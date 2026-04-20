@@ -582,7 +582,7 @@ export default function Heatmap() {
                 <Paper key={blockId} sx={{
                   p: "8px 14px", borderRadius: 2, minWidth: 130,
                   borderLeft: `4px solid ${block.concentration === "High" ? "#dc2626" :
-                      block.concentration === "Medium" ? "#f97316" : "#22c55e"
+                    block.concentration === "Medium" ? "#f97316" : "#22c55e"
                     }`,
                 }}>
                   <Typography variant="caption" color="text.secondary" fontWeight={700}>
