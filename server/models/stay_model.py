@@ -201,7 +201,5 @@ def predict_vessel(df, vessel_service):
 
     return {
         "avg_hours": round(sum(preds) / len(preds), 2),
-        "max_hours": round(max(preds), 2),
-        "min_hours": round(min(preds), 2),
         "visits":    len(preds),
     }

@@ -9,21 +9,51 @@ import {
   Chip,
 } from "@mui/material";
 import { MapContainer, TileLayer, Rectangle, Popup } from "react-leaflet";
-import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import "leaflet.heat";
+// Make sure to import your api instance properly
 import { api } from "../api/api";
 
-// 🔥 Terminal bounding box (APM NJ)
+// --- TYPESCRIPT INTERFACES ---
+
+export interface BlockData {
+  count: number;
+  hazardous: number;
+  reefer: number;
+  oog: number;
+}
+
+export interface Summary {
+  total_containers: number;
+  hazardous: number;
+  reefer: number;
+  oog: number;
+}
+
+export interface HeatmapData {
+  vessel: string;
+  visit_id: string;
+  recommended_berth: string;
+  max_block: string;
+  summary: Summary;
+  blocks: Record<string, BlockData>;
+}
+
+export interface MappedBlock extends BlockData {
+  block: string;
+  bounds: [[number, number], [number, number]];
+}
+
+// 🔥 Terminal bounding box (APM NJ) - Adjusted to cover actual land/pier
+// 🔥 Terminal bounding box (APM NJ) - Shifted West onto the actual land
 const TERMINAL_BOUNDS = {
-  latMin: 40.6685,
-  latMax: 40.6755,
-  lngMin: -74.143,
-  lngMax: -74.13,
+  latMin: 40.6620,
+  latMax: 40.6760,
+  lngMin: -74.1620, // Shifted west to align with McLester St
+  lngMax: -74.1460, // Shifted west to align with the berth edge
 };
 
 // 🔥 Auto-grid mapping (NO HARDCODING)
-function mapBlocksToGrid(blocks: any) {
+function mapBlocksToGrid(blocks: Record<string, BlockData>): MappedBlock[] {
   const blockNames = Object.keys(blocks);
 
   const cols = 6;
@@ -54,16 +84,16 @@ function mapBlocksToGrid(blocks: any) {
 }
 
 // 🔥 Color scale
-function getColor(count: number, max: number) {
+function getColor(count: number, max: number): string {
   const ratio = count / max;
-  if (ratio > 0.7) return "#ef4444";
-  if (ratio > 0.3) return "#f97316";
-  return "#22c55e";
+  if (ratio > 0.7) return "#ef4444"; // Red for High
+  if (ratio > 0.3) return "#f97316"; // Orange for Medium
+  return "#22c55e";                  // Green for Low
 }
 
 export default function RealHeatmapPage() {
   const [vesselInput, setVesselInput] = useState("AA7");
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<HeatmapData | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchHeatmap = async () => {
@@ -72,15 +102,15 @@ export default function RealHeatmapPage() {
       const res = await api.get(`/vessel/heatmap?vessel_id=${vesselInput}`);
       setData(res.data);
     } catch {
-      alert("API Error");
+      alert("API Error: Ensure your local server is running and returning the correct JSON.");
     } finally {
       setLoading(false);
     }
   };
 
-  const mappedBlocks = data ? mapBlocksToGrid(data.blocks) : [];
+  const mappedBlocks: MappedBlock[] = data ? mapBlocksToGrid(data.blocks) : [];
   const maxCount = data
-    ? Math.max(...Object.values(data.blocks).map((b: any) => b.count))
+    ? Math.max(...Object.values(data.blocks).map((b) => b.count))
     : 1;
 
   return (
@@ -99,7 +129,7 @@ export default function RealHeatmapPage() {
           sx={{ bgcolor: "#1e293b", input: { color: "white" } }}
         />
         <Button variant="contained" onClick={fetchHeatmap}>
-          {loading ? <CircularProgress size={20} /> : "Load"}
+          {loading ? <CircularProgress size={20} color="inherit" /> : "Load"}
         </Button>
       </Box>
 
@@ -108,18 +138,21 @@ export default function RealHeatmapPage() {
           {/* MAP */}
           <Box sx={{ flex: 3 }}>
             <MapContainer
-              center={[40.672, -74.136]}
-              zoom={16}
+              center={[40.669, -74.154]} // Centered on the new bounding box
+              zoom={15}
               style={{ height: "600px", borderRadius: "12px" }}
             >
-              {/* Satellite-like */}
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              {/* Esri Satellite Imagery Layer (better for viewing ports than OSM) */}
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                attribution="Tiles &copy; Esri"
+              />
 
               {/* 🔥 Blocks */}
-              {mappedBlocks.map((b: any) => (
+              {mappedBlocks.map((b) => (
                 <Rectangle
                   key={b.block}
-                  bounds={b.bounds as any}
+                  bounds={b.bounds}
                   pathOptions={{
                     color: b.block === data.max_block ? "#ffffff" : "#000000",
                     weight: b.block === data.max_block ? 3 : 1,
@@ -128,15 +161,17 @@ export default function RealHeatmapPage() {
                   }}
                 >
                   <Popup>
-                    <b>{b.block}</b>
-                    <br />
-                    Containers: {b.count}
-                    <br />
-                    Hazardous: {b.hazardous}
-                    <br />
-                    Reefer: {b.reefer}
-                    <br />
-                    OOG: {b.oog}
+                    <div style={{ color: "#000" }}>
+                      <b>{b.block}</b>
+                      <br />
+                      Containers: {b.count}
+                      <br />
+                      Hazardous: {b.hazardous}
+                      <br />
+                      Reefer: {b.reefer}
+                      <br />
+                      OOG: {b.oog}
+                    </div>
                   </Popup>
                 </Rectangle>
               ))}
@@ -170,7 +205,7 @@ export default function RealHeatmapPage() {
 
           {/* SIDE PANEL */}
           <Box sx={{ flex: 1 }}>
-            <Paper sx={{ p: 2, bgcolor: "#1e293b", mb: 2 }}>
+            <Paper sx={{ p: 2, bgcolor: "#1e293b", color: "white", mb: 2 }}>
               <Typography variant="h6">Vessel</Typography>
               <Typography>{data.vessel}</Typography>
               <Typography sx={{ fontSize: 12, color: "#94a3b8" }}>
@@ -178,19 +213,19 @@ export default function RealHeatmapPage() {
               </Typography>
             </Paper>
 
-            <Paper sx={{ p: 2, bgcolor: "#1e293b", mb: 2 }}>
+            <Paper sx={{ p: 2, bgcolor: "#1e293b", color: "white", mb: 2 }}>
               <Typography variant="h6">Recommended Berth</Typography>
               <Typography
                 sx={{ fontSize: 24, fontWeight: 800, color: "#38bdf8" }}
               >
                 {data.recommended_berth}
               </Typography>
-              <Typography sx={{ fontSize: 12 }}>
+              <Typography sx={{ fontSize: 12, color: "#94a3b8" }}>
                 Based on max block: {data.max_block}
               </Typography>
             </Paper>
 
-            <Paper sx={{ p: 2, bgcolor: "#1e293b", mb: 2 }}>
+            <Paper sx={{ p: 2, bgcolor: "#1e293b", color: "white", mb: 2 }}>
               <Typography variant="h6">Summary</Typography>
               <Typography>Total: {data.summary.total_containers}</Typography>
               <Typography>Hazardous: {data.summary.hazardous}</Typography>
@@ -198,12 +233,12 @@ export default function RealHeatmapPage() {
               <Typography>OOG: {data.summary.oog}</Typography>
             </Paper>
 
-            <Paper sx={{ p: 2, bgcolor: "#1e293b" }}>
+            <Paper sx={{ p: 2, bgcolor: "#1e293b", color: "white" }}>
               <Typography variant="h6">Legend</Typography>
               <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
-                <Chip label="Low" sx={{ bgcolor: "#22c55e" }} />
-                <Chip label="Medium" sx={{ bgcolor: "#f97316" }} />
-                <Chip label="High" sx={{ bgcolor: "#ef4444" }} />
+                <Chip label="Low" sx={{ bgcolor: "#22c55e", color: "white" }} />
+                <Chip label="Medium" sx={{ bgcolor: "#f97316", color: "white" }} />
+                <Chip label="High" sx={{ bgcolor: "#ef4444", color: "white" }} />
               </Box>
             </Paper>
           </Box>
