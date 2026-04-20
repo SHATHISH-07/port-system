@@ -1,41 +1,28 @@
-export interface VisitDetails {
-  stay_hours: number;
-  loaded_containers: number;
-  discharged_containers: number;
-  move_start: string;
-  move_end: string;
-  start_time: string;
-  end_time: string;
+export interface LayoutBlock {
+  x: number;
+  y: number;
 }
 
-export interface VesselAnalysisData {
+export interface BlockData {
+  count: number;
+  hazardous?: number;
+  reefer?: number;
+  oog?: number;
+}
+
+export interface VesselHeatmapResponse {
   vessel: string;
   visit_id: string;
+  recommended_berth: string;
+  max_block: string;
 
-  actual: {
-    visits: Record<string, VisitDetails>;  // 🔥 FIX HERE
-    avg_hours: number;
-    max_hours: number;
-    min_hours: number;
-  };
+  layout: Record<string, LayoutBlock>;
 
-  predicted: {
-    avg_hours: number;
-    max_hours: number;
-    min_hours: number;
-    visits: number;
-  };
+  blocks?: Record<string, BlockData>; // 🔥 optional (backend issue safe)
 
-  summary: {
-    loaded: number;
-    discharged: number;
+  summary?: {
     hazardous: number;
     reefer: number;
     oog: number;
   };
-
-  risks: string[];
-  execution_plan: string[];
-  berth_analysis: any[];
-  overall_risk_level: "Low" | "Medium" | "High";
 }
