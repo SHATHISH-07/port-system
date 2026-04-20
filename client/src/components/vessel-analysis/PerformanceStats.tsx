@@ -8,7 +8,7 @@ interface Props {
 
 const PerformanceStats = ({ actual, predicted }: Props) => {
     return (
-        <Card sx={{ borderRadius: 3, border: "1px solid #e5e7eb", boxShadow: "none", backgroundColor: "#ffffffff" }}>
+        <Card sx={{ borderRadius: 3, border: "1px solid #e5e7eb", boxShadow: "none", backgroundColor: "#ffffffff", width: "100%", mx: "auto" }}>
             <CardContent sx={{ p: 3 }}>
 
                 {/* HEADER FIX */}
@@ -37,20 +37,20 @@ const PerformanceStats = ({ actual, predicted }: Props) => {
                 {/* CONTENT */}
                 <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
                     <Box>
-                        <Typography sx={{ fontSize: 34, fontWeight: 700 }}>
+                        <Typography sx={{ fontSize: 74, fontWeight: 700 }}>
                             {actual}{" "}
-                            <span style={{ fontSize: 14, color: "#6b7280" }}>hrs</span>
+                            <span style={{ fontSize: 34, color: "#6b7280" }}>hrs</span>
                         </Typography>
-                        <Typography sx={{ fontSize: 13, color: "#6b7280" }}>
+                        <Typography sx={{ fontSize: 23, color: "#6b7280" }}>
                             Actual Stay
                         </Typography>
                     </Box>
 
                     <Box sx={{ textAlign: "right" }}>
-                        <Typography sx={{ fontSize: 25, fontWeight: 600, color: "#486495ff" }}>
+                        <Typography sx={{ fontSize: 65, fontWeight: 600, color: "#486495ff" }}>
                             {predicted} hrs
                         </Typography>
-                        <Typography sx={{ fontSize: 13, color: "#486495ff" }}>
+                        <Typography sx={{ fontSize: 23, color: "#486495ff" }}>
                             Predicted
                         </Typography>
                     </Box>

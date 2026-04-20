@@ -1,47 +1,25 @@
+import { Card, CardContent, Typography, Box } from "@mui/material";
 import { Anchor } from "@mui/icons-material";
-import { Box, Card, CardContent, Typography } from "@mui/material";
 
 interface Props {
-    bestBerth: string;
+    berth?: string;
+    concentration?: string;
 }
 
-const BerthRecommendation = ({ bestBerth }: Props) => (
-    <Card sx={{
-        height: "100%",
-        borderRadius: 3,
-        border: "1px solid #e5e7eb",
-        boxShadow: "none",
-        backgroundColor: "#ffffffff"
-    }}>
-        <CardContent sx={{ p: 3 }}>
-            <Box
-                sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    mb: 3
-                }}
-            >
-                <Anchor sx={{ fontSize: 18, color: "#373e4cff" }} />
-
-                <Typography
-                    sx={{
-                        fontWeight: 600,
-                        color: "#373e4cff",
-                        fontSize: 13,
-                        letterSpacing: 0.5
-                    }}
-                >
-                    BERTH RECOMMENDATION
-                </Typography>
+const BerthRecommendation = ({ berth, concentration }: Props) => (
+    <Card sx={{ borderRadius: 3, border: "1px solid #e5e7eb" }}>
+        <CardContent>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                <Anchor fontSize="small" />
+                <Typography sx={{ fontWeight: 600 }}>RECOMMENDED BERTH</Typography>
             </Box>
 
-            <Typography sx={{ fontSize: 30, fontWeight: 700, color: "#093148ff", mb: 1 }}>
-                {bestBerth}
+            <Typography sx={{ fontSize: 28, fontWeight: 700 }}>
+                {berth || "N/A"}
             </Typography>
 
-            <Typography sx={{ color: "#071922ff", lineHeight: 1.6, fontSize: 15 }}>
-                Assigning the vessel to this block minimizes yard-to-vessel transfer distances, as the majority of outbound containers are currently staged in this zone.
+            <Typography sx={{ fontSize: 13, color: "#64748b" }}>
+                Cargo concentration: {concentration}
             </Typography>
         </CardContent>
     </Card>

@@ -232,20 +232,35 @@ def analyze_vessel_dashboard(vessel_service: str):
     # -----------------------------
     risks = []
 
-    if hazardous > 20:
-        risks.append("High number of hazardous containers detected — safety protocols required.")
-
-    if reefer > 30:
-        risks.append("High reefer load — ensure power points.")
-
-    if oog > 5:
-        risks.append("OOG cargo present — special handling needed.")
-
-    if total_loaded > 200:
+    # 🔥 Volume Risk
+    if total_loaded > 250:
         risks.append("High loading volume — potential crane congestion.")
 
+    # 🔥 Hazard Risk
+    if hazardous > 10:
+        risks.append("Hazardous cargo present — requires safety buffer handling.")
+
+    # 🔥 Reefer Risk
+    if reefer > 20:
+        risks.append("High reefer concentration — ensure power point allocation.")
+
+    # 🔥 Imbalance Risk
+    if total_discharged > 0:
+        ratio = total_loaded / max(total_discharged, 1)
+        if ratio > 3:
+            risks.append("Load-heavy imbalance — yard congestion likely during export flow.")
+
+    # 🔥 Long Stay Risk
+    if actual["avg_hours"] > 40:
+        risks.append("Extended vessel stay — possible operational inefficiency.")
+
+    # 🔥 Low Efficiency Risk
+    moves_per_hour = total_loaded / max(actual["avg_hours"], 1)
+    if moves_per_hour < 20:
+        risks.append("Low crane productivity detected.")
+
     if not risks:
-        risks.append("No significant operational risks identified.")
+        risks.append("Operations appear stable with no major risks.")
 
     # -----------------------------
     # EXECUTION PLAN
@@ -265,18 +280,9 @@ def analyze_vessel_dashboard(vessel_service: str):
     # -----------------------------
     return {
         "vessel": vessel_service,
-        "visit_id": str(top_visit_id),
 
         "actual": actual,
         "predicted": predicted,
-
-        "summary": {
-            "loaded": int(total_loaded),
-            "discharged": int(total_discharged),
-            "hazardous": int(hazardous),
-            "reefer": int(reefer),
-            "oog": int(oog)
-        },
 
         "risks": risks,
         "execution_plan": steps,

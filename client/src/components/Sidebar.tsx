@@ -13,7 +13,6 @@ import {
 import {
   Menu,
   DashboardRounded,
-  ModelTrainingRounded,
   MapRounded
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
@@ -25,7 +24,6 @@ const Sidebar = () => {
   const navItems = [
     { path: "/", label: "Vessel Analysis", icon: <DashboardRounded /> },
     { path: "/heatmap", label: "Terminal Heatmap", icon: <MapRounded /> },
-    { path: "/train", label: "Retrain Model", icon: <ModelTrainingRounded /> }
   ];
 
   return (
