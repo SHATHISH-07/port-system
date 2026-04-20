@@ -279,12 +279,14 @@ def analyze_vessel_dashboard(vessel_service: str):
     # FINAL RESPONSE
     # -----------------------------
     return {
-        "vessel": vessel_service,
+    "mode": "vessel",   # 🔥 IMPORTANT
 
-        "actual": actual,
-        "predicted": predicted,
+    "vessel": vessel_service,
 
-        "risks": risks,
-        "execution_plan": steps,
-        "berth_analysis": berth_analysis
-    }
+    "actual": actual,
+    "predicted": predicted,
+
+    "risks": risks,
+    "execution_plan": steps,
+    "berth_analysis": berth_analysis
+}

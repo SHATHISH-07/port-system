@@ -1,28 +1,26 @@
-export interface LayoutBlock {
-  x: number;
-  y: number;
-}
+export interface VesselAnalysisData {
+  mode: "vessel" | "manual" | "override";
 
-export interface BlockData {
-  count: number;
-  hazardous?: number;
-  reefer?: number;
-  oog?: number;
-}
+  vessel: string | null;
 
-export interface VesselHeatmapResponse {
-  vessel: string;
-  visit_id: string;
-  recommended_berth: string;
-  max_block: string;
+  actual: {
+    avg_hours: number | null;
+    visits: Record<string, any>;
+  };
 
-  layout: Record<string, LayoutBlock>;
+  predicted: {
+    avg_hours: number;
+    max_hours?: number | null;
+    min_hours?: number | null;
+    visits?: number;
+  };
 
-  blocks?: Record<string, BlockData>; // 🔥 optional (backend issue safe)
+  risks: string[];
+  execution_plan: string[];
+  berth_analysis: any[];
 
-  summary?: {
-    hazardous: number;
-    reefer: number;
-    oog: number;
+  input?: {
+    loaded: number;
+    discharged: number;
   };
 }

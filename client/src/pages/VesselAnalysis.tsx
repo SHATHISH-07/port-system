@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api/api";
 import { type VesselAnalysisData } from "../types/vessel";
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 
 import AnalysisHeader from "../components/vessel-analysis/AnalysisHeader";
 import PerformanceStats from "../components/vessel-analysis/PerformanceStats";
@@ -9,33 +9,48 @@ import RiskEvaluation from "../components/vessel-analysis/RiskAndStrategy";
 import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
 import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
-
 import VisitTable from "../components/vessel-analysis/VisitTable";
 
 const VesselAnalysis = () => {
   const [vesselId, setVesselId] = useState("");
+  const [loaded, setLoaded] = useState("");
+  const [discharged, setDischarged] = useState("");
+
   const [data, setData] = useState<VesselAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // 🔥 FETCH DATA (UNIFIED)
   const fetchData = async () => {
-    if (!vesselId) return;
     setLoading(true);
 
     try {
-      const res = await api.get<VesselAnalysisData>(
-        `/vessel/analysis?vessel_id=${vesselId}`
-      );
+      let url = `/vessel/analysis?`;
+
+      if (vesselId) url += `vessel_id=${vesselId}&`;
+      if (loaded) url += `loaded=${loaded}&`;
+      if (discharged) url += `discharged=${discharged}&`;
+
+      const res = await api.get<VesselAnalysisData>(url);
       setData(res.data);
     } finally {
       setLoading(false);
     }
   };
 
+  // 🔥 MODE DETECTION
+  const isManual = data?.mode === "manual";
+  const isOverride = data?.mode === "override";
+
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto", py: 5, px: 2 }}>
+      {/* HEADER */}
       <AnalysisHeader
         vesselId={vesselId}
         setVesselId={setVesselId}
+        loaded={loaded}
+        setLoaded={setLoaded}
+        discharged={discharged}
+        setDischarged={setDischarged}
         onAnalyze={fetchData}
         loading={loading}
         data={data}
@@ -44,48 +59,70 @@ const VesselAnalysis = () => {
       {data && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
 
-          {/* 1️⃣ PERFORMANCE */}
+          {/* PERFORMANCE */}
           <PerformanceStats
-            actual={data.actual.avg_hours}
+            actual={data.actual?.avg_hours ?? data.predicted.avg_hours}
             predicted={data.predicted.avg_hours}
           />
 
-          {/* 2️⃣ VISIT TABLE */}
-          <VisitTable
-            visits={data.actual.visits}
-            avg={data.actual.avg_hours}
-          />
-
-          {/* 3️⃣ STRATEGY + RISK LAYOUT */}
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, // 🔥 left bigger
-              gap: 3,
-              alignItems: "stretch"
-            }}
-          >
-
-            {/* LEFT COLUMN → BERTH + STRATEGY */}
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-
-              <BerthRecommendation
-                berth={data.berth_analysis?.[0]?.berth}
-                concentration={data.berth_analysis?.[0]?.cargo_concentration}
-              />
-
-              <ExecutionPlan steps={data.execution_plan} />
-
-            </Box>
-
-            {/* RIGHT COLUMN → RISKS */}
-            <RiskEvaluation risks={data.risks} />
-
+          {/* 🔥 CONTEXT MESSAGE */}
+          <Box>
+            {isOverride ? (
+              <Typography color="primary">
+                For Loaded: <b>{data.input?.loaded}</b> and Discharged:{" "}
+                <b>{data.input?.discharged}</b>, the predicted stay time is{" "}
+                <b>{data.predicted.avg_hours} hrs</b>
+              </Typography>
+            ) : isManual ? (
+              <Typography color="primary">
+                Based on input, predicted stay time is{" "}
+                <b>{data.predicted.avg_hours} hrs</b>
+              </Typography>
+            ) : (
+              <Typography color="text.secondary">
+                Overall predicted average stay time:{" "}
+                <b>{data.predicted.avg_hours} hrs</b>
+              </Typography>
+            )}
           </Box>
 
-          {/* 5️⃣ BERTH IMPACT TABLE */}
-          <BerthImpactTable data={data.berth_analysis} />
+          {/* VISITS */}
+          {!isManual && (
+            <VisitTable
+              visits={data.actual.visits}
+              avg={data.actual.avg_hours}
+            />
+          )}
 
+          {/* STRATEGY + RISKS */}
+          {!isManual && (
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                gap: 3,
+              }}
+            >
+              {/* LEFT */}
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <BerthRecommendation
+                  berth={data.berth_analysis?.[0]?.berth}
+                  concentration={
+                    data.berth_analysis?.[0]?.cargo_concentration
+                  }
+                />
+                <ExecutionPlan steps={data.execution_plan} />
+              </Box>
+
+              {/* RIGHT */}
+              <RiskEvaluation risks={data.risks} />
+            </Box>
+          )}
+
+          {/* BERTH IMPACT */}
+          {!isManual && (
+            <BerthImpactTable data={data.berth_analysis} />
+          )}
         </Box>
       )}
     </Box>

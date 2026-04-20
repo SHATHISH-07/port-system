@@ -11,6 +11,13 @@ from models.training_status import training_status
 MODEL_PATH = "models/stay_model.pkl"
 
 FEATURE_NAMES = [
+    "loaded",
+    "discharged",
+    "total_moves",
+    "imbalance",
+    "load_ratio",
+    "discharge_ratio",
+
     "container_count",
     "avg_weight",
     "heavy_count",
@@ -202,4 +209,68 @@ def predict_vessel(df, vessel_service):
     return {
         "avg_hours": round(sum(preds) / len(preds), 2),
         "visits":    len(preds),
+    }
+
+def predict_from_input(loaded: int, discharged: int):
+    bundle = load_model()
+
+    if bundle is None:
+        return {"error": "Model not trained"}
+
+    model = bundle["model"]
+    feature_names = bundle["features"]
+
+    total_moves = loaded + discharged
+    imbalance = abs(loaded - discharged)
+
+    features = {
+        "loaded": loaded,
+        "discharged": discharged,
+        "total_moves": total_moves,
+        "imbalance": imbalance,
+        "load_ratio": loaded / (total_moves + 1),
+        "discharge_ratio": discharged / (total_moves + 1),
+
+        "container_count": total_moves,
+        "avg_weight": 15000,
+        "heavy_count": int(total_moves * 0.3),
+        "reefer_count": int(total_moves * 0.1),
+        "hazard_count": int(total_moves * 0.05),
+        "oog_count": int(total_moves * 0.02),
+
+        "operation_hours": max(total_moves / 30, 1),
+        "moves_per_hour": 30,
+
+        "service_hash": 123456,
+    }
+
+    X = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
+    pred = model.predict(X)[0]
+
+    # 🔥 FIXED RESPONSE SHAPE
+    return {
+        "mode": "manual",
+
+        "vessel": None,
+
+        "actual": {
+            "visits": {},
+            "avg_hours": None
+        },
+
+        "predicted": {
+            "avg_hours": round(float(pred), 2),
+            "max_hours": None,
+            "min_hours": None,
+            "visits": 1
+        },
+
+        "risks": [],
+        "execution_plan": [],
+        "berth_analysis": [],
+
+        "input": {
+            "loaded": loaded,
+            "discharged": discharged
+        }
     }
