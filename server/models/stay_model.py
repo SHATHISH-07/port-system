@@ -8,7 +8,7 @@ from utils.feature_utils import create_features
 from utils.data_loader import get_data
 from models.training_status import training_status
 
-MODEL_PATH = "models/stay_model.pkl"
+MODEL_PATH = "models/synthetic_stay_model.pkl"
 
 FEATURE_NAMES = [
     "loaded",
@@ -171,14 +171,6 @@ def predict_visit(df):
 # PREDICT VESSEL  (all visits for one Outbound Service)
 # =========================================================
 def predict_vessel(df, vessel_service):
-    """
-    Predicts the expected stay for each visit of a vessel and returns
-    aggregated statistics:
-        avg_hours – mean predicted stay across all visits
-        max_hours – maximum predicted stay
-        min_hours – minimum predicted stay
-        visits    – number of visits predicted
-    """
     df = df[
         df["Outbound Service"].astype(str).str.strip() == str(vessel_service)
     ].copy()
@@ -211,7 +203,37 @@ def predict_vessel(df, vessel_service):
         "visits":    len(preds),
     }
 
-def predict_from_input(loaded: int, discharged: int):
+def estimate_moves_per_hour_from_actual(actual_visits):
+    rates = []
+
+    for v in actual_visits.values():
+        moves = v["loaded_containers"] + v["discharged_containers"]
+        hours = v["stay_hours"]
+
+        if hours > 0:
+            rates.append({
+                "rate": moves / hours,
+                "load_ratio": v["loaded_containers"] / (moves + 1)
+            })
+
+    if not rates:
+        return 50
+
+    return rates
+
+def pick_throughput(rates, loaded, discharged):
+    total = loaded + discharged
+    input_ratio = loaded / (total + 1)
+
+    # find closest match in history
+    closest = min(
+        rates,
+        key=lambda r: abs(r["load_ratio"] - input_ratio)
+    )
+
+    return closest["rate"]
+
+def predict_from_input(loaded: int, discharged: int,actual_visits=None):
     bundle = load_model()
 
     if bundle is None:
@@ -222,6 +244,10 @@ def predict_from_input(loaded: int, discharged: int):
 
     total_moves = loaded + discharged
     imbalance = abs(loaded - discharged)
+
+    rates = estimate_moves_per_hour_from_actual(actual_visits)
+    moves_per_hour = pick_throughput(rates, loaded, discharged)
+    operation_hours = total_moves / moves_per_hour
 
     features = {
         "loaded": loaded,
@@ -238,8 +264,8 @@ def predict_from_input(loaded: int, discharged: int):
         "hazard_count": int(total_moves * 0.05),
         "oog_count": int(total_moves * 0.02),
 
-        "operation_hours": max(total_moves / 30, 1),
-        "moves_per_hour": 30,
+        "operation_hours": operation_hours,
+        "moves_per_hour": moves_per_hour,
 
         "service_hash": 123456,
     }
@@ -247,28 +273,22 @@ def predict_from_input(loaded: int, discharged: int):
     X = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
     pred = model.predict(X)[0]
 
-    # 🔥 FIXED RESPONSE SHAPE
     return {
         "mode": "manual",
-
         "vessel": None,
-
         "actual": {
             "visits": {},
             "avg_hours": None
         },
-
         "predicted": {
             "avg_hours": round(float(pred), 2),
             "max_hours": None,
             "min_hours": None,
             "visits": 1
         },
-
         "risks": [],
         "execution_plan": [],
         "berth_analysis": [],
-
         "input": {
             "loaded": loaded,
             "discharged": discharged

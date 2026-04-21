@@ -12,25 +12,16 @@ def vessel_analysis(
     loaded: int = Query(None),
     discharged: int = Query(None)
 ):
-    """
-    3 modes:
-    1. vessel_id → full analytics
-    2. vessel_id + loaded/discharged → full analytics + override prediction
-    3. loaded/discharged → manual only
-    """
-
-    # -----------------------------
-    # CASE 1: FULL + OVERRIDE
-    # -----------------------------
     if vessel_id and loaded is not None and discharged is not None:
         result = analyze_vessel_dashboard(vessel_id)
 
-        manual = predict_from_input(loaded, discharged)
+        manual = predict_from_input(
+            loaded,
+            discharged,
+            actual_visits=result["actual"]["visits"]
+        )
 
-        # 🔥 override prediction
         result["predicted"] = manual["predicted"]
-
-        # 🔥 add input
         result["input"] = {
             "loaded": loaded,
             "discharged": discharged
