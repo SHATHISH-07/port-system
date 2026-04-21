@@ -1,138 +1,169 @@
-import {
-  Box,
-  Typography,
-  TextField,
-  Button,
-  CircularProgress
-} from "@mui/material";
-import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
+import { Box, Typography, TextField, Button, CircularProgress, Chip, InputAdornment } from "@mui/material";
+import { SearchRounded, DirectionsBoat, AutoGraphRounded, LocalShippingRounded } from "@mui/icons-material";
 
 interface Props {
-  vesselId: string;
-  setVesselId: (val: string) => void;
-
-  loaded: string;
-  setLoaded: (val: string) => void;
-
-  discharged: string;
-  setDischarged: (val: string) => void;
-
+  vesselId: string;  setVesselId: (v: string) => void;
+  loaded: string;    setLoaded:   (v: string) => void;
+  discharged: string; setDischarged: (v: string) => void;
   onAnalyze: () => void;
   loading: boolean;
   data: any;
 }
 
-const AnalysisHeader = ({
-  vesselId,
-  setVesselId,
-  loaded,
-  setLoaded,
-  discharged,
-  setDischarged,
-  onAnalyze,
-  loading,
-  data
-}: Props) => {
+const HINTS = [
+  { label: "Vessel ID → full analytics",          color: "#8ab4f8",  bg: "rgba(138,180,248,0.1)", border: "rgba(138,180,248,0.2)" },
+  { label: "Load / Discharge → stay prediction",  color: "#d7aefb",  bg: "rgba(215,174,251,0.1)", border: "rgba(215,174,251,0.2)" },
+  { label: "Both → optimized prediction",         color: "#81c995",  bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.2)" },
+];
 
-  const hasValidData = data && (data.vessel || data.mode);
-
-  const handleEnter = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      onAnalyze();
-    }
-  };
+export default function AnalysisHeader({
+  vesselId, setVesselId, loaded, setLoaded,
+  discharged, setDischarged, onAnalyze, loading, data,
+}: Props) {
+  const hasData = data && (data.vessel || data.mode);
+  const handleEnter = (e: React.KeyboardEvent) => { if (e.key === "Enter") onAnalyze(); };
 
   return (
-    <Box sx={{ mb: 4, textAlign: "center" }}>
-      {/* TITLE */}
-      <Typography variant="h4" sx={{ fontWeight: 700, mb: 1, color: "#111827" }}>
-        Vessel Dashboard
-      </Typography>
-
-      <Typography sx={{ color: "#6b7280", mb: 4 }}>
-        Analyze vessel performance or simulate stay time using load & discharge inputs.
-      </Typography>
-
-      {/* INPUTS */}
+    <Box>
+      {/* ── QUERY CARD ─────────────────────────────────────── */}
       <Box
         sx={{
-          display: "flex",
-          gap: 2,
-          maxWidth: 800,
-          mx: "auto",
-          flexWrap: "wrap",
-          justifyContent: "center"
+          bgcolor: "#292a2d",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 2,
+          p: 3,
+          mb: hasData ? 3 : 0,
+          boxShadow: "0 1px 2px rgba(0,0,0,.3), 0 2px 6px rgba(0,0,0,.15)",
         }}
       >
-        <TextField
-          placeholder="Vessel ID (optional)"
-          value={vesselId}
-          onChange={(e) => setVesselId(e.target.value)}
-          onKeyDown={handleEnter}
-          sx={{ bgcolor: "#fff", borderRadius: 1, minWidth: 200 }}
-        />
-
-        <TextField
-          label="Loaded"
-          value={loaded}
-          onChange={(e) => setLoaded(e.target.value)}
-          onKeyDown={handleEnter}
-          sx={{ bgcolor: "#fff", borderRadius: 1, minWidth: 140 }}
-        />
-
-        <TextField
-          label="Discharged"
-          value={discharged}
-          onChange={(e) => setDischarged(e.target.value)}
-          onKeyDown={handleEnter}
-          sx={{ bgcolor: "#fff", borderRadius: 1, minWidth: 140 }}
-        />
-
-        <Button
-          variant="contained"
-          onClick={onAnalyze}
-          disableElevation
+        {/* Section label */}
+        <Typography
           sx={{
-            bgcolor: "#0f172a",
-            textTransform: "none",
-            fontWeight: 600,
-            px: 4,
-            borderRadius: 2,
-            minWidth: 120,
-            "&:hover": { bgcolor: "#334155" }
+            fontSize: "0.6875rem",
+            fontWeight: 500,
+            color: "#9aa0a6",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            mb: 2,
           }}
         >
-          {loading ? <CircularProgress size={24} color="inherit" /> : "Analyze"}
-        </Button>
+          Query parameters
+        </Typography>
+
+        {/* Inputs row */}
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, alignItems: "flex-end" }}>
+          <TextField
+            placeholder="Vessel ID (e.g. AA7)"
+            value={vesselId}
+            onChange={e => setVesselId(e.target.value)}
+            onKeyDown={handleEnter}
+            size="small"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchRounded sx={{ fontSize: 16, color: "#5f6368" }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ minWidth: 220, "& .MuiOutlinedInput-root": { borderRadius: 1 } }}
+          />
+          <TextField
+            label="Loaded"
+            placeholder="0"
+            value={loaded}
+            onChange={e => setLoaded(e.target.value)}
+            onKeyDown={handleEnter}
+            size="small"
+            type="number"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LocalShippingRounded sx={{ fontSize: 14, color: "#5f6368" }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ minWidth: 160, "& .MuiOutlinedInput-root": { borderRadius: 1 } }}
+          />
+          <TextField
+            label="Discharged"
+            placeholder="0"
+            value={discharged}
+            onChange={e => setDischarged(e.target.value)}
+            onKeyDown={handleEnter}
+            size="small"
+            type="number"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LocalShippingRounded sx={{ fontSize: 14, color: "#5f6368" }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ minWidth: 160, "& .MuiOutlinedInput-root": { borderRadius: 1 } }}
+          />
+
+          <Button
+            variant="contained"
+            onClick={onAnalyze}
+            disabled={loading}
+            startIcon={loading ? undefined : <AutoGraphRounded sx={{ fontSize: 16 }} />}
+            sx={{ height: 37, px: 3, borderRadius: 1, minWidth: 140 }}
+          >
+            {loading ? <CircularProgress size={16} color="inherit" /> : "Run Analysis"}
+          </Button>
+        </Box>
+
+        {/* Hint chips */}
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2 }}>
+          {HINTS.map(h => (
+            <Chip
+              key={h.label}
+              label={h.label}
+              size="small"
+              sx={{ bgcolor: h.bg, color: h.color, border: `1px solid ${h.border}`, fontSize: "0.6875rem" }}
+            />
+          ))}
+        </Box>
       </Box>
 
-      {/* EMPTY STATE */}
-      {!hasValidData && !loading && (
+      {/* ── EMPTY STATE ─────────────────────────────────────── */}
+      {!hasData && !loading && (
         <Box
           sx={{
-            mt: 8,
+            mt: 4,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             gap: 2,
-            color: "#6b7280"
+            py: 10,
+            borderRadius: 2,
+            border: "1px dashed rgba(255,255,255,0.1)",
           }}
         >
-          <DirectionsBoatIcon sx={{ fontSize: 48, color: "#9ca3af" }} />
-
-          <Typography sx={{ fontSize: "1rem" }}>
-            Enter a vessel ID or load/discharge values to begin analysis.
-          </Typography>
-
-          <Typography sx={{ fontSize: "0.95rem", color: "#9ca3af" }}>
-            • Vessel only → Full analytics  
-            • Load/Discharge → Stay time prediction  
-            • Both → Optimized prediction
-          </Typography>
+          <Box
+            sx={{
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              bgcolor: "#292a2d",
+              border: "1px solid rgba(255,255,255,0.1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <DirectionsBoat sx={{ fontSize: 30, color: "#5f6368" }} />
+          </Box>
+          <Box sx={{ textAlign: "center" }}>
+            <Typography sx={{ fontSize: "0.9375rem", fontWeight: 500, color: "#9aa0a6", mb: 0.5 }}>
+              No vessel data loaded
+            </Typography>
+            <Typography sx={{ fontSize: "0.8125rem", color: "#5f6368" }}>
+              Enter a Vessel ID or load/discharge values above to begin
+            </Typography>
+          </Box>
         </Box>
       )}
     </Box>
   );
-};
-
-export default AnalysisHeader;
+}

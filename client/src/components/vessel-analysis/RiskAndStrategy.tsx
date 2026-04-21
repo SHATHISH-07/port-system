@@ -1,91 +1,116 @@
 import { Card, CardContent, Typography, Box } from "@mui/material";
-import { WarningAmberOutlined } from "@mui/icons-material";
+import { WarningAmberRounded, CheckCircleOutlineRounded } from "@mui/icons-material";
 
-interface Props {
-    risks: string[];
-}
+interface Props { risks: string[]; }
 
-const RiskEvaluation = ({ risks }: Props) => (
-    <Card
-        sx={{
-            borderRadius: 3,
-            border: "1px solid #e5e7eb",
-            boxShadow: "none"
-        }}
-    >
-        <CardContent sx={{ p: 3 }}>
+export default function RiskEvaluation({ risks }: Props) {
+  const hasRisks = risks.length > 0;
 
-            {/* HEADER */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
-                <WarningAmberOutlined sx={{ fontSize: 18, color: "#6b7280" }} />
+  return (
+    <Card>
+      <CardContent sx={{ p: 0 }}>
+        {/* ── Header ── */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            px: 2.5,
+            py: 2,
+            borderBottom: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <WarningAmberRounded sx={{ fontSize: 15, color: hasRisks ? "#fdd663" : "#81c995" }} />
+          <Typography
+            sx={{
+              fontSize: "0.6875rem",
+              fontWeight: 500,
+              color: "#9aa0a6",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              flex: 1,
+            }}
+          >
+            Operational Risks
+          </Typography>
+          {hasRisks && (
+            <Box
+              sx={{
+                height: 20,
+                minWidth: 20,
+                borderRadius: 10,
+                bgcolor: "rgba(242,139,130,0.12)",
+                border: "1px solid rgba(242,139,130,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                px: 0.75,
+              }}
+            >
+              <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#f28b82" }}>
+                {risks.length}
+              </Typography>
+            </Box>
+          )}
+        </Box>
 
+        {/* ── Body ── */}
+        <Box sx={{ px: 2.5, py: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+          {hasRisks ? (
+            risks.map((risk, i) => (
+              <Box
+                key={i}
+                sx={{
+                  display: "flex",
+                  gap: 1.5,
+                  alignItems: "flex-start",
+                  p: "10px 12px",
+                  bgcolor: "rgba(253,214,99,0.04)",
+                  border: "1px solid rgba(253,214,99,0.12)",
+                  borderLeft: "3px solid #fdd663",
+                  borderRadius: 1,
+                  transition: "background-color 150ms",
+                  "&:hover": { bgcolor: "rgba(253,214,99,0.08)" },
+                }}
+              >
                 <Typography
-                    sx={{
-                        fontWeight: 600,
-                        color: "#6b7280",
-                        fontSize: 13,
-                        letterSpacing: 0.5
-                    }}
+                  sx={{
+                    fontSize: "0.6875rem",
+                    fontWeight: 700,
+                    color: "#fdd663",
+                    lineHeight: "1.6rem",
+                    flexShrink: 0,
+                    minWidth: 14,
+                  }}
                 >
-                    OPERATIONAL RISKS
+                  {i + 1}
                 </Typography>
+                <Typography sx={{ color: "#e8eaed", fontSize: "0.8125rem", lineHeight: 1.6 }}>
+                  {risk}
+                </Typography>
+              </Box>
+            ))
+          ) : (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                p: "10px 12px",
+                bgcolor: "rgba(129,201,149,0.06)",
+                border: "1px solid rgba(129,201,149,0.18)",
+                borderLeft: "3px solid #81c995",
+                borderRadius: 1,
+              }}
+            >
+              <CheckCircleOutlineRounded sx={{ fontSize: 16, color: "#81c995", flexShrink: 0 }} />
+              <Typography sx={{ color: "#81c995", fontSize: "0.8125rem" }}>
+                No significant operational risks identified
+              </Typography>
             </Box>
-
-            {/* CONTENT */}
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {risks.length > 0 ? (
-                    risks.map((risk, i) => (
-                        <Box
-                            key={i}
-                            sx={{
-                                p: 2,
-                                borderLeft: "4px solid #f59e0b",
-                                bgcolor: "#fffbeb",
-                                borderRadius: 2,
-                                display: "flex",
-                                gap: 1.5,
-                                alignItems: "flex-start"
-                            }}
-                        >
-
-                            <Box
-                                sx={{
-                                    width: 6,
-                                    height: 6,
-                                    borderRadius: "50%",
-                                    bgcolor: "#f59e0b",
-                                    mt: "6px"
-                                }}
-                            />
-
-                            <Typography
-                                sx={{
-                                    color: "#92400e",
-                                    fontWeight: 500,
-                                    fontSize: 14,
-                                    lineHeight: 1.6
-                                }}
-                            >
-                                {risk}
-                            </Typography>
-                        </Box>
-                    ))
-                ) : (
-                    <Box sx={{ p: 2 }}>
-                        <Typography
-                            sx={{
-                                color: "#6b7280",
-                                fontStyle: "italic",
-                                fontSize: 13
-                            }}
-                        >
-                            No significant operational risks identified for this visit.
-                        </Typography>
-                    </Box>
-                )}
-            </Box>
-        </CardContent>
+          )}
+        </Box>
+      </CardContent>
     </Card>
-);
-
-export default RiskEvaluation;
+  );
+}

@@ -1,0 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* ── Surface scale (Google Cloud dark) ── */
+  --surface-0:   #202124;   /* body / page bg */
+  --surface-1:   #292a2d;   /* card / panel bg */
+  --surface-2:   #35363a;   /* elevated / hover */
+  --surface-3:   #3c3d40;   /* input bg */
+  --sidebar-bg:  #1f2023;   /* sidebar */
+
+  /* ── Borders ── */
+  --border-dim:    rgba(255,255,255,0.07);
+  --border-subtle: rgba(255,255,255,0.12);
+  --border-focus:  #8ab4f8;
+
+  /* ── Text ── */
+  --on-surface:     #e8eaed;  /* primary text */
+  --on-surface-2:   #9aa0a6;  /* secondary */
+  --on-surface-3:   #5f6368;  /* muted / disabled */
+
+  /* ── Google Blue ── */
+  --blue:           #8ab4f8;
+  --blue-hover:     #93bafa;
+  --blue-bg:        rgba(138,180,248,0.12);
+  --blue-border:    rgba(138,180,248,0.22);
+  --blue-cta:       #1a73e8;  /* button fill */
+  --blue-cta-hover: #1557b0;
+
+  /* ── Semantic ── */
+  --green:          #81c995;
+  --green-bg:       rgba(129,201,149,0.12);
+  --green-border:   rgba(129,201,149,0.22);
+  --yellow:         #fdd663;
+  --yellow-bg:      rgba(253,214,99,0.12);
+  --yellow-border:  rgba(253,214,99,0.22);
+  --red:            #f28b82;
+  --red-bg:         rgba(242,139,130,0.12);
+  --red-border:     rgba(242,139,130,0.22);
+  --purple:         #d7aefb;
+  --purple-bg:      rgba(215,174,251,0.12);
+
+  /* ── Radius ── */
+  --r-sm:  4px;
+  --r-md:  8px;
+  --r-lg:  12px;
+  --r-xl:  16px;
+
+  /* ── Shadows ── */
+  --shadow-1: 0 1px 2px rgba(0,0,0,.3), 0 2px 6px rgba(0,0,0,.15);
+  --shadow-2: 0 2px 6px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.19);
+  --shadow-3: 0 4px 12px rgba(0,0,0,.35), 0 12px 34px rgba(0,0,0,.25);
+
+  /* ── Motion ── */
+  --ease-std:  cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast:  150ms;
+  --dur-std:   250ms;
+  --dur-slow:  400ms;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: 'Roboto', 'Google Sans', -apple-system, sans-serif;
+  font-size: 14px;
+  background: var(--surface-0);
+  color: var(--on-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ── */
+* { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--on-surface-3); }
+
+/* ── Text selection ── */
+::selection { background: rgba(138,180,248,0.3); color: #fff; }
+
+/* ── Focus ── */
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }

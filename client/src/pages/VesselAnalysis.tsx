@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api/api";
 import { type VesselAnalysisData } from "../types/vessel";
-import { Box, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 
 import AnalysisHeader from "../components/vessel-analysis/AnalysisHeader";
 import PerformanceStats from "../components/vessel-analysis/PerformanceStats";
@@ -39,10 +39,9 @@ const VesselAnalysis = () => {
 
   // 🔥 MODE DETECTION
   const isManual = data?.mode === "manual";
-  const isOverride = data?.mode === "override";
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: "auto", py: 5, px: 2 }}>
+    <Box sx={{ maxWidth: 1200, mx: "auto" }}>
       {/* HEADER */}
       <AnalysisHeader
         vesselId={vesselId}
@@ -63,58 +62,34 @@ const VesselAnalysis = () => {
           <PerformanceStats
             actual={data.actual?.avg_hours ?? data.predicted.avg_hours}
             predicted={data.predicted.avg_hours}
+            mode={data.mode || "vessel"} // Pass mode to trigger override logic
+            loaded={data.input?.loaded} // Pass load input
+            discharged={data.input?.discharged} // Pass discharge input
           />
-
-          {/* 🔥 CONTEXT MESSAGE */}
-          <Box>
-            {isOverride ? (
-              <Typography color="primary">
-                For Loaded: <b>{data.input?.loaded}</b> and Discharged:{" "}
-                <b>{data.input?.discharged}</b>, the predicted stay time is{" "}
-                <b>{data.predicted.avg_hours} hrs</b>
-              </Typography>
-            ) : isManual ? (
-              <Typography color="primary">
-                Based on input, predicted stay time is{" "}
-                <b>{data.predicted.avg_hours} hrs</b>
-              </Typography>
-            ) : (
-              <Typography color="text.secondary">
-                Overall predicted average stay time:{" "}
-                <b>{data.predicted.avg_hours} hrs</b>
-              </Typography>
-            )}
-          </Box>
 
           {/* VISITS */}
           {!isManual && (
             <VisitTable
-              visits={data.actual.visits}
-              avg={data.actual.avg_hours}
+              visits={data.actual?.visits}
+              avg={data.actual?.avg_hours}
             />
           )}
 
-          {/* STRATEGY + RISKS */}
+          {/* STRATEGY + RISKS — 3-col equal grid */}
           {!isManual && (
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-                gap: 3,
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
+                gap: 2.5,
+                alignItems: "start",
               }}
             >
-              {/* LEFT */}
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <BerthRecommendation
-                  berth={data.berth_analysis?.[0]?.berth}
-                  concentration={
-                    data.berth_analysis?.[0]?.cargo_concentration
-                  }
-                />
-                <ExecutionPlan steps={data.execution_plan} />
-              </Box>
-
-              {/* RIGHT */}
+              <BerthRecommendation
+                berth={data.berth_analysis?.[0]?.berth}
+                concentration={data.berth_analysis?.[0]?.cargo_concentration}
+              />
+              <ExecutionPlan steps={data.execution_plan} />
               <RiskEvaluation risks={data.risks} />
             </Box>
           )}

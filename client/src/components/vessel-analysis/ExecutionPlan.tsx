@@ -1,78 +1,124 @@
 import { Card, CardContent, Typography, Box } from "@mui/material";
-import { ChecklistOutlined } from "@mui/icons-material";
+import { ChecklistRounded } from "@mui/icons-material";
 
-interface Props {
-    steps: string[];
-}
+interface Props { steps: string[]; }
 
-const ExecutionPlan = ({ steps }: Props) => (
-    <Card
-        sx={{
-            borderRadius: 3,
-            border: "1px solid #e5e7eb",
-            boxShadow: "none"
-        }}
-    >
-        <CardContent sx={{ p: 3 }}>
+export default function ExecutionPlan({ steps }: Props) {
+  return (
+    <Card>
+      <CardContent sx={{ p: 0 }}>
+        {/* ── Header ── */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            px: 2.5,
+            py: 2,
+            borderBottom: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <ChecklistRounded sx={{ fontSize: 15, color: "#9aa0a6" }} />
+          <Typography
+            sx={{
+              fontSize: "0.6875rem",
+              fontWeight: 500,
+              color: "#9aa0a6",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              flex: 1,
+            }}
+          >
+            Execution Plan
+          </Typography>
+          <Box
+            sx={{
+              height: 20,
+              minWidth: 20,
+              borderRadius: 10,
+              bgcolor: "rgba(138,180,248,0.12)",
+              border: "1px solid rgba(138,180,248,0.22)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              px: 0.75,
+            }}
+          >
+            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8" }}>
+              {steps.length}
+            </Typography>
+          </Box>
+        </Box>
 
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
-                <ChecklistOutlined sx={{ fontSize: 18, color: "#6b7280" }} />
+        {/* ── Steps ── */}
+        <Box sx={{ px: 2.5, py: 2 }}>
+          {steps.map((step, i) => (
+            <Box
+              key={i}
+              sx={{
+                display: "flex",
+                gap: 1.5,
+                alignItems: "flex-start",
+                position: "relative",
+                pb: i < steps.length - 1 ? 2 : 0,
+              }}
+            >
+              {/* Connector line */}
+              {i < steps.length - 1 && (
+                <Box
+                  sx={{
+                    position: "absolute",
+                    left: 11,
+                    top: 22,
+                    width: 1,
+                    bottom: 0,
+                    bgcolor: "rgba(255,255,255,0.07)",
+                  }}
+                />
+              )}
+
+              {/* Step number */}
+              <Box
+                sx={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: "50%",
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 1,
+                  bgcolor: i === 0 ? "rgba(138,180,248,0.14)" : "rgba(255,255,255,0.05)",
+                  border: `1px solid ${i === 0 ? "rgba(138,180,248,0.28)" : "rgba(255,255,255,0.09)"}`,
+                }}
+              >
                 <Typography
-                    sx={{
-                        fontWeight: 600,
-                        color: "#6b7280",
-                        fontSize: 13,
-                        letterSpacing: 0.5
-                    }}
+                  sx={{
+                    fontSize: "0.6875rem",
+                    fontWeight: 600,
+                    color: i === 0 ? "#8ab4f8" : "#9aa0a6",
+                    lineHeight: 1,
+                  }}
                 >
-                    RECOMMENDED EXECUTION PLAN
+                  {i + 1}
                 </Typography>
+              </Box>
+
+              {/* Step text */}
+              <Typography
+                sx={{
+                  fontSize: "0.8125rem",
+                  color: "#e8eaed",
+                  lineHeight: 1.6,
+                  pt: "3px",
+                }}
+              >
+                {step}
+              </Typography>
             </Box>
-
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {steps.map((step, i) => (
-                    <Box
-                        key={i}
-                        sx={{
-                            display: "flex",
-                            gap: 2,
-                            alignItems: "flex-start"
-                        }}
-                    >
-
-                        <Box
-                            sx={{
-                                minWidth: 28,
-                                height: 28,
-                                borderRadius: "50%",
-                                bgcolor: "#e2e8f0",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontWeight: 700,
-                                color: "#475569",
-                                fontSize: 12,
-                                mt: "2px"
-                            }}
-                        >
-                            {i + 1}
-                        </Box>
-
-                        <Typography
-                            sx={{
-                                color: "#334155",
-                                lineHeight: 1.6,
-                                fontSize: 14,
-                                flex: 1
-                            }}
-                        >
-                            {step}
-                        </Typography>
-                    </Box>
-                ))}
-            </Box>
-        </CardContent>
+          ))}
+        </Box>
+      </CardContent>
     </Card>
-);
-
-export default ExecutionPlan;
+  );
+}

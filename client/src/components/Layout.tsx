@@ -1,30 +1,75 @@
 import React from "react";
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import Sidebar from "./Sidebar";
+import { useLocation } from "react-router-dom";
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
+interface LayoutProps { children: React.ReactNode; }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const PAGE: Record<string, { title: string; sub: string }> = {
+  "/": { title: "Vessel Analysis", sub: "Performance monitoring & predictive stay-time modeling" },
+  "/heatmap": { title: "Terminal Heatmap", sub: "Container yard block & berth utilization" },
+};
+
+export default function Layout({ children }: LayoutProps) {
+  const { pathname } = useLocation();
+  const page = PAGE[pathname] ?? { title: "PortSync", sub: "" };
+
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#faf9f6" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
       <Sidebar />
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          display: "flex",
-          flexDirection: "column",
-          p: { xs: 4, md: 6 }
-        }}
-      >
-        <Box sx={{ maxWidth: "1200px", width: "100%", mx: "auto" }}>
+
+      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", overflow: "hidden" }}>
+
+        {/* ── TOP BAR ──────────────────────────────────────── */}
+        <Box
+          component="header"
+          sx={{
+            height: 64,
+            px: { xs: 3, md: 4 },
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            bgcolor: "#292a2d",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            position: "sticky",
+            top: 0,
+            zIndex: 100,
+            flexShrink: 0,
+          }}
+        >
+          {/* Page title */}
+          <Box>
+            <Typography
+              sx={{
+                fontSize: "1rem",
+                fontWeight: 500,
+                color: "#e8eaed",
+                lineHeight: 1.25,
+                fontFamily: "'Google Sans', Roboto, sans-serif",
+              }}
+            >
+              {page.title}
+            </Typography>
+            <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", lineHeight: 1.3 }}>
+              {page.sub}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* ── PAGE CONTENT ─────────────────────────────────── */}
+        <Box
+          component="main"
+          sx={{
+            flex: 1,
+            p: { xs: 3, md: "24px 32px" },
+            maxWidth: 1320,
+            width: "100%",
+            mx: "auto",
+          }}
+        >
           {children}
         </Box>
       </Box>
     </Box>
   );
-};
-
-export default Layout;
+}

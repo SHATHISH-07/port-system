@@ -1,164 +1,128 @@
 import {
-    Card,
-    CardContent,
-    Typography,
-    Table,
-    TableHead,
-    TableRow,
-    TableCell,
-    TableBody,
-    Chip,
-    Box,
-    Button
+  Card, CardContent, Typography, Table, TableHead,
+  TableRow, TableCell, TableBody, Chip, Box, Button,
 } from "@mui/material";
-import { KeyboardArrowDown, KeyboardArrowUp } from "@mui/icons-material";
+import { TableChartRounded, KeyboardArrowDownRounded, KeyboardArrowUpRounded } from "@mui/icons-material";
 import { useState } from "react";
 
 interface Row {
-    berth: string;
-    block: string;
-    cargo_concentration: string;
-    total_travel_distance: string;
-    congestion_risk: "Low" | "Medium" | "High";
+  berth: string;
+  block: string;
+  cargo_concentration: string;
+  total_travel_distance: string;
+  congestion_risk: "Low" | "Medium" | "High";
 }
+interface Props { data: Row[]; }
 
-interface Props {
-    data: Row[];
-}
-
-const getChipStyles = (value: string) => {
-    if (value === "Low") return { bgcolor: "#ecfdf5", color: "#047857" };
-    if (value === "Medium") return { bgcolor: "#fffbeb", color: "#b45309" };
-    return { bgcolor: "#fef2f2", color: "#b91c1c" };
+const riskStyle = (v: string) => {
+  if (v === "Low")    return { bgcolor: "rgba(129,201,149,0.1)", color: "#81c995", border: "1px solid rgba(129,201,149,0.22)" };
+  if (v === "Medium") return { bgcolor: "rgba(253,214,99,0.1)",  color: "#fdd663", border: "1px solid rgba(253,214,99,0.22)" };
+  return                     { bgcolor: "rgba(242,139,130,0.1)", color: "#f28b82", border: "1px solid rgba(242,139,130,0.22)" };
 };
 
-const BerthImpactTable = ({ data }: Props) => {
-    const [expanded, setExpanded] = useState(false);
+const COLS = ["Berth", "Cargo Concentration", "Travel Distance", "Congestion Risk"];
+const LIMIT = 5;
 
-    if (!data || data.length === 0) return null;
+export default function BerthImpactTable({ data }: Props) {
+  const [expanded, setExpanded] = useState(false);
+  if (!data?.length) return null;
+  const rows = expanded ? data : data.slice(0, LIMIT);
 
-    const initialRows = 5;
-
-    const displayRows = expanded ? data : data.slice(0, initialRows);
-
-    return (
-        <Card
+  return (
+    <Card>
+      <CardContent sx={{ p: 3 }}>
+        {/* Header */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
+          <TableChartRounded sx={{ fontSize: 16, color: "#9aa0a6" }} />
+          <Typography
+            sx={{ fontSize: "0.6875rem", fontWeight: 500, color: "#9aa0a6", letterSpacing: "0.1em", textTransform: "uppercase", flex: 1 }}
+          >
+            Berth Impact Analysis
+          </Typography>
+          <Box
             sx={{
-                borderRadius: 3,
-                border: "1px solid #e5e7eb",
-                boxShadow: "none"
+              bgcolor: "rgba(138,180,248,0.08)",
+              border: "1px solid rgba(138,180,248,0.18)",
+              borderRadius: 1,
+              px: 1,
+              py: 0.25,
             }}
-        >
-            <CardContent sx={{ p: 3 }}>
-                {/* HEADER */}
-                <Typography
-                    sx={{
-                        fontWeight: 600,
-                        fontSize: 14,
-                        color: "#6b7280",
-                        letterSpacing: 0.5,
-                        mb: 2
-                    }}
+          >
+            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 500, color: "#8ab4f8" }}>
+              {data.length} berths
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Table */}
+        <Box sx={{ overflowX: "auto" }}>
+          <Table size="small" sx={{ minWidth: 480 }}>
+            <TableHead>
+              <TableRow>
+                {COLS.map(h => (
+                  <TableCell key={h}>{h}</TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.map((row, i) => (
+                <TableRow
+                  key={i}
+                  sx={{ bgcolor: i === 0 ? "rgba(138,180,248,0.04)" : "transparent" }}
                 >
-                    BERTH IMPACT ANALYSIS
-                </Typography>
-
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            {["Berth", "Cargo Concentration", "Travel Distance", "Congestion Risk"].map((h) => (
-                                <TableCell
-                                    key={h}
-                                    sx={{
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        color: "#9ca3af",
-                                        borderBottom: "1px solid #f1f5f9"
-                                    }}
-                                >
-                                    {h}
-                                </TableCell>
-                            ))}
-                        </TableRow>
-                    </TableHead>
-
-                    <TableBody>
-                        {displayRows.map((row, i) => (
-                            <TableRow
-                                key={i}
-                                sx={{
-                                    backgroundColor: i === 0 ? "#f0fdf4" : "transparent",
-                                    "&:hover": {
-                                        backgroundColor: "#f9fafb"
-                                    }
-                                }}
-                            >
-                                {/* BERTH */}
-                                <TableCell sx={{ borderBottom: "1px solid #f9fafb" }}>
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                        {row.berth}
-
-                                        {i === 0 && (
-                                            <Chip
-                                                label="Recommended"
-                                                size="small"
-                                                sx={{
-                                                    bgcolor: "#e5f9feff",
-                                                    color: "#d1370dff",
-                                                    fontSize: 13,
-                                                    border: "1px solid #d1370dff"
-                                                }}
-                                            />
-                                        )}
-                                    </Box>
-                                </TableCell>
-
-                                {/* CONCENTRATION */}
-                                <TableCell sx={{ borderBottom: "1px solid #f9fafb" }}>
-                                    {row.cargo_concentration}
-                                </TableCell>
-
-                                {/* DISTANCE */}
-                                <TableCell sx={{ borderBottom: "1px solid #f9fafb" }}>
-                                    <Chip
-                                        label={row.total_travel_distance}
-                                        size="small"
-                                        sx={getChipStyles(row.total_travel_distance)}
-                                    />
-                                </TableCell>
-
-                                {/* CONGESTION */}
-                                <TableCell sx={{ borderBottom: "1px solid #f9fafb" }}>
-                                    <Chip
-                                        label={row.congestion_risk}
-                                        size="small"
-                                        sx={getChipStyles(row.congestion_risk)}
-                                    />
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-
-                {/* 🔽 SHOW MORE / LESS */}
-                {data.length > initialRows && (
-                    <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-                        <Button
-                            onClick={() => setExpanded(!expanded)}
-                            endIcon={expanded ? <KeyboardArrowUp /> : <KeyboardArrowDown />}
-                            sx={{
-                                textTransform: "none",
-                                color: "#6b7280",
-                                fontSize: 13
-                            }}
-                        >
-                            {expanded ? "Show Less" : "Show More"}
-                        </Button>
+                  {/* Berth */}
+                  <TableCell>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography sx={{ fontWeight: i === 0 ? 600 : 400, color: "#e8eaed", fontSize: "0.8125rem" }}>
+                        {row.berth}
+                      </Typography>
+                      {i === 0 && (
+                        <Chip
+                          label="Recommended"
+                          size="small"
+                          sx={{ bgcolor: "rgba(138,180,248,0.12)", color: "#8ab4f8", border: "1px solid rgba(138,180,248,0.25)", fontSize: "0.625rem", height: 18 }}
+                        />
+                      )}
                     </Box>
-                )}
-            </CardContent>
-        </Card>
-    );
-};
+                  </TableCell>
 
-export default BerthImpactTable;
+                  {/* Concentration */}
+                  <TableCell>
+                    <Typography sx={{ color: "#e8eaed", fontSize: "0.8125rem" }}>
+                      {row.cargo_concentration}
+                    </Typography>
+                  </TableCell>
+
+                  {/* Distance */}
+                  <TableCell>
+                    <Chip label={row.total_travel_distance} size="small" sx={{ ...riskStyle(row.total_travel_distance), fontSize: "0.6875rem" }} />
+                  </TableCell>
+
+                  {/* Congestion */}
+                  <TableCell>
+                    <Chip label={row.congestion_risk} size="small" sx={{ ...riskStyle(row.congestion_risk), fontSize: "0.6875rem" }} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
+
+        {/* Show more */}
+        {data.length > LIMIT && (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 1.5 }}>
+            <Button
+              onClick={() => setExpanded(v => !v)}
+              endIcon={expanded ? <KeyboardArrowUpRounded /> : <KeyboardArrowDownRounded />}
+              variant="text"
+              size="small"
+              sx={{ color: "#9aa0a6", fontSize: "0.75rem", "&:hover": { color: "#e8eaed" } }}
+            >
+              {expanded ? "Show less" : `Show ${data.length - LIMIT} more`}
+            </Button>
+          </Box>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

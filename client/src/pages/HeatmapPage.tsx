@@ -1,144 +1,134 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Box,
-  Typography,
-  Paper,
-  Chip,
-  TextField,
-  Button,
-  CircularProgress,
+  Box, Typography, TextField, Button, CircularProgress, Divider, InputAdornment,
 } from "@mui/material";
-// IMPORTANT: Update this import to match your actual api path
+import {
+  SearchRounded,
+  AutoGraphRounded,
+  WarningAmberRounded,
+  CheckCircleOutlineRounded,
+  HelpOutlineRounded,
+  GridViewOutlined,
+  StarRounded
+} from "@mui/icons-material";
 import { api } from "../api/api";
 
-// ─── TYPESCRIPT INTERFACES ────────────────────────────────────────────────────
-export interface CellData {
-  row: number;
-  bay: number;
-  count: number;
-  tiers: Record<string, number>;
-}
-
-export interface BlockData {
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface BlockData {
   count: number;
   hazardous: number;
   reefer: number;
   oog: number;
   intensity: number;
   concentration: "High" | "Medium" | "Low";
-  cells?: CellData[];
 }
 
-export interface Summary {
-  hazardous: number;
-  reefer: number;
-  oog: number;
-}
-
-export interface VesselHeatmapResponse {
+interface VesselHeatmapResponse {
   vessel: string;
   visit_id: string;
   recommended_berth: string;
   max_block: string;
-  summary: Summary;
+  summary: { hazardous: number; reefer: number; oog: number };
   layout: Record<string, { x: number; y: number }>;
   blocks: Record<string, BlockData>;
 }
 
-// ─── HEATMAP COLOR (3-color system) ───────────────────────────────────────────
-const getHeatColor = (concentration?: "High" | "Medium" | "Low"): string => {
-  if (concentration === "High") return "rgba(220, 38, 38, 0.88)";
-  if (concentration === "Medium") return "rgba(249, 115, 22, 0.86)";
-  if (concentration === "Low") return "rgba(34, 197, 94, 0.82)";
-  return "rgba(255,255,255,0)";
+// ─── Colour helpers ───────────────────────────────────────────────────────────
+const CONC_COLOR = {
+  High: { fill: "#dc2626", track: "rgba(220,38,38,0.18)", text: "#f87171", border: "rgba(220,38,38,0.30)" }, // Red
+  Medium: { fill: "#ea580c", track: "rgba(234,88,12,0.18)", text: "#fb923c", border: "rgba(234,88,12,0.30)" }, // Orange
+  Low: { fill: "#16a34a", track: "rgba(22,163,74,0.18)", text: "#4ade80", border: "rgba(22,163,74,0.30)" }, // Green
 };
 
-// ─── APM TERMINALS PORT ELIZABETH — REAL LAYOUT ───────────────────────────────
-//
-// SVG canvas: 980 × 860
-//
-// Real-world geography (5080 McLester St, Elizabeth NJ):
-//   The terminal is a peninsula on Newark Bay / Elizabeth Channel.
-//   Water wraps THREE sides: North (top), East (right), South (bottom).
-//   Truck Gate (McLester St):  West side  x=0   → x=160
-//   Terminal land:             x=160 → x=820,  y=80 → y=780
-//   North quay apron:          y=80  → y=135   (top)
-//   East quay apron (main):    x=765 → x=820   (right — deepest berth)
-//   South quay apron:          y=725 → y=780   (bottom)
-//   Rail yard (Millennium):    x=160..345, y=80..210  (NW corner)
-//   Container yard blocks:     3 cols × 3 rows (G1–G9) in the center
-//
-// Grid → SVG mapping (blocks are horizontal, landscape orientation):
-//   col 0: x=195,  col 1: x=400,  col 2: x=605
-//   row 0: y=165,  row 1: y=345,  row 2: y=525
-//   G1–G3 wide blocks  w=175, G3/G6/G9 narrower w=140 (east col, near main quay), h=155
-//
-// Berths:
-//   B1 — North berth: ship above north apron (y<80), spans x=640..820
-//   B2 — East berth (main deep quay): ship right of east apron (x>820), spans y=80..500
-//   B3 — South berth: ship below south apron (y>780), spans x=160..720
-//
-const CANVAS_W = 980;
-const CANVAS_H = 860;
+const concColor = (c?: "High" | "Medium" | "Low") =>
+  CONC_COLOR[c ?? "Low"];
 
-// Block layout config: blockId → grid col/row
-const BLOCK_GRID: Record<string, { col: number; row: number }> = {
-  G1: { col: 0, row: 0 },
-  G2: { col: 1, row: 0 },
-  G3: { col: 2, row: 0 },
-  G4: { col: 0, row: 1 },
-  G5: { col: 1, row: 1 },
-  G6: { col: 2, row: 1 },
-  G7: { col: 0, row: 2 },
-  G8: { col: 1, row: 2 },
-  G9: { col: 2, row: 2 },
+// Row labels
+const ROW_LABELS: Record<number, string> = {
+  0: "ROW A - FAR ZONE",
+  1: "ROW B - MID ZONE",
+  2: "ROW C - NEAR QUAY",
+  3: "ROW D - QUAY SIDE",
 };
 
-const COL_X = [195, 400, 605];
-const ROW_Y = [165, 345, 525];
-const BLOCK_W_MAIN = 175; // cols 0 & 1
-const BLOCK_W_EAST = 140; // col 2 (near east quay, tighter)
-const BLOCK_H = 155;
-const BAY_COUNT = 10;
+// ─── Single block tile ────────────────────────────────────────────────────────
+function BlockTile({
+  blockId, block, isMax,
+}: {
+  blockId: string;
+  block?: BlockData;
+  isMax: boolean;
+}) {
+  if (!block || block.count === 0) return null;
 
-function getBlockRect(col: number, row: number) {
-  const x = COL_X[col];
-  const y = ROW_Y[row];
-  const w = col === 2 ? BLOCK_W_EAST : BLOCK_W_MAIN;
-  const h = BLOCK_H;
-  return { x, y, w, h, cx: x + w / 2, cy: y + h / 2 };
+  const cc = concColor(block.concentration);
+  const pct = (block.intensity * 100).toFixed(0);
+
+  return (
+    <Box
+      sx={{
+        bgcolor: "#111827",
+        border: isMax ? "2px solid #a855f7" : "1px solid rgba(255,255,255,0.05)",
+        boxShadow: isMax ? "0 0 20px rgba(168, 85, 247, 0.4), inset 0 0 10px rgba(168, 85, 247, 0.1)" : "none",
+        borderRadius: 2,
+        p: 2,
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: 140,
+        // Force exactly up to 3 blocks per row centrally
+        flex: "0 1 calc(33.333% - 16px)",
+        minWidth: 180,
+        maxWidth: 280,
+        transition: "transform 150ms",
+        zIndex: 2,
+        "&:hover": { transform: "translateY(-2px)" },
+      }}
+    >
+      {isMax && (
+        <StarRounded sx={{ position: "absolute", top: 8, right: 8, color: "#a855f7", fontSize: 20 }} />
+      )}
+
+      <Typography sx={{ position: "absolute", top: 12, left: 14, fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        Block {blockId}
+      </Typography>
+
+      <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <Typography
+          sx={{
+            fontSize: "2.75rem",
+            fontWeight: 700,
+            color: "#ffffff",
+            lineHeight: 1,
+            fontFamily: "'Google Sans', Roboto, sans-serif",
+          }}
+        >
+          {pct}%
+        </Typography>
+        <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", mt: 0.5 }}>
+          {block.count} Containers
+        </Typography>
+      </Box>
+
+      <Box sx={{ position: "absolute", bottom: 16, width: "calc(100% - 32px)", height: 4, bgcolor: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
+        <Box
+          sx={{
+            height: "100%",
+            width: `${Math.min(Number(pct), 100)}%`,
+            bgcolor: cc.fill,
+            borderRadius: 3,
+            transition: "width 600ms ease",
+          }}
+        />
+      </Box>
+    </Box>
+  );
 }
 
-// Build block layout from API layout grid (maps API x/y → our actual SVG positions)
-function buildBlockLayout(
-  layout: Record<string, { x: number; y: number }>
-): Record<string, { x: number; y: number; w: number; h: number; cx: number; cy: number }> {
-  const result: Record<
-    string,
-    { x: number; y: number; w: number; h: number; cx: number; cy: number }
-  > = {};
-  Object.entries(layout).forEach(([blockId, pos]) => {
-    const grid = BLOCK_GRID[blockId];
-    if (grid) {
-      result[blockId] = getBlockRect(grid.col, grid.row);
-    } else {
-      // Fallback: use API coords as col/row indices
-      result[blockId] = getBlockRect(
-        Math.min(pos.x, 2),
-        Math.min(pos.y, 2)
-      );
-    }
-  });
-  return result;
-}
-
-// ─── CRANE POSITIONS ──────────────────────────────────────────────────────────
-const NORTH_CRANES = [230, 360, 480, 610, 720]; // x positions along north quay
-const SOUTH_CRANES = [230, 360, 480, 610, 720]; // x positions along south quay
-const EAST_CRANES = [155, 290, 425, 560, 695]; // y positions along east quay
-
-// ─── COMPONENT ────────────────────────────────────────────────────────────────
-export default function Heatmap() {
+// ─── Main Component ───────────────────────────────────────────────────────────
+export default function HeatmapPage() {
   const [vesselInput, setVesselInput] = useState("AA7");
   const [data, setData] = useState<VesselHeatmapResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -150,470 +140,383 @@ export default function Heatmap() {
     setError(null);
     api
       .get(`/vessel/heatmap?vessel_id=${encodeURIComponent(vesselInput.trim())}`)
-      .then((res) => setData(res.data))
-      .catch((err) => {
-        console.error("Error loading heatmap:", err);
-        setError("Failed to load data. Check vessel ID and try again.");
-      })
+      .then(res => setData(res.data))
+      .catch(() => setError("Failed to load data. Check vessel ID and try again."))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    fetchHeatmap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { fetchHeatmap(); }, []);
 
-  const blockLayout = data ? buildBlockLayout(data.layout) : {};
+  // 1) Extract and chunk active blocks logic (3 per row, max block strictly at the very end)
+  const chunkedRows: string[][] = [];
+  if (data) {
+    const activeBlockIds = Object.entries(data.blocks)
+      .filter(([, block]) => block.count > 0)
+      .map(([id]) => id);
 
-  // ── RENDER HELPERS ───────────────────────────────────────────────────────────
+    // Isolate max block
+    const withoutMax = activeBlockIds.filter(id => id !== data.max_block);
 
-  /** One container yard block (base grid + RTG rails) */
-  const renderBlockBase = (blockId: string, pos: ReturnType<typeof getBlockRect>) => {
-    const stepX = pos.w / BAY_COUNT;
-    return (
-      <g key={`base-${blockId}`}>
-        <rect x={pos.x} y={pos.y} width={pos.w} height={pos.h}
-          fill="#F8F7F0" stroke="#94A3B8" strokeWidth="0.8" />
-        {Array.from({ length: BAY_COUNT - 1 }).map((_, i) => (
-          <line key={i}
-            x1={pos.x + stepX * (i + 1)} y1={pos.y}
-            x2={pos.x + stepX * (i + 1)} y2={pos.y + pos.h}
-            stroke="#CBD5E1" strokeWidth="0.5" />
-        ))}
-        <line x1={pos.x} y1={pos.cy} x2={pos.x + pos.w} y2={pos.cy}
-          stroke="#94A3B8" strokeWidth="0.8" strokeDasharray="5 4" />
-        {/* RTG rails top/bottom */}
-        <rect x={pos.x} y={pos.y} width={pos.w} height={4} fill="#64748B" opacity="0.25" />
-        <rect x={pos.x} y={pos.y + pos.h - 4} width={pos.w} height={4} fill="#64748B" opacity="0.25" />
-      </g>
-    );
-  };
+    // Sort standard blocks by original layout proximity to keep things tidy
+    withoutMax.sort((a, b) => {
+      const posA = data.layout[a] || { x: 0, y: 0 };
+      const posB = data.layout[b] || { x: 0, y: 0 };
+      return posA.y - posB.y || posA.x - posB.x;
+    });
 
-  /** Heatmap heat cloud overlay for a block */
-  const renderHeatCloud = (blockId: string, pos: ReturnType<typeof getBlockRect>) => {
-    if (!data) return null;
-    const block = data.blocks[blockId];
-    if (!block || block.count === 0) return null;
-    return (
-      <ellipse key={`heat-${blockId}`}
-        cx={pos.cx} cy={pos.cy}
-        rx={pos.w * 0.6} ry={pos.h * 0.7}
-        fill={getHeatColor(block.concentration)}
-      />
-    );
-  };
+    // Re-append max block at the absolute end so it's always closest to the berth
+    const finalOrder = [...withoutMax, data.max_block];
 
-  /** Block ID badge, count label, intensity bar */
-  const renderBlockLabels = (blockId: string, pos: ReturnType<typeof getBlockRect>) => {
-    if (!data) return null;
-    const block = data.blocks[blockId];
-    const count = block?.count ?? 0;
-    const intensity = block?.intensity ?? 0;
-    const isMax = blockId === data.max_block;
-
-    return (
-      <g key={`lbl-${blockId}`}>
-        {data.recommended_berth.includes(blockId) && (
-          <rect x={pos.x - 3} y={pos.y - 3} width={pos.w + 6} height={pos.h + 6}
-            rx="5" fill="none" stroke="#1d4ed8" strokeWidth="2.5" strokeDasharray="6 3" />
-        )}
-        <rect x={pos.x + 4} y={pos.y + 5} width={30} height={18} rx="3"
-          fill={isMax ? "rgba(220,38,38,0.85)" : "rgba(15,23,42,0.72)"} />
-        <text x={pos.x + 19} y={pos.y + 18} fill="#f8fafc" fontSize="9" fontWeight="800"
-          fontFamily="sans-serif" textAnchor="middle">{blockId}</text>
-        {count > 0 && (
-          <text x={pos.cx} y={pos.cy - 8} fill="#0f172a" fontSize="17" fontWeight="800"
-            fontFamily="sans-serif" textAnchor="middle"
-            style={{ textShadow: "0 0 5px rgba(255,255,255,0.95)" }}>
-            {count}
-          </text>
-        )}
-        {count > 0 && (
-          <>
-            <rect x={pos.x + 8} y={pos.y + pos.h - 22} width={pos.w - 16} height={8}
-              rx="3" fill="rgba(0,0,0,0.12)" />
-            <rect x={pos.x + 8} y={pos.y + pos.h - 22}
-              width={(pos.w - 16) * intensity} height={8} rx="3"
-              fill={block?.concentration === "High" ? "#dc2626"
-                : block?.concentration === "Medium" ? "#f97316" : "#22c55e"}
-              opacity="0.85"
-            />
-            <text x={pos.cx} y={pos.y + pos.h - 8} fill="#475569" fontSize="9" fontWeight="600"
-              fontFamily="sans-serif" textAnchor="middle">
-              {`${(intensity * 100).toFixed(0)}% intensity`}
-            </text>
-          </>
-        )}
-      </g>
-    );
-  };
-
-  /** One quay crane — direction: "down" (north quay), "up" (south quay), "right" (east quay) */
-  const renderCrane = (key: string, cx: number, cy: number, dir: "down" | "up" | "right") => {
-    if (dir === "down") {
-      // North quay: mast vertical, boom extends toward water (upward)
-      return (
-        <g key={key}>
-          <rect x={cx - 4} y={cy - 4} width={9} height={50} fill="#F59E0B" stroke="#B45309" strokeWidth="0.6" />
-          <rect x={cx - 65} y={cy - 4} width={70} height={5} fill="#FBBF24" stroke="#B45309" strokeWidth="0.5" />
-          <rect x={cx + 5} y={cy - 4} width={35} height={5} fill="#FBBF24" stroke="#B45309" strokeWidth="0.5" />
-          <line x1={cx - 30} y1={cy + 1} x2={cx - 30} y2={cy + 30} stroke="#92400E" strokeWidth="1" />
-          <rect x={cx - 42} y={cy + 28} width={24} height={4} rx="1" fill="#B45309" />
-        </g>
-      );
+    // Chunk into arrays of 3
+    for (let i = 0; i < finalOrder.length; i += 3) {
+      chunkedRows.push(finalOrder.slice(i, i + 3));
     }
-    if (dir === "up") {
-      // South quay: mast vertical, boom extends toward water (downward)
-      return (
-        <g key={key}>
-          <rect x={cx - 4} y={cy - 44} width={9} height={50} fill="#F59E0B" stroke="#B45309" strokeWidth="0.6" />
-          <rect x={cx - 65} y={cy} width={70} height={5} fill="#FBBF24" stroke="#B45309" strokeWidth="0.5" />
-          <rect x={cx + 5} y={cy} width={35} height={5} fill="#FBBF24" stroke="#B45309" strokeWidth="0.5" />
-          <line x1={cx - 30} y1={cy - 10} x2={cx - 30} y2={cy} stroke="#92400E" strokeWidth="1" />
-          <rect x={cx - 42} y={cy - 14} width={24} height={4} rx="1" fill="#B45309" />
-        </g>
-      );
-    }
-    // East quay: mast horizontal (rotated), boom extends toward water (rightward)
-    return (
-      <g key={key}>
-        <rect x={cx - 4} y={cy - 4} width={50} height={9} fill="#F59E0B" stroke="#B45309" strokeWidth="0.6" />
-        <rect x={cx - 4} y={cy - 65} width={5} height={70} fill="#FBBF24" stroke="#B45309" strokeWidth="0.5" />
-        <rect x={cx - 4} y={cy + 5} width={5} height={35} fill="#FBBF24" stroke="#B45309" strokeWidth="0.5" />
-        <line x1={cx + 1} y1={cy - 30} x2={cx + 32} y2={cy - 30} stroke="#92400E" strokeWidth="1" />
-        <rect x={cx + 28} y={cy - 42} width={4} height={24} rx="1" fill="#B45309" />
-      </g>
-    );
+  }
+
+  const totalContainers = data
+    ? Object.values(data.blocks).reduce((s, b) => s + b.count, 0)
+    : 0;
+
+  // Efficiency string calculator
+  const calcEfficiency = (targetBerth: number) => {
+    if (!data) return "";
+    const optimalBerthNum = parseInt(data.recommended_berth.replace(/\D/g, '')) || 2;
+    if (targetBerth === optimalBerthNum) return "100% Optimal";
+
+    const distance = Math.abs(targetBerth - optimalBerthNum);
+    const intensityWeight = data.blocks[data.max_block]?.intensity * 20 || 15;
+    const penalty = Math.round((distance * 25) + intensityWeight);
+
+    return `-${penalty}% efficiency`;
   };
 
-  /** Ship hull — north (horizontal, bow right), east (vertical, bow up), south (horizontal, bow left) */
-  const renderShip = (berth: "B1" | "B2" | "B3", vesselName: string) => {
-    if (berth === "B1") {
-      // North berth — ship sits above north quay (y < 80), bow points west (left)
-      return (
-        <g key="ship-B1">
-          <path d="M 820,8 L 820,72 L 655,72 L 636,40 L 655,8 Z"
-            fill="#334155" stroke="#0f172a" strokeWidth="1.2" />
-          <path d="M 820,8 L 820,20 L 660,20 L 642,40 L 660,60 L 820,60 L 820,72 L 655,72 L 636,40 L 655,8 Z"
-            fill="#3D5068" />
-          <rect x="696" y="16" width="48" height="44" rx="2" fill="#475569" stroke="#334155" strokeWidth="0.8" />
-          {[0.3, 0.5, 0.7].map((t) => (
-            <rect key={t} x="703" y={16 + 44 * t - 4} width="10" height="7" rx="1" fill="#BAE6FD" opacity="0.9" />
-          ))}
-          <text x="745" y="46" fill="#E2E8F0" fontSize="8" fontWeight="600" fontFamily="sans-serif" textAnchor="middle">
-            MSC OSCAR
-          </text>
-          <rect x="812" y="29" width="34" height="22" rx="3" fill="#1e40af" />
-          <text x="829" y="44" fill="#fff" fontSize="11" fontWeight="700" fontFamily="sans-serif" textAnchor="middle">B1</text>
-        </g>
-      );
-    }
-    if (berth === "B2") {
-      // East berth — ship sits right of east quay (x > 820), bow points north (up)
-      return (
-        <g key="ship-B2">
-          <path d="M 836,80 L 836,510 L 905,510 L 926,295 L 905,80 Z"
-            fill="#334155" stroke="#0f172a" strokeWidth="1.2" />
-          <path d="M 836,80 L 848,80 L 912,80 L 912,510 L 836,510 Z" fill="#3D5068" />
-          <rect x="852" y="220" width="44" height="76" rx="2" fill="#475569" stroke="#334155" strokeWidth="0.8" />
-          {[0.3, 0.5, 0.7].map((t) => (
-            <rect key={t} x="858" y={220 + 76 * t - 4} width="10" height="7" rx="1" fill="#BAE6FD" opacity="0.9" />
-          ))}
-          <text x="875" y="280" fill="#E2E8F0" fontSize="8" fontWeight="600" fontFamily="sans-serif"
-            textAnchor="middle" transform="rotate(90,875,280)">{vesselName}</text>
-          <rect x="824" y="284" width="34" height="22" rx="3" fill="#1e40af" />
-          <text x="841" y="299" fill="#fff" fontSize="11" fontWeight="700" fontFamily="sans-serif" textAnchor="middle">B2</text>
-        </g>
-      );
-    }
-    // B3 — South berth: ship below south quay (y > 780), bow points east (right)
-    return (
-      <g key="ship-B3">
-        <path d="M 160,790 L 160,852 L 705,852 L 726,820 L 705,790 Z"
-          fill="#334155" stroke="#0f172a" strokeWidth="1.2" />
-        <path d="M 160,790 L 160,802 L 703,802 L 722,820 L 703,840 L 160,840 L 160,852 L 705,852 L 726,820 L 705,790 Z"
-          fill="#3D5068" />
-        <rect x="372" y="798" width="50" height="44" rx="2" fill="#475569" stroke="#334155" strokeWidth="0.8" />
-        {[0.3, 0.5, 0.7].map((t) => (
-          <rect key={t} x="379" y={798 + 44 * t - 3} width="10" height="6" rx="1" fill="#BAE6FD" opacity="0.9" />
-        ))}
-        <text x="397" y="836" fill="#E2E8F0" fontSize="8" fontWeight="600" fontFamily="sans-serif" textAnchor="middle">
-          MAERSK ESSEX
-        </text>
-        <rect x="155" y="808" width="34" height="22" rx="3" fill="#1e40af" />
-        <text x="172" y="823" fill="#fff" fontSize="11" fontWeight="700" fontFamily="sans-serif" textAnchor="middle">B3</text>
-      </g>
-    );
-  };
+  const optimalNum = data ? parseInt(data.recommended_berth.replace(/\D/g, '')) || 2 : 2;
+
+  // Calculate the physical X position of the max block for SVG lines to target
+  let maxBlockTargetX = 50; // Default center
+  if (chunkedRows.length > 0) {
+    const lastRowLength = chunkedRows[chunkedRows.length - 1].length;
+    if (lastRowLength === 3) maxBlockTargetX = 83.3; // Right-most of 3
+    else if (lastRowLength === 2) maxBlockTargetX = 66.6; // Right of 2
+    else maxBlockTargetX = 50; // Centered by itself
+  }
 
   return (
-    <Box sx={{ p: 3, bgcolor: "#f1f5f9", minHeight: "100vh" }}>
-      {/* Title */}
-      <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, color: "#0f172a", letterSpacing: "-0.3px" }}>
-        APM Terminals Port Elizabeth — Container Yard Heatmap
-      </Typography>
+    <Box sx={{ maxWidth: 1400, mx: "auto", bgcolor: "#060d17", minHeight: "100vh", p: 2 }}>
 
-      {/* Input bar */}
-      <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
-        <TextField
-          value={vesselInput}
-          onChange={(e) => setVesselInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && fetchHeatmap()}
-          placeholder="Vessel ID (e.g. AA7)"
-          size="small"
-          variant="outlined"
-          sx={{ bgcolor: "#fff", borderRadius: 1, width: "260px" }}
-        />
-        <Button
-          variant="contained"
-          onClick={fetchHeatmap}
-          disableElevation
-          sx={{ bgcolor: "#0284c7", "&:hover": { bgcolor: "#0369a1" }, textTransform: "none", fontWeight: 700 }}
-        >
-          {loading ? <CircularProgress size={18} color="inherit" /> : "Load Data"}
-        </Button>
+      {/* ── QUERY CARD ──────────────────────────────────────── */}
+      <Box
+        sx={{
+          bgcolor: "#0d1726",
+          border: "1px solid rgba(138,180,248,0.15)",
+          borderRadius: 2,
+          p: 3,
+          mb: 3,
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 1.5,
+          flexWrap: "wrap",
+        }}
+      >
+        <Box>
+          <Typography sx={{ fontSize: "0.6875rem", fontWeight: 500, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase", mb: 1 }}>
+            Query parameters
+          </Typography>
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+            <TextField
+              placeholder="Vessel ID (e.g. AA7)"
+              value={vesselInput}
+              onChange={e => setVesselInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && fetchHeatmap()}
+              size="small"
+              InputProps={{ startAdornment: <InputAdornment position="start"><SearchRounded sx={{ fontSize: 16, color: "#8ab4f8" }} /></InputAdornment> }}
+              sx={{
+                width: 240,
+                "& .MuiOutlinedInput-root": { borderRadius: 1, color: "#fff", bgcolor: "rgba(255,255,255,0.05)" },
+                "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(138,180,248,0.2)" }
+              }}
+            />
+            <Button
+              variant="contained"
+              onClick={fetchHeatmap}
+              disabled={loading}
+              startIcon={loading ? undefined : <AutoGraphRounded sx={{ fontSize: 16 }} />}
+              sx={{ height: 37, px: 2.5, borderRadius: 1, bgcolor: "#1a73e8" }}
+            >
+              {loading ? <CircularProgress size={16} color="inherit" /> : "Load Data"}
+            </Button>
+          </Box>
+        </Box>
       </Box>
 
-      {/* Error */}
-      {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
+      {/* Empty State */}
+      {!data && !loading && !error && (
+        <Box sx={{ py: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, border: "1px dashed rgba(138,180,248,0.2)", borderRadius: 2 }}>
+          <GridViewOutlined sx={{ fontSize: 40, color: "#5f6368" }} />
+          <Typography sx={{ fontSize: "0.9375rem", fontWeight: 500, color: "#9aa0a6" }}>No heatmap data</Typography>
+          <Typography sx={{ fontSize: "0.8125rem", color: "#5f6368" }}>Enter a Vessel ID above and click Load Data</Typography>
+        </Box>
+      )}
 
-      {data ? (
-        <>
-          {/* Summary cards */}
-          <Box sx={{ display: "flex", gap: 2, mb: 3, flexWrap: "wrap" }}>
+      {data && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+
+          {/* ── SUMMARY STRIP ─────────────────────────────────── */}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "repeat(2,1fr)", sm: "repeat(4,1fr)", md: "repeat(7,1fr)" },
+              gap: 1.5,
+            }}
+          >
             {[
-              { label: "Vessel", value: data.vessel, color: "#0f172a" },
-              { label: "Visit ID", value: data.visit_id, color: "#334155" },
-              { label: "Recommended Berth", value: data.recommended_berth, color: "#0284c7" },
-              { label: "Max Block", value: data.max_block, color: "#dc2626" },
-              { label: "Hazardous", value: String(data.summary?.hazardous ?? 0), color: "#ef4444" },
-              { label: "Reefer", value: String(data.summary?.reefer ?? 0), color: "#3b82f6" },
-              { label: "OOG", value: String(data.summary?.oog ?? 0), color: "#8b5cf6" },
-            ].map(({ label, value, color }) => (
-              <Paper key={label} sx={{ p: "10px 16px", borderRadius: 2, minWidth: 110 }}>
-                <Typography variant="caption" color="text.secondary"
-                  sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>
+              { label: "Vessel", value: data.vessel, accent: "#ffffff" },
+              { label: "Visit ID", value: data.visit_id, accent: "#9aa0a6" },
+              { label: "Total Containers", value: String(totalContainers), accent: "#ffffff" },
+              { label: "Recommended Berth", value: data.recommended_berth, accent: "#4ade80" },
+              { label: "Highest Block", value: data.max_block, accent: "#a855f7" },
+              { label: "Hazardous", value: String(data.summary?.hazardous ?? 0), accent: "#f87171" },
+              { label: "Reefer / OOG", value: `${data.summary?.reefer ?? 0} / ${data.summary?.oog ?? 0}`, accent: "#8ab4f8" },
+            ].map(({ label, value, accent }) => (
+              <Box
+                key={label}
+                sx={{
+                  bgcolor: "#0d1726",
+                  border: "1px solid rgba(138,180,248,0.15)",
+                  borderRadius: 1.5,
+                  px: 2,
+                  py: 1.5,
+                }}
+              >
+                <Typography sx={{ fontSize: "0.625rem", fontWeight: 500, color: "#8ab4f8", letterSpacing: "0.08em", textTransform: "uppercase", mb: 0.5 }}>
                   {label}
                 </Typography>
-                <Typography variant="h6" fontWeight="800" color={color} sx={{ lineHeight: 1.2 }}>
+                <Typography sx={{ fontSize: "1rem", fontWeight: 400, color: accent, lineHeight: 1.2, fontFamily: "'Google Sans', Roboto, sans-serif" }}>
                   {value}
                 </Typography>
-              </Paper>
+              </Box>
             ))}
           </Box>
 
-          {/* SVG Terminal Map */}
-          <Box sx={{ overflowX: "auto", pb: 2 }}>
-            <Paper elevation={2} sx={{ display: "inline-block", borderRadius: "10px", overflow: "hidden", border: "1px solid #e2e8f0" }}>
-              <svg
-                width={CANVAS_W}
-                height={CANVAS_H}
-                viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
-                style={{ display: "block" }}
-              >
-                <defs>
-                  <filter id="hblur" x="-70%" y="-70%" width="240%" height="240%">
-                    <feGaussianBlur stdDeviation="30" />
-                  </filter>
-                </defs>
+          {/* ── MAIN CONTENT ──────────────────────────────────── */}
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 280px" }, gap: 3, alignItems: "start" }}>
 
-                {/* ── 1. WATER (full canvas — wraps N, E, S) ─────── */}
-                <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#7EC8E3" />
-                {/* Ripples */}
-                {[120, 260, 440, 620, 760].map((ry) => (
-                  <ellipse key={`rE${ry}`} cx={900} cy={ry} rx="52" ry="8"
-                    fill="none" stroke="#A8D8EA" strokeWidth="0.9" opacity="0.45" />
+            {/* LEFT — Block Grid Map */}
+            <Box
+              sx={{
+                bgcolor: "#0d1726",
+                border: "1px solid rgba(138,180,248,0.15)",
+                borderRadius: 2,
+                overflow: "hidden",
+                backgroundImage: "linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)",
+                backgroundSize: "40px 40px",
+                position: "relative",
+                display: "flex",
+                flexDirection: "column"
+              }}
+            >
+              {/* Header */}
+              <Box sx={{ px: 3, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)", display: "flex", alignItems: "center", gap: 1, bgcolor: "#0d1726" }}>
+                <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase", flex: 1 }}>
+                  Vessel Cargo Concentration — {data.vessel}
+                </Typography>
+                <Box sx={{ display: "flex", gap: 0.75, alignItems: "center" }}>
+                  <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "#4ade80" }} />
+                  <Typography sx={{ fontSize: "0.6875rem", color: "#4ade80", fontWeight: 600, letterSpacing: "0.05em" }}>LIVE</Typography>
+                </Box>
+              </Box>
+
+              {/* Grid Rows (Rendered in max-3 chunks, max block guaranteed in last row) */}
+              <Box sx={{ p: 4, pb: 0, display: "flex", flexDirection: "column", gap: 6, flexGrow: 1 }}>
+                {chunkedRows.map((rowBlockIds, rowIdx) => (
+                  <Box key={rowIdx} sx={{ position: "relative", zIndex: 2 }}>
+                    <Typography
+                      sx={{
+                        position: "absolute", right: 0, top: -28,
+                        fontSize: "0.625rem", fontWeight: 600, color: "#475e7a",
+                        letterSpacing: "0.1em", textTransform: "uppercase"
+                      }}
+                    >
+                      {ROW_LABELS[rowIdx] || `ROW ${rowIdx + 1} ZONE`}
+                    </Typography>
+
+                    <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 3 }}>
+                      {rowBlockIds.map(blockId => (
+                        <BlockTile
+                          key={blockId}
+                          blockId={blockId}
+                          block={data.blocks[blockId]}
+                          isRecommended={data.recommended_berth.includes(blockId)}
+                          isMax={blockId === data.max_block}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
                 ))}
-                {[340, 580].map((rx) => (
-                  <ellipse key={`rN${rx}`} cx={rx} cy={30} rx="50" ry="7"
-                    fill="none" stroke="#A8D8EA" strokeWidth="0.8" opacity="0.38" />
-                ))}
-                {[350, 600].map((rx) => (
-                  <ellipse key={`rS${rx}`} cx={rx} cy={840} rx="52" ry="7"
-                    fill="none" stroke="#A8D8EA" strokeWidth="0.8" opacity="0.38" />
-                ))}
-                <text x="935" y="430" fill="#1B6CA8" fontSize="10" fontWeight="600"
-                  fontFamily="sans-serif" textAnchor="middle" transform="rotate(90,935,430)">
-                  NEWARK BAY / ELIZABETH CHANNEL
-                </text>
+              </Box>
 
-                {/* ── 2. TERMINAL LAND (peninsula) ────────────────── */}
-                <rect x="160" y="80" width="660" height="700" fill="#DDD8C4" />
+              {/* ── BERTHS AND DYNAMIC DASHED LINES ────────────────── */}
+              <Box sx={{ position: "relative", pt: 6, pb: 4, px: 4, mt: "auto" }}>
 
-                {/* ── 3. WEST — TRUCK GATE (McLester St) ──────────── */}
-                <rect x="0" y="80" width="160" height="700" fill="#C8C4B0" />
-                <text x="80" y="440" fill="#555" fontSize="11" fontWeight="600"
-                  fontFamily="sans-serif" textAnchor="middle" transform="rotate(-90,80,440)">
-                  TRUCK GATE — McLESTER ST
-                </text>
-                {[140, 240, 370, 510, 650].map((gy) => (
-                  <rect key={`gs${gy}`} x="0" y={gy} width="160" height="9" fill="#F5C518" opacity="0.5" />
-                ))}
-                <rect x="120" y="180" width="30" height="22" rx="3" fill="#1e40af" opacity="0.8" />
-                <text x="135" y="195" fill="#fff" fontSize="8" fontWeight="700" fontFamily="sans-serif" textAnchor="middle">GATE</text>
-                <rect x="120" y="440" width="30" height="22" rx="3" fill="#1e40af" opacity="0.8" />
-                <text x="135" y="455" fill="#fff" fontSize="8" fontWeight="700" fontFamily="sans-serif" textAnchor="middle">GATE</text>
+                {/* SVG Connecting Lines - Originating from center of berths directly to the highest block */}
+                <svg width="100%" height="80" style={{ position: "absolute", top: -20, left: 0, zIndex: 1, overflow: "visible" }}>
 
-                {/* ── 4. NORTH QUAY APRON ──────────────────────────── */}
-                <rect x="160" y="80" width="660" height="55" fill="#9CA3AF" />
-                <rect x="160" y="130" width="660" height="5" fill="#4B5563" opacity="0.8" />
-                <rect x="160" y="135" width="660" height="2" fill="#6B7280" opacity="0.5" />
-                <rect x="358" y="88" width="82" height="18" rx="3" fill="#1e40af" opacity="0.85" />
-                <text x="399" y="101" fill="#fff" fontSize="9" fontWeight="700" fontFamily="sans-serif" textAnchor="middle">
-                  APM TERMINALS
-                </text>
-
-                {/* ── 5. EAST QUAY APRON (main deep quay) ─────────── */}
-                <rect x="765" y="80" width="55" height="700" fill="#9CA3AF" />
-                <rect x="765" y="80" width="5" height="700" fill="#4B5563" opacity="0.8" />
-                <rect x="770" y="80" width="2" height="700" fill="#6B7280" opacity="0.5" />
-                <text x="795" y="440" fill="#4B5563" fontSize="10" fontWeight="600"
-                  fontFamily="sans-serif" textAnchor="middle" transform="rotate(90,795,440)">
-                  ELIZABETH CHANNEL — MAIN DEEP QUAY
-                </text>
-
-                {/* ── 6. SOUTH QUAY APRON ──────────────────────────── */}
-                <rect x="160" y="725" width="660" height="55" fill="#9CA3AF" />
-                <rect x="160" y="725" width="660" height="2" fill="#6B7280" opacity="0.5" />
-                <rect x="160" y="727" width="660" height="5" fill="#4B5563" opacity="0.8" />
-                <rect x="518" y="738" width="82" height="18" rx="3" fill="#1e40af" opacity="0.85" />
-                <text x="559" y="751" fill="#fff" fontSize="9" fontWeight="700" fontFamily="sans-serif" textAnchor="middle">
-                  APM TERMINALS
-                </text>
-
-                {/* ── 7. RAIL YARD (NW corner — Millennium Marine Rail) */}
-                <rect x="160" y="80" width="190" height="135" fill="#AAAAAA" />
-                <rect x="164" y="84" width="182" height="127" rx="2" fill="none" stroke="#6B7280"
-                  strokeWidth="1" strokeDasharray="4 3" />
-                {[100, 112, 124, 136, 148, 160, 172, 184, 196].map((ry) => (
-                  <line key={`rt${ry}`} x1="168" y1={ry} x2="342" y2={ry}
-                    stroke="#6B7280" strokeWidth="1.4" />
-                ))}
-                {[175, 193, 211, 229, 247, 265, 283, 301, 319, 337].map((rx) => (
-                  <rect key={`sl${rx}`} x={rx} y="97" width="3" height="104" fill="#78716C" opacity="0.5" />
-                ))}
-                <rect x="170" y="86" width="128" height="15" rx="2" fill="#1e3a5f" opacity="0.8" />
-                <text x="234" y="97" fill="#fff" fontSize="8" fontWeight="700" fontFamily="sans-serif" textAnchor="middle">
-                  MILLENNIUM MARINE RAIL
-                </text>
-
-                {/* ── 8. INTER-BLOCK ROADS ─────────────────────────── */}
-                {/* Horizontal roads between block rows */}
-                <rect x="175" y="328" width="578" height="16" fill="#B8B4A4" opacity="0.7" />
-                <rect x="175" y="508" width="578" height="16" fill="#B8B4A4" opacity="0.7" />
-                {/* Vertical roads between block cols */}
-                <rect x="378" y="152" width="16" height="584" fill="#B8B4A4" opacity="0.7" />
-                <rect x="588" y="152" width="16" height="584" fill="#B8B4A4" opacity="0.7" />
-
-                {/* ── 9. BLOCK BASES ───────────────────────────────── */}
-                {Object.entries(BLOCK_GRID).map(([blockId, grid]) => {
-                  const pos = getBlockRect(grid.col, grid.row);
-                  return renderBlockBase(blockId, pos);
-                })}
-
-                {/* ── 10. HEATMAP CLOUDS ───────────────────────────── */}
-                <g filter="url(#hblur)" style={{ mixBlendMode: "multiply" }}>
-                  {Object.entries(BLOCK_GRID).map(([blockId, grid]) => {
-                    const pos = getBlockRect(grid.col, grid.row);
-                    return renderHeatCloud(blockId, pos);
-                  })}
-                </g>
-
-                {/* ── 11. BLOCK LABELS & STATS ─────────────────────── */}
-                {Object.entries(BLOCK_GRID).map(([blockId, grid]) => {
-                  const pos = getBlockRect(grid.col, grid.row);
-                  return renderBlockLabels(blockId, pos);
-                })}
-
-                {/* ── 12. NORTH CRANES ─────────────────────────────── */}
-                {NORTH_CRANES.map((cx, i) => renderCrane(`nC${i}`, cx, 135, "down"))}
-
-                {/* ── 13. EAST CRANES ──────────────────────────────── */}
-                {EAST_CRANES.map((cy, i) => renderCrane(`eC${i}`, 765, cy, "right"))}
-
-                {/* ── 14. SOUTH CRANES ─────────────────────────────── */}
-                {SOUTH_CRANES.map((cx, i) => renderCrane(`sC${i}`, cx, 727, "up"))}
-
-                {/* ── 15. SHIPS ────────────────────────────────────── */}
-                {renderShip("B1", "MSC OSCAR")}
-                {renderShip("B2", data.vessel)}
-                {renderShip("B3", "MAERSK ESSEX")}
-
-                {/* ── 16. RECOMMENDED BERTH LEGEND ────────────────── */}
-                <g transform="translate(170, 700)">
-                  <rect x="0" y="0" width="14" height="8" rx="1"
-                    fill="none" stroke="#1d4ed8" strokeWidth="2" strokeDasharray="4 2" />
-                  <text x="20" y="8" fill="#334155" fontSize="10" fontFamily="sans-serif">
-                    Recommended berth: {data.recommended_berth}
+                  {/* Line from Berth 1 to Max Block */}
+                  <path d={`M 16.6% 80 L ${maxBlockTargetX}% 0`} fill="none" stroke={optimalNum === 1 ? "#4ade80" : "#dc2626"} strokeWidth="2" strokeDasharray="6,6" opacity={optimalNum === 1 ? "1" : "0.5"} />
+                  <text x={`${(16.6 + maxBlockTargetX) / 2}%`} y="40" fill={optimalNum === 1 ? "#4ade80" : "#dc2626"} fontSize="11" fontWeight="600" textAnchor="middle" style={{ textShadow: "0px 0px 4px #000" }}>
+                    {calcEfficiency(1)}
                   </text>
-                </g>
 
-                {/* ── 17. COMPASS ROSE ─────────────────────────────── */}
-                <g transform="translate(930, 750)">
-                  <circle cx="0" cy="0" r="22" fill="rgba(255,255,255,0.88)"
-                    stroke="#94A3B8" strokeWidth="0.8" />
-                  <polygon points="0,-15 -4,-6 4,-6" fill="#0F172A" />
-                  <polygon points="0,15 -4,6 4,6" fill="#94A3B8" />
-                  <text x="0" y="-5" fill="#0F172A" fontSize="9" fontWeight="700"
-                    fontFamily="sans-serif" textAnchor="middle">N</text>
-                </g>
+                  {/* Line from Berth 2 to Max Block */}
+                  <path d={`M 50% 80 L ${maxBlockTargetX}% 0`} fill="none" stroke={optimalNum === 2 ? "#4ade80" : "#dc2626"} strokeWidth="2" strokeDasharray="6,6" opacity={optimalNum === 2 ? "1" : "0.5"} />
+                  <text x={`${(50 + maxBlockTargetX) / 2}%`} y="40" fill={optimalNum === 2 ? "#4ade80" : "#dc2626"} fontSize="11" fontWeight="600" textAnchor="middle" style={{ textShadow: "0px 0px 4px #000" }}>
+                    {calcEfficiency(2)}
+                  </text>
 
-                {/* ── 18. SCALE BAR ────────────────────────────────── */}
-                <g transform="translate(170, 848)">
-                  <rect x="0" y="0" width="100" height="3" fill="#64748B" />
-                  <line x1="0" y1="-4" x2="0" y2="7" stroke="#64748B" strokeWidth="1" />
-                  <line x1="100" y1="-4" x2="100" y2="7" stroke="#64748B" strokeWidth="1" />
-                  <text x="50" y="-6" fill="#64748B" fontSize="9" textAnchor="middle" fontFamily="sans-serif">250 m</text>
-                </g>
+                  {/* Line from Berth 3 to Max Block */}
+                  <path d={`M 83.3% 80 L ${maxBlockTargetX}% 0`} fill="none" stroke={optimalNum === 3 ? "#4ade80" : "#dc2626"} strokeWidth="2" strokeDasharray="6,6" opacity={optimalNum === 3 ? "1" : "0.5"} />
+                  <text x={`${(83.3 + maxBlockTargetX) / 2}%`} y="40" fill={optimalNum === 3 ? "#4ade80" : "#dc2626"} fontSize="11" fontWeight="600" textAnchor="middle" style={{ textShadow: "0px 0px 4px #000" }}>
+                    {calcEfficiency(3)}
+                  </text>
 
-                {/* ── 19. BERTH BADGES (water side) ────────────────── */}
-                <rect x="820" y="795" width="80" height="44" rx="4" fill="rgba(255,255,255,0.6)" />
-                <text x="860" y="810" fill="#334155" fontSize="9" fontWeight="700" fontFamily="sans-serif" textAnchor="middle">B1: North</text>
-                <text x="860" y="822" fill="#334155" fontSize="9" fontFamily="sans-serif" textAnchor="middle">B2: East (main)</text>
-                <text x="860" y="834" fill="#334155" fontSize="9" fontFamily="sans-serif" textAnchor="middle">B3: South</text>
-              </svg>
-            </Paper>
-          </Box>
+                </svg>
 
-          {/* Block stats chips */}
-          {Object.keys(data.blocks).length > 0 && (
-            <Box sx={{ mt: 2, display: "flex", flexWrap: "wrap", gap: 1.5 }}>
-              {Object.entries(data.blocks).map(([blockId, block]) => (
-                <Paper key={blockId} sx={{
-                  p: "8px 14px", borderRadius: 2, minWidth: 130,
-                  borderLeft: `4px solid ${block.concentration === "High" ? "#dc2626" :
-                    block.concentration === "Medium" ? "#f97316" : "#22c55e"
-                    }`,
-                }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                    Block {blockId}
-                  </Typography>
-                  <Typography variant="body2" fontWeight={700} color="#0f172a">
-                    {block.count} containers
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {block.concentration} · {(block.intensity * 100).toFixed(0)}%
-                  </Typography>
-                </Paper>
-              ))}
+                {/* Berth Docks Layout */}
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, position: "relative", zIndex: 2 }}>
+
+                  {/* Berth 1 */}
+                  <Box sx={{ border: optimalNum === 1 ? "2px solid #4ade80" : "2px solid rgba(138,180,248,0.2)", bgcolor: optimalNum === 1 ? "rgba(74, 222, 128, 0.1)" : "#111827", boxShadow: optimalNum === 1 ? "0 -5px 15px rgba(74, 222, 128, 0.2)" : "none", borderRadius: "8px 8px 0 0", p: 1.5, textAlign: "center" }}>
+                    <Typography sx={{ fontSize: "0.6875rem", fontWeight: optimalNum === 1 ? 700 : 600, color: optimalNum === 1 ? "#4ade80" : "#8ab4f8", letterSpacing: "0.1em" }}>
+                      {optimalNum === 1 ? "OPTIMAL BERTH 1" : "BERTH 1"}
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: "2px", justifyContent: "center", mt: 1 }}>
+                      {[1, 2, 3, 4, 5, 6].map(i => <Box key={i} sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: optimalNum === 1 ? "#4ade80" : "rgba(138,180,248,0.2)" }} />)}
+                    </Box>
+                  </Box>
+
+                  {/* Berth 2 */}
+                  <Box sx={{ border: optimalNum === 2 ? "2px solid #4ade80" : "2px solid rgba(138,180,248,0.2)", bgcolor: optimalNum === 2 ? "rgba(74, 222, 128, 0.1)" : "#111827", boxShadow: optimalNum === 2 ? "0 -5px 15px rgba(74, 222, 128, 0.2)" : "none", borderRadius: "8px 8px 0 0", p: 1.5, textAlign: "center" }}>
+                    <Typography sx={{ fontSize: "0.6875rem", fontWeight: optimalNum === 2 ? 700 : 600, color: optimalNum === 2 ? "#4ade80" : "#8ab4f8", letterSpacing: "0.1em" }}>
+                      {optimalNum === 2 ? "OPTIMAL BERTH 2" : "BERTH 2"}
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: "2px", justifyContent: "center", mt: 1 }}>
+                      {[1, 2, 3, 4, 5, 6].map(i => <Box key={i} sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: optimalNum === 2 ? "#4ade80" : "rgba(138,180,248,0.2)" }} />)}
+                    </Box>
+                  </Box>
+
+                  {/* Berth 3 */}
+                  <Box sx={{ border: optimalNum === 3 ? "2px solid #4ade80" : "2px solid rgba(138,180,248,0.2)", bgcolor: optimalNum === 3 ? "rgba(74, 222, 128, 0.1)" : "#111827", boxShadow: optimalNum === 3 ? "0 -5px 15px rgba(74, 222, 128, 0.2)" : "none", borderRadius: "8px 8px 0 0", p: 1.5, textAlign: "center" }}>
+                    <Typography sx={{ fontSize: "0.6875rem", fontWeight: optimalNum === 3 ? 700 : 600, color: optimalNum === 3 ? "#4ade80" : "#8ab4f8", letterSpacing: "0.1em" }}>
+                      {optimalNum === 3 ? "OPTIMAL BERTH 3" : "BERTH 3"}
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: "2px", justifyContent: "center", mt: 1 }}>
+                      {[1, 2, 3, 4, 5, 6].map(i => <Box key={i} sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: optimalNum === 3 ? "#4ade80" : "rgba(138,180,248,0.2)" }} />)}
+                    </Box>
+                  </Box>
+
+                </Box>
+              </Box>
             </Box>
-          )}
 
-          {/* Legend */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: 2 }}>
-            <Typography variant="body2" color="text.secondary" fontWeight={700}>HEAT INDEX:</Typography>
-            <Chip label="Empty" size="small" sx={{ bgcolor: "#f1f5f9", border: "1px solid #cbd5e1" }} />
-            <Chip label="Low" size="small" sx={{ bgcolor: "#22c55e", color: "white", fontWeight: "bold" }} />
-            <Chip label="Medium" size="small" sx={{ bgcolor: "#f97316", color: "white", fontWeight: "bold" }} />
-            <Chip label="High" size="small" sx={{ bgcolor: "#dc2626", color: "white", fontWeight: "bold" }} />
+            {/* RIGHT PANEL */}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+
+              {/* Recommended Berth card */}
+              <Box sx={{ bgcolor: "#0d1726", border: "1.5px solid rgba(74, 222, 128, 0.4)", borderRadius: 2, overflow: "hidden" }}>
+                <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)" }}>
+                  <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                    Berth Suitability
+                  </Typography>
+                </Box>
+                <Box sx={{ px: 2.5, py: 2.5 }}>
+                  <Typography sx={{ fontSize: 32, fontWeight: 700, color: "#4ade80", lineHeight: 1, fontFamily: "'Google Sans', Roboto, sans-serif", mb: 0.5 }}>
+                    {data.recommended_berth}
+                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 1 }}>
+                    <CheckCircleOutlineRounded sx={{ fontSize: 14, color: "#4ade80" }} />
+                    <Typography sx={{ fontSize: "0.75rem", color: "#4ade80" }}>Optimal assignment</Typography>
+                  </Box>
+                  <Divider sx={{ borderColor: "rgba(138,180,248,0.1)", my: 1.5 }} />
+                  <Typography sx={{ fontSize: "0.625rem", fontWeight: 500, color: "#8ab4f8", letterSpacing: "0.08em", textTransform: "uppercase", mb: 0.75 }}>
+                    Nearest High Density Block
+                  </Typography>
+                  <Typography sx={{ fontSize: 20, fontWeight: 300, color: "#a855f7", fontFamily: "'Google Sans', Roboto, sans-serif" }}>
+                    {data.max_block}
+                  </Typography>
+                  {data.blocks[data.max_block] && (
+                    <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", mt: 0.25 }}>
+                      {data.blocks[data.max_block].count} Containers · {(data.blocks[data.max_block].intensity * 100).toFixed(0)}% utilisation
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+
+              {/* Cargo summary */}
+              <Box sx={{ bgcolor: "#0d1726", border: "1px solid rgba(138,180,248,0.15)", borderRadius: 2, overflow: "hidden" }}>
+                <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)" }}>
+                  <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                    Cargo Summary
+                  </Typography>
+                </Box>
+                <Box sx={{ px: 2.5, py: 2, display: "flex", flexDirection: "column", gap: 1.25 }}>
+                  {[
+                    { label: "Hazardous", value: data.summary?.hazardous ?? 0, accent: "#f87171", warnAt: 1 },
+                    { label: "Reefer", value: data.summary?.reefer ?? 0, accent: "#60a5fa", warnAt: 1 },
+                    { label: "OOG", value: data.summary?.oog ?? 0, accent: "#c084fc", warnAt: 1 },
+                  ].map(({ label, value, accent, warnAt }) => (
+                    <Box key={label} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <Typography sx={{ fontSize: "0.8125rem", color: "#9aa0a6" }}>{label}</Typography>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                        {value >= warnAt && <WarningAmberRounded sx={{ fontSize: 13, color: accent }} />}
+                        <Typography sx={{ fontSize: "0.875rem", fontWeight: 500, color: value >= warnAt ? accent : "#5f6368" }}>
+                          {value}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ))}
+                  {(data.summary?.hazardous ?? 0) === 0 &&
+                    (data.summary?.reefer ?? 0) === 0 &&
+                    (data.summary?.oog ?? 0) === 0 && (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5 }}>
+                        <CheckCircleOutlineRounded sx={{ fontSize: 14, color: "#4ade80" }} />
+                        <Typography sx={{ fontSize: "0.75rem", color: "#4ade80" }}>No special cargo</Typography>
+                      </Box>
+                    )}
+                </Box>
+              </Box>
+
+              {/* Visual Legend Panel */}
+              <Box sx={{ bgcolor: "#0d1726", border: "1px solid rgba(138,180,248,0.15)", borderRadius: 2, overflow: "hidden", mt: 'auto' }}>
+                <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)", display: "flex", alignItems: "center", gap: 1 }}>
+                  <HelpOutlineRounded sx={{ fontSize: 14, color: "#8ab4f8" }} />
+                  <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                    Concentration Legend
+                  </Typography>
+                </Box>
+                <Box sx={{ px: 2.5, py: 2 }}>
+                  <Box sx={{ width: "100%", height: 6, borderRadius: 2, mb: 1.5, background: "linear-gradient(90deg, #16a34a 0%, #ea580c 50%, #dc2626 100%)" }} />
+
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+                    {([
+                      { level: "High", desc: "> 65% utilisation", ...CONC_COLOR.High },
+                      { level: "Medium", desc: "30 – 65% utilisation", ...CONC_COLOR.Medium },
+                      { level: "Low", desc: "< 30% utilisation", ...CONC_COLOR.Low },
+                    ] as const).map(({ level, desc, fill, text }) => (
+                      <Box key={level} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: fill }} />
+                          <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: text }}>{level}</Typography>
+                        </Box>
+                        <Typography sx={{ fontSize: "0.6875rem", color: "#9aa0a6" }}>{desc}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </Box>
+
+            </Box>
           </Box>
-        </>
-      ) : (
-        !loading && !error && (
-          <Typography color="text.secondary">
-            Enter a Vessel ID and click Load Data to view the terminal heatmap.
-          </Typography>
-        )
+        </Box>
       )}
     </Box>
   );
