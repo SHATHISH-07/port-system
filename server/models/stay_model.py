@@ -8,7 +8,10 @@ from utils.feature_utils import create_features
 from utils.data_loader import get_data
 from models.training_status import training_status
 
-MODEL_PATH = "models/synthetic_stay_model.pkl"
+from dotenv import load_dotenv
+load_dotenv()
+
+MODEL_PATH = os.getenv("MODEL_PATH")
 
 FEATURE_NAMES = [
     "loaded",
@@ -282,8 +285,6 @@ def predict_from_input(loaded: int, discharged: int,actual_visits=None):
         },
         "predicted": {
             "avg_hours": round(float(pred), 2),
-            "max_hours": None,
-            "min_hours": None,
             "visits": 1
         },
         "risks": [],

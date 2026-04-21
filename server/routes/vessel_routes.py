@@ -15,10 +15,15 @@ def vessel_analysis(
     if vessel_id and loaded is not None and discharged is not None:
         result = analyze_vessel_dashboard(vessel_id)
 
+        actual_visits = None
+
+        if "actual" in result and "visits" in result["actual"]:
+            actual_visits = result["actual"]["visits"]
+
         manual = predict_from_input(
             loaded,
             discharged,
-            actual_visits=result["actual"]["visits"]
+            actual_visits=actual_visits
         )
 
         result["predicted"] = manual["predicted"]
