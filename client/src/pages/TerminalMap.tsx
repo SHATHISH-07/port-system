@@ -165,8 +165,8 @@ export default function TerminalMap() {
         {data ? (
           <Box sx={{ display: "flex", gap: 5, alignItems: "center", flex: 1 }}>
             <KPI label="Vessel Name" value={data.vessel} />
-            <KPI label="Visit GKEY" value={data.visit_id || "—"} isMono />
-            <KPI label="Total Volume" value={`${totalMoves} TEU`} isMono />
+            <KPI label="Visit ID" value={data.visit_id || "—"} isMono />
+            <KPI label="Total Volume" value={`${totalMoves} CTN`} isMono />
             <KPI label="Optimal Berth" value={targetBerthId} valueColor="#38bdf8" isMono />
             <KPI label="Primary Block" value={computedMaxBlock || data.max_block || "—"} valueColor="#e2e8f0" isMono />
 
