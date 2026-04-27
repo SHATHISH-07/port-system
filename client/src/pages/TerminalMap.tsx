@@ -1,13 +1,6 @@
 import { useState } from "react";
-import { Box, Typography, IconButton, Divider, Button, Tooltip } from "@mui/material";
-import {
-  ZoomIn,
-  ZoomOut,
-  Refresh,
-  Layers,
-  WarningAmberRounded,
-  PrecisionManufacturingRounded
-} from "@mui/icons-material";
+import { Box, Typography, Divider, Button } from "@mui/material";
+import { WarningAmberRounded } from "@mui/icons-material";
 import { api } from "../api/api";
 
 const W = "100%", H = "100%";
@@ -142,21 +135,7 @@ export default function TerminalMap() {
         .zone-block:hover { filter: brightness(1.3); }
       `}</style>
 
-      <Box sx={{ height: 44, bgcolor: "#12161f", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, justifyContent: "space-between", flexShrink: 0 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <PrecisionManufacturingRounded sx={{ color: "#38bdf8", fontSize: 20 }} />
-          <Typography sx={{ fontSize: "0.85rem", fontWeight: 700, color: "#f8fafc", letterSpacing: "0.5px" }}>
-            TOS <span style={{ color: "#38bdf8", fontWeight: 500 }}>| Yard Allocation Planner</span>
-          </Typography>
-        </Box>
-        <Box sx={{ display: "flex", gap: 3, alignItems: "center" }}>
-          <Typography sx={{ fontSize: "0.7rem", color: "#64748b", fontFamily: "'Roboto Mono', monospace" }}>SRV: PRD_OPT_01</Typography>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#10b981" }} />
-            <Typography sx={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>ONLINE</Typography>
-          </Box>
-        </Box>
-      </Box>
+
 
       <Box sx={{ bgcolor: "#161b24", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, py: 1.5, gap: 4, flexShrink: 0 }}>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
@@ -219,13 +198,6 @@ export default function TerminalMap() {
                 <Typography sx={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 500 }}>{l}</Typography>
               </Box>
             ))}
-          </Box>
-          <Box sx={{ display: "flex", bgcolor: "rgba(18, 22, 31, 0.9)", backdropFilter: "blur(4px)", border: "1px solid #272e3d", borderRadius: 1 }}>
-            <Tooltip title="Zoom In"><IconButton size="small" sx={{ color: "#94a3b8" }}><ZoomIn fontSize="small" /></IconButton></Tooltip>
-            <Tooltip title="Zoom Out"><IconButton size="small" sx={{ color: "#94a3b8" }}><ZoomOut fontSize="small" /></IconButton></Tooltip>
-            <Divider orientation="vertical" flexItem sx={{ borderColor: "#272e3d", my: 1 }} />
-            <Tooltip title="Layers"><IconButton size="small" sx={{ color: "#94a3b8" }}><Layers fontSize="small" /></IconButton></Tooltip>
-            <Tooltip title="Reset"><IconButton size="small" sx={{ color: "#94a3b8" }}><Refresh fontSize="small" /></IconButton></Tooltip>
           </Box>
         </Box>
 
@@ -377,15 +349,6 @@ export default function TerminalMap() {
               );
             })}
 
-            <g transform="translate(1080,820)">
-              <circle cx="0" cy="0" r="24" fill="#0f1219" stroke="#272e3d" strokeWidth="2" />
-              <text x="0" y="-10" fill="#ef4444" fontSize="10" fontWeight="800" fontFamily="sans-serif" textAnchor="middle">N</text>
-              <text x="0" y="17" fill="#94a3b8" fontSize="9" fontFamily="sans-serif" textAnchor="middle">S</text>
-              <text x="16" y="4" fill="#94a3b8" fontSize="9" fontFamily="sans-serif" textAnchor="middle">E</text>
-              <text x="-16" y="4" fill="#94a3b8" fontSize="9" fontFamily="sans-serif" textAnchor="middle">W</text>
-              <line x1="0" y1="-6" x2="0" y2="-18" stroke="#ef4444" strokeWidth="2.5" />
-              <line x1="0" y1="6" x2="0" y2="18" stroke="#475569" strokeWidth="2" />
-            </g>
           </svg>
         </Box>
       </Box>
