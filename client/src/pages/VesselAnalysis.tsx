@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { Box } from "@mui/material";
 import { api } from "../api/api";
 import { type VesselAnalysisData } from "../types/vessel";
-import { Box } from "@mui/material";
 
 import AnalysisHeader from "../components/vessel-analysis/AnalysisHeader";
 import PerformanceStats from "../components/vessel-analysis/PerformanceStats";
@@ -10,6 +10,7 @@ import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
 import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
 import VisitTable from "../components/vessel-analysis/VisitTable";
+import HeatmapPage from "./HeatmapPage"; // Import the extracted view
 
 const VesselAnalysis = () => {
   const [vesselId, setVesselId] = useState("");
@@ -17,32 +18,38 @@ const VesselAnalysis = () => {
   const [discharged, setDischarged] = useState("");
 
   const [data, setData] = useState<VesselAnalysisData | null>(null);
+  const [heatmapData, setHeatmapData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 🔥 FETCH DATA (UNIFIED)
+  // 🔥 FETCH DATA (PARALLEL FETCH)
   const fetchData = async () => {
     setLoading(true);
 
     try {
-      let url = `/vessel/analysis?`;
+      let analysisUrl = `/vessel/analysis?`;
+      if (vesselId) analysisUrl += `vessel_id=${vesselId}&`;
+      if (loaded) analysisUrl += `loaded=${loaded}&`;
+      if (discharged) analysisUrl += `discharged=${discharged}&`;
 
-      if (vesselId) url += `vessel_id=${vesselId}&`;
-      if (loaded) url += `loaded=${loaded}&`;
-      if (discharged) url += `discharged=${discharged}&`;
+      // Fetch both endpoints simultaneously
+      const [analysisRes, heatmapRes] = await Promise.all([
+        api.get<VesselAnalysisData>(analysisUrl),
+        api.get(`/vessel/heatmap?vessel_id=${vesselId}`)
+      ]);
 
-      const res = await api.get<VesselAnalysisData>(url);
-      setData(res.data);
+      setData(analysisRes.data);
+      setHeatmapData(heatmapRes.data);
+    } catch (error) {
+      console.error("Failed to load vessel data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  // 🔥 MODE DETECTION
   const isManual = data?.mode === "manual";
 
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto" }}>
-      {/* HEADER */}
       <AnalysisHeader
         vesselId={vesselId}
         setVesselId={setVesselId}
@@ -56,48 +63,33 @@ const VesselAnalysis = () => {
       />
 
       {data && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-
-          {/* PERFORMANCE */}
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 3 }}>
           <PerformanceStats
             actual={data.actual?.avg_hours ?? data.predicted.avg_hours}
             predicted={data.predicted.avg_hours}
-            mode={data.mode || "vessel"} // Pass mode to trigger override logic
-            loaded={data.input?.loaded} // Pass load input
-            discharged={data.input?.discharged} // Pass discharge input
+            mode={data.mode || "vessel"}
+            loaded={data.input?.loaded}
+            discharged={data.input?.discharged}
           />
 
-          {/* VISITS */}
-          {!isManual && (
-            <VisitTable
-              visits={data.actual?.visits}
-              avg={data.actual?.avg_hours}
-            />
+          {/* 🔥 EMBEDDED HEATMAP DASHBOARD */}
+          {heatmapData && (
+            <HeatmapPage data={heatmapData} />
           )}
 
-          {/* STRATEGY + RISKS — 3-col equal grid */}
           {!isManual && (
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
-                gap: 2.5,
-                alignItems: "start",
-              }}
-            >
-              <BerthRecommendation
-                berth={data.berth_analysis?.[0]?.berth}
-                concentration={data.berth_analysis?.[0]?.cargo_concentration}
-              />
+            <VisitTable visits={data.actual?.visits} avg={data.actual?.avg_hours} />
+          )}
+
+          {!isManual && (
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 2.5, alignItems: "start" }}>
+              <BerthRecommendation berth={data.berth_analysis?.[0]?.berth} concentration={data.berth_analysis?.[0]?.cargo_concentration} />
               <ExecutionPlan steps={data.execution_plan} />
               <RiskEvaluation risks={data.risks} />
             </Box>
           )}
 
-          {/* BERTH IMPACT */}
-          {!isManual && (
-            <BerthImpactTable data={data.berth_analysis} />
-          )}
+          {!isManual && <BerthImpactTable data={data.berth_analysis} />}
         </Box>
       )}
     </Box>

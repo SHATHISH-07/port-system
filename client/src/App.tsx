@@ -1,30 +1,30 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { createTheme, ThemeProvider, alpha } from "@mui/material/styles";
+import { createTheme, ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import Layout from "./components/Layout";
 import VesselAnalysis from "./pages/VesselAnalysis";
-import HeatmapPage from "./pages/HeatmapPage";
+import TerminalMap from "./pages/TerminalMap";
 
 // ── Google Cloud Console Dark Theme ──────────────────────────────────────────
 const theme = createTheme({
   palette: {
     mode: "dark",
     background: { default: "#202124", paper: "#292a2d" },
-    primary:   { main: "#8ab4f8", light: "#93bafa", dark: "#1a73e8", contrastText: "#202124" },
+    primary: { main: "#8ab4f8", light: "#93bafa", dark: "#1a73e8", contrastText: "#202124" },
     secondary: { main: "#d7aefb" },
-    success:   { main: "#81c995" },
-    warning:   { main: "#fdd663" },
-    error:     { main: "#f28b82" },
+    success: { main: "#81c995" },
+    warning: { main: "#fdd663" },
+    error: { main: "#f28b82" },
     text: {
-      primary:   "#e8eaed",
+      primary: "#e8eaed",
       secondary: "#9aa0a6",
-      disabled:  "#5f6368",
+      disabled: "#5f6368",
     },
     divider: "rgba(255,255,255,0.08)",
     action: {
-      hover:    "rgba(255,255,255,0.05)",
+      hover: "rgba(255,255,255,0.05)",
       selected: "rgba(138,180,248,0.12)",
-      focus:    "rgba(138,180,248,0.15)",
+      focus: "rgba(138,180,248,0.15)",
     },
   },
   typography: {
@@ -244,7 +244,7 @@ export default function App() {
         <Layout>
           <Routes>
             <Route path="/" element={<VesselAnalysis />} />
-            <Route path="/heatmap" element={<HeatmapPage />} />
+            <Route path="/heatmap" element={<TerminalMap />} />
           </Routes>
         </Layout>
       </BrowserRouter>
