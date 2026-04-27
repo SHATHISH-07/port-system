@@ -10,7 +10,8 @@ import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
 import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
 import VisitTable from "../components/vessel-analysis/VisitTable";
-import HeatmapPage from "./HeatmapPage"; // Import the extracted view
+import HeatmapPage from "./HeatmapPage";
+import YardStrategy from "../components/vessel-analysis/YardStrategy"; // ✅ NEW
 
 const VesselAnalysis = () => {
   const [vesselId, setVesselId] = useState("");
@@ -21,7 +22,7 @@ const VesselAnalysis = () => {
   const [heatmapData, setHeatmapData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 🔥 FETCH DATA (PARALLEL FETCH)
+  // 🔥 FETCH DATA
   const fetchData = async () => {
     setLoading(true);
 
@@ -31,7 +32,6 @@ const VesselAnalysis = () => {
       if (loaded) analysisUrl += `loaded=${loaded}&`;
       if (discharged) analysisUrl += `discharged=${discharged}&`;
 
-      // Fetch both endpoints simultaneously
       const [analysisRes, heatmapRes] = await Promise.all([
         api.get<VesselAnalysisData>(analysisUrl),
         api.get(`/vessel/heatmap?vessel_id=${vesselId}`)
@@ -50,6 +50,7 @@ const VesselAnalysis = () => {
 
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto" }}>
+      {/* ── HEADER ── */}
       <AnalysisHeader
         vesselId={vesselId}
         setVesselId={setVesselId}
@@ -62,8 +63,11 @@ const VesselAnalysis = () => {
         data={data}
       />
 
+      {/* ── MAIN CONTENT ── */}
       {data && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 3 }}>
+
+          {/* ── PERFORMANCE ── */}
           <PerformanceStats
             actual={data.actual?.avg_hours ?? data.predicted.avg_hours}
             predicted={data.predicted.avg_hours}
@@ -72,24 +76,45 @@ const VesselAnalysis = () => {
             discharged={data.input?.discharged}
           />
 
-          {/* 🔥 EMBEDDED HEATMAP DASHBOARD */}
-          {heatmapData && (
-            <HeatmapPage data={heatmapData} />
-          )}
+          {/* ── HEATMAP ── */}
+          {heatmapData && <HeatmapPage data={heatmapData} />}
 
+          {/* ── VISIT TABLE ── */}
           {!isManual && (
             <VisitTable visits={data.actual?.visits} avg={data.actual?.avg_hours} />
           )}
 
+          {/* ── TOP GRID (CORE DECISIONS) ── */}
           {!isManual && (
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 2.5, alignItems: "start" }}>
-              <BerthRecommendation berth={data.berth_analysis?.[0]?.berth} concentration={data.berth_analysis?.[0]?.cargo_concentration} />
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
+                gap: 2.5,
+                alignItems: "start",
+              }}
+            >
+              <BerthRecommendation
+                berth={data.berth_analysis?.[0]?.berth}
+                concentration={data.berth_analysis?.[0]?.cargo_concentration}
+              />
+
               <ExecutionPlan steps={data.execution_plan} />
+
               <RiskEvaluation risks={data.risks} />
             </Box>
           )}
 
+          {/* ── NEW: YARD STRATEGY (FULL WIDTH) ── */}
+          {!isManual && data.yard_strategy && (
+            <Box>
+              <YardStrategy data={data.yard_strategy} />
+            </Box>
+          )}
+
+          {/* ── BERTH IMPACT TABLE ── */}
           {!isManual && <BerthImpactTable data={data.berth_analysis} />}
+
         </Box>
       )}
     </Box>

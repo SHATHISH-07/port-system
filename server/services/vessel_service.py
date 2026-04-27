@@ -5,6 +5,9 @@ from utils.data_loader import get_data
 from utils.stay_utils import compute_vessel_stay, prepare_visit_data
 from models.stay_model import predict_vessel
 
+from utils.extractContainerMoves import extract_container_moves
+from utils.classifyWeight import classify_weight
+
 
 # =========================================================
 # REGEX
@@ -18,7 +21,7 @@ def extract_block(pos: str):
         return None
 
     full = match.group(1)
-    return "G" + full[1]   # G22606 → G2
+    return "G" + full[1]
 
 
 def is_yes(val):
@@ -30,7 +33,7 @@ def starts_with(series, prefix):
 
 
 # =========================================================
-# 🔥 VISIT DETAILS (FULL DATA)
+# VISIT DETAILS
 # =========================================================
 def get_visit_details(vessel_df):
 
@@ -45,16 +48,10 @@ def get_visit_details(vessel_df):
         if visit_df.empty:
             continue
 
-        # -----------------------------
-        # TIME
-        # -----------------------------
         start_time = visit_df["event_time"].min()
         end_time = visit_df["event_time"].max()
         stay_hours = (end_time - start_time).total_seconds() / 3600
 
-        # -----------------------------
-        # LOAD / DISCHARGE
-        # -----------------------------
         loaded_df = visit_df[
             starts_with(visit_df["Ctr From Position"], "Y-") &
             starts_with(visit_df["Ctr To Position"], "V-")
@@ -65,31 +62,19 @@ def get_visit_details(vessel_df):
             starts_with(visit_df["Ctr To Position"], "Y-")
         ]
 
-        loaded = len(loaded_df)
-        discharged = len(discharged_df)
-
-        # -----------------------------
-        # MOVE WINDOW
-        # -----------------------------
-        move_start = visit_df["Move Complete Time"].min()
-        move_end = visit_df["Move Complete Time"].max()
-
         visits_output[str(visit_id)] = {
             "start_time": str(start_time),
             "end_time": str(end_time),
             "stay_hours": round(stay_hours, 2),
-            "loaded_containers": int(loaded),
-            "discharged_containers": int(discharged),
-            "move_start": str(move_start),
-            "move_end": str(move_end)
+            "loaded_containers": int(len(loaded_df)),
+            "discharged_containers": int(len(discharged_df)),
+            "move_start": str(visit_df["Move Complete Time"].min()),
+            "move_end": str(visit_df["Move Complete Time"].max())
         }
 
     return visits_output
 
 
-# =========================================================
-# 🔥 MERGE WITH ACTUAL VISITS (NO DUPLICATE)
-# =========================================================
 def merge_visit_data(actual_visits, visit_details):
 
     merged = {}
@@ -100,13 +85,10 @@ def merge_visit_data(actual_visits, visit_details):
 
         merged[visit_id] = {
             "stay_hours": round(stay, 2),
-
             "start_time": details.get("start_time"),
             "end_time": details.get("end_time"),
-
             "loaded_containers": details.get("loaded_containers", 0),
             "discharged_containers": details.get("discharged_containers", 0),
-
             "move_start": details.get("move_start"),
             "move_end": details.get("move_end")
         }
@@ -117,7 +99,6 @@ def merge_visit_data(actual_visits, visit_details):
 # =========================================================
 # MAIN SERVICE
 # =========================================================
-
 def analyze_vessel_dashboard(vessel_service: str):
 
     df = get_data()
@@ -135,9 +116,6 @@ def analyze_vessel_dashboard(vessel_service: str):
     actual_raw = compute_vessel_stay(df, vessel_service)
     predicted = predict_vessel(df, vessel_service)
 
-    # -----------------------------
-    # VISIT DETAILS + MERGE
-    # -----------------------------
     visit_details = get_visit_details(vessel_df)
 
     merged_visits = merge_visit_data(
@@ -151,17 +129,15 @@ def analyze_vessel_dashboard(vessel_service: str):
     }
 
     # -----------------------------
-    # PICK TOP VISIT (MAX LOAD)
+    # TOP VISIT
     # -----------------------------
     visit_scores = []
 
     for visit_id, group in vessel_df.groupby("Actual Outbound Carrier visit ID"):
-
         loaded = group[
             starts_with(group["Ctr From Position"], "Y-") &
             starts_with(group["Ctr To Position"], "V-")
         ]
-
         visit_scores.append((visit_id, len(loaded)))
 
     visit_scores.sort(key=lambda x: x[1], reverse=True)
@@ -174,7 +150,7 @@ def analyze_vessel_dashboard(vessel_service: str):
     visit_df = prepare_visit_data(visit_df)
 
     # -----------------------------
-    # LOAD / DISCHARGE (TOP VISIT)
+    # LOAD / DISCHARGE
     # -----------------------------
     loaded_df = visit_df[
         starts_with(visit_df["Ctr From Position"], "Y-") &
@@ -197,7 +173,7 @@ def analyze_vessel_dashboard(vessel_service: str):
     oog = visit_df["OOG Unit"].apply(is_yes).sum()
 
     # -----------------------------
-    # BLOCK AGGREGATION
+    # BLOCK ANALYSIS
     # -----------------------------
     block_counts = defaultdict(int)
 
@@ -208,15 +184,10 @@ def analyze_vessel_dashboard(vessel_service: str):
 
     total_blocks = sum(block_counts.values()) or 1
 
-    # -----------------------------
-    # BERTH ANALYSIS
-    # -----------------------------
     berth_analysis = []
-
     sorted_blocks = sorted(block_counts.items(), key=lambda x: x[1], reverse=True)
 
     for block, count in sorted_blocks:
-
         percentage = (count / total_blocks) * 100
 
         berth_analysis.append({
@@ -227,66 +198,87 @@ def analyze_vessel_dashboard(vessel_service: str):
             "congestion_risk": "High" if percentage > 40 else "Medium" if percentage > 20 else "Low"
         })
 
+    # =========================================================
+    # 🔥 YARD PREPARATION & WEIGHT STRATEGY
+    # =========================================================
+    visit_df["weight_class"] = visit_df["Verified Gross Mass (Kg)"].apply(classify_weight)
+
+    weight_dist = visit_df["weight_class"].value_counts().to_dict()
+    pod_group = visit_df["Port of Discharge"].value_counts().to_dict()
+
+    move_counts = extract_container_moves(visit_df)
+    total_units = visit_df["Unit ID"].nunique()
+
+    avg_moves = sum(move_counts.values()) / max(total_units, 1)
+
+    reshuffle_risk = "High" if avg_moves > 2 else "Medium" if avg_moves > 1.5 else "Low"
+
+    yard_strategy = {
+        "weight_distribution": weight_dist,
+        "top_discharge_ports": dict(list(pod_group.items())[:5]),
+        "avg_moves_per_container": round(avg_moves, 2),
+        "reshuffle_risk": reshuffle_risk
+    }
+
     # -----------------------------
     # RISKS
     # -----------------------------
     risks = []
 
-    # 🔥 Volume Risk
     if total_loaded > 250:
         risks.append("High loading volume — potential crane congestion.")
 
-    # 🔥 Hazard Risk
     if hazardous > 10:
         risks.append("Hazardous cargo present — requires safety buffer handling.")
 
-    # 🔥 Reefer Risk
     if reefer > 20:
         risks.append("High reefer concentration — ensure power point allocation.")
 
-    # 🔥 Imbalance Risk
     if total_discharged > 0:
         ratio = total_loaded / max(total_discharged, 1)
         if ratio > 3:
-            risks.append("Load-heavy imbalance — yard congestion likely during export flow.")
+            risks.append("Load-heavy imbalance — yard congestion likely.")
 
-    # 🔥 Long Stay Risk
     if actual["avg_hours"] > 40:
-        risks.append("Extended vessel stay — possible operational inefficiency.")
+        risks.append("Extended vessel stay — possible inefficiency.")
 
-    # 🔥 Low Efficiency Risk
     moves_per_hour = total_loaded / max(actual["avg_hours"], 1)
     if moves_per_hour < 20:
         risks.append("Low crane productivity detected.")
 
     if not risks:
-        risks.append("Operations appear stable with no major risks.")
+        risks.append("Operations appear stable.")
 
     # -----------------------------
-    # EXECUTION PLAN
+    # EXECUTION PLAN (UPGRADED)
     # -----------------------------
     steps = []
 
     if sorted_blocks:
-        main_block = sorted_blocks[0][0]
-        steps.append(f"Prioritize loading from block {main_block} for faster turnaround.")
+        steps.append(f"Prioritize loading from block {sorted_blocks[0][0]}.")
+
+    if weight_dist.get("Heavy", 0) > weight_dist.get("Light", 0):
+        steps.append("Position heavy containers closer to berth.")
+
+    if len(pod_group) > 1:
+        steps.append("Group containers by discharge port.")
+
+    if reshuffle_risk == "High":
+        steps.append("High reshuffle risk — pre-consolidate yard stacks.")
 
     steps.append("Allocate cranes based on cargo concentration.")
     steps.append("Separate hazardous and reefer flows.")
-    steps.append("Monitor congestion and adjust yard routing.")
 
     # -----------------------------
     # FINAL RESPONSE
     # -----------------------------
     return {
-    "mode": "vessel",   # 🔥 IMPORTANT
-
-    "vessel": vessel_service,
-
-    "actual": actual,
-    "predicted": predicted,
-
-    "risks": risks,
-    "execution_plan": steps,
-    "berth_analysis": berth_analysis
-}
+        "mode": "vessel",
+        "vessel": vessel_service,
+        "actual": actual,
+        "predicted": predicted,
+        "risks": risks,
+        "execution_plan": steps,
+        "berth_analysis": berth_analysis,
+        "yard_strategy": yard_strategy
+    }
