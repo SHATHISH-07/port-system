@@ -19,7 +19,7 @@ interface BlockData {
 interface VesselHeatmapResponse {
   vessel: string;
   visit_id: string;
-  recommended_berth: string;
+  recommended_berth?: string; // Made optional to reflect potential missing data
   max_block: string;
   summary: { hazardous: number; reefer: number; oog: number };
   layout: Record<string, { x: number; y: number }>;
@@ -124,9 +124,13 @@ function BlockTile({
 export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
   if (!data) return null;
 
-  // 1) Extract and chunk active blocks logic (3 per row, max block strictly at the very end)
+  // SAFE ACCESS: Provide empty string fallback to prevent crash if recommended_berth is missing
+  const safeBerth = data.recommended_berth || "";
+  const optimalNum = parseInt(safeBerth.replace(/\D/g, '')) || 2;
+
+  // 1) Extract and chunk active blocks logic (3 per row)
   const chunkedRows: string[][] = [];
-  const activeBlockIds = Object.entries(data.blocks)
+  const activeBlockIds = Object.entries(data.blocks || {})
     .filter(([, block]) => block.count > 0)
     .map(([id]) => id);
 
@@ -140,37 +144,54 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
     return posA.y - posB.y || posA.x - posB.x;
   });
 
-  // Re-append max block at the absolute end so it's always closest to the berth
-  const finalOrder = [...withoutMax, data.max_block];
+  // Calculate where the max block should sit in the final row
+  const totalItems = withoutMax.length + 1;
+  const lastRowLength = totalItems % 3 === 0 ? 3 : totalItems % 3;
+
+  // Map Berth (1, 2, 3) -> Row Index (0, 1, 2), capping it to the row's actual length
+  const targetIndexInRow = Math.min(optimalNum - 1, lastRowLength - 1);
+  const insertIndex = (totalItems - lastRowLength) + targetIndexInRow;
+
+  // Insert max_block at the correct visual index
+  const finalOrder = [...withoutMax];
+  if (data.max_block) finalOrder.splice(insertIndex, 0, data.max_block);
 
   // Chunk into arrays of 3
   for (let i = 0; i < finalOrder.length; i += 3) {
     chunkedRows.push(finalOrder.slice(i, i + 3));
   }
 
-  const totalContainers = Object.values(data.blocks).reduce((s, b) => s + b.count, 0);
+  const totalContainers = Object.values(data.blocks || {}).reduce((s, b) => s + b.count, 0);
 
   // Efficiency string calculator
   const calcEfficiency = (targetBerth: number) => {
-    const optimalBerthNum = parseInt(data.recommended_berth.replace(/\D/g, '')) || 2;
-    if (targetBerth === optimalBerthNum) return "100% Optimal";
+    if (targetBerth === optimalNum) return "100% Optimal";
 
-    const distance = Math.abs(targetBerth - optimalBerthNum);
+    const distance = Math.abs(targetBerth - optimalNum);
     const intensityWeight = data.blocks[data.max_block]?.intensity * 20 || 15;
     const penalty = Math.round((distance * 25) + intensityWeight);
 
     return `-${penalty}% efficiency`;
   };
 
-  const optimalNum = parseInt(data.recommended_berth.replace(/\D/g, '')) || 2;
-
   // Calculate the physical X position of the max block for SVG lines to target
   let maxBlockTargetX = 50; // Default center
+
   if (chunkedRows.length > 0) {
-    const lastRowLength = chunkedRows[chunkedRows.length - 1].length;
-    if (lastRowLength === 3) maxBlockTargetX = 83.3; // Right-most of 3
-    else if (lastRowLength === 2) maxBlockTargetX = 66.6; // Right of 2
-    else maxBlockTargetX = 50; // Centered by itself
+    const maxRow = chunkedRows.find(row => row.includes(data.max_block));
+
+    if (maxRow) {
+      const colIdx = maxRow.indexOf(data.max_block);
+      const rowLen = maxRow.length;
+
+      if (rowLen === 3) {
+        maxBlockTargetX = colIdx === 0 ? 16.6 : colIdx === 1 ? 50 : 83.3;
+      } else if (rowLen === 2) {
+        maxBlockTargetX = colIdx === 0 ? 33.3 : 66.6;
+      } else {
+        maxBlockTargetX = 50;
+      }
+    }
   }
 
   return (
@@ -185,11 +206,11 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
         }}
       >
         {[
-          { label: "Vessel", value: data.vessel, accent: "#ffffff" },
-          { label: "Visit ID", value: data.visit_id, accent: "#9aa0a6" },
+          { label: "Vessel", value: data.vessel || "—", accent: "#ffffff" },
+          { label: "Visit ID", value: data.visit_id || "—", accent: "#9aa0a6" },
           { label: "Total Containers", value: String(totalContainers), accent: "#ffffff" },
-          { label: "Recommended Berth", value: data.recommended_berth, accent: "#4ade80" },
-          { label: "Highest Block", value: data.max_block, accent: "#a855f7" },
+          { label: "Recommended Berth", value: data.recommended_berth || "Unassigned", accent: "#4ade80" },
+          { label: "Highest Block", value: data.max_block || "—", accent: "#a855f7" },
           { label: "Hazardous", value: String(data.summary?.hazardous ?? 0), accent: "#f87171" },
           { label: "Reefer / OOG", value: `${data.summary?.reefer ?? 0} / ${data.summary?.oog ?? 0}`, accent: "#8ab4f8" },
         ].map(({ label, value, accent }) => (
@@ -314,20 +335,22 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
             </Box>
             <Box sx={{ px: 2.5, py: 2.5 }}>
               <Typography sx={{ fontSize: 32, fontWeight: 700, color: "#4ade80", lineHeight: 1, fontFamily: "'Google Sans', Roboto, sans-serif", mb: 0.5 }}>
-                {data.recommended_berth}
+                {data.recommended_berth || "Unassigned"}
               </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 1 }}>
-                <CheckCircleOutlineRounded sx={{ fontSize: 14, color: "#4ade80" }} />
-                <Typography sx={{ fontSize: "0.75rem", color: "#4ade80" }}>Optimal assignment</Typography>
-              </Box>
+              {data.recommended_berth && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 1 }}>
+                  <CheckCircleOutlineRounded sx={{ fontSize: 14, color: "#4ade80" }} />
+                  <Typography sx={{ fontSize: "0.75rem", color: "#4ade80" }}>Optimal assignment</Typography>
+                </Box>
+              )}
               <Divider sx={{ borderColor: "rgba(138,180,248,0.1)", my: 1.5 }} />
               <Typography sx={{ fontSize: "0.625rem", fontWeight: 500, color: "#8ab4f8", letterSpacing: "0.08em", textTransform: "uppercase", mb: 0.75 }}>
                 Nearest High Density Block
               </Typography>
               <Typography sx={{ fontSize: 20, fontWeight: 300, color: "#a855f7", fontFamily: "'Google Sans', Roboto, sans-serif" }}>
-                {data.max_block}
+                {data.max_block || "—"}
               </Typography>
-              {data.blocks[data.max_block] && (
+              {data.max_block && data.blocks[data.max_block] && (
                 <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", mt: 0.25 }}>
                   {data.blocks[data.max_block].count} Containers · {(data.blocks[data.max_block].intensity * 100).toFixed(0)}% utilisation
                 </Typography>
