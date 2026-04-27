@@ -29,11 +29,11 @@ function getZones(layout: Record<string, { x: number, y: number }>) {
   }));
 }
 
-// Flat, professional status colors
+// Flat, professional status colors - Adjusted to survive the 55px blur
 const getHeatFill = (c: string) => {
-  if (c === "High") return "rgba(239, 68, 68, 1)"; // Red
-  if (c === "Medium") return "rgba(249, 115, 22, 0.9)"; // Orange
-  if (c === "Low") return "rgba(34, 197, 94, 0.8)"; // Green
+  if (c === "High") return "rgba(239, 68, 68, 0.85)"; // Strong Red
+  if (c === "Medium") return "rgba(249, 115, 22, 0.65)"; // Solid Orange
+  if (c === "Low") return "rgba(34, 197, 94, 0.55)"; // Visible Green
   return "transparent";
 };
 
@@ -101,14 +101,28 @@ export default function TerminalMap() {
 
   let targetBerthId = "R1";
   let totalMoves = 0;
+  let computedMaxBlock: string | null = null;
 
   if (data) {
-    totalMoves = Object.values(data.blocks || {}).reduce((s: any, b: any) => s + b.count, 0) as number;
+    // 1. Manually find the absolute highest concentration block 
+    let maxCount = -1;
+    Object.entries(data.blocks || {}).forEach(([id, b]: [string, any]) => {
+      totalMoves += b.count;
+      if (b.count > maxCount) {
+        maxCount = b.count;
+        computedMaxBlock = id;
+      }
+    });
 
-    if (data.max_block && data.layout[data.max_block]) {
-      const pos = data.layout[data.max_block];
+    const highestBlockId = computedMaxBlock || data.max_block;
+
+    // 2. Find the physically closest berth to that exact highest block
+    if (highestBlockId && data.layout && data.layout[highestBlockId]) {
+      const pos = data.layout[highestBlockId];
+
       const maxBlockX = BLK_START_X + pos.x * (BLK_W + BLK_GAP_X) + (BLK_W / 2);
       const maxBlockY = BLK_START_Y + pos.y * (BLK_H + BLK_GAP_Y) + (BLK_H / 2);
+
       let minDistance = Infinity;
 
       BERTHS.forEach(berth => {
@@ -125,7 +139,7 @@ export default function TerminalMap() {
     <Box sx={{
       width: "100%",
       height: "100vh",
-      bgcolor: "#0b0e14", // Deep modern slate background
+      bgcolor: "#0b0e14",
       color: "#e2e8f0",
       display: "flex",
       flexDirection: "column",
@@ -139,16 +153,7 @@ export default function TerminalMap() {
       `}</style>
 
       {/* ── TOP SYSTEM BAR ── */}
-      <Box sx={{
-        height: 44,
-        bgcolor: "#12161f",
-        borderBottom: "1px solid #1e2433",
-        display: "flex",
-        alignItems: "center",
-        px: 3,
-        justifyContent: "space-between",
-        flexShrink: 0
-      }}>
+      <Box sx={{ height: 44, bgcolor: "#12161f", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, justifyContent: "space-between", flexShrink: 0 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <PrecisionManufacturingRounded sx={{ color: "#38bdf8", fontSize: 20 }} />
           <Typography sx={{ fontSize: "0.85rem", fontWeight: 700, color: "#f8fafc", letterSpacing: "0.5px" }}>
@@ -165,17 +170,7 @@ export default function TerminalMap() {
       </Box>
 
       {/* ── HORIZONTAL CONTROL DASHBOARD ── */}
-      <Box sx={{
-        bgcolor: "#161b24",
-        borderBottom: "1px solid #1e2433",
-        display: "flex",
-        alignItems: "center",
-        px: 3,
-        py: 1.5,
-        gap: 4,
-        flexShrink: 0
-      }}>
-        {/* Search Input */}
+      <Box sx={{ bgcolor: "#161b24", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, py: 1.5, gap: 4, flexShrink: 0 }}>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
           <input
             value={vesselInput}
@@ -191,14 +186,8 @@ export default function TerminalMap() {
             onBlur={(e) => e.target.style.borderColor = "#272e3d"}
           />
           <Button
-            onClick={load}
-            disabled={loading}
-            disableElevation
-            sx={{
-              bgcolor: "#38bdf8", color: "#0f1219", fontSize: "0.75rem", fontWeight: 700,
-              px: 2.5, py: "8px", textTransform: "none", borderRadius: "4px",
-              "&:hover": { bgcolor: "#0ea5e9" }
-            }}
+            onClick={load} disabled={loading} disableElevation
+            sx={{ bgcolor: "#38bdf8", color: "#0f1219", fontSize: "0.75rem", fontWeight: 700, px: 2.5, py: "8px", textTransform: "none", borderRadius: "4px", "&:hover": { bgcolor: "#0ea5e9" } }}
           >
             {loading ? "Computing..." : "Execute"}
           </Button>
@@ -206,14 +195,13 @@ export default function TerminalMap() {
 
         <Divider orientation="vertical" flexItem sx={{ borderColor: "#272e3d", my: 0.5 }} />
 
-        {/* Execution Summary KPIs */}
         {data ? (
           <Box sx={{ display: "flex", gap: 5, alignItems: "center", flex: 1 }}>
             <KPI label="Vessel Name" value={data.vessel} />
             <KPI label="Visit GKEY" value={data.visit_id || "—"} isMono />
             <KPI label="Total Volume" value={`${totalMoves} TEU`} isMono />
-            <KPI label="Optimal Berth" value={data.recommended_berth || "—"} valueColor="#38bdf8" isMono />
-            <KPI label="Primary Block" value={data.max_block || "—"} valueColor="#e2e8f0" isMono />
+            <KPI label="Optimal Berth" value={targetBerthId} valueColor="#38bdf8" isMono />
+            <KPI label="Primary Block" value={computedMaxBlock || data.max_block || "—"} valueColor="#e2e8f0" isMono />
 
             <Box sx={{ flex: 1 }} />
 
@@ -225,9 +213,7 @@ export default function TerminalMap() {
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: "0.85rem", color: "#475569", fontStyle: "italic", flex: 1 }}>
-            Awaiting vessel query execution...
-          </Typography>
+          <Typography sx={{ fontSize: "0.85rem", color: "#475569", fontStyle: "italic", flex: 1 }}>Awaiting vessel query execution...</Typography>
         )}
       </Box>
 
@@ -238,7 +224,7 @@ export default function TerminalMap() {
         <Box sx={{ position: "absolute", top: 16, right: 24, zIndex: 10, display: "flex", gap: 1 }}>
           <Box sx={{ display: "flex", gap: 2, px: 2, py: 1, bgcolor: "rgba(18, 22, 31, 0.9)", backdropFilter: "blur(4px)", border: "1px solid #272e3d", borderRadius: 1 }}>
             {[
-              { c: "#ef4444", l: "High Density" },
+              { c: "#ef4444", l: "Highest Density" },
               { c: "#f97316", l: "Med Density" },
               { c: "#10b981", l: "Low Density" }
             ].map(({ c, l }) => (
@@ -284,10 +270,8 @@ export default function TerminalMap() {
             {/* Quay Edges */}
             <rect x="0" y="120" width="960" height="15" fill="#1e2433" />
             <line x1="0" y1="125" x2="960" y2="125" stroke="#eab308" strokeWidth="2" strokeDasharray="14 7" opacity="0.8" />
-
             <rect x="0" y="685" width="960" height="15" fill="#1e2433" />
             <line x1="0" y1="695" x2="960" y2="695" stroke="#eab308" strokeWidth="2" strokeDasharray="14 7" opacity="0.8" />
-
             <rect x="945" y="120" width="15" height="580" fill="#1e2433" />
             <line x1="955" y1="120" x2="955" y2="700" stroke="#eab308" strokeWidth="2" strokeDasharray="14 7" opacity="0.8" />
 
@@ -300,15 +284,13 @@ export default function TerminalMap() {
             ))}
 
             {/* Vertical Roads */}
-            {[240, 440, 640].map(lx => (
-              <rect key={lx} x={lx} y="120" width="20" height="580" fill="#0b0e14" opacity="0.7" />
-            ))}
+            {[240, 440, 640].map(lx => <rect key={lx} x={lx} y="120" width="20" height="580" fill="#0b0e14" opacity="0.7" />)}
 
-            {/* ── YARD BLOCK ZONES (Your Implementation) ── */}
+            {/* ── YARD BLOCK ZONES ── */}
             {data && getZones(data.layout).map(z => {
               const block = data.blocks[z.id];
               const isHot = !!block && block.count > 0;
-              const isMax = z.id === data.max_block;
+              const isMax = z.id === (computedMaxBlock || data.max_block);
               const isRec = data.recommended_berth?.includes(z.id);
               const isH = hovered === z.id;
 
@@ -318,34 +300,27 @@ export default function TerminalMap() {
                   onMouseEnter={() => setHovered(z.id)}
                   onMouseLeave={() => setHovered(null)}
                   style={{ cursor: "pointer" }}>
+
                   {isRec && <rect x={z.x - 4} y={z.y - 4} width={z.w + 8} height={z.h + 8} rx="5" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeDasharray="8 4" opacity="0.9" />}
 
-                  {/* Clean, dark base block */}
                   <rect x={z.x} y={z.y} width={z.w} height={z.h}
                     fill="#161b24"
                     stroke={isH ? "#fcd34d" : isMax ? "#ef4444" : isRec ? "#38bdf8" : "#334155"}
                     strokeWidth={isH || isMax ? 2.5 : isRec ? 2 : 1} rx="3" />
 
-                  {/* Clean Bay grid */}
                   {[0, 1, 2, 3, 4, 5].map(row => (
                     <g key={row}>
                       {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(col => (
-                        <rect key={col}
-                          x={z.x + 6 + col * 17} y={z.y + 8 + row * 17} width="14" height="14"
-                          fill="#0b0e14"
-                          stroke="#1e2433" strokeWidth="0.5" rx="1"
-                          opacity={0.8} />
+                        <rect key={col} x={z.x + 6 + col * 17} y={z.y + 8 + row * 17} width="14" height="14" fill="#0b0e14" stroke="#1e2433" strokeWidth="0.5" rx="1" opacity={0.8} />
                       ))}
                     </g>
                   ))}
 
-                  {/* Sharp Badge */}
                   <rect x={z.x + 4} y={z.y + 4} width={36} height={16} rx="3"
                     fill={isMax ? "rgba(239,68,68,0.95)" : isRec ? "rgba(14,165,233,0.9)" : "rgba(30,36,51,0.95)"}
                     stroke={isMax ? "#ef4444" : isRec ? "#38bdf8" : "#475569"} strokeWidth="1" />
                   <text x={z.x + 22} y={z.y + 15} fill="#f8fafc" fontSize="10" fontWeight="800" fontFamily="sans-serif" textAnchor="middle">{z.id}</text>
 
-                  {/* Container Count Bubble */}
                   {isHot && (
                     <g>
                       <circle cx={z.x + z.w - 15} cy={z.y + 15} r="12" fill="#0b0e14" stroke="#475569" strokeWidth="1" />
@@ -356,14 +331,47 @@ export default function TerminalMap() {
               );
             })}
 
-            {/* ── WEATHER HEATMAP GLOW OVERLAY (Exactly as you implemented it) ── */}
+            {/* ── WEATHER HEATMAP GLOW OVERLAY ── */}
             {data && (
-              <g filter="url(#weatherglow)" style={{ mixBlendMode: "screen" }} opacity="0.85">
-                {getZones(data.layout).map(z => {
-                  const block = data.blocks[z.id];
-                  if (!block || block.count === 0) return null;
-                  return <ellipse key={`heat-${z.id}`} cx={z.x + z.w / 2} cy={z.y + z.h / 2} rx={z.w * 1.1} ry={z.h * 1.1} fill={getHeatFill(block.concentration)} />;
-                })}
+              <g filter="url(#weatherglow)" style={{ mixBlendMode: "screen" }} opacity="0.95">
+                {getZones(data.layout)
+                  .map(z => {
+                    const block = data.blocks[z.id];
+                    if (!block || block.count === 0) return null;
+
+                    // FORCE STRICT COLORING:
+                    // 1. If it's the absolute maximum block -> Make it "High" (Red)
+                    // 2. If the API called it "High" but it's NOT the max -> Demote to "Medium" (Orange)
+                    // 3. Otherwise -> Leave as is ("Medium" or "Low")
+                    let effectiveConc = block.concentration;
+                    if (z.id === computedMaxBlock) {
+                      effectiveConc = "High";
+                    } else if (effectiveConc === "High") {
+                      effectiveConc = "Medium";
+                    }
+
+                    return { z, block, effectiveConc };
+                  })
+                  .filter((item): item is { z: any; block: any; effectiveConc: string } => item !== null)
+                  // Draw Low (Green) first, Medium (Orange) second, High (Red) last so Red sits on top
+                  .sort((a, b) => {
+                    const heatIndex: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
+                    return (heatIndex[a.effectiveConc] || 0) - (heatIndex[b.effectiveConc] || 0);
+                  })
+                  .map(({ z, effectiveConc }) => {
+                    const spreadScale = effectiveConc === "High" ? 1.6 : effectiveConc === "Medium" ? 1.3 : 1.1;
+
+                    return (
+                      <ellipse
+                        key={`heat-${z.id}`}
+                        cx={z.x + z.w / 2}
+                        cy={z.y + z.h / 2}
+                        rx={z.w * spreadScale}
+                        ry={z.h * spreadScale}
+                        fill={getHeatFill(effectiveConc)}
+                      />
+                    );
+                  })}
               </g>
             )}
 
@@ -376,19 +384,12 @@ export default function TerminalMap() {
             {BERTHS.map(berth => {
               const isTarget = data ? targetBerthId === berth.id : berth.id === "R1";
               const shipName = isTarget ? (data ? data.vessel : "TARGET VESSEL") : berth.defaultShip.name;
-              const shipColor = isTarget ? "#0284c7" : berth.defaultShip.color; // Highlight target ship
+              const shipColor = isTarget ? "#0284c7" : berth.defaultShip.color;
 
               return (
                 <Ship
-                  key={berth.id}
-                  x={berth.x}
-                  y={berth.y}
-                  w={280}
-                  h={60}
-                  name={shipName}
-                  color={shipColor}
-                  rot={berth.rot}
-                  isTarget={isTarget}
+                  key={berth.id} x={berth.x} y={berth.y} w={280} h={60}
+                  name={shipName} color={shipColor} rot={berth.rot} isTarget={isTarget}
                 />
               );
             })}
@@ -396,19 +397,10 @@ export default function TerminalMap() {
             {/* ── BERTH LABELS ── */}
             {BERTHS.map(berth => {
               const isTarget = data ? targetBerthId === berth.id : berth.id === "R1";
-
               return (
                 <text
-                  key={`label-${berth.id}`}
-                  x={berth.lx}
-                  y={berth.ly}
-                  transform={`rotate(${berth.lrot}, ${berth.lx}, ${berth.ly})`}
-                  fill={isTarget ? "#38bdf8" : "#94a3b8"} // Highlight target berth text
-                  fontSize="11"
-                  fontFamily="sans-serif"
-                  textAnchor="middle"
-                  fontWeight="800"
-                  letterSpacing="1px"
+                  key={`label-${berth.id}`} x={berth.lx} y={berth.ly} transform={`rotate(${berth.lrot}, ${berth.lx}, ${berth.ly})`}
+                  fill={isTarget ? "#38bdf8" : "#94a3b8"} fontSize="11" fontFamily="sans-serif" textAnchor="middle" fontWeight="800" letterSpacing="1px"
                 >
                   {berth.label}
                 </text>
