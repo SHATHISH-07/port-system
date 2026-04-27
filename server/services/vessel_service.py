@@ -8,10 +8,6 @@ from models.stay_model import predict_vessel
 from utils.extractContainerMoves import extract_container_moves
 from utils.classifyWeight import classify_weight
 
-
-# =========================================================
-# REGEX
-# =========================================================
 FULL_BLOCK_REGEX = re.compile(r'Y-[A-Z0-9]+-(G\d+)')
 
 
@@ -31,10 +27,6 @@ def is_yes(val):
 def starts_with(series, prefix):
     return series.astype(str).str.strip().str.upper().str.startswith(prefix)
 
-
-# =========================================================
-# VISIT DETAILS
-# =========================================================
 def get_visit_details(vessel_df):
 
     visits_output = {}
@@ -95,10 +87,6 @@ def merge_visit_data(actual_visits, visit_details):
 
     return merged
 
-
-# =========================================================
-# MAIN SERVICE
-# =========================================================
 def analyze_vessel_dashboard(vessel_service: str):
 
     df = get_data()
@@ -110,9 +98,6 @@ def analyze_vessel_dashboard(vessel_service: str):
     if vessel_df.empty:
         return {"error": f"No vessel data for {vessel_service}"}
 
-    # -----------------------------
-    # ACTUAL + PREDICTED
-    # -----------------------------
     actual_raw = compute_vessel_stay(df, vessel_service)
     predicted = predict_vessel(df, vessel_service)
 
@@ -128,9 +113,6 @@ def analyze_vessel_dashboard(vessel_service: str):
         "avg_hours": actual_raw.get("avg_hours"),
     }
 
-    # -----------------------------
-    # TOP VISIT
-    # -----------------------------
     visit_scores = []
 
     for visit_id, group in vessel_df.groupby("Actual Outbound Carrier visit ID"):
@@ -149,9 +131,6 @@ def analyze_vessel_dashboard(vessel_service: str):
 
     visit_df = prepare_visit_data(visit_df)
 
-    # -----------------------------
-    # LOAD / DISCHARGE
-    # -----------------------------
     loaded_df = visit_df[
         starts_with(visit_df["Ctr From Position"], "Y-") &
         starts_with(visit_df["Ctr To Position"], "V-")
@@ -165,16 +144,10 @@ def analyze_vessel_dashboard(vessel_service: str):
     total_loaded = len(loaded_df)
     total_discharged = len(discharged_df)
 
-    # -----------------------------
-    # FLAGS
-    # -----------------------------
     hazardous = visit_df["Hazardous Flag"].apply(is_yes).sum()
     reefer = visit_df["Reefer"].apply(is_yes).sum()
     oog = visit_df["OOG Unit"].apply(is_yes).sum()
 
-    # -----------------------------
-    # BLOCK ANALYSIS
-    # -----------------------------
     block_counts = defaultdict(int)
 
     for pos in loaded_df["Ctr From Position"]:
@@ -198,9 +171,6 @@ def analyze_vessel_dashboard(vessel_service: str):
             "congestion_risk": "High" if percentage > 40 else "Medium" if percentage > 20 else "Low"
         })
 
-    # =========================================================
-    # 🔥 YARD PREPARATION & WEIGHT STRATEGY
-    # =========================================================
     visit_df["weight_class"] = visit_df["Verified Gross Mass (Kg)"].apply(classify_weight)
 
     weight_dist = visit_df["weight_class"].value_counts().to_dict()
@@ -220,9 +190,6 @@ def analyze_vessel_dashboard(vessel_service: str):
         "reshuffle_risk": reshuffle_risk
     }
 
-    # -----------------------------
-    # RISKS
-    # -----------------------------
     risks = []
 
     if total_loaded > 250:
@@ -249,9 +216,6 @@ def analyze_vessel_dashboard(vessel_service: str):
     if not risks:
         risks.append("Operations appear stable.")
 
-    # -----------------------------
-    # EXECUTION PLAN (UPGRADED)
-    # -----------------------------
     steps = []
 
     if sorted_blocks:
@@ -269,9 +233,6 @@ def analyze_vessel_dashboard(vessel_service: str):
     steps.append("Allocate cranes based on cargo concentration.")
     steps.append("Separate hazardous and reefer flows.")
 
-    # -----------------------------
-    # FINAL RESPONSE
-    # -----------------------------
     return {
         "mode": "vessel",
         "vessel": vessel_service,

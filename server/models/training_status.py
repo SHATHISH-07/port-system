@@ -1,7 +1,7 @@
 class TrainingStatus:
     def __init__(self):
         self.data = {
-            "status": "idle",   # idle | training | completed | failed
+            "status": "idle", 
             "message": ""
         }
 

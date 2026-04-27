@@ -36,17 +36,11 @@ def vessel_analysis(
 
         return result
 
-    # -----------------------------
-    # CASE 2: VESSEL ONLY
-    # -----------------------------
     if vessel_id:
         result = analyze_vessel_dashboard(vessel_id)
         result["mode"] = "vessel"
         return result
 
-    # -----------------------------
-    # CASE 3: MANUAL ONLY
-    # -----------------------------
     if loaded is not None and discharged is not None:
         return predict_from_input(loaded, discharged)
 

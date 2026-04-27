@@ -32,23 +32,15 @@ FEATURE_NAMES = [
     "service_hash",
 ]
 
-# Training bounds: visits outside this range are excluded from model training.
-# They are still shown in actual/historical statistics.
-TRAIN_MIN_HOURS = 2     # below this → single-move noise, not a real vessel stay
-TRAIN_MAX_HOURS = 240   # above this → data error (vessel ID used across multiple voyages)
-MIN_VISIT_ROWS  = 5     # visit IDs with fewer rows are single-transit containers, not vessel ops
+TRAIN_MIN_HOURS = 2     
+TRAIN_MAX_HOURS = 240   
+MIN_VISIT_ROWS  = 5     
 
-
-# =========================================================
-# TRAIN MODEL
-# =========================================================
 def train_model():
     try:
         training_status.set("training", "Training started")
 
         df = get_data()
-
-        # Group by unique visit ID (one port call per vessel)
         grouped = df.groupby("Actual Outbound Carrier visit ID")
 
         X, y = [], []
@@ -58,32 +50,22 @@ def train_model():
 
         for visit_id, group in grouped:
 
-            # ── Skip groups with too few rows (transit noise, not real ops) ──
             if len(group) < MIN_VISIT_ROWS:
                 skipped_rows += 1
                 continue
-
-            # ── Prepare: parse event_time, sort ascending ────────────────────
             visit_df = prepare_visit_data(group)
-
-            # ── Compute stay: max(event_time) - min(event_time) ─────────────
             stay = compute_visit_stay(visit_df)
 
             if stay is None:
                 continue
 
-            # ── Filter training data ─────────────────────────────────────────
-            # < TRAIN_MIN_HOURS → noise (too short to be a real vessel visit)
             if stay < TRAIN_MIN_HOURS:
                 skipped_noise += 1
                 continue
 
-            # > TRAIN_MAX_HOURS → data error (two unrelated records merged)
             if stay > TRAIN_MAX_HOURS:
                 skipped_error += 1
                 continue
-
-            # ── Extract features ─────────────────────────────────────────────
             features = create_features(visit_df)
 
             if features is None:

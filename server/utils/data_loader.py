@@ -17,17 +17,16 @@ def load_data():
     path = os.getenv("DATA_PATH")
 
     if not path:
-        raise ValueError("❌ DATA_PATH not set in .env")
+        raise ValueError("DATA_PATH not set in .env")
 
     if not os.path.exists(path):
-        raise FileNotFoundError(f"❌ File not found: {path}")
+        raise FileNotFoundError(f"File not found: {path}")
 
     print("[INFO] Loading dataset...")
 
     df = pd.read_csv(path, low_memory=False)
     df.columns = df.columns.str.strip()
 
-    # Parse datetime columns
     for col in ["Move Complete Time", "Time In", "Time Out"]:
         if col in df.columns:
             df[col] = parse_datetime(df[col])
@@ -41,5 +40,5 @@ def load_data():
 
 def get_data():
     if _df is None:
-        raise Exception("❌ Data not loaded. Call load_data() first.")
+        raise Exception("Data not loaded. Call load_data() first.")
     return _df
