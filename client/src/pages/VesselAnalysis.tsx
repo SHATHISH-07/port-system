@@ -11,7 +11,7 @@ import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
 import VisitTable from "../components/vessel-analysis/VisitTable";
 import HeatmapPage from "./HeatmapPage";
-import YardStrategy from "../components/vessel-analysis/YardStrategy"; // ✅ NEW
+import YardStrategy from "../components/vessel-analysis/YardStrategy";
 
 const VesselAnalysis = () => {
   const [vesselId, setVesselId] = useState("");
@@ -22,7 +22,6 @@ const VesselAnalysis = () => {
   const [heatmapData, setHeatmapData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 🔥 FETCH DATA
   const fetchData = async () => {
     setLoading(true);
 
@@ -50,7 +49,6 @@ const VesselAnalysis = () => {
 
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto" }}>
-      {/* ── HEADER ── */}
       <AnalysisHeader
         vesselId={vesselId}
         setVesselId={setVesselId}
@@ -63,11 +61,9 @@ const VesselAnalysis = () => {
         data={data}
       />
 
-      {/* ── MAIN CONTENT ── */}
       {data && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 3 }}>
 
-          {/* ── PERFORMANCE ── */}
           <PerformanceStats
             actual={data.actual?.avg_hours ?? data.predicted.avg_hours}
             predicted={data.predicted.avg_hours}
@@ -76,15 +72,12 @@ const VesselAnalysis = () => {
             discharged={data.input?.discharged}
           />
 
-          {/* ── HEATMAP ── */}
           {heatmapData && <HeatmapPage data={heatmapData} />}
 
-          {/* ── VISIT TABLE ── */}
           {!isManual && (
             <VisitTable visits={data.actual?.visits} avg={data.actual?.avg_hours} />
           )}
 
-          {/* ── TOP GRID (CORE DECISIONS) ── */}
           {!isManual && (
             <Box
               sx={{
@@ -105,14 +98,12 @@ const VesselAnalysis = () => {
             </Box>
           )}
 
-          {/* ── NEW: YARD STRATEGY (FULL WIDTH) ── */}
           {!isManual && data.yard_strategy && (
             <Box>
               <YardStrategy data={data.yard_strategy} />
             </Box>
           )}
 
-          {/* ── BERTH IMPACT TABLE ── */}
           {!isManual && <BerthImpactTable data={data.berth_analysis} />}
 
         </Box>

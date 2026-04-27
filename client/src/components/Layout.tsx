@@ -16,14 +16,9 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <Box sx={{ display: "flex", height: "100vh", bgcolor: "background.default" }}>
-      {/* Sidebar remains fixed on the left naturally via flexbox */}
       <Sidebar />
 
-      {/* 1. Changed overflow: "hidden" to overflowY: "auto" on this wrapper. 
-             This makes the ENTIRE right side (Nav + Content) scroll as one piece. */}
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
-
-        {/* ── TOP BAR ──────────────────────────────────────── */}
         <Box
           component="header"
           sx={{
@@ -38,7 +33,6 @@ export default function Layout({ children }: LayoutProps) {
             flexShrink: 0,
           }}
         >
-          {/* Page title */}
           <Box>
             <Typography
               sx={{
@@ -57,14 +51,11 @@ export default function Layout({ children }: LayoutProps) {
           </Box>
         </Box>
 
-        {/* ── PAGE CONTENT ─────────────────────────────────── */}
         <Box
           component="main"
           sx={{
             flex: 1,
-            // 2. Removed overflowY: "auto" from here so it doesn't scroll independently
             p: { xs: 3, md: "24px 32px" },
-            // Keeping the inner content centered with max-width
             '& > div': {
               maxWidth: 1320,
               width: "100%",

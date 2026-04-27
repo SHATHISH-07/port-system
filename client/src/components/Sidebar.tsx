@@ -8,12 +8,12 @@ import {
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 
-const OPEN   = 220;
+const OPEN = 220;
 const CLOSED = 56;
 
 const navItems = [
-  { path: "/",        label: "Vessel Analysis",  icon: AnalyticsOutlined },
-  { path: "/heatmap", label: "Terminal Heatmap", icon: GridViewOutlined  },
+  { path: "/", label: "Vessel Analysis", icon: AnalyticsOutlined },
+  { path: "/heatmap", label: "Terminal Heatmap", icon: GridViewOutlined },
 ];
 
 export default function Sidebar() {
@@ -38,7 +38,6 @@ export default function Sidebar() {
         zIndex: 200,
       }}
     >
-      {/* ── HEADER ─────────────────────────────────────────── */}
       <Box
         sx={{
           height: 64,
@@ -65,7 +64,7 @@ export default function Sidebar() {
           >
             {open
               ? <ChevronLeftRounded sx={{ fontSize: 22 }} />
-              : <MenuRounded       sx={{ fontSize: 22 }} />}
+              : <MenuRounded sx={{ fontSize: 22 }} />}
           </IconButton>
         </Tooltip>
 
@@ -85,7 +84,6 @@ export default function Sidebar() {
         )}
       </Box>
 
-      {/* ── NAV ITEMS ──────────────────────────────────────── */}
       <Box sx={{ flex: 1, py: 1.5, overflowY: "auto", overflowX: "hidden" }}>
         {navItems.map(({ path, label, icon: Icon }) => {
           const active = loc.pathname === path;
@@ -104,7 +102,6 @@ export default function Sidebar() {
                   alignItems: "center",
                   gap: 1.5,
                   height: 40,
-                  /* When open: left-align with padding; when closed: center the icon */
                   px: open ? 2 : 0,
                   mx: 1,
                   mb: 0.5,

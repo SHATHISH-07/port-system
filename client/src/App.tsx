@@ -5,7 +5,6 @@ import Layout from "./components/Layout";
 import VesselAnalysis from "./pages/VesselAnalysis";
 import TerminalMap from "./pages/TerminalMap";
 
-// ── Google Cloud Console Dark Theme ──────────────────────────────────────────
 const theme = createTheme({
   palette: {
     mode: "dark",
@@ -52,7 +51,6 @@ const theme = createTheme({
       styleOverrides: { body: { backgroundColor: "#202124", color: "#e8eaed" } },
     },
 
-    // ── CARD ──────────────────────────────────────────────────────────────────
     MuiCard: {
       styleOverrides: {
         root: {
@@ -73,7 +71,6 @@ const theme = createTheme({
       styleOverrides: { root: { "&:last-child": { paddingBottom: 20 } } },
     },
 
-    // ── PAPER ─────────────────────────────────────────────────────────────────
     MuiPaper: {
       styleOverrides: {
         root: {
@@ -87,7 +84,6 @@ const theme = createTheme({
       },
     },
 
-    // ── INPUT ─────────────────────────────────────────────────────────────────
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
@@ -116,7 +112,6 @@ const theme = createTheme({
       },
     },
 
-    // ── BUTTON ────────────────────────────────────────────────────────────────
     MuiButton: {
       styleOverrides: {
         root: {
@@ -159,7 +154,6 @@ const theme = createTheme({
       },
     },
 
-    // ── CHIP ──────────────────────────────────────────────────────────────────
     MuiChip: {
       styleOverrides: {
         root: { borderRadius: 4, fontWeight: 500, fontSize: "0.75rem", height: 22 },
@@ -167,7 +161,6 @@ const theme = createTheme({
       },
     },
 
-    // ── TABLE ─────────────────────────────────────────────────────────────────
     MuiTableCell: {
       styleOverrides: {
         root: { borderColor: "rgba(255,255,255,0.07)", fontSize: "0.8125rem", padding: "10px 12px" },
@@ -192,12 +185,9 @@ const theme = createTheme({
       },
     },
 
-    // ── DIVIDER ───────────────────────────────────────────────────────────────
     MuiDivider: {
       styleOverrides: { root: { borderColor: "rgba(255,255,255,0.08)" } },
     },
-
-    // ── TOOLTIP ───────────────────────────────────────────────────────────────
     MuiTooltip: {
       styleOverrides: {
         tooltip: {
@@ -214,7 +204,6 @@ const theme = createTheme({
       },
     },
 
-    // ── MENU ──────────────────────────────────────────────────────────────────
     MuiMenuItem: {
       styleOverrides: {
         root: {
@@ -226,7 +215,6 @@ const theme = createTheme({
       },
     },
 
-    // ── LINEAR PROGRESS ───────────────────────────────────────────────────────
     MuiLinearProgress: {
       styleOverrides: {
         root: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 2, height: 4 },

@@ -6,7 +6,6 @@ import {
   StarRounded
 } from "@mui/icons-material";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface BlockData {
   count: number;
   hazardous: number;
@@ -19,24 +18,22 @@ interface BlockData {
 interface VesselHeatmapResponse {
   vessel: string;
   visit_id: string;
-  recommended_berth?: string; // Made optional to reflect potential missing data
+  recommended_berth?: string;
   max_block: string;
   summary: { hazardous: number; reefer: number; oog: number };
   layout: Record<string, { x: number; y: number }>;
   blocks: Record<string, BlockData>;
 }
 
-// ─── Colour helpers ───────────────────────────────────────────────────────────
 const CONC_COLOR = {
-  High: { fill: "#dc2626", track: "rgba(220,38,38,0.18)", text: "#f87171", border: "rgba(220,38,38,0.30)" }, // Red
-  Medium: { fill: "#ea580c", track: "rgba(234,88,12,0.18)", text: "#fb923c", border: "rgba(234,88,12,0.30)" }, // Orange
-  Low: { fill: "#16a34a", track: "rgba(22,163,74,0.18)", text: "#4ade80", border: "rgba(22,163,74,0.30)" }, // Green
+  High: { fill: "#dc2626", track: "rgba(220,38,38,0.18)", text: "#f87171", border: "rgba(220,38,38,0.30)" },
+  Medium: { fill: "#ea580c", track: "rgba(234,88,12,0.18)", text: "#fb923c", border: "rgba(234,88,12,0.30)" },
+  Low: { fill: "#16a34a", track: "rgba(22,163,74,0.18)", text: "#4ade80", border: "rgba(22,163,74,0.30)" },
 };
 
 const concColor = (c?: "High" | "Medium" | "Low") =>
   CONC_COLOR[c ?? "Low"];
 
-// Row labels
 const ROW_LABELS: Record<number, string> = {
   0: "ROW A - FAR ZONE",
   1: "ROW B - MID ZONE",
@@ -44,7 +41,6 @@ const ROW_LABELS: Record<number, string> = {
   3: "ROW D - QUAY SIDE",
 };
 
-// ─── Single block tile ────────────────────────────────────────────────────────
 function BlockTile({
   blockId, block, isMax,
 }: {
@@ -71,7 +67,6 @@ function BlockTile({
         alignItems: "center",
         justifyContent: "center",
         minHeight: 140,
-        // Force exactly up to 3 blocks per row centrally
         flex: "0 1 calc(33.333% - 16px)",
         minWidth: 180,
         maxWidth: 280,
@@ -120,50 +115,39 @@ function BlockTile({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
   if (!data) return null;
 
-  // SAFE ACCESS: Provide empty string fallback to prevent crash if recommended_berth is missing
   const safeBerth = data.recommended_berth || "";
   const optimalNum = parseInt(safeBerth.replace(/\D/g, '')) || 2;
 
-  // 1) Extract and chunk active blocks logic (3 per row)
   const chunkedRows: string[][] = [];
   const activeBlockIds = Object.entries(data.blocks || {})
     .filter(([, block]) => block.count > 0)
     .map(([id]) => id);
-
-  // Isolate max block
   const withoutMax = activeBlockIds.filter(id => id !== data.max_block);
 
-  // Sort standard blocks by original layout proximity to keep things tidy
   withoutMax.sort((a, b) => {
     const posA = data.layout[a] || { x: 0, y: 0 };
     const posB = data.layout[b] || { x: 0, y: 0 };
     return posA.y - posB.y || posA.x - posB.x;
   });
 
-  // Calculate where the max block should sit in the final row
   const totalItems = withoutMax.length + 1;
   const lastRowLength = totalItems % 3 === 0 ? 3 : totalItems % 3;
 
-  // Map Berth (1, 2, 3) -> Row Index (0, 1, 2), capping it to the row's actual length
   const targetIndexInRow = Math.min(optimalNum - 1, lastRowLength - 1);
   const insertIndex = (totalItems - lastRowLength) + targetIndexInRow;
 
-  // Insert max_block at the correct visual index
   const finalOrder = [...withoutMax];
   if (data.max_block) finalOrder.splice(insertIndex, 0, data.max_block);
 
-  // Chunk into arrays of 3
   for (let i = 0; i < finalOrder.length; i += 3) {
     chunkedRows.push(finalOrder.slice(i, i + 3));
   }
 
   const totalContainers = Object.values(data.blocks || {}).reduce((s, b) => s + b.count, 0);
 
-  // Efficiency string calculator
   const calcEfficiency = (targetBerth: number) => {
     if (targetBerth === optimalNum) return "100% Optimal";
 
@@ -174,8 +158,7 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
     return `-${penalty}% efficiency`;
   };
 
-  // Calculate the physical X position of the max block for SVG lines to target
-  let maxBlockTargetX = 50; // Default center
+  let maxBlockTargetX = 50;
 
   if (chunkedRows.length > 0) {
     const maxRow = chunkedRows.find(row => row.includes(data.max_block));
@@ -196,8 +179,6 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-
-      {/* ── SUMMARY STRIP ─────────────────────────────────── */}
       <Box
         sx={{
           display: "grid",
@@ -233,11 +214,7 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
           </Box>
         ))}
       </Box>
-
-      {/* ── MAIN CONTENT ──────────────────────────────────── */}
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 280px" }, gap: 3, alignItems: "start" }}>
-
-        {/* LEFT — Block Grid Map */}
         <Box
           sx={{
             bgcolor: "#0d1726",
@@ -251,7 +228,6 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
             flexDirection: "column"
           }}
         >
-          {/* Header */}
           <Box sx={{ px: 3, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)", display: "flex", alignItems: "center", gap: 1, bgcolor: "#0d1726" }}>
             <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase", flex: 1 }}>
               Vessel Cargo Concentration — {data.vessel}
@@ -261,8 +237,6 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
               <Typography sx={{ fontSize: "0.6875rem", color: "#4ade80", fontWeight: 600, letterSpacing: "0.05em" }}>LIVE</Typography>
             </Box>
           </Box>
-
-          {/* Grid Rows */}
           <Box sx={{ p: 4, pb: 0, display: "flex", flexDirection: "column", gap: 6, flexGrow: 1 }}>
             {chunkedRows.map((rowBlockIds, rowIdx) => (
               <Box key={rowIdx} sx={{ position: "relative", zIndex: 2 }}>
@@ -290,7 +264,6 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
             ))}
           </Box>
 
-          {/* ── BERTHS AND DYNAMIC DASHED LINES ────────────────── */}
           <Box sx={{ position: "relative", pt: 6, pb: 4, px: 4, mt: "auto" }}>
             <svg width="100%" height="80" style={{ position: "absolute", top: -20, left: 0, zIndex: 1, overflow: "visible" }}>
               {[1, 2, 3].map(num => {
@@ -322,11 +295,7 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
             </Box>
           </Box>
         </Box>
-
-        {/* RIGHT PANEL */}
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-
-          {/* Recommended Berth card */}
           <Box sx={{ bgcolor: "#0d1726", border: "1.5px solid rgba(74, 222, 128, 0.4)", borderRadius: 2, overflow: "hidden" }}>
             <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)" }}>
               <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
@@ -358,7 +327,6 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
             </Box>
           </Box>
 
-          {/* Cargo summary */}
           <Box sx={{ bgcolor: "#0d1726", border: "1px solid rgba(138,180,248,0.15)", borderRadius: 2, overflow: "hidden" }}>
             <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)" }}>
               <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
@@ -392,7 +360,6 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
             </Box>
           </Box>
 
-          {/* Visual Legend Panel */}
           <Box sx={{ bgcolor: "#0d1726", border: "1px solid rgba(138,180,248,0.15)", borderRadius: 2, overflow: "hidden", mt: 'auto' }}>
             <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)", display: "flex", alignItems: "center", gap: 1 }}>
               <HelpOutlineRounded sx={{ fontSize: 14, color: "#8ab4f8" }} />

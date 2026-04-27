@@ -18,7 +18,6 @@ export default function YardStrategy({ data }: Props) {
     return (
         <Card>
             <CardContent sx={{ p: 0 }}>
-                {/* ── Header ── */}
                 <Box
                     sx={{
                         display: "flex",
@@ -44,10 +43,8 @@ export default function YardStrategy({ data }: Props) {
                     </Typography>
                 </Box>
 
-                {/* ── Body ── */}
                 <Box sx={{ px: 2.5, py: 2, display: "flex", flexDirection: "column", gap: 1.5 }}>
 
-                    {/* Weight Distribution */}
                     <Box
                         sx={{
                             p: "10px 12px",
@@ -67,7 +64,6 @@ export default function YardStrategy({ data }: Props) {
                         </Typography>
                     </Box>
 
-                    {/* Discharge Ports */}
                     <Box
                         sx={{
                             p: "10px 12px",
@@ -87,7 +83,6 @@ export default function YardStrategy({ data }: Props) {
                         </Typography>
                     </Box>
 
-                    {/* Reshuffle + Moves */}
                     <Box
                         sx={{
                             p: "10px 12px",

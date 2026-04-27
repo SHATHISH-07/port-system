@@ -12,24 +12,24 @@ interface Props {
 export default function PerformanceStats({ actual, predicted, mode, loaded, discharged }: Props) {
   const isOverride = mode === "override";
   const diff = predicted - actual;
-  const pct  = actual !== 0 ? Math.abs(diff / actual * 100).toFixed(1) : "—";
+  const pct = actual !== 0 ? Math.abs(diff / actual * 100).toFixed(1) : "—";
   const positive = diff <= 0;
 
   const METRIC = [
     {
-      label:    "Historical avg",
-      value:    actual.toFixed(1),
-      unit:     "hrs",
-      sub:      "Average vessel stay",
-      color:    "#e8eaed",
+      label: "Historical avg",
+      value: actual.toFixed(1),
+      unit: "hrs",
+      sub: "Average vessel stay",
+      color: "#e8eaed",
       dimColor: "#9aa0a6",
     },
     {
-      label:    isOverride ? `Predicted · ${loaded ?? 0} load / ${discharged ?? 0} disc` : "ML prediction",
-      value:    predicted.toFixed(1),
-      unit:     "hrs",
-      sub:      "Predicted stay time",
-      color:    "#8ab4f8",
+      label: isOverride ? `Predicted · ${loaded ?? 0} load / ${discharged ?? 0} disc` : "ML prediction",
+      value: predicted.toFixed(1),
+      unit: "hrs",
+      sub: "Predicted stay time",
+      color: "#8ab4f8",
       dimColor: "rgba(138,180,248,0.7)",
     },
   ];
@@ -37,7 +37,6 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
   return (
     <Card>
       <CardContent sx={{ p: 3 }}>
-        {/* Header */}
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <AccessTimeRounded sx={{ fontSize: 16, color: "#9aa0a6" }} />
@@ -56,7 +55,6 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
           )}
         </Box>
 
-        {/* Stats grid */}
         <Box sx={{ display: "flex", gap: 0, alignItems: "stretch" }}>
           {METRIC.map((m, i) => (
             <Box key={i} sx={{ flex: 1, pr: i === 0 ? 3 : 0, pl: i === 1 ? 3 : 0 }}>
@@ -75,7 +73,6 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
 
           <Divider orientation="vertical" flexItem sx={{ mx: 0, borderColor: "rgba(255,255,255,0.08)" }} />
 
-          {/* Delta */}
           <Box sx={{ pl: 3, display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 120 }}>
             <Typography sx={{ fontSize: "0.6875rem", color: "#9aa0a6", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em", mb: 0.75 }}>
               Delta
@@ -83,7 +80,7 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
               {positive
                 ? <TrendingDownRounded sx={{ fontSize: 18, color: "#81c995" }} />
-                : <TrendingUpRounded  sx={{ fontSize: 18, color: "#f28b82" }} />
+                : <TrendingUpRounded sx={{ fontSize: 18, color: "#f28b82" }} />
               }
               <Typography sx={{ fontSize: 28, fontWeight: 300, color: positive ? "#81c995" : "#f28b82", lineHeight: 1, letterSpacing: "-0.5px", fontFamily: "'Google Sans', Roboto, sans-serif" }}>
                 {Math.abs(diff).toFixed(2)}

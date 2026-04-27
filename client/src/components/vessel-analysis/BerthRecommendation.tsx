@@ -4,9 +4,9 @@ import { AnchorRounded, FiberManualRecord } from "@mui/icons-material";
 interface Props { berth?: string; concentration?: string; }
 
 const concStyle = (c?: string) => {
-  if (c === "High")   return { color: "#f28b82", bg: "rgba(242,139,130,0.10)", border: "rgba(242,139,130,0.22)" };
-  if (c === "Medium") return { color: "#fdd663", bg: "rgba(253,214,99,0.10)",  border: "rgba(253,214,99,0.22)"  };
-  return                     { color: "#81c995", bg: "rgba(129,201,149,0.10)", border: "rgba(129,201,149,0.22)" };
+  if (c === "High") return { color: "#f28b82", bg: "rgba(242,139,130,0.10)", border: "rgba(242,139,130,0.22)" };
+  if (c === "Medium") return { color: "#fdd663", bg: "rgba(253,214,99,0.10)", border: "rgba(253,214,99,0.22)" };
+  return { color: "#81c995", bg: "rgba(129,201,149,0.10)", border: "rgba(129,201,149,0.22)" };
 };
 
 export default function BerthRecommendation({ berth, concentration }: Props) {
@@ -15,7 +15,6 @@ export default function BerthRecommendation({ berth, concentration }: Props) {
   return (
     <Card>
       <CardContent sx={{ p: 0 }}>
-        {/* ── Header ── */}
         <Box
           sx={{
             display: "flex",
@@ -39,10 +38,8 @@ export default function BerthRecommendation({ berth, concentration }: Props) {
             Recommended Berth
           </Typography>
         </Box>
-
-        {/* ── Body ── */}
         <Box sx={{ px: 2.5, py: 2.5 }}>
-          {/* Berth ID — large but not enormous */}
+
           <Typography
             sx={{
               fontSize: 40,
@@ -61,8 +58,6 @@ export default function BerthRecommendation({ berth, concentration }: Props) {
           </Typography>
 
           <Divider sx={{ borderColor: "rgba(255,255,255,0.07)", mb: 2 }} />
-
-          {/* Concentration badge */}
           <Box
             sx={{
               display: "flex",

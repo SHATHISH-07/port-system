@@ -10,8 +10,6 @@ export interface BlockData {
     hazardous: number;
     reefer: number;
     oog: number;
-
-    // ✅ ADDED (from backend — DO NOT REMOVE OLD)
     intensity: number;
     concentration: "High" | "Medium" | "Low";
 

@@ -2,8 +2,8 @@ import { Box, Typography, TextField, Button, CircularProgress, Chip, InputAdornm
 import { SearchRounded, DirectionsBoat, AutoGraphRounded, LocalShippingRounded } from "@mui/icons-material";
 
 interface Props {
-  vesselId: string;  setVesselId: (v: string) => void;
-  loaded: string;    setLoaded:   (v: string) => void;
+  vesselId: string; setVesselId: (v: string) => void;
+  loaded: string; setLoaded: (v: string) => void;
   discharged: string; setDischarged: (v: string) => void;
   onAnalyze: () => void;
   loading: boolean;
@@ -11,9 +11,9 @@ interface Props {
 }
 
 const HINTS = [
-  { label: "Vessel ID → full analytics",          color: "#8ab4f8",  bg: "rgba(138,180,248,0.1)", border: "rgba(138,180,248,0.2)" },
-  { label: "Load / Discharge → stay prediction",  color: "#d7aefb",  bg: "rgba(215,174,251,0.1)", border: "rgba(215,174,251,0.2)" },
-  { label: "Both → optimized prediction",         color: "#81c995",  bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.2)" },
+  { label: "Vessel ID → full analytics", color: "#8ab4f8", bg: "rgba(138,180,248,0.1)", border: "rgba(138,180,248,0.2)" },
+  { label: "Load / Discharge → stay prediction", color: "#d7aefb", bg: "rgba(215,174,251,0.1)", border: "rgba(215,174,251,0.2)" },
+  { label: "Both → optimized prediction", color: "#81c995", bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.2)" },
 ];
 
 export default function AnalysisHeader({
@@ -25,7 +25,6 @@ export default function AnalysisHeader({
 
   return (
     <Box>
-      {/* ── QUERY CARD ─────────────────────────────────────── */}
       <Box
         sx={{
           bgcolor: "#292a2d",
@@ -36,7 +35,6 @@ export default function AnalysisHeader({
           boxShadow: "0 1px 2px rgba(0,0,0,.3), 0 2px 6px rgba(0,0,0,.15)",
         }}
       >
-        {/* Section label */}
         <Typography
           sx={{
             fontSize: "0.6875rem",
@@ -50,7 +48,6 @@ export default function AnalysisHeader({
           Query parameters
         </Typography>
 
-        {/* Inputs row */}
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, alignItems: "flex-end" }}>
           <TextField
             placeholder="Vessel ID (e.g. AA7)"
@@ -113,7 +110,6 @@ export default function AnalysisHeader({
           </Button>
         </Box>
 
-        {/* Hint chips */}
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2 }}>
           {HINTS.map(h => (
             <Chip
@@ -125,8 +121,6 @@ export default function AnalysisHeader({
           ))}
         </Box>
       </Box>
-
-      {/* ── EMPTY STATE ─────────────────────────────────────── */}
       {!hasData && !loading && (
         <Box
           sx={{

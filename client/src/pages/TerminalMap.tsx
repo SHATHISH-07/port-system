@@ -11,14 +11,11 @@ import {
 import { api } from "../api/api";
 
 const W = "100%", H = "100%";
-// Expanded viewBox provides breathing room so no edges/ships are cut off
 const VIEWBOX = "-50 -50 1250 950";
 
-// Block canvas layout constants
 const BLK_W = 160, BLK_H = 120, BLK_GAP_X = 40, BLK_GAP_Y = 40;
 const BLK_START_X = 80, BLK_START_Y = 190;
 
-// Derive positioned zones from API layout
 function getZones(layout: Record<string, { x: number, y: number }>) {
   return Object.entries(layout).map(([id, pos]) => ({
     id,
@@ -29,15 +26,13 @@ function getZones(layout: Record<string, { x: number, y: number }>) {
   }));
 }
 
-// Flat, professional status colors - Adjusted to survive the 55px blur
 const getHeatFill = (c: string) => {
-  if (c === "High") return "rgba(239, 68, 68, 0.85)"; // Strong Red
-  if (c === "Medium") return "rgba(249, 115, 22, 0.65)"; // Solid Orange
-  if (c === "Low") return "rgba(34, 197, 94, 0.55)"; // Visible Green
+  if (c === "High") return "rgba(239, 68, 68, 0.85)";
+  if (c === "Medium") return "rgba(249, 115, 22, 0.65)";
+  if (c === "Low") return "rgba(34, 197, 94, 0.55)";
   return "transparent";
 };
 
-// Available terminal berths mapping
 const BERTHS = [
   { id: "T1", label: "BERTH T1", lx: 260, ly: 140, lrot: 0, x: 260, y: 60, rot: 0, defaultShip: { name: "MSC OSCAR", color: "#1e293b" } },
   { id: "T2", label: "BERTH T2", lx: 600, ly: 140, lrot: 0, x: 600, y: 60, rot: 0, defaultShip: { name: "EVER GIVEN", color: "#1e293b" } },
@@ -47,7 +42,6 @@ const BERTHS = [
   { id: "R2", label: "BERTH R2", lx: 930, ly: 580, lrot: -90, x: 1010, y: 580, rot: 90, defaultShip: { name: "MAERSK MC-KINNEY", color: "#1e293b" } },
 ];
 
-// Sleek STS Crane
 const STS = ({ x, y, rot }: { x: number; y: number; rot: number }) => (
   <g transform={`translate(${x}, ${y}) rotate(${rot})`}>
     <rect x={-20} y={10} width={10} height={50} fill="#475569" />
@@ -60,7 +54,6 @@ const STS = ({ x, y, rot }: { x: number; y: number; rot: number }) => (
   </g>
 );
 
-// Sleek Ship hull
 const Ship = ({ x, y, w, h, name, color, rot = 0, isTarget = false }: { x: number, y: number, w: number, h: number, name: string, color: string, rot?: number, isTarget?: boolean }) => (
   <g transform={`translate(${x}, ${y}) rotate(${rot})`}>
     <g transform={`translate(${-w / 2}, ${-h / 2})`}>
@@ -75,7 +68,6 @@ const Ship = ({ x, y, w, h, name, color, rot = 0, isTarget = false }: { x: numbe
   </g>
 );
 
-// High-end KPI component
 const KPI = ({ label, value, valueColor = "#f8fafc", isMono = false }: { label: string, value: string | number, valueColor?: string, isMono?: boolean }) => (
   <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
     <Typography sx={{ fontSize: "0.65rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase" }}>{label}</Typography>
@@ -104,7 +96,6 @@ export default function TerminalMap() {
   let computedMaxBlock: string | null = null;
 
   if (data) {
-    // 1. Manually find the absolute highest concentration block 
     let maxCount = -1;
     Object.entries(data.blocks || {}).forEach(([id, b]: [string, any]) => {
       totalMoves += b.count;
@@ -116,7 +107,6 @@ export default function TerminalMap() {
 
     const highestBlockId = computedMaxBlock || data.max_block;
 
-    // 2. Find the physically closest berth to that exact highest block
     if (highestBlockId && data.layout && data.layout[highestBlockId]) {
       const pos = data.layout[highestBlockId];
 
@@ -152,7 +142,6 @@ export default function TerminalMap() {
         .zone-block:hover { filter: brightness(1.3); }
       `}</style>
 
-      {/* ── TOP SYSTEM BAR ── */}
       <Box sx={{ height: 44, bgcolor: "#12161f", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, justifyContent: "space-between", flexShrink: 0 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <PrecisionManufacturingRounded sx={{ color: "#38bdf8", fontSize: 20 }} />
@@ -169,7 +158,6 @@ export default function TerminalMap() {
         </Box>
       </Box>
 
-      {/* ── HORIZONTAL CONTROL DASHBOARD ── */}
       <Box sx={{ bgcolor: "#161b24", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, py: 1.5, gap: 4, flexShrink: 0 }}>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
           <input
@@ -217,10 +205,8 @@ export default function TerminalMap() {
         )}
       </Box>
 
-      {/* ── MAP WORKSPACE ── */}
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", position: "relative", minHeight: 0 }}>
 
-        {/* Floating Map Controls & Legend */}
         <Box sx={{ position: "absolute", top: 16, right: 24, zIndex: 10, display: "flex", gap: 1 }}>
           <Box sx={{ display: "flex", gap: 2, px: 2, py: 1, bgcolor: "rgba(18, 22, 31, 0.9)", backdropFilter: "blur(4px)", border: "1px solid #272e3d", borderRadius: 1 }}>
             {[
@@ -243,7 +229,6 @@ export default function TerminalMap() {
           </Box>
         </Box>
 
-        {/* SVG Map Container */}
         <Box sx={{ flex: 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", minHeight: 0 }}>
           {loading && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 120, background: "linear-gradient(transparent,rgba(56,189,248,0.18),transparent)", animation: "scan 1.8s linear infinite", pointerEvents: "none", zIndex: 99 }} />}
 
@@ -256,7 +241,6 @@ export default function TerminalMap() {
               </pattern>
             </defs>
 
-            {/* Water Area */}
             <rect x="-100" y="-100" width="1400" height="1100" fill="#0b0e14" />
             <g opacity="0.2">
               {Array.from({ length: 33 }).map((_, i) => (
@@ -264,10 +248,8 @@ export default function TerminalMap() {
               ))}
             </g>
 
-            {/* Peninsula Land */}
             <path d="M 0,120 L 960,120 L 960,700 L 0,700 Z" fill="url(#asphalt)" stroke="#272e3d" strokeWidth="2" />
 
-            {/* Quay Edges */}
             <rect x="0" y="120" width="960" height="15" fill="#1e2433" />
             <line x1="0" y1="125" x2="960" y2="125" stroke="#eab308" strokeWidth="2" strokeDasharray="14 7" opacity="0.8" />
             <rect x="0" y="685" width="960" height="15" fill="#1e2433" />
@@ -275,7 +257,6 @@ export default function TerminalMap() {
             <rect x="945" y="120" width="15" height="580" fill="#1e2433" />
             <line x1="955" y1="120" x2="955" y2="700" stroke="#eab308" strokeWidth="2" strokeDasharray="14 7" opacity="0.8" />
 
-            {/* Truck Lanes */}
             {[135, 310, 470, 630].map(ly => (
               <g key={ly}>
                 <rect x="0" y={ly} width="945" height="20" fill="#0b0e14" opacity="0.8" />
@@ -283,10 +264,8 @@ export default function TerminalMap() {
               </g>
             ))}
 
-            {/* Vertical Roads */}
             {[240, 440, 640].map(lx => <rect key={lx} x={lx} y="120" width="20" height="580" fill="#0b0e14" opacity="0.7" />)}
 
-            {/* ── YARD BLOCK ZONES ── */}
             {data && getZones(data.layout).map(z => {
               const block = data.blocks[z.id];
               const isHot = !!block && block.count > 0;
@@ -331,7 +310,6 @@ export default function TerminalMap() {
               );
             })}
 
-            {/* ── WEATHER HEATMAP GLOW OVERLAY ── */}
             {data && (
               <g filter="url(#weatherglow)" style={{ mixBlendMode: "screen" }} opacity="0.95">
                 {getZones(data.layout)
@@ -339,10 +317,6 @@ export default function TerminalMap() {
                     const block = data.blocks[z.id];
                     if (!block || block.count === 0) return null;
 
-                    // FORCE STRICT COLORING:
-                    // 1. If it's the absolute maximum block -> Make it "High" (Red)
-                    // 2. If the API called it "High" but it's NOT the max -> Demote to "Medium" (Orange)
-                    // 3. Otherwise -> Leave as is ("Medium" or "Low")
                     let effectiveConc = block.concentration;
                     if (z.id === computedMaxBlock) {
                       effectiveConc = "High";
@@ -353,7 +327,6 @@ export default function TerminalMap() {
                     return { z, block, effectiveConc };
                   })
                   .filter((item): item is { z: any; block: any; effectiveConc: string } => item !== null)
-                  // Draw Low (Green) first, Medium (Orange) second, High (Red) last so Red sits on top
                   .sort((a, b) => {
                     const heatIndex: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
                     return (heatIndex[a.effectiveConc] || 0) - (heatIndex[b.effectiveConc] || 0);
@@ -375,12 +348,10 @@ export default function TerminalMap() {
               </g>
             )}
 
-            {/* ── STS CRANES ── */}
             {[200, 320, 540, 660].map((cx, i) => <STS key={`top-${i}`} x={cx} y={120} rot={0} />)}
             {[200, 320, 540, 660].map((cx, i) => <STS key={`bot-${i}`} x={cx} y={700} rot={180} />)}
             {[220, 340, 500, 620].map((cy, i) => <STS key={`right-${i}`} x={960} y={cy} rot={90} />)}
 
-            {/* ── SHIPS AT BERTH ── */}
             {BERTHS.map(berth => {
               const isTarget = data ? targetBerthId === berth.id : berth.id === "R1";
               const shipName = isTarget ? (data ? data.vessel : "TARGET VESSEL") : berth.defaultShip.name;
@@ -394,7 +365,6 @@ export default function TerminalMap() {
               );
             })}
 
-            {/* ── BERTH LABELS ── */}
             {BERTHS.map(berth => {
               const isTarget = data ? targetBerthId === berth.id : berth.id === "R1";
               return (
@@ -407,7 +377,6 @@ export default function TerminalMap() {
               );
             })}
 
-            {/* COMPASS */}
             <g transform="translate(1080,820)">
               <circle cx="0" cy="0" r="24" fill="#0f1219" stroke="#272e3d" strokeWidth="2" />
               <text x="0" y="-10" fill="#ef4444" fontSize="10" fontWeight="800" fontFamily="sans-serif" textAnchor="middle">N</text>

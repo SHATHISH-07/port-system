@@ -9,7 +9,6 @@ export default function RiskEvaluation({ risks }: Props) {
   return (
     <Card>
       <CardContent sx={{ p: 0 }}>
-        {/* ── Header ── */}
         <Box
           sx={{
             display: "flex",
@@ -54,7 +53,6 @@ export default function RiskEvaluation({ risks }: Props) {
           )}
         </Box>
 
-        {/* ── Body ── */}
         <Box sx={{ px: 2.5, py: 2, display: "flex", flexDirection: "column", gap: 1 }}>
           {hasRisks ? (
             risks.map((risk, i) => (

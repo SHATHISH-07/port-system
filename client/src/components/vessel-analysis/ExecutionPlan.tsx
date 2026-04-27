@@ -1,5 +1,4 @@
 import { Card, CardContent, Typography, Box } from "@mui/material";
-import { ChecklistRounded } from "@mui/icons-material";
 
 interface Props { steps: string[]; }
 
@@ -7,7 +6,6 @@ export default function ExecutionPlan({ steps }: Props) {
   return (
     <Card>
       <CardContent sx={{ p: 0 }}>
-        {/* ── Header ── */}
         <Box
           sx={{
             display: "flex",
@@ -18,7 +16,6 @@ export default function ExecutionPlan({ steps }: Props) {
             borderBottom: "1px solid rgba(255,255,255,0.07)",
           }}
         >
-          <ChecklistRounded sx={{ fontSize: 15, color: "#9aa0a6" }} />
           <Typography
             sx={{
               fontSize: "0.6875rem",
@@ -50,7 +47,6 @@ export default function ExecutionPlan({ steps }: Props) {
           </Box>
         </Box>
 
-        {/* ── Steps ── */}
         <Box sx={{ px: 2.5, py: 2 }}>
           {steps.map((step, i) => (
             <Box
@@ -63,7 +59,6 @@ export default function ExecutionPlan({ steps }: Props) {
                 pb: i < steps.length - 1 ? 2 : 0,
               }}
             >
-              {/* Connector line */}
               {i < steps.length - 1 && (
                 <Box
                   sx={{
@@ -77,7 +72,6 @@ export default function ExecutionPlan({ steps }: Props) {
                 />
               )}
 
-              {/* Step number */}
               <Box
                 sx={{
                   width: 24,
@@ -103,8 +97,6 @@ export default function ExecutionPlan({ steps }: Props) {
                   {i + 1}
                 </Typography>
               </Box>
-
-              {/* Step text */}
               <Typography
                 sx={{
                   fontSize: "0.8125rem",

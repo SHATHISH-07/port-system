@@ -15,9 +15,9 @@ interface Row {
 interface Props { data: Row[]; }
 
 const riskStyle = (v: string) => {
-  if (v === "Low")    return { bgcolor: "rgba(129,201,149,0.1)", color: "#81c995", border: "1px solid rgba(129,201,149,0.22)" };
-  if (v === "Medium") return { bgcolor: "rgba(253,214,99,0.1)",  color: "#fdd663", border: "1px solid rgba(253,214,99,0.22)" };
-  return                     { bgcolor: "rgba(242,139,130,0.1)", color: "#f28b82", border: "1px solid rgba(242,139,130,0.22)" };
+  if (v === "Low") return { bgcolor: "rgba(129,201,149,0.1)", color: "#81c995", border: "1px solid rgba(129,201,149,0.22)" };
+  if (v === "Medium") return { bgcolor: "rgba(253,214,99,0.1)", color: "#fdd663", border: "1px solid rgba(253,214,99,0.22)" };
+  return { bgcolor: "rgba(242,139,130,0.1)", color: "#f28b82", border: "1px solid rgba(242,139,130,0.22)" };
 };
 
 const COLS = ["Berth", "Cargo Concentration", "Travel Distance", "Congestion Risk"];
@@ -31,7 +31,6 @@ export default function BerthImpactTable({ data }: Props) {
   return (
     <Card>
       <CardContent sx={{ p: 3 }}>
-        {/* Header */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
           <TableChartRounded sx={{ fontSize: 16, color: "#9aa0a6" }} />
           <Typography
@@ -54,7 +53,6 @@ export default function BerthImpactTable({ data }: Props) {
           </Box>
         </Box>
 
-        {/* Table */}
         <Box sx={{ overflowX: "auto" }}>
           <Table size="small" sx={{ minWidth: 480 }}>
             <TableHead>
@@ -70,7 +68,6 @@ export default function BerthImpactTable({ data }: Props) {
                   key={i}
                   sx={{ bgcolor: i === 0 ? "rgba(138,180,248,0.04)" : "transparent" }}
                 >
-                  {/* Berth */}
                   <TableCell>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Typography sx={{ fontWeight: i === 0 ? 600 : 400, color: "#e8eaed", fontSize: "0.8125rem" }}>
@@ -86,19 +83,15 @@ export default function BerthImpactTable({ data }: Props) {
                     </Box>
                   </TableCell>
 
-                  {/* Concentration */}
                   <TableCell>
                     <Typography sx={{ color: "#e8eaed", fontSize: "0.8125rem" }}>
                       {row.cargo_concentration}
                     </Typography>
                   </TableCell>
 
-                  {/* Distance */}
                   <TableCell>
                     <Chip label={row.total_travel_distance} size="small" sx={{ ...riskStyle(row.total_travel_distance), fontSize: "0.6875rem" }} />
                   </TableCell>
-
-                  {/* Congestion */}
                   <TableCell>
                     <Chip label={row.congestion_risk} size="small" sx={{ ...riskStyle(row.congestion_risk), fontSize: "0.6875rem" }} />
                   </TableCell>
@@ -108,7 +101,6 @@ export default function BerthImpactTable({ data }: Props) {
           </Table>
         </Box>
 
-        {/* Show more */}
         {data.length > LIMIT && (
           <Box sx={{ display: "flex", justifyContent: "center", mt: 1.5 }}>
             <Button
