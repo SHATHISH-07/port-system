@@ -13,6 +13,7 @@ load_dotenv()
 
 MODEL_PATH = os.getenv("MODEL_PATH")
 
+# Feature names in order of feature_utils.py file
 FEATURE_NAMES = [
     "loaded",
     "discharged",
@@ -32,22 +33,31 @@ FEATURE_NAMES = [
     "service_hash",
 ]
 
-TRAIN_MIN_HOURS = 2     
-TRAIN_MAX_HOURS = 240   
-MIN_VISIT_ROWS  = 5     
+# Training parameters
+TRAIN_MIN_HOURS = 2     # Ignore stays shorter than 2 hours (noise)
+TRAIN_MAX_HOURS = 240   # Ignore stays longer than 240 hours (outliers)
+MIN_VISIT_ROWS  = 5     # Ignore visits with fewer than 5 rows
 
+# Function to train the model
 def train_model():
     try:
         training_status.set("training", "Training started")
 
+        # Load dataset from get_data() function in utils/data_loader.py
         df = get_data()
+
+        # Group the dataset by visit ID
         grouped = df.groupby("Actual Outbound Carrier visit ID")
 
+        # Lists to store training data and target values
         X, y = [], []
+
+        # Counters for skipped records
         skipped_noise = 0
         skipped_error = 0
         skipped_rows  = 0
 
+        # Iterate through each visit ID and group
         for visit_id, group in grouped:
 
             if len(group) < MIN_VISIT_ROWS:
@@ -74,15 +84,18 @@ def train_model():
             X.append([features[f] for f in FEATURE_NAMES])
             y.append(stay)
 
+        # Check for empty training data after filtering
         if not X:
             raise Exception(
                 f"No training data after filtering "
                 f"(noise={skipped_noise}, errors={skipped_error})"
             )
 
+        # Convert to pandas DataFrame and Series
         X = pd.DataFrame(X, columns=FEATURE_NAMES)
         y = pd.Series(y)
 
+        # Print training statistics
         print(f"[OK] Training samples   : {len(X)}")
         print(f"     Skipped (< 5 rows) : {skipped_rows}")
         print(f"     Skipped (< 2h)     : {skipped_noise}")
@@ -90,6 +103,7 @@ def train_model():
         print(f"     Target range       : {y.min():.1f}h - {y.max():.1f}h")
         print(f"     Target mean        : {y.mean():.1f}h")
 
+        # XGBoost Regressor model
         model = XGBRegressor(
             n_estimators=150,
             max_depth=6,
@@ -103,10 +117,13 @@ def train_model():
             random_state=42,
         )
 
+        # Train the model
         model.fit(X, y)
 
+        # Create models directory if it doesn't exist
         os.makedirs("models", exist_ok=True)
 
+        # Save the model and features
         joblib.dump({
             "model":    model,
             "features": FEATURE_NAMES,
@@ -120,18 +137,14 @@ def train_model():
         print("[ERR] Training failed:", str(e))
 
 
-# =========================================================
 # LOAD MODEL
-# =========================================================
 def load_model():
     if not os.path.exists(MODEL_PATH):
         return None
     return joblib.load(MODEL_PATH)
 
 
-# =========================================================
 # PREDICT VISIT  (single visit DataFrame → predicted hours)
-# =========================================================
 def predict_visit(df):
     bundle = load_model()
 
@@ -146,15 +159,16 @@ def predict_visit(df):
     if features is None:
         return None
 
+    # Prepare input features in the same order as training
     X    = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
+    
+    # Predict the stay time
     pred = model.predict(X)[0]
 
     return round(float(pred), 2)
 
 
-# =========================================================
 # PREDICT VESSEL  (all visits for one Outbound Service)
-# =========================================================
 def predict_vessel(df, vessel_service):
     df = df[
         df["Outbound Service"].astype(str).str.strip() == str(vessel_service)
@@ -172,14 +186,17 @@ def predict_vessel(df, vessel_service):
         # Same preparation pipeline as training
         visit_df = prepare_visit_data(group)
 
+        # Predict the stay time
         pred = predict_visit(visit_df)
 
-        if isinstance(pred, dict):   # error dict → propagate
+        # Error dict → propagate
+        if isinstance(pred, dict):
             return pred
 
         if pred is not None:
             preds.append(pred)
 
+    # No prediction data available
     if not preds:
         return {"error": "No prediction data available"}
 
@@ -188,9 +205,12 @@ def predict_vessel(df, vessel_service):
         "visits":    len(preds),
     }
 
+
+# Estimate moves per hour from actual visits
 def estimate_moves_per_hour_from_actual(actual_visits):
     rates = []
 
+    # Calculate moves per hour for each visit
     for v in actual_visits.values():
         moves = v["loaded_containers"] + v["discharged_containers"]
         hours = v["stay_hours"]
@@ -201,16 +221,18 @@ def estimate_moves_per_hour_from_actual(actual_visits):
                 "load_ratio": v["loaded_containers"] / (moves + 1)
             })
 
+    # Default rate if no rates available
     if not rates:
         return 50
 
     return rates
 
+# Pick throughput based on load ratio
 def pick_throughput(rates, loaded, discharged):
     total = loaded + discharged
     input_ratio = loaded / (total + 1)
 
-    # find closest match in history
+    # Find closest match in history
     closest = min(
         rates,
         key=lambda r: abs(r["load_ratio"] - input_ratio)
@@ -218,22 +240,27 @@ def pick_throughput(rates, loaded, discharged):
 
     return closest["rate"]
 
+# Predict the stay time from input
 def predict_from_input(loaded: int, discharged: int,actual_visits=None):
     bundle = load_model()
 
     if bundle is None:
         return {"error": "Model not trained"}
 
+    # Model and feature names
     model = bundle["model"]
     feature_names = bundle["features"]
 
+    # Total moves and imbalance
     total_moves = loaded + discharged
     imbalance = abs(loaded - discharged)
 
+    # Estimate moves per hour from actual visits
     rates = estimate_moves_per_hour_from_actual(actual_visits)
     moves_per_hour = pick_throughput(rates, loaded, discharged)
     operation_hours = total_moves / moves_per_hour
 
+    # Feature engineering
     features = {
         "loaded": loaded,
         "discharged": discharged,
@@ -248,16 +275,18 @@ def predict_from_input(loaded: int, discharged: int,actual_visits=None):
         "reefer_count": int(total_moves * 0.1),
         "hazard_count": int(total_moves * 0.05),
         "oog_count": int(total_moves * 0.02),
-
         "operation_hours": operation_hours,
         "moves_per_hour": moves_per_hour,
-
         "service_hash": 123456,
     }
 
+    # Prepare input features in the same order as training
     X = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
+
+    # Predict the stay time
     pred = model.predict(X)[0]
 
+    # Return predicted stay time
     return {
         "mode": "manual",
         "vessel": None,

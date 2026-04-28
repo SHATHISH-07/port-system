@@ -9,8 +9,10 @@ from models.training_status import training_status
 from routes.vessel_routes import router as vessel_router
 from routes.model_routes import router as model_router
 
+# Initialize FastAPI app
 app = FastAPI()
 
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,23 +21,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Startup event
 @app.on_event("startup")
 def startup():
 
-    # 🔥 Load dataset
+    # Load dataset
     load_data()
 
-    # 🔥 Train model if not exists
+    # Train model if not exists
     if not os.path.exists("models/stay_model.pkl"):
-        print("⚠️ Model not found → Training...")
+        print("Model not found → Training...")
         training_status.set("training", "Training started")
 
-        train_model()  # ✅ blocking (correct)
+        train_model()  # blocking (correct)
 
     else:
         training_status.set("completed", "Model already available")
 
 
-# ✅ Register routes
+# Register routes
 app.include_router(vessel_router)
 app.include_router(model_router)
