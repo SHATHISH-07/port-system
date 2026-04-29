@@ -14,43 +14,25 @@ import YardStrategy from "../components/vessel-analysis/YardStrategy";
 
 const HistoryVesselAnalysis = () => {
 
-  const [uploaded, setUploaded] = useState(false);
   const [vesselId, setVesselId] = useState("");
-
   const [data, setData] = useState<VesselAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 🔥 UPLOAD DATASET
-  const handleUpload = async (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-
-    await api.post("/vessel/vessel-history-analysis", form);
-
-    setUploaded(true);
-  };
-
-  // 🔥 ANALYZE
   const fetchData = async () => {
+    if (!vesselId.trim()) return;
     setLoading(true);
-
     try {
       const form = new FormData();
-      if (vesselId) form.append("vessel_id", vesselId);
-
-      const analysisRes = await api.post<VesselAnalysisData>("/vessel/vessel-history-analysis", form);
-
-      setData(analysisRes.data);
-
+      form.append("vessel_id", vesselId.trim());
+      const res = await api.post<VesselAnalysisData>("/vessel/vessel-history-analysis", form);
+      setData(res.data);
     } catch (err: any) {
-
-      if (err?.response?.data?.message?.includes("No dataset") || err?.response?.data?.detail?.includes("No dataset")) {
-        setUploaded(false);
-        alert("Upload dataset again");
+      const detail = err?.response?.data?.detail || "";
+      if (detail.includes("No dataset")) {
+        alert("No historical data found in the database. Please upload the dataset via POST /upload/history.");
       } else {
-        alert("Error fetching data");
+        alert(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
       }
-
     } finally {
       setLoading(false);
     }
@@ -66,9 +48,7 @@ const HistoryVesselAnalysis = () => {
         vesselId={vesselId}
         setVesselId={setVesselId}
         onAnalyze={fetchData}
-        onUpload={handleUpload}
         loading={loading}
-        uploaded={uploaded}
         data={data}
       />
 

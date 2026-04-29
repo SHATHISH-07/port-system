@@ -151,21 +151,6 @@ export default function TerminalMap() {
   const [loading, setLoading] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
 
-  const [file, setFile] = useState<File | null>(null);
-  const [uploaded, setUploaded] = useState(false);
-
-  const handleUpload = async () => {
-    if (!file) return;
-    setLoading(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      await api.post("/vessel/heatmap", form);
-      setUploaded(true);
-    } catch { console.error("Failed to upload"); }
-    finally { setLoading(false); }
-  };
-
   const load = async () => {
     if (!vesselInput.trim()) return;
     setLoading(true);
@@ -175,11 +160,11 @@ export default function TerminalMap() {
       const res = await api.post("/vessel/heatmap", form);
       setData(res.data);
     } catch (err: any) {
-      if (err?.response?.data?.message?.includes("No dataset") || err?.response?.data?.detail?.includes("No dataset")) {
-        setUploaded(false);
-        alert("Please upload the dataset first.");
+      const detail = err?.response?.data?.detail || "";
+      if (detail.includes("No dataset")) {
+        alert("No current data found in the database. Please upload via POST /upload/current.");
       } else {
-        console.error("Failed to load");
+        alert(err?.response?.data?.error || "Error loading heatmap.");
       }
     } finally { setLoading(false); }
   };
@@ -239,48 +224,6 @@ export default function TerminalMap() {
 
       <Box sx={{ bgcolor: "#161b24", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, py: 1.5, gap: 2, flexShrink: 0, flexWrap: "wrap" }}>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <Button
-            component="label"
-            variant="outlined"
-            sx={{
-              color: "#94a3b8",
-              borderColor: "#272e3d",
-              fontSize: "0.75rem",
-              textTransform: "none",
-              py: "6px",
-              "&:hover": { borderColor: "#38bdf8", color: "#e2e8f0" }
-            }}
-          >
-            {uploaded ? (file?.name || "Dataset Ready") : "Choose CSV"}
-            <input
-              type="file"
-              hidden
-              accept=".csv"
-              onChange={(e) => {
-                const selected = e.target.files?.[0];
-                if (selected) {
-                  setFile(selected);
-                  // We could call handleUpload directly here if we want auto-upload
-                }
-              }}
-            />
-          </Button>
-
-          {!uploaded && (
-            <Button
-              onClick={handleUpload} disabled={!file || loading} disableElevation
-              sx={{ bgcolor: "#334155", color: "#f8fafc", fontSize: "0.75rem", fontWeight: 600, px: 2, py: "6px", textTransform: "none", borderRadius: "4px", "&:hover": { bgcolor: "#475569" } }}
-            >
-              Upload
-            </Button>
-          )}
-          
-          {uploaded && <Typography sx={{ fontSize: "0.7rem", color: "#10b981", fontWeight: 600, ml: 1 }}>Uploaded</Typography>}
-        </Box>
-
-        <Divider orientation="vertical" flexItem sx={{ borderColor: "#272e3d", my: 0.5 }} />
-
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
           <StyledTextField
             variant="outlined"
             placeholder="Vessel ID"
@@ -302,7 +245,9 @@ export default function TerminalMap() {
             }}
           />
           <Button
-            onClick={load} disabled={loading || !uploaded} disableElevation
+            onClick={load}
+            disabled={loading || !vesselInput.trim()}
+            disableElevation
             startIcon={<MapRounded sx={{ fontSize: 16 }} />}
             sx={{ bgcolor: "#38bdf8", color: "#0f1219", fontSize: "0.75rem", fontWeight: 700, px: 2.5, py: "7px", textTransform: "none", borderRadius: "4px", "&:hover": { bgcolor: "#0ea5e9" }, "&:disabled": { bgcolor: "#1e293b", color: "#475569" } }}
           >
@@ -330,7 +275,7 @@ export default function TerminalMap() {
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: "0.85rem", color: "#475569", fontStyle: "italic", flex: 1 }}>{uploaded ? "Ready for vessel query execution..." : "Upload a dataset first..."}</Typography>
+          <Typography sx={{ fontSize: "0.85rem", color: "#475569", fontStyle: "italic", flex: 1 }}>Enter a Vessel ID and click Generate Heatmap...</Typography>
         )}
       </Box>
 

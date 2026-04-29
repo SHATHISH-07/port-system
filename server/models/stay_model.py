@@ -208,19 +208,20 @@ def estimate_moves_per_hour_from_actual(actual_visits):
     rates = []
 
     # Calculate moves per hour for each visit
-    for v in actual_visits.values():
-        moves = v["loaded_containers"] + v["discharged_containers"]
-        hours = v["stay_hours"]
+    if actual_visits:
+        for v in actual_visits.values():
+            moves = v["loaded_containers"] + v["discharged_containers"]
+            hours = v["stay_hours"]
 
-        if hours > 0:
-            rates.append({
-                "rate": moves / hours,
-                "load_ratio": v["loaded_containers"] / (moves + 1)
-            })
+            if hours > 0:
+                rates.append({
+                    "rate": moves / hours,
+                    "load_ratio": v["loaded_containers"] / (moves + 1)
+                })
 
     # Default rate if no rates available
     if not rates:
-        return 50
+        return [{"rate": 50, "load_ratio": 0.5}]
 
     return rates
 

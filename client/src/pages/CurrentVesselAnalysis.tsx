@@ -9,60 +9,48 @@ import RiskEvaluation from "../components/vessel-analysis/RiskAndStrategy";
 import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
 import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
-import VisitTable from "../components/vessel-analysis/VisitTable";
+// import VisitTable from "../components/vessel-analysis/VisitTable";
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
+import HeatmapPage from "./HeatmapPage";
 
 const CurrentVesselAnalysis = () => {
-
-  const [uploaded, setUploaded] = useState(false);
 
   const [vesselId, setVesselId] = useState("");
   const [loaded, setLoaded] = useState("");
   const [discharged, setDischarged] = useState("");
-
   const [data, setData] = useState<VesselAnalysisData | null>(null);
+  const [heatmapData, setHeatmapData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  // 🔥 UPLOAD DATASET
-  const handleUpload = async (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-
-    await api.post("/vessel/current-vessel-analysis", form);
-
-    setUploaded(true);
-  };
-
-  // 🔥 ANALYZE
   const fetchData = async () => {
+    if (!vesselId.trim()) return;
     setLoading(true);
-
     try {
       const form = new FormData();
-
-      if (vesselId) form.append("vessel_id", vesselId);
+      form.append("vessel_id", vesselId.trim());
       if (loaded) form.append("loaded", loaded);
       if (discharged) form.append("discharged", discharged);
 
-      const analysisRes = await api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form);
+      const [analysisRes, heatmapRes] = await Promise.all([
+        api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form),
+        api.post("/vessel/heatmap", form)
+      ]);
 
       setData(analysisRes.data);
-
+      setHeatmapData(heatmapRes.data);
     } catch (err: any) {
-
-      if (err?.response?.data?.message?.includes("No dataset") || err?.response?.data?.detail?.includes("No dataset")) {
-        setUploaded(false);
-        alert("Upload dataset again");
+      const detail = err?.response?.data?.detail || "";
+      if (detail.includes("No dataset")) {
+        alert("No current data found in the database. Please upload the dataset via POST /upload/current.");
       } else {
-        alert("Error fetching data");
+        alert(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
       }
-
     } finally {
       setLoading(false);
     }
   };
 
-  const isManual = data?.mode === "manual" || data?.mode === "current-override";
+
 
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto" }}>
@@ -76,12 +64,9 @@ const CurrentVesselAnalysis = () => {
         discharged={discharged}
         setDischarged={setDischarged}
         onAnalyze={fetchData}
-        onUpload={handleUpload}
         loading={loading}
-        uploaded={uploaded}
         data={data}
       />
-
       {data && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 3 }}>
 
@@ -93,32 +78,44 @@ const CurrentVesselAnalysis = () => {
             discharged={data.input?.discharged}
           />
 
-          {!isManual && (
-            <VisitTable visits={data.actual?.visits} avg={data.actual?.avg_hours ?? 0} />
-          )}
-
-          {!isManual && (
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
-                gap: 2.5,
-              }}
-            >
-              <BerthRecommendation
-                berth={data.berth_analysis?.[0]?.berth}
-                concentration={data.berth_analysis?.[0]?.cargo_concentration}
-              />
-              <ExecutionPlan steps={data.execution_plan} />
-              <RiskEvaluation risks={data.risks} />
+          {heatmapData && !heatmapData.error && (
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ fontSize: "1.25rem", fontWeight: 600, color: "#e8eaed", mb: 0.5 }}>
+                  Live Yard Heatmap
+                </Box>
+                <Box sx={{ fontSize: "0.875rem", color: "#9aa0a6" }}>
+                  Real-time container concentration and block allocation for the target vessel.
+                </Box>
+              </Box>
+              <HeatmapPage data={heatmapData} />
             </Box>
           )}
 
-          {!isManual && data.yard_strategy && (
+          {/* <VisitTable visits={data.actual?.visits} avg={data.actual?.avg_hours ?? 0} /> */}
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
+              gap: 2.5,
+            }}
+          >
+            <BerthRecommendation
+              berth={data.berth_analysis?.[0]?.berth}
+              concentration={data.berth_analysis?.[0]?.cargo_concentration}
+            />
+            <ExecutionPlan steps={data.execution_plan} />
+            <RiskEvaluation risks={data.risks} />
+          </Box>
+
+          {data.yard_strategy && (
             <YardStrategy data={data.yard_strategy} />
           )}
 
-          {!isManual && <BerthImpactTable data={data.berth_analysis} />}
+          <BerthImpactTable data={data.berth_analysis} />
+
+
 
         </Box>
       )}
