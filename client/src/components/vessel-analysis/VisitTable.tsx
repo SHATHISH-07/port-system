@@ -1,8 +1,7 @@
 import {
-  Card, CardContent, Typography, Table, TableHead,
-  TableRow, TableCell, TableBody, Chip, Box,
+  Box, Typography, Table, TableHead,
+  TableRow, TableCell, TableBody,
 } from "@mui/material";
-import { HistoryRounded } from "@mui/icons-material";
 
 interface Visit {
   stay_hours: number;
@@ -13,97 +12,174 @@ interface Visit {
 }
 interface Props { visits: Record<string, Visit>; avg: number; }
 
-const stayStyle = (v: number, avg: number) => {
-  if (v > avg * 1.3) return { bgcolor: "rgba(242,139,130,0.1)", color: "#f28b82", border: "1px solid rgba(242,139,130,0.22)" };
-  if (v > avg) return { bgcolor: "rgba(253,214,99,0.1)", color: "#fdd663", border: "1px solid rgba(253,214,99,0.22)" };
-  return { bgcolor: "rgba(129,201,149,0.1)", color: "#81c995", border: "1px solid rgba(129,201,149,0.22)" };
+const stayColor = (v: number, avg: number) => {
+  if (v > avg * 1.3) return { color: "#f28b82", bg: "rgba(242,139,130,0.1)", border: "rgba(242,139,130,0.22)" };
+  if (v > avg) return { color: "#fdd663", bg: "rgba(253,214,99,0.1)", border: "rgba(253,214,99,0.22)" };
+  return { color: "#81c995", bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.22)" };
 };
-
-const COLS = ["Visit ID", "Stay", "Loaded", "Discharged", "Operation Window"];
 
 export default function VisitTable({ visits, avg }: Props) {
   const rows = Object.entries(visits || {});
+  const maxStay = Math.max(...rows.map(([, v]) => v.stay_hours), 1);
 
   return (
-    <Card>
-      <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
-          <HistoryRounded sx={{ fontSize: 16, color: "#9aa0a6" }} />
-          <Typography
-            sx={{ fontSize: "0.6875rem", fontWeight: 500, color: "#9aa0a6", letterSpacing: "0.1em", textTransform: "uppercase", flex: 1 }}
-          >
-            Visit History
-          </Typography>
-          <Box
-            sx={{
-              bgcolor: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 1,
-              px: 1,
-              py: 0.25,
-            }}
-          >
-            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 500, color: "#9aa0a6" }}>
-              avg {avg.toFixed(1)} hrs
-            </Typography>
-          </Box>
-        </Box>
+    <Box
+      sx={{
+        bgcolor: "#292a2d",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 1.5,
+        overflow: "hidden",
+      }}
+    >
+      {/* Header strip */}
+      <Box
+        sx={{
+          px: 3,
+          py: 2,
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: "0.6875rem",
+            fontWeight: 500,
+            color: "#9aa0a6",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          Visit History
+        </Typography>
+        <Typography sx={{ fontSize: "0.6875rem", color: "#5f6368", fontFamily: "monospace" }}>
+          avg {avg.toFixed(1)} hrs / visit
+        </Typography>
+      </Box>
 
-        <Box sx={{ overflowX: "auto" }}>
-          <Table size="small" sx={{ minWidth: 520 }}>
-            <TableHead>
-              <TableRow>
-                {COLS.map(h => <TableCell key={h}>{h}</TableCell>)}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map(([id, v]) => {
-                const s = stayStyle(v.stay_hours, avg);
-                return (
-                  <TableRow key={id}>
-                    <TableCell>
-                      <Typography sx={{ fontSize: "0.8125rem", fontWeight: 500, color: "#e8eaed", fontFamily: "'Roboto Mono', monospace" }}>
-                        {id}
+      {/* Table */}
+      <Box sx={{ overflowX: "auto" }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow
+              sx={{
+                bgcolor: "rgba(255,255,255,0.025)",
+                "& th": {
+                  fontSize: "0.625rem",
+                  fontWeight: 600,
+                  color: "#5f6368",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  borderBottom: "1px solid rgba(255,255,255,0.08)",
+                  py: 1.5,
+                  whiteSpace: "nowrap",
+                },
+              }}
+            >
+              <TableCell sx={{ pl: 3 }}>Visit ID</TableCell>
+              <TableCell>Stay Duration</TableCell>
+              <TableCell>Loaded</TableCell>
+              <TableCell>Discharged</TableCell>
+              <TableCell>Operation Window</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map(([id, v]) => {
+              const s = stayColor(v.stay_hours, avg);
+              const barW = (v.stay_hours / maxStay) * 100;
+              return (
+                <TableRow
+                  key={id}
+                  sx={{
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.03)" },
+                    "& td": {
+                      borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      py: 1.75,
+                    },
+                  }}
+                >
+                  {/* ID */}
+                  <TableCell sx={{ pl: 3 }}>
+                    <Typography
+                      sx={{
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        color: "#e8eaed",
+                        fontFamily: "'Roboto Mono', monospace",
+                        letterSpacing: "-0.3px",
+                      }}
+                    >
+                      {id}
+                    </Typography>
+                  </TableCell>
+
+                  {/* Stay + mini bar */}
+                  <TableCell>
+                    <Box
+                      sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        px: 1,
+                        py: 0.3,
+                        borderRadius: 0.5,
+                        bgcolor: s.bg,
+                        border: `1px solid ${s.border}`,
+                        mb: 0.75,
+                      }}
+                    >
+                      <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: s.color }}>
+                        {v.stay_hours.toFixed(1)} hrs
                       </Typography>
-                    </TableCell>
-
-                    <TableCell>
-                      <Chip
-                        label={`${v.stay_hours.toFixed(1)} hrs`}
-                        size="small"
-                        sx={{ ...s, fontSize: "0.6875rem", fontWeight: 600 }}
+                    </Box>
+                    <Box sx={{ height: 2, width: 72, bgcolor: "rgba(255,255,255,0.08)", borderRadius: 1 }}>
+                      <Box
+                        sx={{
+                          height: "100%",
+                          width: `${barW}%`,
+                          bgcolor: s.color,
+                          opacity: 0.65,
+                          borderRadius: 1,
+                        }}
                       />
-                    </TableCell>
+                    </Box>
+                  </TableCell>
 
-                    <TableCell>
-                      <Typography sx={{ fontSize: "0.8125rem", color: "#e8eaed" }}>
-                        {v.loaded_containers}
-                        <Typography component="span" sx={{ fontSize: "0.75rem", color: "#5f6368", ml: 0.5 }}>ctr</Typography>
+                  {/* Loaded */}
+                  <TableCell>
+                    <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, color: "#bdc1c6", fontFamily: "monospace" }}>
+                      {v.loaded_containers}
+                      <Typography component="span" sx={{ fontSize: "0.6875rem", color: "#5f6368", ml: 0.5, fontFamily: "inherit" }}>
+                        ctr
                       </Typography>
-                    </TableCell>
+                    </Typography>
+                  </TableCell>
 
-                    <TableCell>
-                      <Typography sx={{ fontSize: "0.8125rem", color: "#e8eaed" }}>
-                        {v.discharged_containers}
-                        <Typography component="span" sx={{ fontSize: "0.75rem", color: "#5f6368", ml: 0.5 }}>ctr</Typography>
+                  {/* Discharged */}
+                  <TableCell>
+                    <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, color: "#bdc1c6", fontFamily: "monospace" }}>
+                      {v.discharged_containers}
+                      <Typography component="span" sx={{ fontSize: "0.6875rem", color: "#5f6368", ml: 0.5, fontFamily: "inherit" }}>
+                        ctr
                       </Typography>
-                    </TableCell>
+                    </Typography>
+                  </TableCell>
 
-                    <TableCell>
-                      <Typography sx={{ fontSize: "0.75rem", color: "#e8eaed", fontFamily: "'Roboto Mono', monospace" }}>
-                        {v.move_start}
-                      </Typography>
-                      <Typography sx={{ fontSize: "0.75rem", color: "#5f6368", fontFamily: "'Roboto Mono', monospace" }}>
-                        → {v.move_end}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </Box>
-      </CardContent>
-    </Card>
+                  {/* Window */}
+                  <TableCell>
+                    <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", fontFamily: "'Roboto Mono', monospace" }}>
+                      {v.move_start}
+                    </Typography>
+                    <Typography sx={{ fontSize: "0.75rem", color: "#5f6368", fontFamily: "'Roboto Mono', monospace" }}>
+                      → {v.move_end}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Box>
+    </Box>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { api } from "../api/api";
 import { type VesselAnalysisData } from "../types/vessel";
 
@@ -9,12 +9,69 @@ import RiskEvaluation from "../components/vessel-analysis/RiskAndStrategy";
 import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
 import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
-// import VisitTable from "../components/vessel-analysis/VisitTable";
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
 import HeatmapPage from "./HeatmapPage";
 
-const CurrentVesselAnalysis = () => {
+/**
+ * Editorial section anchor — numbered like a design report.
+ * The faded large number creates visual depth without decoration.
+ */
+function Section({
+  n,
+  label,
+  children,
+}: {
+  n: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Box component="section" sx={{ pt: 4 }}>
+      {/* Section label row */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 2.5,
+          mb: 2.5,
+          pb: 2,
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
+        }}
+      >
+        {/* Big faded number — purely structural, not decorative */}
+        <Typography
+          sx={{
+            fontSize: "2.25rem",
+            fontWeight: 800,
+            color: "rgba(255,255,255,0.09)",
+            lineHeight: 1,
+            letterSpacing: "-2px",
+            fontFamily: "monospace",
+            userSelect: "none",
+            flexShrink: 0,
+          }}
+        >
+          {n}
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: "0.6875rem",
+            fontWeight: 600,
+            color: "#6b7280",
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+          }}
+        >
+          {label}
+        </Typography>
+      </Box>
 
+      {children}
+    </Box>
+  );
+}
+
+const CurrentVesselAnalysis = () => {
   const [vesselId, setVesselId] = useState("");
   const [loaded, setLoaded] = useState("");
   const [discharged, setDischarged] = useState("");
@@ -33,7 +90,7 @@ const CurrentVesselAnalysis = () => {
 
       const [analysisRes, heatmapRes] = await Promise.all([
         api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form),
-        api.post("/vessel/heatmap", form)
+        api.post("/vessel/heatmap", form),
       ]);
 
       setData(analysisRes.data);
@@ -41,7 +98,7 @@ const CurrentVesselAnalysis = () => {
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "";
       if (detail.includes("No dataset")) {
-        alert("No current data found in the database. Please upload the dataset via POST /upload/current.");
+        alert("No current data found. Please upload via POST /upload/current.");
       } else {
         alert(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
       }
@@ -50,11 +107,10 @@ const CurrentVesselAnalysis = () => {
     }
   };
 
-
-
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto" }}>
 
+      {/* ── Command bar ── */}
       <AnalysisHeader
         mode="current"
         vesselId={vesselId}
@@ -67,57 +123,76 @@ const CurrentVesselAnalysis = () => {
         loading={loading}
         data={data}
       />
+
       {data && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 3 }}>
-
-          <PerformanceStats
-            actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
-            predicted={data.predicted?.avg_hours ?? 0}
-            mode={data.mode || "current"}
-            loaded={data.input?.loaded}
-            discharged={data.input?.discharged}
-          />
-
-          {heatmapData && !heatmapData.error && (
-            <Box sx={{ mt: 2 }}>
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ fontSize: "1.25rem", fontWeight: 600, color: "#e8eaed", mb: 0.5 }}>
-                  Live Yard Heatmap
-                </Box>
-                <Box sx={{ fontSize: "0.875rem", color: "#9aa0a6" }}>
-                  Real-time container concentration and block allocation for the target vessel.
-                </Box>
-              </Box>
-              <HeatmapPage data={heatmapData} />
-            </Box>
-          )}
-
-          {/* <VisitTable visits={data.actual?.visits} avg={data.actual?.avg_hours ?? 0} /> */}
-
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
-              gap: 2.5,
-            }}
-          >
-            <BerthRecommendation
-              berth={data.berth_analysis?.[0]?.berth}
-              concentration={data.berth_analysis?.[0]?.cargo_concentration}
+        <>
+          {/* ── 01 · Performance ── */}
+          <Section n="01" label="Performance Metrics">
+            <PerformanceStats
+              actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
+              predicted={data.predicted?.avg_hours ?? 0}
+              mode={data.mode || "current"}
+              loaded={data.input?.loaded}
+              discharged={data.input?.discharged}
             />
-            <ExecutionPlan steps={data.execution_plan} />
-            <RiskEvaluation risks={data.risks} />
-          </Box>
+          </Section>
 
-          {data.yard_strategy && (
-            <YardStrategy data={data.yard_strategy} />
+          {/* ── 02 · Yard Heatmap ── */}
+          {heatmapData && !heatmapData.error && (
+            <Section n="02" label="Live Yard Heatmap">
+              <HeatmapPage data={heatmapData} />
+            </Section>
           )}
 
-          <BerthImpactTable data={data.berth_analysis} />
+          {/* ── 03 · Operational Intelligence ── */}
+          {/* Asymmetric 1:2 grid — berth on left, execution+risks share right */}
+          <Section n={heatmapData && !heatmapData.error ? "03" : "02"} label="Operational Intelligence">
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "280px 1fr" },
+                gridTemplateRows: { md: "1fr 1fr" },
+                gap: 2,
+              }}
+            >
+              {/* Berth — spans 2 rows on the left */}
+              <Box sx={{ gridRow: { md: "1 / 3" } }}>
+                <BerthRecommendation
+                  berth={data.berth_analysis?.[0]?.berth}
+                  concentration={data.berth_analysis?.[0]?.cargo_concentration}
+                />
+              </Box>
+              {/* Execution plan — top right */}
+              <ExecutionPlan steps={data.execution_plan} />
+              {/* Risks — bottom right */}
+              <RiskEvaluation risks={data.risks} />
+            </Box>
+          </Section>
 
+          {/* ── 04 · Yard Strategy ── */}
+          {data.yard_strategy && (
+            <Section n={heatmapData && !heatmapData.error ? "04" : "03"} label="Yard Preparation Strategy">
+              <YardStrategy data={data.yard_strategy} />
+            </Section>
+          )}
 
+          {/* ── 05 · Berth Table ── */}
+          <Section
+            n={
+              [heatmapData && !heatmapData.error, data.yard_strategy].filter(Boolean).length === 2
+                ? "05"
+                : [heatmapData && !heatmapData.error, data.yard_strategy].filter(Boolean).length === 1
+                ? "04"
+                : "03"
+            }
+            label="Berth Impact Analysis"
+          >
+            <BerthImpactTable data={data.berth_analysis} />
+          </Section>
 
-        </Box>
+          {/* Bottom spacer */}
+          <Box sx={{ pb: 6 }} />
+        </>
       )}
     </Box>
   );

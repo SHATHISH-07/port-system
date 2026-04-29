@@ -1,87 +1,125 @@
-import { Card, CardContent, Typography, Box, Divider } from "@mui/material";
-import { AnchorRounded, FiberManualRecord } from "@mui/icons-material";
+import { Box, Typography } from "@mui/material";
 
 interface Props { berth?: string; concentration?: string; }
 
-const concStyle = (c?: string) => {
-  if (c === "High") return { color: "#f28b82", bg: "rgba(242,139,130,0.10)", border: "rgba(242,139,130,0.22)" };
-  if (c === "Medium") return { color: "#fdd663", bg: "rgba(253,214,99,0.10)", border: "rgba(253,214,99,0.22)" };
-  return { color: "#81c995", bg: "rgba(129,201,149,0.10)", border: "rgba(129,201,149,0.22)" };
+const concColor = (c?: string) => {
+  if (c === "High") return { color: "#f28b82", bg: "rgba(242,139,130,0.1)", border: "rgba(242,139,130,0.22)" };
+  if (c === "Medium") return { color: "#fdd663", bg: "rgba(253,214,99,0.1)", border: "rgba(253,214,99,0.22)" };
+  return { color: "#81c995", bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.22)" };
 };
 
 export default function BerthRecommendation({ berth, concentration }: Props) {
-  const s = concStyle(concentration);
+  const s = concColor(concentration);
 
   return (
-    <Card>
-      <CardContent sx={{ p: 0 }}>
-        <Box
+    <Box
+      sx={{
+        bgcolor: "#292a2d",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 1.5,
+        overflow: "hidden",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Header strip — same as ExecutionPlan / RiskAndStrategy */}
+      <Box
+        sx={{
+          px: 3,
+          py: 2,
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Typography
           sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            px: 2.5,
-            py: 2,
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
+            fontSize: "0.6875rem",
+            fontWeight: 500,
+            color: "#9aa0a6",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
           }}
         >
-          <AnchorRounded sx={{ fontSize: 15, color: "#9aa0a6" }} />
-          <Typography
-            sx={{
-              fontSize: "0.6875rem",
-              fontWeight: 500,
-              color: "#9aa0a6",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-            }}
-          >
-            Recommended Berth
-          </Typography>
-        </Box>
-        <Box sx={{ px: 2.5, py: 2.5 }}>
+          Recommended Berth
+        </Typography>
+        <Typography sx={{ fontSize: "0.6875rem", color: "#5f6368" }}>
+          Optimal assignment
+        </Typography>
+      </Box>
 
-          <Typography
-            sx={{
-              fontSize: 40,
-              fontWeight: 300,
-              color: "#e8eaed",
-              lineHeight: 1,
-              letterSpacing: "-1px",
-              fontFamily: "'Google Sans', Roboto, sans-serif",
-              mb: 0.5,
-            }}
-          >
-            {berth || "N / A"}
-          </Typography>
-          <Typography sx={{ fontSize: "0.75rem", color: "#5f6368", mb: 2.5 }}>
-            Optimal berth assignment
-          </Typography>
+      {/* Body — centred berth name so it looks good tall or short */}
+      <Box
+        sx={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          justifyContent: "center",
+          px: 3,
+          py: 3,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: "5rem",
+            fontWeight: 200,
+            color: "#e8eaed",
+            lineHeight: 1,
+            letterSpacing: "-3px",
+            fontFamily: "'Inter', 'Roboto', sans-serif",
+            mb: 0.75,
+          }}
+        >
+          {berth || "—"}
+        </Typography>
+        <Typography sx={{ fontSize: "0.75rem", color: "#5f6368" }}>
+          Berth assignment
+        </Typography>
+      </Box>
 
-          <Divider sx={{ borderColor: "rgba(255,255,255,0.07)", mb: 2 }} />
+      {/* Footer — concentration strip */}
+      <Box
+        sx={{
+          px: 3,
+          py: 2,
+          borderTop: "1px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6" }}>
+          Cargo concentration
+        </Typography>
+        <Box
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.75,
+            px: 1.25,
+            py: 0.4,
+            borderRadius: 0.75,
+            bgcolor: s.bg,
+            border: `1px solid ${s.border}`,
+          }}
+        >
           <Box
             sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              bgcolor: s.bg,
-              border: `1px solid ${s.border}`,
-              borderRadius: 1.5,
-              px: 1.5,
-              py: 1,
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              bgcolor: s.color,
+              flexShrink: 0,
             }}
-          >
-            <FiberManualRecord sx={{ fontSize: 8, color: s.color, flexShrink: 0 }} />
-            <Box>
-              <Typography sx={{ fontSize: "0.6875rem", color: "#9aa0a6", lineHeight: 1.2 }}>
-                Cargo concentration
-              </Typography>
-              <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: s.color }}>
-                {concentration ?? "Unknown"}
-              </Typography>
-            </Box>
-          </Box>
+          />
+          <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: s.color }}>
+            {concentration ?? "Unknown"}
+          </Typography>
         </Box>
-      </CardContent>
-    </Card>
+      </Box>
+    </Box>
   );
 }

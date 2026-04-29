@@ -1,4 +1,4 @@
-import { Card, CardContent, Typography, Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 
 interface Props { steps: string[]; }
 
@@ -6,113 +6,96 @@ export default function ExecutionPlan({ steps }: Props) {
   const safeSteps = steps || [];
 
   return (
-    <Card>
-      <CardContent sx={{ p: 0 }}>
-        <Box
+    <Box
+      sx={{
+        bgcolor: "#292a2d",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 1.5,
+        overflow: "hidden",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Header strip */}
+      <Box
+        sx={{
+          px: 3,
+          py: 2,
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Typography
           sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            px: 2.5,
-            py: 2,
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
+            fontSize: "0.6875rem",
+            fontWeight: 500,
+            color: "#9aa0a6",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
           }}
         >
-          <Typography
-            sx={{
-              fontSize: "0.6875rem",
-              fontWeight: 500,
-              color: "#9aa0a6",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              flex: 1,
-            }}
-          >
-            Execution Plan
-          </Typography>
-          <Box
-            sx={{
-              height: 20,
-              minWidth: 20,
-              borderRadius: 10,
-              bgcolor: "rgba(138,180,248,0.12)",
-              border: "1px solid rgba(138,180,248,0.22)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              px: 0.75,
-            }}
-          >
-            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8" }}>
-              {safeSteps.length}
-            </Typography>
-          </Box>
-        </Box>
+          Execution Plan
+        </Typography>
+        <Typography sx={{ fontSize: "0.6875rem", color: "#5f6368", fontFamily: "monospace" }}>
+          {safeSteps.length} steps
+        </Typography>
+      </Box>
 
-        <Box sx={{ px: 2.5, py: 2 }}>
-          {safeSteps.map((step, i) => (
+      {/* Steps */}
+      <Box sx={{ flex: 1 }}>
+        {safeSteps.map((step, i) => (
+          <Box
+            key={i}
+            sx={{
+              display: "flex",
+              gap: 0,
+              borderBottom: i < safeSteps.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
+            }}
+          >
+            {/* Number gutter */}
             <Box
-              key={i}
               sx={{
+                width: 44,
+                flexShrink: 0,
                 display: "flex",
-                gap: 1.5,
                 alignItems: "flex-start",
-                position: "relative",
-                pb: i < safeSteps.length - 1 ? 2 : 0,
+                justifyContent: "center",
+                pt: 2,
+                borderRight: "1px solid rgba(255,255,255,0.06)",
               }}
             >
-              {i < safeSteps.length - 1 && (
-                <Box
-                  sx={{
-                    position: "absolute",
-                    left: 11,
-                    top: 22,
-                    width: 1,
-                    bottom: 0,
-                    bgcolor: "rgba(255,255,255,0.07)",
-                  }}
-                />
-              )}
-
-              <Box
+              <Typography
                 sx={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: "50%",
-                  flexShrink: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  zIndex: 1,
-                  bgcolor: i === 0 ? "rgba(138,180,248,0.14)" : "rgba(255,255,255,0.05)",
-                  border: `1px solid ${i === 0 ? "rgba(138,180,248,0.28)" : "rgba(255,255,255,0.09)"}`,
+                  fontSize: "0.625rem",
+                  fontWeight: 700,
+                  color: i === 0 ? "#8ab4f8" : "#3c4043",
+                  fontFamily: "monospace",
+                  letterSpacing: "0.05em",
                 }}
               >
-                <Typography
-                  sx={{
-                    fontSize: "0.6875rem",
-                    fontWeight: 600,
-                    color: i === 0 ? "#8ab4f8" : "#9aa0a6",
-                    lineHeight: 1,
-                  }}
-                >
-                  {i + 1}
-                </Typography>
-              </Box>
+                {String(i + 1).padStart(2, "0")}
+              </Typography>
+            </Box>
+
+            {/* Step text */}
+            <Box sx={{ px: 2, py: 1.75, flex: 1 }}>
               <Typography
                 sx={{
                   fontSize: "0.8125rem",
-                  color: "#e8eaed",
+                  color: i === 0 ? "#e8eaed" : "#bdc1c6",
                   lineHeight: 1.6,
-                  pt: "3px",
+                  fontWeight: i === 0 ? 500 : 400,
                 }}
               >
                 {step}
               </Typography>
             </Box>
-          ))}
-        </Box>
-      </CardContent>
-    </Card>
+          </Box>
+        ))}
+      </Box>
+    </Box>
   );
 }

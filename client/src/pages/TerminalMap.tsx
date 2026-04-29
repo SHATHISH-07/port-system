@@ -256,7 +256,7 @@ export default function TerminalMap() {
 
         <Divider orientation="vertical" flexItem sx={{ borderColor: "#272e3d", my: 0.5 }} />
 
-        {data ? (
+        {data && (
           <Box sx={{ display: "flex", gap: 4, alignItems: "center", flex: 1, overflowX: "auto" }}>
             <KPI label="Vessel Name" value={data.vessel} />
             <KPI label="Visit ID" value={data.visit_id || "—"} isMono />
@@ -273,8 +273,6 @@ export default function TerminalMap() {
               </Box>
             )}
           </Box>
-        ) : (
-          <Typography sx={{ fontSize: "0.85rem", color: "#475569", fontStyle: "italic", flex: 1 }}>Enter a Vessel ID and click Generate Heatmap...</Typography>
         )}
       </Box>
 

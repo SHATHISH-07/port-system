@@ -5,12 +5,11 @@ import {
   GridViewOutlined,
   HistoryOutlined,
   MenuRounded,
-  ChevronLeftRounded,
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 
-const OPEN = 220;
-const CLOSED = 56;
+const OPEN = 270;
+const CLOSED = 66;
 
 const navItems = [
   { path: "/history-analysis", label: "History Analysis", icon: HistoryOutlined },
@@ -31,8 +30,7 @@ export default function Sidebar() {
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
-        bgcolor: "#1f2023",
-        borderRight: "1px solid rgba(255,255,255,0.08)",
+        bgcolor: "#292a2d",
         transition: "width 280ms cubic-bezier(0.2,0,0,1)",
         overflow: "hidden",
         position: "sticky",
@@ -47,7 +45,6 @@ export default function Sidebar() {
           alignItems: "center",
           px: 1,
           gap: 1,
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
           flexShrink: 0,
         }}
       >
@@ -56,8 +53,8 @@ export default function Sidebar() {
             onClick={() => setOpen(v => !v)}
             size="small"
             sx={{
-              width: 40,
-              height: 40,
+              width: 50,
+              height: 50,
               borderRadius: "50%",
               color: "#9aa0a6",
               flexShrink: 0,
@@ -65,7 +62,7 @@ export default function Sidebar() {
             }}
           >
             {open
-              ? <ChevronLeftRounded sx={{ fontSize: 22 }} />
+              ? <MenuRounded sx={{ fontSize: 22 }} />
               : <MenuRounded sx={{ fontSize: 22 }} />}
           </IconButton>
         </Tooltip>
@@ -73,7 +70,7 @@ export default function Sidebar() {
         {open && (
           <Typography
             sx={{
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: 500,
               color: "#e8eaed",
               whiteSpace: "nowrap",
@@ -81,7 +78,7 @@ export default function Sidebar() {
               fontFamily: "'Google Sans', Roboto, sans-serif",
             }}
           >
-            PortSync
+            Berth & Yard Preparation
           </Typography>
         )}
       </Box>
@@ -106,7 +103,7 @@ export default function Sidebar() {
                   height: 40,
                   px: open ? 2 : 0,
                   mx: 1,
-                  mb: 0.5,
+                  mb: 1.2,
                   borderRadius: "20px",
                   textDecoration: "none",
                   cursor: "pointer",
@@ -122,7 +119,7 @@ export default function Sidebar() {
               >
                 <Icon
                   sx={{
-                    fontSize: 20,
+                    fontSize: 22,
                     flexShrink: 0,
                     color: active ? "#8ab4f8" : "#9aa0a6",
                     transition: "color 150ms",

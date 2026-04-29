@@ -1,5 +1,4 @@
-import { Card, CardContent, Typography, Box, Divider, Chip } from "@mui/material";
-import { AccessTimeRounded, TrendingUpRounded, TrendingDownRounded } from "@mui/icons-material";
+import { Box, Typography } from "@mui/material";
 
 interface Props {
   actual: number;
@@ -12,100 +11,92 @@ interface Props {
 export default function PerformanceStats({ actual, predicted, mode, loaded, discharged }: Props) {
   const isOverride = mode === "override";
   const diff = predicted - actual;
-  const pct = actual !== 0 ? Math.abs(diff / actual * 100).toFixed(1) : "—";
-  const positive = diff <= 0;
+  const pct = actual !== 0 ? Math.abs((diff / actual) * 100).toFixed(1) : "—";
+  const isBetter = diff <= 0;
 
-  const METRIC = [
+  const stats = [
     {
-      label: "Historical avg",
+      label: "Historical Average",
       value: actual.toFixed(1),
       unit: "hrs",
-      sub: "Average vessel stay",
-      color: "#e8eaed",
-      dimColor: "#9aa0a6",
+      sub: "Avg vessel stay time",
+      valueColor: "#e8eaed",
+      subColor: "#9aa0a6",
     },
     {
-      label: isOverride ? `Predicted · ${loaded ?? 0} load / ${discharged ?? 0} disc` : "ML prediction",
+      label: isOverride
+        ? `Predicted · ${loaded ?? 0} loaded / ${discharged ?? 0} discharged`
+        : "ML Prediction",
       value: predicted.toFixed(1),
       unit: "hrs",
       sub: "Predicted stay time",
-      color: "#8ab4f8",
-      dimColor: "rgba(138,180,248,0.7)",
+      valueColor: "#8ab4f8",
+      subColor: "#9aa0a6",
+    },
+    {
+      label: "Variance",
+      value: `${isBetter ? "−" : "+"}${Math.abs(diff).toFixed(2)}`,
+      unit: "hrs",
+      sub: `${pct}% ${isBetter ? "under" : "over"} actual`,
+      valueColor: isBetter ? "#81c995" : "#f28b82",
+      subColor: isBetter ? "rgba(129,201,149,0.7)" : "rgba(242,139,130,0.7)",
     },
   ];
 
   return (
-    <Card>
-      <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <AccessTimeRounded sx={{ fontSize: 16, color: "#9aa0a6" }} />
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        bgcolor: "#292a2d",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 1.5,
+        overflow: "hidden",
+      }}
+    >
+      {stats.map((s, i) => (
+        <Box
+          key={i}
+          sx={{
+            px: 3.5,
+            py: 3,
+            borderRight: i < 2 ? "1px solid rgba(255,255,255,0.08)" : "none",
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: "0.6875rem",
+              fontWeight: 500,
+              color: "#9aa0a6",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              mb: 1.5,
+            }}
+          >
+            {s.label}
+          </Typography>
+          <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mb: 0.75 }}>
             <Typography
-              sx={{ fontSize: "0.6875rem", fontWeight: 500, color: "#9aa0a6", letterSpacing: "0.1em", textTransform: "uppercase" }}
-            >
-              Performance Metrics
-            </Typography>
-          </Box>
-          {isOverride && (
-            <Chip
-              label="Override mode"
-              size="small"
-              sx={{ bgcolor: "rgba(215,174,251,0.12)", color: "#d7aefb", border: "1px solid rgba(215,174,251,0.22)", fontSize: "0.6875rem" }}
-            />
-          )}
-        </Box>
-
-        <Box sx={{ display: "flex", gap: 0, alignItems: "stretch" }}>
-          {METRIC.map((m, i) => (
-            <Box key={i} sx={{ flex: 1, pr: i === 0 ? 3 : 0, pl: i === 1 ? 3 : 0 }}>
-              <Typography sx={{ fontSize: "0.6875rem", color: m.dimColor, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em", mb: 0.75 }}>
-                {m.label}
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
-                <Typography sx={{ fontSize: 44, fontWeight: 300, color: m.color, lineHeight: 1, letterSpacing: "-1.5px", fontFamily: "'Google Sans', Roboto, sans-serif" }}>
-                  {m.value}
-                </Typography>
-                <Typography sx={{ fontSize: 18, color: m.dimColor, fontWeight: 300 }}>hrs</Typography>
-              </Box>
-              <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", mt: 0.5 }}>{m.sub}</Typography>
-            </Box>
-          ))}
-
-          <Divider orientation="vertical" flexItem sx={{ mx: 0, borderColor: "rgba(255,255,255,0.08)" }} />
-
-          <Box sx={{ pl: 3, display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 120 }}>
-            <Typography sx={{ fontSize: "0.6875rem", color: "#9aa0a6", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em", mb: 0.75 }}>
-              Delta
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              {positive
-                ? <TrendingDownRounded sx={{ fontSize: 18, color: "#81c995" }} />
-                : <TrendingUpRounded sx={{ fontSize: 18, color: "#f28b82" }} />
-              }
-              <Typography sx={{ fontSize: 28, fontWeight: 300, color: positive ? "#81c995" : "#f28b82", lineHeight: 1, letterSpacing: "-0.5px", fontFamily: "'Google Sans', Roboto, sans-serif" }}>
-                {Math.abs(diff).toFixed(2)}
-              </Typography>
-              <Typography sx={{ fontSize: 14, color: positive ? "#81c995" : "#f28b82", fontWeight: 300 }}>hrs</Typography>
-            </Box>
-            <Box
               sx={{
-                mt: 0.75,
-                display: "inline-flex",
-                alignItems: "center",
-                bgcolor: positive ? "rgba(129,201,149,0.1)" : "rgba(242,139,130,0.1)",
-                border: `1px solid ${positive ? "rgba(129,201,149,0.22)" : "rgba(242,139,130,0.22)"}`,
-                borderRadius: 20,
-                px: 1,
-                py: 0.25,
+                fontSize: "3rem",
+                fontWeight: 300,
+                color: s.valueColor,
+                lineHeight: 1,
+                letterSpacing: "-2px",
+                fontFamily: "'Inter', 'Roboto', sans-serif",
               }}
             >
-              <Typography sx={{ fontSize: "0.6875rem", fontWeight: 500, color: positive ? "#81c995" : "#f28b82" }}>
-                {positive ? "−" : "+"}{pct}% vs actual
-              </Typography>
-            </Box>
+              {s.value}
+            </Typography>
+            <Typography sx={{ fontSize: "1rem", color: "#5f6368", fontWeight: 400 }}>
+              {s.unit}
+            </Typography>
           </Box>
+          <Typography sx={{ fontSize: "0.75rem", color: s.subColor }}>
+            {s.sub}
+          </Typography>
         </Box>
-      </CardContent>
-    </Card>
+      ))}
+    </Box>
   );
 }

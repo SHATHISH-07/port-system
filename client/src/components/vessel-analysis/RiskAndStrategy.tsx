@@ -1,115 +1,117 @@
-import { Card, CardContent, Typography, Box } from "@mui/material";
-import { WarningAmberRounded, CheckCircleOutlineRounded } from "@mui/icons-material";
+import { Box, Typography } from "@mui/material";
 
 interface Props { risks: string[]; }
 
-export default function RiskEvaluation({ risks }: Props) {
+const severityOf = (i: number, total: number) => {
+  if (total === 0) return null;
+  if (i === 0) return { label: "HIGH", color: "#f28b82" };
+  if (i === 1) return { label: "MED", color: "#fdd663" };
+  return { label: "LOW", color: "#9aa0a6" };
+};
+
+export default function RiskAndStrategy({ risks }: Props) {
   const safeRisks = risks || [];
   const hasRisks = safeRisks.length > 0;
 
   return (
-    <Card>
-      <CardContent sx={{ p: 0 }}>
-        <Box
+    <Box
+      sx={{
+        bgcolor: "#292a2d",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 1.5,
+        overflow: "hidden",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Header strip */}
+      <Box
+        sx={{
+          px: 3,
+          py: 2,
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Typography
           sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            px: 2.5,
-            py: 2,
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
+            fontSize: "0.6875rem",
+            fontWeight: 500,
+            color: "#9aa0a6",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
           }}
         >
-          <WarningAmberRounded sx={{ fontSize: 15, color: hasRisks ? "#fdd663" : "#81c995" }} />
-          <Typography
-            sx={{
-              fontSize: "0.6875rem",
-              fontWeight: 500,
-              color: "#9aa0a6",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              flex: 1,
-            }}
-          >
-            Operational Risks
+          Operational Risks
+        </Typography>
+        {hasRisks && (
+          <Typography sx={{ fontSize: "0.6875rem", color: "#f28b82", fontFamily: "monospace", fontWeight: 700 }}>
+            {safeRisks.length} flagged
           </Typography>
-          {hasRisks && (
-            <Box
-              sx={{
-                height: 20,
-                minWidth: 20,
-                borderRadius: 10,
-                bgcolor: "rgba(242,139,130,0.12)",
-                border: "1px solid rgba(242,139,130,0.25)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                px: 0.75,
-              }}
-            >
-              <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#f28b82" }}>
-                {safeRisks.length}
-              </Typography>
-            </Box>
-          )}
-        </Box>
+        )}
+      </Box>
 
-        <Box sx={{ px: 2.5, py: 2, display: "flex", flexDirection: "column", gap: 1 }}>
-          {hasRisks ? (
-            safeRisks.map((risk, i) => (
+      {/* Body */}
+      <Box sx={{ flex: 1 }}>
+        {hasRisks ? (
+          safeRisks.map((risk, i) => {
+            const sev = severityOf(i, safeRisks.length)!;
+            return (
               <Box
                 key={i}
                 sx={{
                   display: "flex",
-                  gap: 1.5,
-                  alignItems: "flex-start",
-                  p: "10px 12px",
-                  bgcolor: "rgba(253,214,99,0.04)",
-                  border: "1px solid rgba(253,214,99,0.12)",
-                  borderLeft: "3px solid #fdd663",
-                  borderRadius: 1,
-                  transition: "background-color 150ms",
-                  "&:hover": { bgcolor: "rgba(253,214,99,0.08)" },
+                  gap: 0,
+                  borderBottom: i < safeRisks.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
                 }}
               >
-                <Typography
+                {/* Severity gutter */}
+                <Box
                   sx={{
-                    fontSize: "0.6875rem",
-                    fontWeight: 700,
-                    color: "#fdd663",
-                    lineHeight: "1.6rem",
+                    width: 44,
                     flexShrink: 0,
-                    minWidth: 14,
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "center",
+                    pt: 2,
+                    borderRight: "1px solid rgba(255,255,255,0.06)",
                   }}
                 >
-                  {i + 1}
-                </Typography>
-                <Typography sx={{ color: "#e8eaed", fontSize: "0.8125rem", lineHeight: 1.6 }}>
-                  {risk}
-                </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: "0.5rem",
+                      fontWeight: 700,
+                      color: sev.color,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    {sev.label}
+                  </Typography>
+                </Box>
+
+                {/* Risk text */}
+                <Box sx={{ px: 2, py: 1.75, flex: 1 }}>
+                  <Typography sx={{ fontSize: "0.8125rem", color: "#bdc1c6", lineHeight: 1.6 }}>
+                    {risk}
+                  </Typography>
+                </Box>
               </Box>
-            ))
-          ) : (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                p: "10px 12px",
-                bgcolor: "rgba(129,201,149,0.06)",
-                border: "1px solid rgba(129,201,149,0.18)",
-                borderLeft: "3px solid #81c995",
-                borderRadius: 1,
-              }}
-            >
-              <CheckCircleOutlineRounded sx={{ fontSize: 16, color: "#81c995", flexShrink: 0 }} />
-              <Typography sx={{ color: "#81c995", fontSize: "0.8125rem" }}>
-                No significant operational risks identified
-              </Typography>
-            </Box>
-          )}
-        </Box>
-      </CardContent>
-    </Card>
+            );
+          })
+        ) : (
+          <Box sx={{ px: 3, py: 3, display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#81c995", flexShrink: 0 }} />
+            <Typography sx={{ fontSize: "0.8125rem", color: "#81c995" }}>
+              No operational risks identified
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    </Box>
   );
 }

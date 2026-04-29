@@ -6,13 +6,13 @@ import { useLocation } from "react-router-dom";
 interface LayoutProps { children: React.ReactNode; }
 
 const PAGE: Record<string, { title: string; sub: string }> = {
-  "/": { title: "Vessel Analysis", sub: "Performance monitoring & predictive stay-time modeling" },
-  "/heatmap": { title: "Terminal Heatmap", sub: "Container yard block & berth utilization" },
+  "/": { title: "Vessel Analysis", sub: "" },
+  "/heatmap": { title: "Terminal Heatmap", sub: "" },
 };
 
 export default function Layout({ children }: LayoutProps) {
   const { pathname } = useLocation();
-  const page = PAGE[pathname] ?? { title: "PortSync", sub: "" };
+  const page = PAGE[pathname] ?? { title: "Berth and Yard Optimization", sub: "" };
 
   return (
     <Box sx={{ display: "flex", height: "100vh", bgcolor: "background.default" }}>
@@ -27,8 +27,7 @@ export default function Layout({ children }: LayoutProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            bgcolor: "#292a2d",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            bgcolor: "#1f2023",
             zIndex: 100,
             flexShrink: 0,
           }}

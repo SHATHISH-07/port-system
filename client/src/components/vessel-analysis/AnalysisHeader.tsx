@@ -3,17 +3,8 @@ import {
   Typography,
   Button,
   CircularProgress,
-  Chip,
   InputAdornment,
-  Card,
-  CardContent,
 } from "@mui/material";
-import {
-  SearchRounded,
-  LocalShippingRounded,
-  AutoGraphRounded,
-  DirectionsBoat,
-} from "@mui/icons-material";
 import { TextField } from "@mui/material";
 
 const StyledTextField = TextField as any;
@@ -31,94 +22,140 @@ interface Props {
   data: any;
 }
 
+const inputSx = (width: number | string) => ({
+  width,
+  "& .MuiOutlinedInput-root": {
+    bgcolor: "#35363a",
+    borderRadius: 1,
+    fontSize: "0.8125rem",
+    "& fieldset": { borderColor: "rgba(255,255,255,0.12)" },
+    "&:hover fieldset": { borderColor: "rgba(255,255,255,0.25)" },
+    "&.Mui-focused fieldset": { borderColor: "#8ab4f8", borderWidth: "1px" },
+    color: "#e8eaed",
+  },
+});
+
 export default function AnalysisHeader({
   mode = "current",
   vesselId, setVesselId,
   loaded, setLoaded,
   discharged, setDischarged,
   onAnalyze,
-  loading, data
+  loading, data,
 }: Props) {
-
   const handleEnter = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") onAnalyze();
   };
-
-  const hasData = data && (data.vessel || data.mode);
+  const isCurrent = mode === "current";
 
   return (
-    <Card sx={{ mb: 4, mt: 3 }}>
-      <CardContent sx={{ p: 3 }}>
-
-        {/* HEADER */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 3 }}>
-          <Box>
-            <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, color: "#e8eaed", mb: 0.5, letterSpacing: "-0.2px" }}>
-              {mode === "history" ? "Vessel History Analysis" : "Live Vessel Execution"}
-            </Typography>
-            <Typography sx={{ fontSize: "0.8125rem", color: "#9aa0a6" }}>
-              {mode === "history"
-                ? "Query past vessel records to review performance metrics."
-                : "Evaluate predictive models and adjust operational parameters."
-              }
-            </Typography>
-          </Box>
-
-          <Chip
-            label={data ? "Completed" : "Ready"}
-            size="small"
+    <Box sx={{ mt: 3, mb: 5, pb: 3, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+      {/* Two-column: title left, controls right */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 4,
+          flexWrap: "wrap",
+        }}
+      >
+        {/* LEFT: Title */}
+        <Box sx={{ flex: "0 0 auto" }}>
+          <Typography
             sx={{
-              bgcolor: data ? "rgba(129,201,149,0.1)" : "rgba(138,180,248,0.1)",
-              color: data ? "#81c995" : "#8ab4f8",
-              border: `1px solid ${data ? "rgba(129,201,149,0.2)" : "rgba(138,180,248,0.2)"}`,
+              fontSize: "1.375rem",
+              fontWeight: 600,
+              color: "#e8eaed",
+              letterSpacing: "-0.4px",
+              lineHeight: 1.2,
+              mb: 0.75,
             }}
-          />
+          >
+            {isCurrent ? "Current Vessel Analysis" : "Vessel History Analysis"}
+          </Typography>
+          <Typography sx={{ fontSize: "0.8125rem", color: "#9aa0a6", maxWidth: 340 }}>
+            {isCurrent
+              ? "Live operational analysis — berth assignment, yard heatmap, and execution plan."
+              : "Historical performance review — visit records, stay times, and berth rankings."
+            }
+          </Typography>
+          {data && (
+            <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, mt: 1.5 }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#81c995" }} />
+              <Typography sx={{ fontSize: "0.75rem", color: "#81c995", fontWeight: 500 }}>
+                Analysis complete
+              </Typography>
+            </Box>
+          )}
         </Box>
 
-        {/* INPUTS */}
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, alignItems: "center" }}>
+        {/* RIGHT: Controls */}
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 1.5,
+            alignItems: "flex-end",
+            flex: "1 1 auto",
+            justifyContent: "flex-end",
+          }}
+        >
+          {/* Vessel ID */}
+          <Box>
+            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 500, color: "#9aa0a6", mb: 0.5 }}>
+              Vessel ID
+            </Typography>
+            <StyledTextField
+              size="small"
+              variant="outlined"
+              placeholder="e.g. VESSEL_001"
+              value={vesselId}
+              onChange={(e: any) => setVesselId(e.target.value)}
+              onKeyDown={handleEnter}
+              sx={inputSx(210)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Typography sx={{ fontSize: "0.625rem", color: "#6b7280", fontFamily: "monospace", fontWeight: 700 }}>
+                      ID
+                    </Typography>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
 
-          <StyledTextField
-            variant="outlined"
-            placeholder="Vessel ID"
-            value={vesselId}
-            onChange={(e: any) => setVesselId(e.target.value)}
-            onKeyDown={handleEnter}
-            size="small"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchRounded sx={{ fontSize: 16 }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-
-          {mode === "current" && setLoaded && setDischarged && (
+          {isCurrent && setLoaded && setDischarged && (
             <>
-              <StyledTextField
-                variant="outlined"
-                label="Loaded"
-                value={loaded || ""}
-                onChange={(e: any) => setLoaded(e.target.value)}
-                type="number"
-                size="small"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LocalShippingRounded sx={{ fontSize: 14 }} />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <StyledTextField
-                variant="outlined"
-                label="Discharged"
-                value={discharged || ""}
-                onChange={(e: any) => setDischarged(e.target.value)}
-                type="number"
-                size="small"
-              />
+              <Box>
+                <Typography sx={{ fontSize: "0.6875rem", fontWeight: 500, color: "#9aa0a6", mb: 0.5 }}>
+                  Loaded
+                </Typography>
+                <StyledTextField
+                  size="small"
+                  variant="outlined"
+                  placeholder="0"
+                  value={loaded || ""}
+                  onChange={(e: any) => setLoaded(e.target.value)}
+                  type="number"
+                  sx={inputSx(100)}
+                />
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: "0.6875rem", fontWeight: 500, color: "#9aa0a6", mb: 0.5 }}>
+                  Discharged
+                </Typography>
+                <StyledTextField
+                  size="small"
+                  variant="outlined"
+                  placeholder="0"
+                  value={discharged || ""}
+                  onChange={(e: any) => setDischarged(e.target.value)}
+                  type="number"
+                  sx={inputSx(100)}
+                />
+              </Box>
             </>
           )}
 
@@ -126,21 +163,50 @@ export default function AnalysisHeader({
             variant="contained"
             onClick={onAnalyze}
             disabled={loading || !vesselId.trim()}
-            startIcon={loading ? undefined : <AutoGraphRounded />}
+            disableElevation
+            sx={{
+              height: 38,
+              px: 2.5,
+              fontWeight: 600,
+              fontSize: "0.8125rem",
+              bgcolor: "#8ab4f8",
+              color: "#0d1117",
+              borderRadius: 1,
+              textTransform: "none",
+              letterSpacing: 0,
+              minWidth: 120,
+              flexShrink: 0,
+              "&:hover": { bgcolor: "#a8c5fb" },
+              "&.Mui-disabled": {
+                bgcolor: "rgba(138,180,248,0.15)",
+                color: "rgba(232,234,237,0.25)",
+              },
+            }}
           >
-            {loading ? <CircularProgress size={16} /> : "Run Analysis"}
+            {loading ? <CircularProgress size={13} sx={{ color: "#0d1117" }} /> : "Run Analysis"}
           </Button>
         </Box>
+      </Box>
 
-        {!hasData && (
-          <Box sx={{ textAlign: "center", py: 6 }}>
-            <DirectionsBoat sx={{ fontSize: 40, color: "#5f6368" }} />
-            <Typography sx={{ color: "#9aa0a6", mt: 1 }}>
-              Enter a Vessel ID and click Run Analysis
-            </Typography>
-          </Box>
-        )}
-      </CardContent>
-    </Card>
+      {/* Empty state */}
+      {!data && !loading && (
+        <Box
+          sx={{
+            mt: 3,
+            py: 2.5,
+            px: 3,
+            bgcolor: "#292a2d",
+            borderRadius: 1,
+            border: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          <Typography sx={{ fontSize: "0.8125rem", color: "#9aa0a6" }}>
+            Enter a vessel ID and click{" "}
+            <Box component="span" sx={{ color: "#8ab4f8", fontWeight: 600 }}>Run Analysis</Box>{" "}
+            to begin.
+          </Typography>
+        </Box>
+      )}
+    </Box>
   );
 }
