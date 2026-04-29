@@ -1,7 +1,6 @@
 import re
 from collections import defaultdict
 
-from utils.data_loader import get_data
 from utils.stay_utils import compute_vessel_stay, prepare_visit_data
 from models.stay_model import predict_vessel
 
@@ -92,9 +91,7 @@ def merge_visit_data(actual_visits, visit_details):
     return merged
 
 # Function to analyze vessel dashboard
-def analyze_vessel_dashboard(vessel_service: str):
-    # Get data
-    df = get_data()
+def analyze_vessel_dashboard(df, vessel_service: str):
     # Filter data for vessel service
     vessel_df = df[
         df["Outbound Service"].astype(str).str.strip() == str(vessel_service)

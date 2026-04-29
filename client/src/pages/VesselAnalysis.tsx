@@ -14,6 +14,9 @@ import HeatmapPage from "./HeatmapPage";
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
 
 const VesselAnalysis = () => {
+
+  const [uploaded, setUploaded] = useState(false);
+
   const [vesselId, setVesselId] = useState("");
   const [loaded, setLoaded] = useState("");
   const [discharged, setDischarged] = useState("");
@@ -22,24 +25,43 @@ const VesselAnalysis = () => {
   const [heatmapData, setHeatmapData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // 🔥 UPLOAD DATASET
+  const handleUpload = async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+
+    await api.post("/vessel/vessel-history-analysis", form);
+    await api.post("/vessel/heatmap", form);
+
+    setUploaded(true);
+  };
+
+  // 🔥 ANALYZE
   const fetchData = async () => {
     setLoading(true);
 
     try {
-      let analysisUrl = `/vessel/analysis?`;
-      if (vesselId) analysisUrl += `vessel_id=${vesselId}&`;
-      if (loaded) analysisUrl += `loaded=${loaded}&`;
-      if (discharged) analysisUrl += `discharged=${discharged}&`;
+      const form = new FormData();
+
+      if (vesselId) form.append("vessel_id", vesselId);
+      if (loaded) form.append("loaded", loaded);
+      if (discharged) form.append("discharged", discharged);
 
       const [analysisRes, heatmapRes] = await Promise.all([
-        api.get<VesselAnalysisData>(analysisUrl),
-        api.get(`/vessel/heatmap?vessel_id=${vesselId}`)
+        api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form),
+        api.post("/vessel/heatmap", form),
       ]);
 
       setData(analysisRes.data);
       setHeatmapData(heatmapRes.data);
-    } catch (error) {
-      console.error("Failed to load vessel data:", error);
+
+    } catch (err: any) {
+
+      if (err?.response?.data?.message?.includes("No dataset")) {
+        setUploaded(false);
+        alert("Upload dataset again");
+      }
+
     } finally {
       setLoading(false);
     }
@@ -49,6 +71,7 @@ const VesselAnalysis = () => {
 
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto" }}>
+
       <AnalysisHeader
         vesselId={vesselId}
         setVesselId={setVesselId}
@@ -57,7 +80,9 @@ const VesselAnalysis = () => {
         discharged={discharged}
         setDischarged={setDischarged}
         onAnalyze={fetchData}
+        onUpload={handleUpload}
         loading={loading}
+        uploaded={uploaded}
         data={data}
       />
 
@@ -84,24 +109,19 @@ const VesselAnalysis = () => {
                 display: "grid",
                 gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
                 gap: 2.5,
-                alignItems: "start",
               }}
             >
               <BerthRecommendation
                 berth={data.berth_analysis?.[0]?.berth}
                 concentration={data.berth_analysis?.[0]?.cargo_concentration}
               />
-
               <ExecutionPlan steps={data.execution_plan} />
-
               <RiskEvaluation risks={data.risks} />
             </Box>
           )}
 
           {!isManual && data.yard_strategy && (
-            <Box>
-              <YardStrategy data={data.yard_strategy} />
-            </Box>
+            <YardStrategy data={data.yard_strategy} />
           )}
 
           {!isManual && <BerthImpactTable data={data.berth_analysis} />}

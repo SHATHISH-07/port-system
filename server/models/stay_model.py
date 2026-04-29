@@ -5,7 +5,7 @@ from xgboost import XGBRegressor
 
 from utils.stay_utils import prepare_visit_data, compute_visit_stay
 from utils.feature_utils import create_features
-from utils.data_loader import get_data
+from utils.data_loader import load_csv
 from models.training_status import training_status
 
 from dotenv import load_dotenv
@@ -39,12 +39,9 @@ TRAIN_MAX_HOURS = 240   # Ignore stays longer than 240 hours (outliers)
 MIN_VISIT_ROWS  = 5     # Ignore visits with fewer than 5 rows
 
 # Function to train the model
-def train_model():
+def train_model(df):
     try:
         training_status.set("training", "Training started")
-
-        # Load dataset from get_data() function in utils/data_loader.py
-        df = get_data()
 
         # Group the dataset by visit ID
         grouped = df.groupby("Actual Outbound Carrier visit ID")

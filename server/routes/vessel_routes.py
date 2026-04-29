@@ -1,56 +1,74 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, UploadFile, File
+from utils.data_loader import load_csv
+
 from services.vessel_service import analyze_vessel_dashboard
 from services.heatmap_service import get_vessel_heatmap
 from models.stay_model import predict_from_input
 
-# Create vessel router
+from utils.endpoint_cache import set_cache, get_cache
+
 router = APIRouter(prefix="/vessel", tags=["Vessel"])
 
-# Vessel analysis endpoint
-@router.get("/analysis")
-def vessel_analysis(
-    vessel_id: str = Query(None),
-    loaded: int = Query(None),
-    discharged: int = Query(None)
+
+# 1. VESSEL HISTORY ANALYSIS
+@router.post("/vessel-history-analysis")
+async def vessel_history_analysis(
+    file: UploadFile = File(None),
+    vessel_id: str = None
 ):
-    if vessel_id and loaded is not None and discharged is not None:
-        result = analyze_vessel_dashboard(vessel_id)
+    if file:
+        content = await file.read()
+        df = load_csv(content)
+        set_cache("history", df)
+    else:
+        df = get_cache("history")
 
-        actual_visits = None
+    result = analyze_vessel_dashboard(df, vessel_id)
+    result["mode"] = "history"
 
-        # Get actual visits
-        if "actual" in result and "visits" in result["actual"]:
-            actual_visits = result["actual"]["visits"]
+    return result
 
-        # Predict stay time from input
-        manual = predict_from_input(
-            loaded,
-            discharged,
-            actual_visits=actual_visits
-        )
-        # Add predicted stay time to result
+
+# 2. CURRENT VESSEL ANALYSIS
+@router.post("/current-vessel-analysis")
+async def current_vessel_analysis(
+    file: UploadFile = File(None),
+    loaded: int = None,
+    discharged: int = None,
+    vessel_id: str = None
+):
+    if file:
+        content = await file.read()
+        df = load_csv(content)
+        set_cache("current", df)
+    else:
+        df = get_cache("current")
+
+    result = analyze_vessel_dashboard(df, vessel_id)
+
+    if loaded is not None and discharged is not None:
+        manual = predict_from_input(loaded, discharged)
         result["predicted"] = manual["predicted"]
         result["input"] = {
             "loaded": loaded,
             "discharged": discharged
         }
-        # Set mode to override
-        result["mode"] = "override"
-        return result
+        result["mode"] = "current-override"
 
-    # Get vessel analysis from database
-    if vessel_id:
-        result = analyze_vessel_dashboard(vessel_id)
-        result["mode"] = "vessel"
-        return result
+    return result
 
-    # Get predicted stay time from input
-    if loaded is not None and discharged is not None:
-        return predict_from_input(loaded, discharged)
 
-    return {"error": "Provide valid input"}
+# 3. HEATMAP ANALYSIS
+@router.post("/heatmap")
+async def heatmap_analysis(
+    file: UploadFile = File(None),
+    vessel_id: str = None
+):
+    if file:
+        content = await file.read()
+        df = load_csv(content)
+        set_cache("heatmap", df)
+    else:
+        df = get_cache("heatmap")
 
-# Heatmap analysis endpoint
-@router.get("/heatmap")
-def heatmap_analysis(vessel_id: str = Query(...)):
-    return get_vessel_heatmap(vessel_id)
+    return get_vessel_heatmap(df, vessel_id)
