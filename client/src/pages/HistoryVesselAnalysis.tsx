@@ -10,19 +10,14 @@ import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
 import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
 import VisitTable from "../components/vessel-analysis/VisitTable";
-import HeatmapPage from "./HeatmapPage";
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
 
-const VesselAnalysis = () => {
+const HistoryVesselAnalysis = () => {
 
   const [uploaded, setUploaded] = useState(false);
-
   const [vesselId, setVesselId] = useState("");
-  const [loaded, setLoaded] = useState("");
-  const [discharged, setDischarged] = useState("");
 
   const [data, setData] = useState<VesselAnalysisData | null>(null);
-  const [heatmapData, setHeatmapData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
   // 🔥 UPLOAD DATASET
@@ -31,7 +26,6 @@ const VesselAnalysis = () => {
     form.append("file", file);
 
     await api.post("/vessel/vessel-history-analysis", form);
-    await api.post("/vessel/heatmap", form);
 
     setUploaded(true);
   };
@@ -42,24 +36,19 @@ const VesselAnalysis = () => {
 
     try {
       const form = new FormData();
-
       if (vesselId) form.append("vessel_id", vesselId);
-      if (loaded) form.append("loaded", loaded);
-      if (discharged) form.append("discharged", discharged);
 
-      const [analysisRes, heatmapRes] = await Promise.all([
-        api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form),
-        api.post("/vessel/heatmap", form),
-      ]);
+      const analysisRes = await api.post<VesselAnalysisData>("/vessel/vessel-history-analysis", form);
 
       setData(analysisRes.data);
-      setHeatmapData(heatmapRes.data);
 
     } catch (err: any) {
 
-      if (err?.response?.data?.message?.includes("No dataset")) {
+      if (err?.response?.data?.message?.includes("No dataset") || err?.response?.data?.detail?.includes("No dataset")) {
         setUploaded(false);
         alert("Upload dataset again");
+      } else {
+        alert("Error fetching data");
       }
 
     } finally {
@@ -67,18 +56,15 @@ const VesselAnalysis = () => {
     }
   };
 
-  const isManual = data?.mode === "manual";
+  const isManual = data?.mode === "manual" || data?.mode === "current-override";
 
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto" }}>
 
       <AnalysisHeader
+        mode="history"
         vesselId={vesselId}
         setVesselId={setVesselId}
-        loaded={loaded}
-        setLoaded={setLoaded}
-        discharged={discharged}
-        setDischarged={setDischarged}
         onAnalyze={fetchData}
         onUpload={handleUpload}
         loading={loading}
@@ -90,17 +76,15 @@ const VesselAnalysis = () => {
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 3 }}>
 
           <PerformanceStats
-            actual={data.actual?.avg_hours ?? data.predicted.avg_hours}
-            predicted={data.predicted.avg_hours}
-            mode={data.mode || "vessel"}
+            actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
+            predicted={data.predicted?.avg_hours ?? 0}
+            mode={data.mode || "history"}
             loaded={data.input?.loaded}
             discharged={data.input?.discharged}
           />
 
-          {heatmapData && <HeatmapPage data={heatmapData} />}
-
           {!isManual && (
-            <VisitTable visits={data.actual?.visits} avg={data.actual?.avg_hours} />
+            <VisitTable visits={data.actual?.visits} avg={data.actual?.avg_hours ?? 0} />
           )}
 
           {!isManual && (
@@ -132,4 +116,4 @@ const VesselAnalysis = () => {
   );
 };
 
-export default VesselAnalysis;
+export default HistoryVesselAnalysis;

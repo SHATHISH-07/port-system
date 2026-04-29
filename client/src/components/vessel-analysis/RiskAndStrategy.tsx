@@ -4,7 +4,8 @@ import { WarningAmberRounded, CheckCircleOutlineRounded } from "@mui/icons-mater
 interface Props { risks: string[]; }
 
 export default function RiskEvaluation({ risks }: Props) {
-  const hasRisks = risks.length > 0;
+  const safeRisks = risks || [];
+  const hasRisks = safeRisks.length > 0;
 
   return (
     <Card>
@@ -47,7 +48,7 @@ export default function RiskEvaluation({ risks }: Props) {
               }}
             >
               <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#f28b82" }}>
-                {risks.length}
+                {safeRisks.length}
               </Typography>
             </Box>
           )}
@@ -55,7 +56,7 @@ export default function RiskEvaluation({ risks }: Props) {
 
         <Box sx={{ px: 2.5, py: 2, display: "flex", flexDirection: "column", gap: 1 }}>
           {hasRisks ? (
-            risks.map((risk, i) => (
+            safeRisks.map((risk, i) => (
               <Box
                 key={i}
                 sx={{

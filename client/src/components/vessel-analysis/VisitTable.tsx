@@ -22,7 +22,7 @@ const stayStyle = (v: number, avg: number) => {
 const COLS = ["Visit ID", "Stay", "Loaded", "Discharged", "Operation Window"];
 
 export default function VisitTable({ visits, avg }: Props) {
-  const rows = Object.entries(visits);
+  const rows = Object.entries(visits || {});
 
   return (
     <Card>

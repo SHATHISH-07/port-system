@@ -10,7 +10,7 @@ const BLK_W = 160, BLK_H = 120, BLK_GAP_X = 40, BLK_GAP_Y = 40;
 const BLK_START_X = 80, BLK_START_Y = 190;
 
 function getZones(layout: Record<string, { x: number, y: number }>) {
-  return Object.entries(layout).map(([id, pos]) => ({
+  return Object.entries(layout || {}).map(([id, pos]) => ({
     id,
     x: BLK_START_X + pos.x * (BLK_W + BLK_GAP_X),
     y: BLK_START_Y + pos.y * (BLK_H + BLK_GAP_Y),
@@ -145,14 +145,37 @@ export default function TerminalMap() {
   const [loading, setLoading] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
 
+  const [file, setFile] = useState<File | null>(null);
+  const [uploaded, setUploaded] = useState(false);
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      await api.post("/vessel/heatmap", form);
+      setUploaded(true);
+    } catch { console.error("Failed to upload"); }
+    finally { setLoading(false); }
+  };
+
   const load = async () => {
     if (!vesselInput.trim()) return;
     setLoading(true);
     try {
-      const res = await api.get(`/vessel/heatmap?vessel_id=${encodeURIComponent(vesselInput.trim())}`);
+      const form = new FormData();
+      form.append("vessel_id", vesselInput.trim());
+      const res = await api.post("/vessel/heatmap", form);
       setData(res.data);
-    } catch { console.error("Failed to load"); }
-    finally { setLoading(false); }
+    } catch (err: any) {
+      if (err?.response?.data?.message?.includes("No dataset") || err?.response?.data?.detail?.includes("No dataset")) {
+        setUploaded(false);
+        alert("Please upload the dataset first.");
+      } else {
+        console.error("Failed to load");
+      }
+    } finally { setLoading(false); }
   };
 
   let targetBerthId = "R1";
@@ -208,7 +231,49 @@ export default function TerminalMap() {
 
 
 
-      <Box sx={{ bgcolor: "#161b24", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, py: 1.5, gap: 4, flexShrink: 0 }}>
+      <Box sx={{ bgcolor: "#161b24", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, py: 1.5, gap: 2, flexShrink: 0, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+          <Button
+            component="label"
+            variant="outlined"
+            sx={{
+              color: "#94a3b8",
+              borderColor: "#272e3d",
+              fontSize: "0.75rem",
+              textTransform: "none",
+              py: "6px",
+              "&:hover": { borderColor: "#38bdf8", color: "#e2e8f0" }
+            }}
+          >
+            {uploaded ? (file?.name || "Dataset Ready") : "Choose CSV"}
+            <input
+              type="file"
+              hidden
+              accept=".csv"
+              onChange={(e) => {
+                const selected = e.target.files?.[0];
+                if (selected) {
+                  setFile(selected);
+                  // We could call handleUpload directly here if we want auto-upload
+                }
+              }}
+            />
+          </Button>
+
+          {!uploaded && (
+            <Button
+              onClick={handleUpload} disabled={!file || loading} disableElevation
+              sx={{ bgcolor: "#334155", color: "#f8fafc", fontSize: "0.75rem", fontWeight: 600, px: 2, py: "6px", textTransform: "none", borderRadius: "4px", "&:hover": { bgcolor: "#475569" } }}
+            >
+              Upload
+            </Button>
+          )}
+          
+          {uploaded && <Typography sx={{ fontSize: "0.7rem", color: "#10b981", fontWeight: 600, ml: 1 }}>Uploaded</Typography>}
+        </Box>
+
+        <Divider orientation="vertical" flexItem sx={{ borderColor: "#272e3d", my: 0.5 }} />
+
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
           <input
             value={vesselInput}
@@ -218,14 +283,14 @@ export default function TerminalMap() {
             style={{
               background: "#0b0e14", border: "1px solid #272e3d", borderRadius: "4px",
               color: "#f8fafc", fontSize: "0.85rem", padding: "8px 14px", outline: "none",
-              width: "200px", fontFamily: "'Roboto Mono', monospace", transition: "border 0.2s"
+              width: "180px", fontFamily: "'Roboto Mono', monospace", transition: "border 0.2s"
             }}
             onFocus={(e) => e.target.style.borderColor = "#38bdf8"}
             onBlur={(e) => e.target.style.borderColor = "#272e3d"}
           />
           <Button
-            onClick={load} disabled={loading} disableElevation
-            sx={{ bgcolor: "#38bdf8", color: "#0f1219", fontSize: "0.75rem", fontWeight: 700, px: 2.5, py: "8px", textTransform: "none", borderRadius: "4px", "&:hover": { bgcolor: "#0ea5e9" } }}
+            onClick={load} disabled={loading || !uploaded} disableElevation
+            sx={{ bgcolor: "#38bdf8", color: "#0f1219", fontSize: "0.75rem", fontWeight: 700, px: 2.5, py: "8px", textTransform: "none", borderRadius: "4px", "&:hover": { bgcolor: "#0ea5e9" }, "&:disabled": { bgcolor: "#1e293b", color: "#475569" } }}
           >
             {loading ? "Computing..." : "Execute"}
           </Button>
@@ -234,7 +299,7 @@ export default function TerminalMap() {
         <Divider orientation="vertical" flexItem sx={{ borderColor: "#272e3d", my: 0.5 }} />
 
         {data ? (
-          <Box sx={{ display: "flex", gap: 5, alignItems: "center", flex: 1 }}>
+          <Box sx={{ display: "flex", gap: 4, alignItems: "center", flex: 1, overflowX: "auto" }}>
             <KPI label="Vessel Name" value={data.vessel} />
             <KPI label="Visit ID" value={data.visit_id || "—"} isMono />
             <KPI label="Total Volume" value={`${totalMoves} CTN`} isMono />
@@ -244,14 +309,14 @@ export default function TerminalMap() {
             <Box sx={{ flex: 1 }} />
 
             {(data.summary?.hazardous > 0 || data.summary?.reefer > 0) && (
-              <Box sx={{ px: 2, py: 1, bgcolor: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: 1, display: "flex", gap: 1.5, alignItems: "center" }}>
+              <Box sx={{ px: 2, py: 1, bgcolor: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: 1, display: "flex", gap: 1.5, alignItems: "center", whiteSpace: "nowrap" }}>
                 <WarningAmberRounded sx={{ fontSize: 18, color: "#ef4444" }} />
                 <Typography sx={{ fontSize: "0.75rem", color: "#fca5a5", fontWeight: 600 }}>Special Cargo (Haz/Ref)</Typography>
               </Box>
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: "0.85rem", color: "#475569", fontStyle: "italic", flex: 1 }}>Awaiting vessel query execution...</Typography>
+          <Typography sx={{ fontSize: "0.85rem", color: "#475569", fontStyle: "italic", flex: 1 }}>{uploaded ? "Ready for vessel query execution..." : "Upload a dataset first..."}</Typography>
         )}
       </Box>
 
@@ -310,7 +375,7 @@ export default function TerminalMap() {
             {[240, 440, 640].map(lx => <rect key={lx} x={lx} y="120" width="20" height="580" fill="#0b0e14" opacity="0.7" />)}
 
             {data && getZones(data.layout).map(z => {
-              const block = data.blocks[z.id];
+              const block = (data.blocks || {})[z.id];
               const isHot = !!block && block.count > 0;
               const isMax = z.id === (computedMaxBlock || data.max_block);
               const isRec = data.recommended_berth?.includes(z.id);

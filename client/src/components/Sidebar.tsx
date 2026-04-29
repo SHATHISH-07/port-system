@@ -3,6 +3,7 @@ import { Box, Typography, Tooltip, IconButton } from "@mui/material";
 import {
   AnalyticsOutlined,
   GridViewOutlined,
+  HistoryOutlined,
   MenuRounded,
   ChevronLeftRounded,
 } from "@mui/icons-material";
@@ -12,7 +13,8 @@ const OPEN = 220;
 const CLOSED = 56;
 
 const navItems = [
-  { path: "/", label: "Vessel Analysis", icon: AnalyticsOutlined },
+  { path: "/history-analysis", label: "History Analysis", icon: HistoryOutlined },
+  { path: "/current-analysis", label: "Current Analysis", icon: AnalyticsOutlined },
   { path: "/heatmap", label: "Terminal Heatmap", icon: GridViewOutlined },
 ];
 

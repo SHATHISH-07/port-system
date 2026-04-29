@@ -5,21 +5,25 @@ import {
   Button,
   CircularProgress,
   Chip,
-  InputAdornment
+  InputAdornment,
+  Card,
+  CardContent,
 } from "@mui/material";
 import {
   SearchRounded,
-  DirectionsBoat,
-  AutoGraphRounded,
   LocalShippingRounded,
-  UploadFileRounded
+  AutoGraphRounded,
+  DirectionsBoat
 } from "@mui/icons-material";
 import { useState } from "react";
 
+const StyledTextField = TextField as any;
+
 interface Props {
+  mode?: "history" | "current";
   vesselId: string; setVesselId: (v: string) => void;
-  loaded: string; setLoaded: (v: string) => void;
-  discharged: string; setDischarged: (v: string) => void;
+  loaded?: string; setLoaded?: (v: string) => void;
+  discharged?: string; setDischarged?: (v: string) => void;
 
   onAnalyze: () => void;
   onUpload: (file: File) => void;
@@ -30,6 +34,7 @@ interface Props {
 }
 
 export default function AnalysisHeader({
+  mode = "current",
   vesselId, setVesselId,
   loaded, setLoaded,
   discharged, setDischarged,
@@ -37,12 +42,7 @@ export default function AnalysisHeader({
   loading, uploaded, data
 }: Props) {
 
-  const [file, setFile] = useState<File | null>(null);
-
-  const handleUpload = () => {
-    if (!file) return;
-    onUpload(file);
-  };
+  const [fileName, setFileName] = useState<string | null>(null);
 
   const handleEnter = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") onAnalyze();
@@ -51,117 +51,123 @@ export default function AnalysisHeader({
   const hasData = data && (data.vessel || data.mode);
 
   return (
-    <Box>
+    <Card sx={{ mb: 4, mt: 3 }}>
+      <CardContent sx={{ p: 3 }}>
 
-      {/* 🔥 HEADER CARD */}
-      <Box
-        sx={{
-          bgcolor: "#292a2d",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 2,
-          p: 3,
-          mb: hasData ? 3 : 0,
-        }}
-      >
-        <Typography sx={{ fontSize: "0.6875rem", color: "#9aa0a6", mb: 2 }}>
-          Dataset & Query
-        </Typography>
+        {/* 🔥 HEADER & BADGES */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 3 }}>
+          <Box>
+            <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, color: "#e8eaed", mb: 0.5, letterSpacing: "-0.2px" }}>
+              {mode === "history" ? "Vessel History Analysis" : "Live Vessel Execution"}
+            </Typography>
+            <Typography sx={{ fontSize: "0.8125rem", color: "#9aa0a6" }}>
+              {mode === "history"
+                ? "Query past vessel records to review performance metrics."
+                : "Evaluate predictive models and adjust operational parameters."
+              }
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+            <Button
+              component="label"
+              variant="outlined"
+              size="small"
+              sx={{
+                color: "#e8eaed",
+                borderColor: "rgba(255,255,255,0.12)",
+                textTransform: "none",
+                "&:hover": { borderColor: "rgba(255,255,255,0.22)", bgcolor: "rgba(255,255,255,0.04)" }
+              }}
+            >
+              {uploaded ? (fileName || "Dataset Ready") : "Choose CSV"}
+              <input type="file" hidden accept=".csv" onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  setFileName(f.name);
+                  onUpload(f);
+                }
+              }} />
+            </Button>
 
-        {/* 🔥 FILE UPLOAD */}
-        <Box sx={{ display: "flex", gap: 1.5, mb: 2 }}>
-          <Button
-            component="label"
-            variant="outlined"
-            startIcon={<UploadFileRounded />}
-          >
-            Choose CSV
-            <input
-              type="file"
-              hidden
-              accept=".csv"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            <Chip
+              label={uploaded ? "Dataset Ready" : "Not Uploaded"}
+              size="small"
+              sx={{
+                bgcolor: uploaded ? "rgba(129,201,149,0.1)" : "rgba(242,139,130,0.1)",
+                color: uploaded ? "#81c995" : "#f28b82",
+                border: `1px solid ${uploaded ? "rgba(129,201,149,0.2)" : "rgba(242,139,130,0.2)"}`
+              }}
             />
-          </Button>
-
-          <Button
-            variant="contained"
-            onClick={handleUpload}
-            disabled={!file}
-          >
-            Upload
-          </Button>
-
-          <Chip
-            label={uploaded ? "Dataset Ready" : "Not Uploaded"}
-            size="small"
-            sx={{
-              bgcolor: uploaded ? "rgba(129,201,149,0.1)" : "rgba(242,139,130,0.1)",
-              color: uploaded ? "#81c995" : "#f28b82",
-              border: `1px solid ${uploaded ? "rgba(129,201,149,0.2)" : "rgba(242,139,130,0.2)"}`
-            }}
-          />
+          </Box>
         </Box>
 
-        {/* 🔥 INPUTS */}
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>
+          {/* 🔥 INPUTS */}
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>
 
-          <TextField
-            placeholder="Vessel ID"
-            value={vesselId}
-            onChange={e => setVesselId(e.target.value)}
-            onKeyDown={handleEnter}
-            size="small"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchRounded sx={{ fontSize: 16 }} />
-                </InputAdornment>
-              ),
-            }}
-          />
+            <StyledTextField
+              variant="outlined"
+              placeholder="Vessel ID"
+              value={vesselId}
+              onChange={(e: any) => setVesselId(e.target.value)}
+              onKeyDown={handleEnter}
+              size="small"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRounded sx={{ fontSize: 16 }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-          <TextField
-            label="Loaded"
-            value={loaded}
-            onChange={e => setLoaded(e.target.value)}
-            type="number"
-            size="small"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <LocalShippingRounded sx={{ fontSize: 14 }} />
-                </InputAdornment>
-              ),
-            }}
-          />
+            {mode === "current" && setLoaded && setDischarged && (
+              <>
+                <StyledTextField
+                  variant="outlined"
+                  label="Loaded"
+                  value={loaded || ""}
+                  onChange={(e: any) => setLoaded(e.target.value)}
+                  type="number"
+                  size="small"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LocalShippingRounded sx={{ fontSize: 14 }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
 
-          <TextField
-            label="Discharged"
-            value={discharged}
-            onChange={e => setDischarged(e.target.value)}
-            type="number"
-            size="small"
-          />
+                <StyledTextField
+                  variant="outlined"
+                  label="Discharged"
+                  value={discharged || ""}
+                  onChange={(e: any) => setDischarged(e.target.value)}
+                  type="number"
+                  size="small"
+                />
+              </>
+            )}
 
-          <Button
-            variant="contained"
-            onClick={onAnalyze}
-            disabled={loading || !uploaded}
-            startIcon={loading ? undefined : <AutoGraphRounded />}
-          >
-            {loading ? <CircularProgress size={16} /> : "Run Analysis"}
-          </Button>
-        </Box>
-      </Box>
+            <Button
+              variant="contained"
+              onClick={onAnalyze}
+              disabled={loading || !uploaded}
+              startIcon={loading ? undefined : <AutoGraphRounded />}
+            >
+              {loading ? <CircularProgress size={16} /> : "Run Analysis"}
+            </Button>
+          </Box>
 
-      {!hasData && (
-        <Box sx={{ textAlign: "center", py: 6 }}>
-          <DirectionsBoat sx={{ fontSize: 40, color: "#5f6368" }} />
-          <Typography sx={{ color: "#9aa0a6" }}>
-            Upload dataset and run analysis
-          </Typography>
-        </Box>
-      )}
-    </Box>
+        {!hasData && (
+          <Box sx={{ textAlign: "center", py: 6 }}>
+            <DirectionsBoat sx={{ fontSize: 40, color: "#5f6368" }} />
+            <Typography sx={{ color: "#9aa0a6" }}>
+              Upload dataset and run analysis
+            </Typography>
+          </Box>
+        )}
+      </CardContent>
+    </Card>
   );
 }

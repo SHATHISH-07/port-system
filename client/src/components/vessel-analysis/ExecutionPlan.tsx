@@ -3,6 +3,8 @@ import { Card, CardContent, Typography, Box } from "@mui/material";
 interface Props { steps: string[]; }
 
 export default function ExecutionPlan({ steps }: Props) {
+  const safeSteps = steps || [];
+
   return (
     <Card>
       <CardContent sx={{ p: 0 }}>
@@ -42,13 +44,13 @@ export default function ExecutionPlan({ steps }: Props) {
             }}
           >
             <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8" }}>
-              {steps.length}
+              {safeSteps.length}
             </Typography>
           </Box>
         </Box>
 
         <Box sx={{ px: 2.5, py: 2 }}>
-          {steps.map((step, i) => (
+          {safeSteps.map((step, i) => (
             <Box
               key={i}
               sx={{
@@ -56,10 +58,10 @@ export default function ExecutionPlan({ steps }: Props) {
                 gap: 1.5,
                 alignItems: "flex-start",
                 position: "relative",
-                pb: i < steps.length - 1 ? 2 : 0,
+                pb: i < safeSteps.length - 1 ? 2 : 0,
               }}
             >
-              {i < steps.length - 1 && (
+              {i < safeSteps.length - 1 && (
                 <Box
                   sx={{
                     position: "absolute",

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, Form
 from utils.data_loader import load_csv
 
 from services.vessel_service import analyze_vessel_dashboard
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/vessel", tags=["Vessel"])
 @router.post("/vessel-history-analysis")
 async def vessel_history_analysis(
     file: UploadFile = File(None),
-    vessel_id: str = None
+    vessel_id: str = Form(None)
 ):
     if file:
         content = await file.read()
@@ -33,9 +33,9 @@ async def vessel_history_analysis(
 @router.post("/current-vessel-analysis")
 async def current_vessel_analysis(
     file: UploadFile = File(None),
-    loaded: int = None,
-    discharged: int = None,
-    vessel_id: str = None
+    loaded: int = Form(None),
+    discharged: int = Form(None),
+    vessel_id: str = Form(None)
 ):
     if file:
         content = await file.read()
@@ -62,7 +62,7 @@ async def current_vessel_analysis(
 @router.post("/heatmap")
 async def heatmap_analysis(
     file: UploadFile = File(None),
-    vessel_id: str = None
+    vessel_id: str = Form(None)
 ):
     if file:
         content = await file.read()

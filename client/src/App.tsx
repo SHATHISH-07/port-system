@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import Layout from "./components/Layout";
-import VesselAnalysis from "./pages/VesselAnalysis";
+import HistoryVesselAnalysis from "./pages/HistoryVesselAnalysis";
+import CurrentVesselAnalysis from "./pages/CurrentVesselAnalysis";
 import TerminalMap from "./pages/TerminalMap";
 
 const theme = createTheme({
@@ -231,7 +232,9 @@ export default function App() {
       <BrowserRouter>
         <Layout>
           <Routes>
-            <Route path="/" element={<VesselAnalysis />} />
+            <Route path="/" element={<Navigate to="/history-analysis" />} />
+            <Route path="/history-analysis" element={<HistoryVesselAnalysis />} />
+            <Route path="/current-analysis" element={<CurrentVesselAnalysis />} />
             <Route path="/heatmap" element={<TerminalMap />} />
           </Routes>
         </Layout>
