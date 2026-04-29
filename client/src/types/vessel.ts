@@ -1,5 +1,5 @@
 export interface VesselAnalysisData {
-  mode: "vessel" | "manual" | "override";
+  mode: string;
 
   vessel: string | null;
 

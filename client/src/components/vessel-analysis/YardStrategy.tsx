@@ -13,7 +13,12 @@ interface Props {
 export default function YardStrategy({ data }: Props) {
     if (!data) return null;
 
-    const { weight_distribution, top_discharge_ports, avg_moves_per_container, reshuffle_risk } = data;
+    const { 
+        weight_distribution = {}, 
+        top_discharge_ports = {}, 
+        avg_moves_per_container = 0, 
+        reshuffle_risk = "Unknown" 
+    } = data;
 
     return (
         <Card>
@@ -58,7 +63,7 @@ export default function YardStrategy({ data }: Props) {
                             Weight Distribution
                         </Typography>
                         <Typography sx={{ fontSize: "0.8125rem", color: "#e8eaed" }}>
-                            {Object.entries(weight_distribution)
+                            {Object.entries(weight_distribution || {})
                                 .map(([k, v]) => `${k}: ${v}`)
                                 .join(" | ")}
                         </Typography>
@@ -77,7 +82,7 @@ export default function YardStrategy({ data }: Props) {
                             Top Discharge Ports
                         </Typography>
                         <Typography sx={{ fontSize: "0.8125rem", color: "#e8eaed" }}>
-                            {Object.entries(top_discharge_ports)
+                            {Object.entries(top_discharge_ports || {})
                                 .map(([k, v]) => `${k}: ${v}`)
                                 .join(" | ")}
                         </Typography>

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Box, Typography, Divider, Button } from "@mui/material";
-import { WarningAmberRounded } from "@mui/icons-material";
+import { useSearchParams } from "react-router-dom";
+import { Box, Typography, Divider, Button, TextField, InputAdornment } from "@mui/material";
+import { WarningAmberRounded, SearchRounded, MapRounded } from "@mui/icons-material";
 import { api } from "../api/api";
 
 const W = "100%", H = "100%";
@@ -10,7 +11,7 @@ const BLK_W = 160, BLK_H = 120, BLK_GAP_X = 40, BLK_GAP_Y = 40;
 const BLK_START_X = 80, BLK_START_Y = 190;
 
 function getZones(layout: Record<string, { x: number, y: number }>) {
-  return Object.entries(layout).map(([id, pos]) => ({
+  return Object.entries(layout || {}).map(([id, pos]) => ({
     id,
     x: BLK_START_X + pos.x * (BLK_W + BLK_GAP_X),
     y: BLK_START_Y + pos.y * (BLK_H + BLK_GAP_Y),
@@ -50,13 +51,84 @@ const STS = ({ x, y, rot }: { x: number; y: number; rot: number }) => (
 const Ship = ({ x, y, w, h, name, color, rot = 0, isTarget = false }: { x: number, y: number, w: number, h: number, name: string, color: string, rot?: number, isTarget?: boolean }) => (
   <g transform={`translate(${x}, ${y}) rotate(${rot})`}>
     <g transform={`translate(${-w / 2}, ${-h / 2})`}>
-      <path d={`M0,${h} L0,8 Q0,0 10,0 L${w - 10},0 Q${w},0 ${w},8 L${w},${h} Z`} fill={color} stroke={isTarget ? "#38bdf8" : "#0f1219"} strokeWidth={isTarget ? "2" : "1"} />
-      {Array.from({ length: Math.floor(w / 20) }).map((_, i) => (
-        <rect key={i} x={10 + i * 20} y={5} width={16} height={h - 10} rx="1" fill="#334155" opacity="0.6" />
+
+      {/* 1. Main Hull Silhouette (Tapered Bow + Transom Stern) */}
+      <path
+        d={`
+          M 0,${h / 2} 
+          L 40,2 
+          L ${w - 15},2 
+          Q ${w},2 ${w},10 
+          L ${w},${h - 10} 
+          Q ${w},${h - 2} ${w - 15},${h - 2} 
+          L 40,${h - 2} 
+          Z
+        `}
+        fill={isTarget ? "#0f172a" : color}
+        stroke={isTarget ? "#38bdf8" : "#0f172a"}
+        strokeWidth={isTarget ? 3 : 1.5}
+      />
+
+      {/* 2. Bulwark / Inner Deck Shadow */}
+      <path
+        d={`M 45,6 L ${w - 20},6 L ${w - 20},${h - 6} L 45,${h - 6} Z`}
+        fill="rgba(0,0,0,0.2)"
+      />
+
+      {/* 3. Container Bay Visualization */}
+      {/* Draws bays based on ship width */}
+      {Array.from({ length: Math.floor(w / 35) }).map((_, i) => (
+        <g key={i} transform={`translate(${45 + i * 28}, 8)`}>
+          <rect
+            width={24}
+            height={h - 16}
+            rx={1}
+            fill="#334155"
+            opacity="0.8"
+          />
+          {/* Container Slot Lines */}
+          <line x1={12} y1={2} x2={12} y2={h - 18} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
+        </g>
       ))}
-      <rect x={w - 30} y={4} width={20} height={h - 8} rx="1" fill="#64748b" />
-      <rect x={w - 26} y={8} width={8} height={h - 16} fill="#0f1219" />
-      <text x={w / 2 - 10} y={h / 2 + 3} fill={isTarget ? "#fff" : "#94a3b8"} fontSize="10" fontWeight="600" fontFamily="'Inter', sans-serif">{name}</text>
+
+      {/* 4. Superstructure (The Bridge Tower) */}
+      {/* Positioned towards the stern like a modern carrier */}
+      <g transform={`translate(${w - 65}, ${h / 2 - 18})`}>
+        {/* Main Tower Base */}
+        <rect width={35} height={36} rx={2} fill="#f8fafc" stroke="#64748b" strokeWidth={0.5} />
+
+        {/* Bridge Windows (The blue tint) */}
+        <rect x={2} y={5} width={8} height={26} rx={1} fill="#0ea5e9" opacity={0.6} />
+
+        {/* Top Deck / Mast Base */}
+        <rect x={12} y={10} width={15} height={16} rx={1} fill="#e2e8f0" />
+
+        {/* Radar / Mast */}
+        <line x1={20} y1={5} x2={20} y2={10} stroke="#475569" strokeWidth={2} />
+        <line x1={15} y1={5} x2={25} y2={5} stroke="#475569" strokeWidth={1} />
+      </g>
+
+      {/* 5. Exhaust Stack (Funnel) */}
+      <rect x={w - 25} y={h / 2 - 6} width={12} height={12} rx={2} fill="#ef4444" />
+      <circle cx={w - 19} cy={h / 2} r={3} fill="#1e293b" />
+
+      {/* 6. Lifeboats (The safety orange spots) */}
+      <rect x={w - 68} y={2} width={10} height={4} rx={2} fill="#f97316" />
+      <rect x={w - 68} y={h - 6} width={10} height={4} rx={2} fill="#f97316" />
+
+      {/* 7. Vessel Name Tag */}
+      <g transform={`translate(${w / 2 - 10}, ${h + 12})`}>
+        <text
+          fill={isTarget ? "#38bdf8" : "#94a3b8"}
+          fontSize="11"
+          fontWeight="800"
+          fontFamily="'Roboto Mono', monospace"
+          textAnchor="middle"
+          letterSpacing="1px"
+        >
+          {name.toUpperCase()}
+        </text>
+      </g>
     </g>
   </g>
 );
@@ -68,8 +140,13 @@ const KPI = ({ label, value, valueColor = "#f8fafc", isMono = false }: { label: 
   </Box>
 );
 
+const StyledTextField = TextField as any;
+
 export default function TerminalMap() {
-  const [vesselInput, setVesselInput] = useState("AA7");
+  const [searchParams] = useSearchParams();
+  const initialVessel = searchParams.get("vessel") || "AA7";
+  
+  const [vesselInput, setVesselInput] = useState(initialVessel);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -78,10 +155,18 @@ export default function TerminalMap() {
     if (!vesselInput.trim()) return;
     setLoading(true);
     try {
-      const res = await api.get(`/vessel/heatmap?vessel_id=${encodeURIComponent(vesselInput.trim())}`);
+      const form = new FormData();
+      form.append("vessel_id", vesselInput.trim());
+      const res = await api.post("/vessel/heatmap", form);
       setData(res.data);
-    } catch { console.error("Failed to load"); }
-    finally { setLoading(false); }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "";
+      if (detail.includes("No dataset")) {
+        alert("No current data found in the database. Please upload via POST /upload/current.");
+      } else {
+        alert(err?.response?.data?.error || "Error loading heatmap.");
+      }
+    } finally { setLoading(false); }
   };
 
   let targetBerthId = "R1";
@@ -137,33 +222,43 @@ export default function TerminalMap() {
 
 
 
-      <Box sx={{ bgcolor: "#161b24", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, py: 1.5, gap: 4, flexShrink: 0 }}>
+      <Box sx={{ bgcolor: "#161b24", borderBottom: "1px solid #1e2433", display: "flex", alignItems: "center", px: 3, py: 1.5, gap: 2, flexShrink: 0, flexWrap: "wrap" }}>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <input
+          <StyledTextField
+            variant="outlined"
+            placeholder="Vessel ID"
             value={vesselInput}
-            onChange={e => setVesselInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && load()}
-            placeholder="Enter Vessel ID"
-            style={{
-              background: "#0b0e14", border: "1px solid #272e3d", borderRadius: "4px",
-              color: "#f8fafc", fontSize: "0.85rem", padding: "8px 14px", outline: "none",
-              width: "200px", fontFamily: "'Roboto Mono', monospace", transition: "border 0.2s"
+            onChange={(e: any) => setVesselInput(e.target.value)}
+            onKeyDown={(e: any) => e.key === "Enter" && load()}
+            size="small"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchRounded sx={{ fontSize: 16 }} />
+                </InputAdornment>
+              ),
             }}
-            onFocus={(e) => e.target.style.borderColor = "#38bdf8"}
-            onBlur={(e) => e.target.style.borderColor = "#272e3d"}
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                bgcolor: "#0b0e14",
+              }
+            }}
           />
           <Button
-            onClick={load} disabled={loading} disableElevation
-            sx={{ bgcolor: "#38bdf8", color: "#0f1219", fontSize: "0.75rem", fontWeight: 700, px: 2.5, py: "8px", textTransform: "none", borderRadius: "4px", "&:hover": { bgcolor: "#0ea5e9" } }}
+            onClick={load}
+            disabled={loading || !vesselInput.trim()}
+            disableElevation
+            startIcon={<MapRounded sx={{ fontSize: 16 }} />}
+            sx={{ bgcolor: "#38bdf8", color: "#0f1219", fontSize: "0.75rem", fontWeight: 700, px: 2.5, py: "7px", textTransform: "none", borderRadius: "4px", "&:hover": { bgcolor: "#0ea5e9" }, "&:disabled": { bgcolor: "#1e293b", color: "#475569" } }}
           >
-            {loading ? "Computing..." : "Execute"}
+            {loading ? "Computing..." : "Generate Heatmap"}
           </Button>
         </Box>
 
         <Divider orientation="vertical" flexItem sx={{ borderColor: "#272e3d", my: 0.5 }} />
 
         {data ? (
-          <Box sx={{ display: "flex", gap: 5, alignItems: "center", flex: 1 }}>
+          <Box sx={{ display: "flex", gap: 4, alignItems: "center", flex: 1, overflowX: "auto" }}>
             <KPI label="Vessel Name" value={data.vessel} />
             <KPI label="Visit ID" value={data.visit_id || "—"} isMono />
             <KPI label="Total Volume" value={`${totalMoves} CTN`} isMono />
@@ -173,14 +268,14 @@ export default function TerminalMap() {
             <Box sx={{ flex: 1 }} />
 
             {(data.summary?.hazardous > 0 || data.summary?.reefer > 0) && (
-              <Box sx={{ px: 2, py: 1, bgcolor: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: 1, display: "flex", gap: 1.5, alignItems: "center" }}>
+              <Box sx={{ px: 2, py: 1, bgcolor: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: 1, display: "flex", gap: 1.5, alignItems: "center", whiteSpace: "nowrap" }}>
                 <WarningAmberRounded sx={{ fontSize: 18, color: "#ef4444" }} />
                 <Typography sx={{ fontSize: "0.75rem", color: "#fca5a5", fontWeight: 600 }}>Special Cargo (Haz/Ref)</Typography>
               </Box>
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: "0.85rem", color: "#475569", fontStyle: "italic", flex: 1 }}>Awaiting vessel query execution...</Typography>
+          <Typography sx={{ fontSize: "0.85rem", color: "#475569", fontStyle: "italic", flex: 1 }}>Enter a Vessel ID and click Generate Heatmap...</Typography>
         )}
       </Box>
 
@@ -239,7 +334,7 @@ export default function TerminalMap() {
             {[240, 440, 640].map(lx => <rect key={lx} x={lx} y="120" width="20" height="580" fill="#0b0e14" opacity="0.7" />)}
 
             {data && getZones(data.layout).map(z => {
-              const block = data.blocks[z.id];
+              const block = (data.blocks || {})[z.id];
               const isHot = !!block && block.count > 0;
               const isMax = z.id === (computedMaxBlock || data.max_block);
               const isRec = data.recommended_berth?.includes(z.id);

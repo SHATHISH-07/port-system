@@ -1,6 +1,5 @@
 import re
 from collections import defaultdict
-from utils.data_loader import get_data
 
 # Position and block regex
 POSITION_REGEX = re.compile(r'Y-[A-Z0-9]+-(G\d)(\d{2})(\d{2})(C\d)')
@@ -46,10 +45,7 @@ def build_layout(blocks):
     return layout
 
 # Get vessel heatmap
-def get_vessel_heatmap(vessel_service: str):
-
-    df = get_data()
-
+def get_vessel_heatmap(df, vessel_service: str):
     # Filter by vessel service
     vessel_df = df[
         df["Outbound Service"].astype(str).str.strip() == str(vessel_service)

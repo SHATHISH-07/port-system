@@ -1,16 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os
-
-from utils.data_loader import load_data
-from models.stay_model import train_model
-from models.training_status import training_status
 
 from routes.vessel_routes import router as vessel_router
 from routes.model_routes import router as model_router
+from routes.upload_routes import router as upload_router
 
 # Initialize FastAPI app
-app = FastAPI()
+app = FastAPI(title="Port System API", version="2.0.0")
 
 # Add CORS middleware
 app.add_middleware(
@@ -21,25 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# Startup event
-@app.on_event("startup")
-def startup():
-
-    # Load dataset
-    load_data()
-
-    # Train model if not exists
-    if not os.path.exists("models/stay_model.pkl"):
-        print("Model not found → Training...")
-        training_status.set("training", "Training started")
-
-        train_model()  # blocking (correct)
-
-    else:
-        training_status.set("completed", "Model already available")
-
-
 # Register routes
 app.include_router(vessel_router)
 app.include_router(model_router)
+app.include_router(upload_router)

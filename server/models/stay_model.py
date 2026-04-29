@@ -5,7 +5,7 @@ from xgboost import XGBRegressor
 
 from utils.stay_utils import prepare_visit_data, compute_visit_stay
 from utils.feature_utils import create_features
-from utils.data_loader import get_data
+from utils.data_loader import load_csv
 from models.training_status import training_status
 
 from dotenv import load_dotenv
@@ -39,12 +39,9 @@ TRAIN_MAX_HOURS = 240   # Ignore stays longer than 240 hours (outliers)
 MIN_VISIT_ROWS  = 5     # Ignore visits with fewer than 5 rows
 
 # Function to train the model
-def train_model():
+def train_model(df):
     try:
         training_status.set("training", "Training started")
-
-        # Load dataset from get_data() function in utils/data_loader.py
-        df = get_data()
 
         # Group the dataset by visit ID
         grouped = df.groupby("Actual Outbound Carrier visit ID")
@@ -211,19 +208,20 @@ def estimate_moves_per_hour_from_actual(actual_visits):
     rates = []
 
     # Calculate moves per hour for each visit
-    for v in actual_visits.values():
-        moves = v["loaded_containers"] + v["discharged_containers"]
-        hours = v["stay_hours"]
+    if actual_visits:
+        for v in actual_visits.values():
+            moves = v["loaded_containers"] + v["discharged_containers"]
+            hours = v["stay_hours"]
 
-        if hours > 0:
-            rates.append({
-                "rate": moves / hours,
-                "load_ratio": v["loaded_containers"] / (moves + 1)
-            })
+            if hours > 0:
+                rates.append({
+                    "rate": moves / hours,
+                    "load_ratio": v["loaded_containers"] / (moves + 1)
+                })
 
     # Default rate if no rates available
     if not rates:
-        return 50
+        return [{"rate": 50, "load_ratio": 0.5}]
 
     return rates
 
