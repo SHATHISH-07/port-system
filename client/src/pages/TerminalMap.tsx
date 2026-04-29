@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Box, Typography, Divider, Button, TextField, InputAdornment } from "@mui/material";
-import { WarningAmberRounded, SearchRounded, MapRounded } from "@mui/icons-material";
+import { WarningAmberRounded, SearchRounded } from "@mui/icons-material";
 import { api } from "../api/api";
 
 const W = "100%", H = "100%";
@@ -145,7 +145,7 @@ const StyledTextField = TextField as any;
 export default function TerminalMap() {
   const [searchParams] = useSearchParams();
   const initialVessel = searchParams.get("vessel") || "AA7";
-  
+
   const [vesselInput, setVesselInput] = useState(initialVessel);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -248,10 +248,9 @@ export default function TerminalMap() {
             onClick={load}
             disabled={loading || !vesselInput.trim()}
             disableElevation
-            startIcon={<MapRounded sx={{ fontSize: 16 }} />}
             sx={{ bgcolor: "#38bdf8", color: "#0f1219", fontSize: "0.75rem", fontWeight: 700, px: 2.5, py: "7px", textTransform: "none", borderRadius: "4px", "&:hover": { bgcolor: "#0ea5e9" }, "&:disabled": { bgcolor: "#1e293b", color: "#475569" } }}
           >
-            {loading ? "Computing..." : "Generate Heatmap"}
+            {loading ? "Computing..." : "Show Heatmap"}
           </Button>
         </Box>
 
