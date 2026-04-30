@@ -929,7 +929,7 @@ export default function TerminalMap() {
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    
+
     let ts: TerminalScene | null = null;
     let ro: ResizeObserver | null = null;
 
@@ -940,22 +940,22 @@ export default function TerminalMap() {
       ts = new TerminalScene(canvasRef.current);
       ts.onHover = id => setHoveredBlock(id);
       sceneRef.current = ts;
-      
+
       ro = new ResizeObserver(() => {
         if (containerRef.current && sceneRef.current)
           sceneRef.current.resize(containerRef.current.clientWidth, containerRef.current.clientHeight);
       });
-      
+
       if (containerRef.current) {
         ro.observe(containerRef.current);
         ts.resize(containerRef.current.clientWidth, containerRef.current.clientHeight);
       }
     }, 10);
 
-    return () => { 
+    return () => {
       clearTimeout(timer);
-      if (ro) ro.disconnect(); 
-      if (ts) ts.destroy(); 
+      if (ro) ro.disconnect();
+      if (ts) ts.destroy();
     };
   }, []);
 
