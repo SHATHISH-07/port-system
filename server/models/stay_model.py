@@ -126,6 +126,9 @@ def train_model(df):
             "features": FEATURE_NAMES,
         }, MODEL_PATH)
 
+        global _cached_bundle
+        _cached_bundle = None
+
         training_status.set("completed", "Model trained successfully")
         print("[OK] Model trained and saved ->", MODEL_PATH)
 
@@ -134,11 +137,19 @@ def train_model(df):
         print("[ERR] Training failed:", str(e))
 
 
+_cached_bundle = None
+
 # LOAD MODEL
 def load_model():
+    global _cached_bundle
+    if _cached_bundle is not None:
+        return _cached_bundle
+
     if not os.path.exists(MODEL_PATH):
         return None
-    return joblib.load(MODEL_PATH)
+    
+    _cached_bundle = joblib.load(MODEL_PATH)
+    return _cached_bundle
 
 
 # PREDICT VISIT  (single visit DataFrame → predicted hours)
@@ -166,22 +177,15 @@ def predict_visit(df):
 
 
 # PREDICT VESSEL  (all visits for one Outbound Service)
-def predict_vessel(df, vessel_service):
-    df = df[
-        df["Outbound Service"].astype(str).str.strip() == str(vessel_service)
-    ].copy()
-
-    if df.empty:
-        return {"error": f"No data found for vessel '{vessel_service}'"}
-
-    grouped = df.groupby("Actual Outbound Carrier visit ID")
+def predict_vessel(prepared_visits: dict):
+    if not prepared_visits:
+        return {"error": "No data found for vessel"}
 
     preds = []
 
-    for visit_id, group in grouped:
-
-        # Same preparation pipeline as training
-        visit_df = prepare_visit_data(group)
+    for visit_id, visit_df in prepared_visits.items():
+        if visit_df.empty:
+            continue
 
         # Predict the stay time
         pred = predict_visit(visit_df)

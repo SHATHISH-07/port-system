@@ -8,6 +8,37 @@ from routes.upload_routes import router as upload_router
 # Initialize FastAPI app
 app = FastAPI(title="Port System API", version="2.0.0")
 
+import logging
+import time
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("port_system")
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.4f}s")
+        return response
+    except Exception as e:
+        process_time = time.time() - start_time
+        logger.error(f"Unhandled Exception on {request.method} {request.url.path} - {process_time:.4f}s: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Internal server error. Please try again later."}
+        )
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,

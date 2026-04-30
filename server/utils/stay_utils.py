@@ -81,26 +81,12 @@ def compute_visit_stay(df):
 
 
 # Compute vessel stay
-def compute_vessel_stay(df, vessel_service):
-    # Filter data by vessel service
-    df = df[
-        df["Outbound Service"].astype(str).str.strip() == str(vessel_service)
-    ].copy()
-
-    # Return empty dictionary if dataframe is empty
-    if df.empty:
-        return {}
-
+def compute_vessel_stay(prepared_visits: dict):
     # Initialize result dictionary
     result = {}
     
-    # Group by visit ID
-    grouped = df.groupby("Actual Outbound Carrier visit ID")
-
     # Compute stay for each visit
-    for visit_id, group in grouped:
-        visit_df = prepare_visit_data(group)
-        
+    for visit_id, visit_df in prepared_visits.items():
         if visit_df.empty:
             continue
         

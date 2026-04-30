@@ -19,7 +19,15 @@ const stayColor = (v: number, avg: number) => {
 };
 
 export default function VisitTable({ visits, avg }: Props) {
-  const rows = Object.entries(visits || {});
+  // Sort rows by move_start descending (most recent first)
+  const allRows = Object.entries(visits || {}).sort((a, b) => {
+    return new Date(b[1].move_start).getTime() - new Date(a[1].move_start).getTime();
+  });
+  
+  // Limit to top 10 visits to prevent heavy React rendering delays
+  const rows = allRows.slice(0, 10);
+  const hasMore = allRows.length > 10;
+  
   const maxStay = Math.max(...rows.map(([, v]) => v.stay_hours), 1);
 
   return (
@@ -51,7 +59,7 @@ export default function VisitTable({ visits, avg }: Props) {
             letterSpacing: "0.08em",
           }}
         >
-          Visit History
+          Visit History {hasMore && `(Recent 10 of ${allRows.length})`}
         </Typography>
         <Typography sx={{ fontSize: "0.6875rem", color: "#5f6368", fontFamily: "monospace" }}>
           avg {avg.toFixed(1)} hrs / visit

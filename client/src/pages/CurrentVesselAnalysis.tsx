@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, Snackbar, Alert } from "@mui/material";
 import { api } from "../api/api";
 import { type VesselAnalysisData } from "../types/vessel";
 
@@ -78,6 +78,13 @@ const CurrentVesselAnalysis = () => {
   const [data, setData] = useState<VesselAnalysisData | null>(null);
   const [heatmapData, setHeatmapData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<{open: boolean, message: string, severity: "success" | "error" | "info" | "warning"}>({open: false, message: "", severity: "info"});
+
+  const showToast = (message: string, severity: "success" | "error" | "info" | "warning" = "error") => {
+    setToast({open: true, message, severity});
+  };
+
+  const handleCloseToast = () => setToast(prev => ({...prev, open: false}));
 
   const fetchData = async () => {
     if (!vesselId.trim()) return;
@@ -88,19 +95,22 @@ const CurrentVesselAnalysis = () => {
       if (loaded) form.append("loaded", loaded);
       if (discharged) form.append("discharged", discharged);
 
+      console.info(`Fetching current vessel analysis data for vessel ID: ${vesselId.trim()}`);
       const [analysisRes, heatmapRes] = await Promise.all([
         api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form),
         api.post("/vessel/heatmap", form),
       ]);
 
+      console.info("Successfully fetched vessel analysis data.");
       setData(analysisRes.data);
       setHeatmapData(heatmapRes.data);
     } catch (err: any) {
+      console.error("Error fetching current vessel data:", err);
       const detail = err?.response?.data?.detail || "";
       if (detail.includes("No dataset")) {
-        alert("No current data found. Please upload via POST /upload/current.");
+        showToast("No current data found. Please upload via POST /upload/current.");
       } else {
-        alert(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
+        showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
       }
     } finally {
       setLoading(false);
@@ -194,6 +204,12 @@ const CurrentVesselAnalysis = () => {
           <Box sx={{ pb: 6 }} />
         </>
       )}
+      
+      <Snackbar open={toast.open} autoHideDuration={6000} onClose={handleCloseToast} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={handleCloseToast} severity={toast.severity} sx={{ width: '100%' }}>
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

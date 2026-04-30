@@ -3,6 +3,10 @@ import warnings
 
 # Parse datetime series with multiple formats
 def parse_datetime(series, col_name="unknown"):
+    # Return immediately if already parsed
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return series
+
     # Convert to string and strip whitespace
     series = series.astype(str).str.strip()
     

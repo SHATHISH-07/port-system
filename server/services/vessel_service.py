@@ -28,15 +28,11 @@ def starts_with(series, prefix):
     return series.astype(str).str.strip().str.upper().str.startswith(prefix)
 
 # Function to get visit details
-def get_visit_details(vessel_df):
+def get_visit_details(prepared_visits: dict):
 
     visits_output = {}
-    # Group by visit ID
-    grouped = vessel_df.groupby("Actual Outbound Carrier visit ID")
     # Iterate through each group
-    for visit_id, group in grouped:
-        # Prepare visit data
-        visit_df = prepare_visit_data(group)
+    for visit_id, visit_df in prepared_visits.items():
 
         if visit_df.empty:
             continue
@@ -100,13 +96,18 @@ def analyze_vessel_dashboard(df, vessel_service: str):
     if vessel_df.empty:
         return {"error": f"No vessel data for {vessel_service}"}
 
+    # Prepare visit data exactly once to avoid redundant computations
+    prepared_visits = {}
+    for visit_id, group in vessel_df.groupby("Actual Outbound Carrier visit ID"):
+        prepared_visits[visit_id] = prepare_visit_data(group)
+
     # Compute vessel stay
-    actual_raw = compute_vessel_stay(df, vessel_service)
+    actual_raw = compute_vessel_stay(prepared_visits)
     # Predict vessel
-    predicted = predict_vessel(df, vessel_service)
+    predicted = predict_vessel(prepared_visits)
 
     # Get visit details
-    visit_details = get_visit_details(vessel_df)
+    visit_details = get_visit_details(prepared_visits)
     # Merge visit data
     merged_visits = merge_visit_data(
         actual_raw.get("visits", {}),
@@ -132,12 +133,15 @@ def analyze_vessel_dashboard(df, vessel_service: str):
     visit_scores.sort(key=lambda x: x[1], reverse=True)
     # Get top visit ID
     top_visit_id = visit_scores[0][0]
-    # Get visit data
-    visit_df = vessel_df[
-        vessel_df["Actual Outbound Carrier visit ID"] == top_visit_id
-    ].copy()
-    # Prepare visit data
-    visit_df = prepare_visit_data(visit_df)
+    
+    # Use precomputed prepared visit data
+    visit_df = prepared_visits.get(top_visit_id)
+    if visit_df is None or visit_df.empty:
+        # Fallback if somehow not prepared
+        visit_df = vessel_df[
+            vessel_df["Actual Outbound Carrier visit ID"] == top_visit_id
+        ].copy()
+        visit_df = prepare_visit_data(visit_df)
     
     # Get loaded containers
     loaded_df = visit_df[

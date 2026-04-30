@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, Snackbar, Alert } from "@mui/material";
 import { api } from "../api/api";
 import { type VesselAnalysisData } from "../types/vessel";
 
@@ -68,21 +68,31 @@ const HistoryVesselAnalysis = () => {
   const [vesselId, setVesselId] = useState("");
   const [data, setData] = useState<VesselAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<{open: boolean, message: string, severity: "success" | "error" | "info" | "warning"}>({open: false, message: "", severity: "info"});
+
+  const showToast = (message: string, severity: "success" | "error" | "info" | "warning" = "error") => {
+    setToast({open: true, message, severity});
+  };
+
+  const handleCloseToast = () => setToast(prev => ({...prev, open: false}));
 
   const fetchData = async () => {
     if (!vesselId.trim()) return;
     setLoading(true);
     try {
+      console.info(`Fetching history vessel analysis data for vessel ID: ${vesselId.trim()}`);
       const form = new FormData();
       form.append("vessel_id", vesselId.trim());
       const res = await api.post<VesselAnalysisData>("/vessel/vessel-history-analysis", form);
+      console.info("Successfully fetched vessel analysis data.");
       setData(res.data);
     } catch (err: any) {
+      console.error("Error fetching history vessel data:", err);
       const detail = err?.response?.data?.detail || "";
       if (detail.includes("No dataset")) {
-        alert("No historical data found. Please upload via POST /upload/history.");
+        showToast("No historical data found. Please upload via POST /upload/history.");
       } else {
-        alert(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
+        showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
       }
     } finally {
       setLoading(false);
@@ -167,6 +177,12 @@ const HistoryVesselAnalysis = () => {
           <Box sx={{ pb: 6 }} />
         </>
       )}
+
+      <Snackbar open={toast.open} autoHideDuration={6000} onClose={handleCloseToast} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={handleCloseToast} severity={toast.severity} sx={{ width: '100%' }}>
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
