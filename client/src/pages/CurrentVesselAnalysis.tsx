@@ -96,14 +96,18 @@ const CurrentVesselAnalysis = () => {
       if (discharged) form.append("discharged", discharged);
 
       console.info(`Fetching current vessel analysis data for vessel ID: ${vesselId.trim()}`);
-      const [analysisRes, heatmapRes] = await Promise.all([
-        api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form),
-        api.post("/vessel/heatmap", form),
-      ]);
+      
+      const analysisPromise = api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form)
+        .then(res => {
+          setData(res.data);
+          setLoading(false); // Stop loading spinner as soon as main data is ready
+        });
 
+      const heatmapPromise = api.post("/vessel/heatmap", form)
+        .then(res => setHeatmapData(res.data));
+
+      await Promise.allSettled([analysisPromise, heatmapPromise]);
       console.info("Successfully fetched vessel analysis data.");
-      setData(analysisRes.data);
-      setHeatmapData(heatmapRes.data);
     } catch (err: any) {
       console.error("Error fetching current vessel data:", err);
       const detail = err?.response?.data?.detail || "";
@@ -113,7 +117,7 @@ const CurrentVesselAnalysis = () => {
         showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
       }
     } finally {
-      setLoading(false);
+      // setLoading(false) is handled inside the promise above to make it snappy
     }
   };
 
