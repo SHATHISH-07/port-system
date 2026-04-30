@@ -929,18 +929,34 @@ export default function TerminalMap() {
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const ts = new TerminalScene(canvasRef.current);
-    ts.onHover = id => setHoveredBlock(id);
-    sceneRef.current = ts;
-    const ro = new ResizeObserver(() => {
-      if (containerRef.current && sceneRef.current)
-        sceneRef.current.resize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-    });
-    if (containerRef.current) {
-      ro.observe(containerRef.current);
-      ts.resize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-    }
-    return () => { ro.disconnect(); ts.destroy(); };
+    
+    let ts: TerminalScene | null = null;
+    let ro: ResizeObserver | null = null;
+
+    // Defer the heavy synchronous scene creation to unblock the router thread.
+    // This allows the page to switch instantly before Three.js builds 10k meshes.
+    const timer = setTimeout(() => {
+      if (!canvasRef.current) return;
+      ts = new TerminalScene(canvasRef.current);
+      ts.onHover = id => setHoveredBlock(id);
+      sceneRef.current = ts;
+      
+      ro = new ResizeObserver(() => {
+        if (containerRef.current && sceneRef.current)
+          sceneRef.current.resize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+      });
+      
+      if (containerRef.current) {
+        ro.observe(containerRef.current);
+        ts.resize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+      }
+    }, 10);
+
+    return () => { 
+      clearTimeout(timer);
+      if (ro) ro.disconnect(); 
+      if (ts) ts.destroy(); 
+    };
   }, []);
 
   // Update scene when data arrives from the API
