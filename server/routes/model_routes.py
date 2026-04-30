@@ -11,7 +11,7 @@ logger = logging.getLogger("port_system")
 
 router = APIRouter(prefix="/model", tags=["Model"])
 
-
+# Background function to train the model
 def background_train(df):
     try:
         train_model(df)
@@ -19,24 +19,27 @@ def background_train(df):
         training_status.set("failed", str(e))
         logger.error(f"Background training failed: {e}")
 
-
+# Train model from uploaded CSV file
 @router.post("/train-stay")
 async def train_stay(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(None)
 ):
-    """Train the model from an uploaded CSV file, or the last uploaded file in cache."""
     try:
+        # If file is uploaded, load it and cache it
         if file:
             content = await file.read()
             df = load_csv(content)
             set_cache("model", df)
+        # If no file is uploaded, load from cache
         else:
             df = get_cache("model")
 
+        # Set training status and train the model
         training_status.set("training", "Training started")
         logger.info("POST /model/train-stay — training started from uploaded file")
 
+        # Add training task to background tasks
         background_tasks.add_task(background_train, df)
 
         return {
@@ -49,23 +52,27 @@ async def train_stay(
         return {"status": "error", "message": str(e)}
 
 
+# Retrain model from uploaded CSV file
 @router.post("/retrain-from-db")
 async def retrain_from_db(background_tasks: BackgroundTasks):
-    """
-    Retrain the stay-time model directly from the history data stored in PostgreSQL.
-    This is the recommended retraining path after new data is ingested via /upload/history.
-    """
     try:
+        # Log the request
         logger.info("POST /model/retrain-from-db — loading history from DB")
+
+        # Load the data from the database
         df = load_df_from_db("history")
 
+        # Check if the data is empty
         if df.empty:
             return {
                 "status": "error",
                 "message": "No history data found in database. Upload data first via POST /upload/history."
             }
 
+        # Set training status and train the model
         training_status.set("training", "Retraining from database")
+        
+        # Add training task to background tasks
         background_tasks.add_task(background_train, df)
 
         return {
@@ -78,6 +85,7 @@ async def retrain_from_db(background_tasks: BackgroundTasks):
         return {"status": "error", "message": str(e)}
 
 
+# Get training status
 @router.get("/status")
 def get_training_status():
     return training_status.get()

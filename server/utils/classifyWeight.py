@@ -1,7 +1,4 @@
 # Utility function to classify the weight of the containers
-# Takes weight in kilograms as input
-# Returns the weight class
-
 def classify_weight(weight):
     try:
         # Convert weight to float

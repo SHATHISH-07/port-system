@@ -4,12 +4,8 @@ import logging
 logger = logging.getLogger("port_system")
 
 def init_dataset_schema(engine, dataset_type: str):
-    """
-    Explicitly defines and creates the schema for vessels, visits, and containers.
-    Includes soft-delete tracking (deleted_at) and update tracking (updated_at).
-    """
     with engine.begin() as conn:
-        # 1. Vessels Table
+        # Vessels Table
         conn.execute(text(f"""
             CREATE TABLE IF NOT EXISTS "{dataset_type}_vessels" (
                 outbound_service VARCHAR(255) PRIMARY KEY,
@@ -19,7 +15,7 @@ def init_dataset_schema(engine, dataset_type: str):
             );
         """))
         
-        # 2. Visits Table
+        # Visits Table
         conn.execute(text(f"""
             CREATE TABLE IF NOT EXISTS "{dataset_type}_visits" (
                 actual_outbound_carrier_visit_id VARCHAR(255) PRIMARY KEY,
@@ -32,7 +28,7 @@ def init_dataset_schema(engine, dataset_type: str):
             );
         """))
         
-        # 3. Containers Table
+        # Containers Table
         conn.execute(text(f"""
             CREATE TABLE IF NOT EXISTS "{dataset_type}_containers" (
                 id UUID PRIMARY KEY,
@@ -57,7 +53,7 @@ def init_dataset_schema(engine, dataset_type: str):
             );
         """))
 
-        # 4. Indexes
+        # Indexes
         conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{dataset_type}_visits_service ON "{dataset_type}_visits" (outbound_service);'))
         conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{dataset_type}_containers_visit ON "{dataset_type}_containers" (actual_outbound_carrier_visit_id);'))
         

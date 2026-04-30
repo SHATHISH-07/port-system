@@ -1,5 +1,6 @@
 import { Box, Typography } from "@mui/material";
 
+// Props for the PerformanceStats component
 interface Props {
   actual: number;
   predicted: number;
@@ -8,12 +9,14 @@ interface Props {
   discharged?: number | string;
 }
 
+// TSX component to display the performance stats for vessels
 export default function PerformanceStats({ actual, predicted, mode, loaded, discharged }: Props) {
   const isOverride = mode === "override";
   const diff = predicted - actual;
   const pct = actual !== 0 ? Math.abs((diff / actual) * 100).toFixed(1) : "—";
   const isBetter = diff <= 0;
 
+  // Stats for the performance stats component
   const stats = [
     {
       label: "Historical Average",
@@ -43,6 +46,7 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
     },
   ];
 
+  // Main component to display the performance stats for vessels
   return (
     <Box
       sx={{

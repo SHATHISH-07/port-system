@@ -44,13 +44,6 @@ TRAIN_MAX_HOURS = 240   # Ignore stays longer than 240 hours (outliers)
 MIN_VISIT_ROWS  = 5     # Ignore visits with fewer than 5 rows
 
 def _build_ensemble():
-    """
-    VotingRegressor tuned for small datasets (~100-200 samples).
-    Ridge handles the linear relationship well.
-    XGBoost captures non-linear patterns with heavy regularisation.
-    GBR with shallow trees adds robustness.
-    Averaging three diverse models reduces overall variance.
-    """
     ridge = Pipeline([
         ("scaler", StandardScaler()),
         ("ridge", Ridge(alpha=10.0)),

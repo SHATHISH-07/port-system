@@ -3,6 +3,7 @@ import {
   TableRow, TableCell, TableBody,
 } from "@mui/material";
 
+// Interface for the Visit table
 interface Visit {
   stay_hours: number;
   loaded_containers: number;
@@ -10,24 +11,32 @@ interface Visit {
   move_start: string;
   move_end: string;
 }
+
+// Props for the Visit table component
 interface Props { visits: Record<string, Visit>; avg: number; }
 
+// Helper function to get the color for the badge based on the value
 const stayColor = (v: number, avg: number) => {
   if (v > avg * 1.3) return { color: "#f28b82", bg: "rgba(242,139,130,0.1)", border: "rgba(242,139,130,0.22)" };
   if (v > avg) return { color: "#fdd663", bg: "rgba(253,214,99,0.1)", border: "rgba(253,214,99,0.22)" };
   return { color: "#81c995", bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.22)" };
 };
 
+// Limit for the number of rows to display
+const LIMIT = 10;
+
+// Main component to display the visit table for vessels
 export default function VisitTable({ visits, avg }: Props) {
   // Sort rows by move_start descending (most recent first)
   const allRows = Object.entries(visits || {}).sort((a, b) => {
     return new Date(b[1].move_start).getTime() - new Date(a[1].move_start).getTime();
   });
-  
+
   // Limit to top 10 visits to prevent heavy React rendering delays
-  const rows = allRows.slice(0, 10);
-  const hasMore = allRows.length > 10;
-  
+  const rows = allRows.slice(0, LIMIT);
+  const hasMore = allRows.length > LIMIT;
+
+  // Calculate max stay for the bar chart
   const maxStay = Math.max(...rows.map(([, v]) => v.stay_hours), 1);
 
   return (

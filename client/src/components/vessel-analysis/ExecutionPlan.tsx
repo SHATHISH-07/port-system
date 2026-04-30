@@ -1,7 +1,9 @@
 import { Box, Typography } from "@mui/material";
 
+// Props for the ExecutionPlan component
 interface Props { steps: string[]; }
 
+// TSX component to display the execution plan for vessels
 export default function ExecutionPlan({ steps }: Props) {
   const safeSteps = steps || [];
 

@@ -1,13 +1,16 @@
 import { Box, Typography } from "@mui/material";
 
+// Props for the BerthRecommendation component
 interface Props { berth?: string; concentration?: string; }
 
+// Helper function to get the color for the badge based on the value
 const concColor = (c?: string) => {
   if (c === "High") return { color: "#f28b82", bg: "rgba(242,139,130,0.1)", border: "rgba(242,139,130,0.22)" };
   if (c === "Medium") return { color: "#fdd663", bg: "rgba(253,214,99,0.1)", border: "rgba(253,214,99,0.22)" };
   return { color: "#81c995", bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.22)" };
 };
 
+// Main component to display the berth recommendation for vessels
 export default function BerthRecommendation({ berth, concentration }: Props) {
   const s = concColor(concentration);
 
@@ -23,7 +26,7 @@ export default function BerthRecommendation({ berth, concentration }: Props) {
         flexDirection: "column",
       }}
     >
-      {/* Header strip — same as ExecutionPlan / RiskAndStrategy */}
+      {/* Header strip */}
       <Box
         sx={{
           px: 3,
@@ -50,7 +53,7 @@ export default function BerthRecommendation({ berth, concentration }: Props) {
         </Typography>
       </Box>
 
-      {/* Body — centred berth name so it looks good tall or short */}
+      {/* Body */}
       <Box
         sx={{
           flex: 1,
@@ -80,7 +83,7 @@ export default function BerthRecommendation({ berth, concentration }: Props) {
         </Typography>
       </Box>
 
-      {/* Footer — concentration strip */}
+      {/* Footer */}
       <Box
         sx={{
           px: 3,

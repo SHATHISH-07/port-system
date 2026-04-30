@@ -7,8 +7,10 @@ import {
 } from "@mui/material";
 import { TextField } from "@mui/material";
 
+// TSX component to display the analysis header for vessels
 const StyledTextField = TextField as any;
 
+// Props for the AnalysisHeader component
 interface Props {
   mode?: "history" | "current";
   vesselId: string;
@@ -22,6 +24,7 @@ interface Props {
   data: any;
 }
 
+// Styles for the input fields
 const inputSx = (width: number | string) => ({
   width,
   "& .MuiOutlinedInput-root": {
@@ -35,6 +38,7 @@ const inputSx = (width: number | string) => ({
   },
 });
 
+// Main component to display the analysis header for vessels
 export default function AnalysisHeader({
   mode = "current",
   vesselId, setVesselId,

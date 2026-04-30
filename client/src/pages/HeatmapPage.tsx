@@ -6,6 +6,7 @@ import {
   StarRounded
 } from "@mui/icons-material";
 
+//Heatmap page
 interface BlockData {
   count: number;
   hazardous: number;
@@ -15,6 +16,7 @@ interface BlockData {
   concentration: "High" | "Medium" | "Low";
 }
 
+//Response data
 interface VesselHeatmapResponse {
   vessel: string;
   visit_id: string;
@@ -25,15 +27,19 @@ interface VesselHeatmapResponse {
   blocks: Record<string, BlockData>;
 }
 
+//concentration color
 const CONC_COLOR = {
   High: { fill: "#dc2626", track: "rgba(220,38,38,0.18)", text: "#f87171", border: "rgba(220,38,38,0.30)" },
   Medium: { fill: "#ea580c", track: "rgba(234,88,12,0.18)", text: "#fb923c", border: "rgba(234,88,12,0.30)" },
   Low: { fill: "#16a34a", track: "rgba(22,163,74,0.18)", text: "#4ade80", border: "rgba(22,163,74,0.30)" },
 };
 
+
+//get color by concentration
 const concColor = (c?: "High" | "Medium" | "Low") =>
   CONC_COLOR[c ?? "Low"];
 
+//row labels
 const ROW_LABELS: Record<number, string> = {
   0: "ROW A - FAR ZONE",
   1: "ROW B - MID ZONE",
@@ -41,6 +47,8 @@ const ROW_LABELS: Record<number, string> = {
   3: "ROW D - QUAY SIDE",
 };
 
+
+//block tile
 function BlockTile({
   blockId, block, isMax,
 }: {
@@ -53,6 +61,7 @@ function BlockTile({
   const cc = concColor(block.concentration);
   const pct = (block.intensity * 100).toFixed(0);
 
+  //block tile
   return (
     <Box
       sx={{

@@ -8,9 +8,11 @@ import {
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 
+// Sidebar width states
 const OPEN = 270;
 const CLOSED = 66;
 
+// Navigation items
 const navItems = [
   { path: "/history-analysis", label: "History Analysis", icon: HistoryOutlined },
   { path: "/current-analysis", label: "Current Analysis", icon: AnalyticsOutlined },
@@ -18,9 +20,12 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  // Sidebar open state
   const [open, setOpen] = useState(true);
+  // Current location
   const loc = useLocation();
 
+  // Main layout component
   return (
     <Box
       component="nav"
