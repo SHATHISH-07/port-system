@@ -726,7 +726,7 @@ class TerminalScene {
       const isTarget = b.id === targetBerthId;
       this.buildShip(
         b.id, b.x, b.y, b.rot,
-        isTarget ? data.vessel || vesselName : b.defaultShip.name,
+        isTarget ? data.vessel : b.defaultShip.name,
         isTarget,
         isTarget ? maxBlockData : undefined
       );
