@@ -43,13 +43,13 @@ def get_visit_details(prepared_visits: dict):
         
         # Get loaded and discharged containers
         loaded_df = visit_df[
-            starts_with(visit_df["Ctr From Position"], "Y-") &
-            starts_with(visit_df["Ctr To Position"], "V-")
+            starts_with(visit_df["ctr_from_position"], "Y-") &
+            starts_with(visit_df["ctr_to_position"], "V-")
         ]
 
         discharged_df = visit_df[
-            starts_with(visit_df["Ctr From Position"], "V-") &
-            starts_with(visit_df["Ctr To Position"], "Y-")
+            starts_with(visit_df["ctr_from_position"], "V-") &
+            starts_with(visit_df["ctr_to_position"], "Y-")
         ]
 
         # Store visit details
@@ -59,8 +59,8 @@ def get_visit_details(prepared_visits: dict):
             "stay_hours": round(stay_hours, 2),
             "loaded_containers": int(len(loaded_df)),
             "discharged_containers": int(len(discharged_df)),
-            "move_start": str(visit_df["Move Complete Time"].min()),
-            "move_end": str(visit_df["Move Complete Time"].max())
+            "move_start": str(visit_df["move_complete_time"].min()),
+            "move_end": str(visit_df["move_complete_time"].max())
         }
 
     return visits_output
@@ -90,7 +90,7 @@ def merge_visit_data(actual_visits, visit_details):
 def analyze_vessel_dashboard(df, vessel_service: str):
     # Filter data for vessel service
     vessel_df = df[
-        df["Outbound Service"].astype(str).str.strip() == str(vessel_service)
+        df["outbound_service"].astype(str).str.strip() == str(vessel_service)
     ].copy()
     # Check if vessel data is empty
     if vessel_df.empty:
@@ -98,7 +98,7 @@ def analyze_vessel_dashboard(df, vessel_service: str):
 
     # Prepare visit data exactly once to avoid redundant computations
     prepared_visits = {}
-    for visit_id, group in vessel_df.groupby("Actual Outbound Carrier visit ID"):
+    for visit_id, group in vessel_df.groupby("actual_outbound_carrier_visit_id"):
         prepared_visits[visit_id] = prepare_visit_data(group)
 
     # Compute vessel stay
@@ -121,11 +121,11 @@ def analyze_vessel_dashboard(df, vessel_service: str):
     # Get visit scores
     visit_scores = []
     # Group by visit ID
-    for visit_id, group in vessel_df.groupby("Actual Outbound Carrier visit ID"):
+    for visit_id, group in vessel_df.groupby("actual_outbound_carrier_visit_id"):
         # Get loaded containers
         loaded = group[
-            starts_with(group["Ctr From Position"], "Y-") &
-            starts_with(group["Ctr To Position"], "V-")
+            starts_with(group["ctr_from_position"], "Y-") &
+            starts_with(group["ctr_to_position"], "V-")
         ]
         # Append visit ID and loaded containers
         visit_scores.append((visit_id, len(loaded)))
@@ -139,34 +139,34 @@ def analyze_vessel_dashboard(df, vessel_service: str):
     if visit_df is None or visit_df.empty:
         # Fallback if somehow not prepared
         visit_df = vessel_df[
-            vessel_df["Actual Outbound Carrier visit ID"] == top_visit_id
+            vessel_df["actual_outbound_carrier_visit_id"] == top_visit_id
         ].copy()
         visit_df = prepare_visit_data(visit_df)
     
     # Get loaded containers
     loaded_df = visit_df[
-        starts_with(visit_df["Ctr From Position"], "Y-") &
-        starts_with(visit_df["Ctr To Position"], "V-")
+        starts_with(visit_df["ctr_from_position"], "Y-") &
+        starts_with(visit_df["ctr_to_position"], "V-")
     ]
 
     # Get discharged containers
     discharged_df = visit_df[
-        starts_with(visit_df["Ctr From Position"], "V-") &
-        starts_with(visit_df["Ctr To Position"], "Y-")
+        starts_with(visit_df["ctr_from_position"], "V-") &
+        starts_with(visit_df["ctr_to_position"], "Y-")
     ]
     # Get total loaded and discharged containers
     total_loaded = len(loaded_df)
     total_discharged = len(discharged_df)
     
     # Get hazardous, reefer, and OOG containers
-    hazardous = visit_df["Hazardous Flag"].apply(is_yes).sum()
-    reefer = visit_df["Reefer"].apply(is_yes).sum()
-    oog = visit_df["OOG Unit"].apply(is_yes).sum()
+    hazardous = visit_df["hazardous_flag"].apply(is_yes).sum()
+    reefer = visit_df["reefer"].apply(is_yes).sum()
+    oog = visit_df["oog_unit"].apply(is_yes).sum()
 
     # Get block counts
     block_counts = defaultdict(int)
     # Iterate through each position
-    for pos in loaded_df["Ctr From Position"]:
+    for pos in loaded_df["ctr_from_position"]:
         # Extract block
         block = extract_block(pos)
         if block:
@@ -189,16 +189,16 @@ def analyze_vessel_dashboard(df, vessel_service: str):
             "congestion_risk": "High" if percentage > 40 else "Medium" if percentage > 20 else "Low"
         })
     # Classify weight
-    visit_df["weight_class"] = visit_df["Verified Gross Mass (Kg)"].apply(classify_weight)
+    visit_df["weight_class"] = visit_df["verified_gross_mass_kg"].apply(classify_weight)
     # Get weight distribution
     weight_dist = visit_df["weight_class"].value_counts().to_dict()
     # Get port of discharge
-    pod_group = visit_df["Port of Discharge"].value_counts().to_dict()
+    pod_group = visit_df["port_of_discharge"].value_counts().to_dict()
     
     # Get move counts
     move_counts = extract_container_moves(visit_df)
     # Get total units
-    total_units = visit_df["Unit ID"].nunique()
+    total_units = visit_df["unit_id"].nunique()
     # Get average moves
     avg_moves = sum(move_counts.values()) / max(total_units, 1)
 
