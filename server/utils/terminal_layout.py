@@ -16,7 +16,7 @@ def get_all_blocks():
     blocks = set()
     
     # Iterate over container positions
-    for pos in df["Ctr From Position"].dropna():
+    for pos in df["ctr_from_position"].dropna():
 
         pos = str(pos)
 

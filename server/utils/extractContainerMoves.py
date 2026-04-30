@@ -2,12 +2,12 @@ from collections import defaultdict
 
 # Extract container moves from the dataset
 def extract_container_moves(df):
-    if df.empty or "Unit ID" not in df.columns:
+    if df.empty or "unit_id" not in df.columns:
         return {}
 
     # Ensure columns exist to avoid KeyError
-    from_col = "Ctr From Position"
-    to_col = "Ctr To Position"
+    from_col = "ctr_from_position"
+    to_col = "ctr_to_position"
     if from_col not in df.columns or to_col not in df.columns:
         return {}
 
@@ -17,7 +17,7 @@ def extract_container_moves(df):
 
     # Create boolean mask
     mask = (
-        df["Unit ID"].notna() &
+        df["unit_id"].notna() &
         (from_pos != "") &
         (from_pos != "nan") &
         (to_pos != "") &
@@ -26,7 +26,7 @@ def extract_container_moves(df):
     )
 
     # Group by Unit ID and count
-    counts = df[mask].groupby("Unit ID").size().to_dict()
+    counts = df[mask].groupby("unit_id").size().to_dict()
     
     # Convert to defaultdict to maintain the same return type
     from collections import defaultdict

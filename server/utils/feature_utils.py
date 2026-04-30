@@ -15,8 +15,8 @@ def create_features(df):
 
     # Parse event time
     if "event_time" not in df.columns:
-        move_time = parse_datetime(df["Move Complete Time"], "Move Complete Time")
-        time_in = parse_datetime(df["Time In"], "Time In")
+        move_time = parse_datetime(df["move_complete_time"], "move_complete_time")
+        time_in = parse_datetime(df["time_in"], "time_in")
         df["event_time"] = move_time.fillna(time_in)
 
     # Drop rows with no event time
@@ -52,39 +52,39 @@ def create_features(df):
     
     # Calculate loaded and discharged counts
     loaded = df[
-        df["Ctr From Position"].astype(str).str.startswith("Y-") &
-        df["Ctr To Position"].astype(str).str.startswith("V-")
-    ]["Unit ID"].nunique()
+        df["ctr_from_position"].astype(str).str.startswith("Y-") &
+        df["ctr_to_position"].astype(str).str.startswith("V-")
+    ]["unit_id"].nunique()
 
     discharged = df[
-        df["Ctr From Position"].astype(str).str.startswith("V-") &
-        df["Ctr To Position"].astype(str).str.startswith("Y-")
-    ]["Unit ID"].nunique()
+        df["ctr_from_position"].astype(str).str.startswith("V-") &
+        df["ctr_to_position"].astype(str).str.startswith("Y-")
+    ]["unit_id"].nunique()
 
     # Calculate total moves and imbalance
     total_moves = loaded + discharged
     imbalance = abs(loaded - discharged)
     
     # Get container count
-    container_count = df["Unit ID"].nunique()
+    container_count = df["unit_id"].nunique()
     
     # Convert unit weight to numeric and calculate average weight
-    df["Unit Weight in kg"] = pd.to_numeric(df["Unit Weight in kg"], errors="coerce")
-    avg_weight = df["Unit Weight in kg"].mean()
-    heavy_count = int((df["Unit Weight in kg"] > 20000).sum())
+    df["unit_weight_in_kg"] = pd.to_numeric(df["unit_weight_in_kg"], errors="coerce")
+    avg_weight = df["unit_weight_in_kg"].mean()
+    heavy_count = int((df["unit_weight_in_kg"] > 20000).sum())
 
     # Count reefer, hazard, and OOG containers
-    reefer_count = int(df["Reefer"].astype(str).str.upper().eq("YES").sum())
-    hazard_count = int(df["Hazardous Flag"].astype(str).str.upper().eq("YES").sum())
-    oog_count = int(df["OOG Unit"].astype(str).str.upper().eq("YES").sum())
+    reefer_count = int(df["reefer"].astype(str).str.upper().eq("YES").sum())
+    hazard_count = int(df["hazardous_flag"].astype(str).str.upper().eq("YES").sum())
+    oog_count = int(df["oog_unit"].astype(str).str.upper().eq("YES").sum())
 
     # Calculate moves per hour
     moves_per_hour = len(df) / total_hours
 
     # Get outbound service
     service_str = (
-        str(df["Outbound Service"].iloc[0]).strip()
-        if "Outbound Service" in df.columns else "unknown"
+        str(df["outbound_service"].iloc[0]).strip()
+        if "outbound_service" in df.columns else "unknown"
     )
     # Hash outbound service
     service_hash = int(hashlib.md5(service_str.encode()).hexdigest()[:6], 16)
