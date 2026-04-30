@@ -10,14 +10,14 @@ def prepare_visit_data(df):
     df.columns = df.columns.str.strip()
 
     # Parse event time
-    move_time = parse_datetime(df["Move Complete Time"], "Move Complete Time")
-    time_in   = parse_datetime(df["Time In"],            "Time In")
+    move_time = parse_datetime(df["move_complete_time"], "move_complete_time")
+    time_in   = parse_datetime(df["time_in"],            "time_in")
     
     # Combine move time and time in
     df["event_time"] = move_time.fillna(time_in)
 
     # Parse vessel departure
-    time_out = parse_datetime(df["Time Out"], "Time Out")
+    time_out = parse_datetime(df["time_out"], "time_out")
     df["vessel_departure"] = time_out
 
     # Drop rows with no event time

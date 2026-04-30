@@ -1,50 +1,25 @@
-import pandas as pd
-from sqlalchemy import text, inspect
-from db.connection import get_engine
-from utils.datetime_utils import parse_datetime
-from fastapi import HTTPException
-
-REQUIRED_COLS = [
-    "Move Complete Time",
-    "Time In",
-    "Time Out",
-    "Outbound Service",
-]
-
 import csv
 import uuid
 import datetime
 from io import StringIO
 import pandas as pd
-from sqlalchemy import inspect
-from db.connection import get_engine
-from utils.datetime_utils import parse_datetime
+from sqlalchemy import text, inspect
+from db.connection import get_engine, _ensure_database_exists, engine as _engine
+from db.schema import init_dataset_schema
 from fastapi import HTTPException
 
-REQUIRED_COLS = [
-    "Move Complete Time",
-    "Time In",
-    "Time Out",
-    "Outbound Service",
-    "Actual Outbound Carrier visit ID"
-]
-
 def psql_insert_copy(table, conn, keys, data_iter):
-    """
-    Execute SQL statement inserting data using PostgreSQL COPY
-    """
+    """Execute SQL statement inserting data using PostgreSQL COPY"""
     dbapi_conn = conn.connection
     with dbapi_conn.cursor() as cur:
         s_buf = StringIO()
         writer = csv.writer(s_buf)
         writer.writerows(data_iter)
         s_buf.seek(0)
-
         columns = ', '.join(f'"{k}"' for k in keys)
         table_name = f'"{table.name}"'
         if getattr(table, "schema", None):
             table_name = f'"{table.schema}".{table_name}'
-
         sql = f'COPY {table_name} ({columns}) FROM STDIN WITH CSV'
         cur.copy_expert(sql=sql, file=s_buf)
 
@@ -53,78 +28,90 @@ _api_cache = {}
 
 def bulk_insert_df(df: pd.DataFrame, dataset_type: str):
     """
-    Normalize the dataset into vessels, visits, and containers.
-    Add UUID and Timestamp tracking columns to all tables.
-    Auto-creates the database if it does not exist.
+    Inserts data into the explicit Relational Schema.
+    'current' TRUNCATES existing data. 'history' safely UPSERTS.
     """
-    # Always ensure the database exists before attempting any write.
-    # This recovers from scenarios where the DB was dropped while the server is running.
-    from db.connection import _ensure_database_exists, engine as _engine
     _ensure_database_exists()
-
-    # After creating the DB, the existing engine pool may have stale/failed connections.
-    # Invalidate the pool so fresh connections are made to the now-existing database.
     _engine.dispose()
     engine = get_engine()
 
-    df.columns = df.columns.str.strip()
-    missing = [c for c in REQUIRED_COLS if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing columns: {missing}")
-
-    for col in ["Move Complete Time", "Time In", "Time Out"]:
-        if col in df.columns:
-            df[col] = parse_datetime(df[col])
+    init_dataset_schema(engine, dataset_type)
 
     now = datetime.datetime.now()
 
-    # 1. Vessels
-    vessels_df = df[['Outbound Service']].drop_duplicates().reset_index(drop=True)
-    vessels_df['id'] = [str(uuid.uuid4()) for _ in range(len(vessels_df))]
+    # Prepare DataFrames with audit columns
+    vessels_df = df[['outbound_service']].drop_duplicates().reset_index(drop=True)
     vessels_df['created_at'] = now
     vessels_df['updated_at'] = now
-    vessels_df['deleted_at'] = pd.NaT
+    vessels_df['deleted_at'] = None
 
-    # 2. Visits
-    visits_df = df[['Actual Outbound Carrier visit ID', 'Outbound Service']].drop_duplicates().reset_index(drop=True)
-    visits_df = visits_df.merge(vessels_df[['Outbound Service', 'id']], on='Outbound Service', how='left').rename(columns={'id': 'vessel_id'})
-    visits_df['id'] = [str(uuid.uuid4()) for _ in range(len(visits_df))]
+    visits_df = df[['actual_outbound_carrier_visit_id', 'outbound_service']].drop_duplicates().reset_index(drop=True)
     visits_df['created_at'] = now
     visits_df['updated_at'] = now
-    visits_df['deleted_at'] = pd.NaT
+    visits_df['deleted_at'] = None
 
-    # 3. Containers (all original columns preserved + visit_id FK)
-    containers_df = df.merge(visits_df[['Actual Outbound Carrier visit ID', 'id']], on='Actual Outbound Carrier visit ID', how='left').rename(columns={'id': 'visit_id'})
+    containers_df = df.copy()
     containers_df['id'] = [str(uuid.uuid4()) for _ in range(len(containers_df))]
     containers_df['created_at'] = now
     containers_df['updated_at'] = now
-    containers_df['deleted_at'] = pd.NaT
+    containers_df['deleted_at'] = None
 
-    # Drop relational columns from containers (stored in visits/vessels tables)
-    containers_df = containers_df.drop(columns=['Outbound Service', 'Actual Outbound Carrier visit ID'])
+    # STRICT COLUMN FILTER: Only keep columns that are explicitly defined in schema.py
+    # This prevents extra CSV columns (like unit_visit_gkey) from crashing the DB insert.
+    expected_columns = [
+        "id", "actual_outbound_carrier_visit_id", "move_complete_time", 
+        "time_in", "time_out", "unit_id", "ctr_from_position", 
+        "ctr_to_position", "unit_weight_in_kg", "verified_gross_mass_kg", 
+        "reefer", "hazardous_flag", "oog_unit", "port_of_discharge", 
+        "created_at", "updated_at", "deleted_at"
+    ]
+    
+    # Keep only columns that exist in the dataframe AND the schema
+    valid_cols = [col for col in expected_columns if col in containers_df.columns]
+    containers_df = containers_df[valid_cols]
 
-    from sqlalchemy import text
     with engine.begin() as conn:
-        vessels_df.to_sql(f"{dataset_type}_vessels", conn, if_exists="replace", index=False, method=psql_insert_copy)
-        visits_df.to_sql(f"{dataset_type}_visits", conn, if_exists="replace", index=False, method=psql_insert_copy)
-        containers_df.to_sql(f"{dataset_type}_containers", conn, if_exists="replace", index=False, method=psql_insert_copy)
+        if dataset_type == "current":
+            conn.execute(text(f'TRUNCATE TABLE "{dataset_type}_vessels" CASCADE;'))
+            
+            vessels_df.to_sql(f"{dataset_type}_vessels", conn, if_exists="append", index=False, method=psql_insert_copy)
+            visits_df.to_sql(f"{dataset_type}_visits", conn, if_exists="append", index=False, method=psql_insert_copy)
+            containers_df.to_sql(f"{dataset_type}_containers", conn, if_exists="append", index=False, method=psql_insert_copy)
 
-        # Create indexes to drastically speed up JOIN queries
-        conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{dataset_type}_visits_vessel_id ON "{dataset_type}_visits" (vessel_id)'))
-        conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{dataset_type}_containers_visit_id ON "{dataset_type}_containers" (visit_id)'))
-        conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{dataset_type}_vessels_service ON "{dataset_type}_vessels" ("Outbound Service")'))
+        else:
+            vessels_df.to_sql("tmp_vessels", conn, if_exists="replace", index=False, method=psql_insert_copy)
+            visits_df.to_sql("tmp_visits", conn, if_exists="replace", index=False, method=psql_insert_copy)
 
-    # Clear entire cache when new data is uploaded
+            # Upsert Vessels: Explicitly CAST deleted_at to TIMESTAMP WITH TIME ZONE
+            conn.execute(text(f'''
+                INSERT INTO "{dataset_type}_vessels" ("outbound_service", "created_at", "updated_at", "deleted_at")
+                SELECT "outbound_service", "created_at", "updated_at", CAST("deleted_at" AS TIMESTAMP WITH TIME ZONE) FROM tmp_vessels 
+                ON CONFLICT (outbound_service) DO UPDATE 
+                SET updated_at = EXCLUDED.updated_at, deleted_at = NULL;
+            '''))
+
+            # Upsert Visits: Explicitly CAST deleted_at to TIMESTAMP WITH TIME ZONE
+            conn.execute(text(f'''
+                INSERT INTO "{dataset_type}_visits" ("actual_outbound_carrier_visit_id", "outbound_service", "created_at", "updated_at", "deleted_at")
+                SELECT "actual_outbound_carrier_visit_id", "outbound_service", "created_at", "updated_at", CAST("deleted_at" AS TIMESTAMP WITH TIME ZONE) FROM tmp_visits 
+                ON CONFLICT (actual_outbound_carrier_visit_id) DO UPDATE 
+                SET updated_at = EXCLUDED.updated_at, deleted_at = NULL;
+            '''))
+
+            containers_df.to_sql(f"{dataset_type}_containers", conn, if_exists="append", index=False, method=psql_insert_copy)
+
+            conn.execute(text("DROP TABLE tmp_vessels;"))
+            conn.execute(text("DROP TABLE tmp_visits;"))
+
     _df_cache.clear()
     _api_cache.clear()
 
     return len(df)
 
-
 def load_df_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
     """
     Reconstruct the flat dataset from the normalized tables via SQL JOIN.
-    If vessel_id is provided, filters at the SQL level for lightning-fast lookups.
+    Filters out any records marked with a soft delete (deleted_at IS NOT NULL).
     """
     cache_key = f"{dataset_type}_{vessel_id}" if vessel_id else dataset_type
     
@@ -132,36 +119,36 @@ def load_df_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
         return _df_cache[cache_key].copy()
 
     engine = get_engine()
-    from sqlalchemy import inspect
     inspector = inspect(engine)
     if not inspector.has_table(f"{dataset_type}_containers"):
         raise HTTPException(
             status_code=400,
-            detail=f"No dataset found for '{dataset_type}'. "
-                   f"Please upload data first via POST /upload/{dataset_type}."
+            detail=f"No dataset found for '{dataset_type}'. Please upload data first."
         )
 
-    # Reconstruct flat dataframe using a highly optimized SQL JOIN
+    # Note the WHERE clause excludes soft-deleted items across the hierarchy
     query = f"""
         SELECT 
             c.*,
-            v."Actual Outbound Carrier visit ID",
-            ve."Outbound Service"
+            v.outbound_service
         FROM "{dataset_type}_containers" c
-        JOIN "{dataset_type}_visits" v ON c.visit_id = v.id
-        JOIN "{dataset_type}_vessels" ve ON v.vessel_id = ve.id
+        JOIN "{dataset_type}_visits" v 
+          ON c.actual_outbound_carrier_visit_id = v.actual_outbound_carrier_visit_id
+        JOIN "{dataset_type}_vessels" ve 
+          ON v.outbound_service = ve.outbound_service
+        WHERE c.deleted_at IS NULL 
+          AND v.deleted_at IS NULL
+          AND ve.deleted_at IS NULL
     """
     params = {}
     if vessel_id:
-        query += '\n        WHERE ve."Outbound Service" = %(vessel_id)s'
+        query += '\n          AND v.outbound_service = %(vessel_id)s'
         params["vessel_id"] = vessel_id
 
     with engine.connect() as conn:
-        import pandas as pd
         df = pd.read_sql_query(query, conn, params=params)
 
-    # Parse datetime columns back
-    for col in ["Move Complete Time", "Time In", "Time Out"]:
+    for col in ["move_complete_time", "time_in", "time_out", "created_at", "updated_at", "deleted_at"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 

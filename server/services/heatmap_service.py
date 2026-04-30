@@ -15,7 +15,7 @@ def get_all_blocks(df):
     blocks = set()
 
     # Get all blocks from the dataframe
-    for pos in df["Ctr From Position"].dropna():
+    for pos in df["ctr_from_position"].dropna():
         pos = str(pos)
 
         if not pos.startswith("Y-"):
@@ -48,25 +48,25 @@ def build_layout(blocks):
 def get_vessel_heatmap(df, vessel_service: str):
     # Filter by vessel service
     vessel_df = df[
-        df["Outbound Service"].astype(str).str.strip() == str(vessel_service)
+        df["outbound_service"].astype(str).str.strip() == str(vessel_service)
     ].copy()
 
     if vessel_df.empty:
         return {"error": f"No data for vessel {vessel_service}"}
     
     # Get top visit ID
-    visit_counts = vessel_df["Actual Outbound Carrier visit ID"].value_counts()
+    visit_counts = vessel_df["actual_outbound_carrier_visit_id"].value_counts()
     top_visit_id = visit_counts.index[0]
 
     # Get top visit data
     visit_df = vessel_df[
-        vessel_df["Actual Outbound Carrier visit ID"] == top_visit_id
+        vessel_df["actual_outbound_carrier_visit_id"] == top_visit_id
     ].copy()
 
     # Filter by yard-to-vessel moves
     visit_df = visit_df[
-        visit_df["Ctr From Position"].astype(str).str.startswith("Y-") &
-        visit_df["Ctr To Position"].astype(str).str.startswith("V-")
+        visit_df["ctr_from_position"].astype(str).str.startswith("Y-") &
+        visit_df["ctr_to_position"].astype(str).str.startswith("V-")
     ]
     
     # Check if there are any yard-to-vessel moves
@@ -92,8 +92,8 @@ def get_vessel_heatmap(df, vessel_service: str):
     # Process each yard-to-vessel move
     for _, row in visit_df.iterrows():
 
-        pos = str(row.get("Ctr From Position", ""))
-        unit = str(row.get("Unit ID"))
+        pos = str(row.get("ctr_from_position", ""))
+        unit = str(row.get("unit_id"))
 
         match = POSITION_REGEX.search(pos)
         if not match:
@@ -119,13 +119,13 @@ def get_vessel_heatmap(df, vessel_service: str):
         blocks[block]["cells"][key]["tiers"][tier] += 1
         
         # Update special container counts
-        if is_yes(row.get("Hazardous Flag")):
+        if is_yes(row.get("hazardous_flag")):
             blocks[block]["hazardous"] += 1
 
-        if is_yes(row.get("Reefer")):
+        if is_yes(row.get("reefer")):
             blocks[block]["reefer"] += 1
 
-        if is_yes(row.get("OOG Unit")):
+        if is_yes(row.get("oog_unit")):
             blocks[block]["oog"] += 1
     
     # Calculate max count
