@@ -1,5 +1,6 @@
 import { Box, Typography } from "@mui/material";
 
+// Props for the YardStrategy component
 interface Props {
   data: {
     weight_distribution: Record<string, number>;
@@ -9,6 +10,7 @@ interface Props {
   };
 }
 
+// Helper function to get the color for the risk based on the value
 const riskColor = (risk: string) => {
   const r = risk?.toLowerCase();
   if (r === "high") return "#f28b82";
@@ -16,9 +18,11 @@ const riskColor = (risk: string) => {
   return "#81c995";
 };
 
+// Main component to display the yard strategy for vessels
 export default function YardStrategy({ data }: Props) {
   if (!data) return null;
 
+  // Destructure the data from the props
   const {
     weight_distribution = {},
     top_discharge_ports = {},
@@ -26,11 +30,16 @@ export default function YardStrategy({ data }: Props) {
     reshuffle_risk = "Unknown",
   } = data;
 
+  // Get the color for the risk
   const rc = riskColor(reshuffle_risk);
+  // Get the top discharge ports
   const portEntries = Object.entries(top_discharge_ports).slice(0, 6);
+  // Get the max value for the port entries
   const portMax = portEntries.length > 0 ? (portEntries[0][1] as number) : 1;
+  // Get the weight distribution
   const weightEntries = Object.entries(weight_distribution);
 
+  // Styles for the column labels
   const colLabel = {
     fontSize: "0.6875rem",
     fontWeight: 500,
@@ -40,6 +49,7 @@ export default function YardStrategy({ data }: Props) {
     mb: 2,
   };
 
+  // Main component to display the yard strategy for vessels
   return (
     <Box
       sx={{

@@ -1,7 +1,9 @@
 import { Box, Typography } from "@mui/material";
 
+// Props for the RiskAndStrategy component
 interface Props { risks: string[]; }
 
+// TSX component to display the risks and strategy for vessels
 const severityOf = (i: number, total: number) => {
   if (total === 0) return null;
   if (i === 0) return { label: "HIGH", color: "#f28b82" };
@@ -9,6 +11,7 @@ const severityOf = (i: number, total: number) => {
   return { label: "LOW", color: "#9aa0a6" };
 };
 
+// Main component to display the risks and strategy for vessels
 export default function RiskAndStrategy({ risks }: Props) {
   const safeRisks = risks || [];
   const hasRisks = safeRisks.length > 0;

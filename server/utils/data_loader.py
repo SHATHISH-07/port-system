@@ -1,6 +1,7 @@
 import pandas as pd
 from utils.datetime_utils import parse_datetime
 
+# Utility function to clean column names
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = (
         df.columns
@@ -11,6 +12,7 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
+# Utility function to load CSV data from bytes
 def load_csv(file_bytes: bytes):
     df = pd.read_csv(pd.io.common.BytesIO(file_bytes), low_memory=False)
     

@@ -4,6 +4,7 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 
+// TSX component to display the berth impact table for vessels
 interface Row {
   berth: string;
   block: string;
@@ -11,16 +12,21 @@ interface Row {
   total_travel_distance: string;
   congestion_risk: "Low" | "Medium" | "High";
 }
+
+// Props for the BerthImpactTable component
 interface Props { data: Row[]; }
 
+// Helper function to get the color for the badge based on the value
 const badgeColor = (v: string) => {
   if (v === "High") return { color: "#f28b82", bg: "rgba(242,139,130,0.1)", border: "rgba(242,139,130,0.22)" };
   if (v === "Medium") return { color: "#fdd663", bg: "rgba(253,214,99,0.1)", border: "rgba(253,214,99,0.22)" };
   return { color: "#81c995", bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.22)" };
 };
 
+// Limit for the number of rows to display
 const LIMIT = 5;
 
+// Main component to display the berth impact table for vessels
 export default function BerthImpactTable({ data }: Props) {
   const [expanded, setExpanded] = useState(false);
   if (!data?.length) return null;

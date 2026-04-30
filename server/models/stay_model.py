@@ -1,12 +1,19 @@
+import logging
 import pandas as pd
 import joblib
 import os
 from xgboost import XGBRegressor
+from sklearn.linear_model import Ridge
+from sklearn.ensemble import GradientBoostingRegressor, VotingRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 
 from utils.stay_utils import prepare_visit_data, compute_visit_stay
 from utils.feature_utils import create_features
 from utils.data_loader import load_csv
 from models.training_status import training_status
+
+logger = logging.getLogger("port_system")
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -28,8 +35,6 @@ FEATURE_NAMES = [
     "reefer_count",
     "hazard_count",
     "oog_count",
-    "operation_hours",
-    "moves_per_hour",
     "service_hash",
 ]
 
@@ -38,13 +43,42 @@ TRAIN_MIN_HOURS = 2     # Ignore stays shorter than 2 hours (noise)
 TRAIN_MAX_HOURS = 240   # Ignore stays longer than 240 hours (outliers)
 MIN_VISIT_ROWS  = 5     # Ignore visits with fewer than 5 rows
 
+def _build_ensemble():
+    ridge = Pipeline([
+        ("scaler", StandardScaler()),
+        ("ridge", Ridge(alpha=10.0)),
+    ])
+    xgb = XGBRegressor(
+        n_estimators=80,
+        max_depth=3,
+        learning_rate=0.08,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        min_child_weight=5,
+        reg_alpha=1.0,
+        reg_lambda=5.0,
+        random_state=42,
+        verbosity=0,
+    )
+    gbr = GradientBoostingRegressor(
+        n_estimators=60,
+        max_depth=2,
+        learning_rate=0.10,
+        subsample=0.75,
+        min_samples_leaf=8,
+        random_state=42,
+    )
+    return VotingRegressor(estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr)])
+
+
 # Function to train the model
 def train_model(df):
     try:
         training_status.set("training", "Training started")
+        logger.info("ML training started")
 
-        # Group the dataset by visit ID
-        grouped = df.groupby("Actual Outbound Carrier visit ID")
+        # Group the dataset by visit ID (using the DB column name)
+        grouped = df.groupby("actual_outbound_carrier_visit_id")
 
         # Lists to store training data and target values
         X, y = [], []
@@ -99,23 +133,12 @@ def train_model(df):
         print(f"     Skipped (> 240h)   : {skipped_error}")
         print(f"     Target range       : {y.min():.1f}h - {y.max():.1f}h")
         print(f"     Target mean        : {y.mean():.1f}h")
+        print(f"     Model type         : VotingRegressor (Ridge + XGBoost + GBR)")
+        logger.info(f"ML training: {len(X)} samples, target mean={y.mean():.1f}h")
 
-        # XGBoost Regressor model
-        model = XGBRegressor(
-            n_estimators=150,
-            max_depth=6,
-            learning_rate=0.05,
-            subsample=1.0,
-            colsample_bytree=1.0,
-            min_child_weight=1,
-            gamma=0.0,
-            reg_alpha=0.0,
-            reg_lambda=0.1,
-            random_state=42,
-        )
-
-        # Train the model
-        model.fit(X, y)
+        # Build and train ensemble model
+        model = _build_ensemble()
+        model.fit(pd.DataFrame(X, columns=FEATURE_NAMES), pd.Series(y))
 
         # Create models directory if it doesn't exist
         os.makedirs("models", exist_ok=True)
@@ -131,9 +154,11 @@ def train_model(df):
 
         training_status.set("completed", "Model trained successfully")
         print("[OK] Model trained and saved ->", MODEL_PATH)
+        logger.info("ML training completed successfully")
 
     except Exception as e:
         training_status.set("failed", str(e))
+        logger.error(f"ML training failed: {e}")
         print("[ERR] Training failed:", str(e))
 
 
@@ -207,43 +232,8 @@ def predict_vessel(prepared_visits: dict):
     }
 
 
-# Estimate moves per hour from actual visits
-def estimate_moves_per_hour_from_actual(actual_visits):
-    rates = []
-
-    # Calculate moves per hour for each visit
-    if actual_visits:
-        for v in actual_visits.values():
-            moves = v["loaded_containers"] + v["discharged_containers"]
-            hours = v["stay_hours"]
-
-            if hours > 0:
-                rates.append({
-                    "rate": moves / hours,
-                    "load_ratio": v["loaded_containers"] / (moves + 1)
-                })
-
-    # Default rate if no rates available
-    if not rates:
-        return [{"rate": 50, "load_ratio": 0.5}]
-
-    return rates
-
-# Pick throughput based on load ratio
-def pick_throughput(rates, loaded, discharged):
-    total = loaded + discharged
-    input_ratio = loaded / (total + 1)
-
-    # Find closest match in history
-    closest = min(
-        rates,
-        key=lambda r: abs(r["load_ratio"] - input_ratio)
-    )
-
-    return closest["rate"]
-
 # Predict the stay time from input
-def predict_from_input(loaded: int, discharged: int,actual_visits=None):
+def predict_from_input(loaded: int, discharged: int, actual_visits=None):
     bundle = load_model()
 
     if bundle is None:
@@ -257,12 +247,7 @@ def predict_from_input(loaded: int, discharged: int,actual_visits=None):
     total_moves = loaded + discharged
     imbalance = abs(loaded - discharged)
 
-    # Estimate moves per hour from actual visits
-    rates = estimate_moves_per_hour_from_actual(actual_visits)
-    moves_per_hour = pick_throughput(rates, loaded, discharged)
-    operation_hours = total_moves / moves_per_hour
-
-    # Feature engineering
+    # Feature engineering without artificial time leakage
     features = {
         "loaded": loaded,
         "discharged": discharged,
@@ -277,8 +262,6 @@ def predict_from_input(loaded: int, discharged: int,actual_visits=None):
         "reefer_count": int(total_moves * 0.1),
         "hazard_count": int(total_moves * 0.05),
         "oog_count": int(total_moves * 0.02),
-        "operation_hours": operation_hours,
-        "moves_per_hour": moves_per_hour,
         "service_hash": 123456,
     }
 

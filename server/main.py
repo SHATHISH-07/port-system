@@ -21,8 +21,11 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# Get the logger
 logger = logging.getLogger("port_system")
 
+# Middleware function to log requests
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()

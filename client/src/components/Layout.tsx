@@ -3,15 +3,20 @@ import { Box, Typography } from "@mui/material";
 import Sidebar from "./Sidebar";
 import { useLocation } from "react-router-dom";
 
+// Props for the Layout component
 interface LayoutProps { children: React.ReactNode; }
 
+// Page titles and subtitles
 const PAGE: Record<string, { title: string; sub: string }> = {
   "/": { title: "Vessel Analysis", sub: "" },
   "/heatmap": { title: "Terminal Heatmap", sub: "" },
 };
 
+// Main layout component
 export default function Layout({ children }: LayoutProps) {
+  // Get the current pathname from the location
   const { pathname } = useLocation();
+  // Get the page title and subtitle based on the current pathname
   const page = PAGE[pathname] ?? { title: "Berth and Yard Optimization", sub: "" };
 
   return (

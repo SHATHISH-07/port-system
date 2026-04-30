@@ -1,10 +1,25 @@
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 import Layout from "./components/Layout";
-import HistoryVesselAnalysis from "./pages/HistoryVesselAnalysis";
-import CurrentVesselAnalysis from "./pages/CurrentVesselAnalysis";
-import TerminalMap from "./pages/TerminalMap";
+
+// Code-split each page into its own JS chunk.
+// TerminalMap imports Three.js (~600KB) — lazy loading prevents it from
+// blocking the initial bundle parse and every subsequent route change.
+const HistoryVesselAnalysis = lazy(() => import("./pages/HistoryVesselAnalysis"));
+const CurrentVesselAnalysis  = lazy(() => import("./pages/CurrentVesselAnalysis"));
+const TerminalMap            = lazy(() => import("./pages/TerminalMap"));
+
+function PageLoader() {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
+      <CircularProgress size={32} sx={{ color: "#8ab4f8" }} />
+    </Box>
+  );
+}
 
 const theme = createTheme({
   palette: {
@@ -226,17 +241,29 @@ const theme = createTheme({
 });
 
 export default function App() {
+  // Prefetch the heavy TerminalMap (Three.js ~550KB) chunk silently in the
+  // background 2 seconds after the app mounts. This ensures the chunk is
+  // already browser-cached by the time the user clicks the nav link.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      import("./pages/TerminalMap");
+    }, 2000);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <BrowserRouter>
         <Layout>
-          <Routes>
-            <Route path="/" element={<Navigate to="/history-analysis" />} />
-            <Route path="/history-analysis" element={<HistoryVesselAnalysis />} />
-            <Route path="/current-analysis" element={<CurrentVesselAnalysis />} />
-            <Route path="/heatmap" element={<TerminalMap />} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<Navigate to="/history-analysis" />} />
+              <Route path="/history-analysis" element={<HistoryVesselAnalysis />} />
+              <Route path="/current-analysis" element={<CurrentVesselAnalysis />} />
+              <Route path="/heatmap" element={<TerminalMap />} />
+            </Routes>
+          </Suspense>
         </Layout>
       </BrowserRouter>
     </ThemeProvider>
