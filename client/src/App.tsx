@@ -10,8 +10,9 @@ import Layout from "./components/Layout";
 // TerminalMap imports Three.js (~600KB) — lazy loading prevents it from
 // blocking the initial bundle parse and every subsequent route change.
 const HistoryVesselAnalysis = lazy(() => import("./pages/HistoryVesselAnalysis"));
-const CurrentVesselAnalysis  = lazy(() => import("./pages/CurrentVesselAnalysis"));
-const TerminalMap            = lazy(() => import("./pages/TerminalMap"));
+const CurrentVesselAnalysis = lazy(() => import("./pages/CurrentVesselAnalysis"));
+const TerminalMap = lazy(() => import("./pages/TerminalMap"));
+// const TerminalMapDark = lazy(() => import("./pages/TerminalMapDark"));
 
 function PageLoader() {
   return (
@@ -262,6 +263,7 @@ export default function App() {
               <Route path="/history-analysis" element={<HistoryVesselAnalysis />} />
               <Route path="/current-analysis" element={<CurrentVesselAnalysis />} />
               <Route path="/heatmap" element={<TerminalMap />} />
+              {/* <Route path="/heatmap" element={<TerminalMapDark />} /> */}
             </Routes>
           </Suspense>
         </Layout>
