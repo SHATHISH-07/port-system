@@ -15,33 +15,7 @@ from models.training_status import training_status
 
 logger = logging.getLogger("port_system")
 
-from dotenv import load_dotenv
-load_dotenv()
-
-MODEL_PATH = os.getenv("MODEL_PATH")
-
-# Feature names in order of feature_utils.py file
-FEATURE_NAMES = [
-    "loaded",
-    "discharged",
-    "total_moves",
-    "imbalance",
-    "load_ratio",
-    "discharge_ratio",
-
-    "container_count",
-    "avg_weight",
-    "heavy_count",
-    "reefer_count",
-    "hazard_count",
-    "oog_count",
-    "service_hash",
-]
-
-# Training parameters
-TRAIN_MIN_HOURS = 2     # Ignore stays shorter than 2 hours (noise)
-TRAIN_MAX_HOURS = 240   # Ignore stays longer than 240 hours (outliers)
-MIN_VISIT_ROWS  = 5     # Ignore visits with fewer than 5 rows
+from config import settings
 
 def _build_ensemble():
     ridge = Pipeline([
@@ -91,7 +65,7 @@ def train_model(df):
         # Iterate through each visit ID and group
         for visit_id, group in grouped:
 
-            if len(group) < MIN_VISIT_ROWS:
+            if len(group) < settings.MIN_VISIT_ROWS:
                 skipped_rows += 1
                 continue
             visit_df = prepare_visit_data(group)
@@ -100,11 +74,11 @@ def train_model(df):
             if stay is None:
                 continue
 
-            if stay < TRAIN_MIN_HOURS:
+            if stay < settings.TRAIN_MIN_HOURS:
                 skipped_noise += 1
                 continue
 
-            if stay > TRAIN_MAX_HOURS:
+            if stay > settings.TRAIN_MAX_HOURS:
                 skipped_error += 1
                 continue
             features = create_features(visit_df)
@@ -112,7 +86,7 @@ def train_model(df):
             if features is None:
                 continue
 
-            X.append([features[f] for f in FEATURE_NAMES])
+            X.append([features[f] for f in settings.FEATURE_NAMES])
             y.append(stay)
 
         # Check for empty training data after filtering
@@ -123,7 +97,7 @@ def train_model(df):
             )
 
         # Convert to pandas DataFrame and Series
-        X = pd.DataFrame(X, columns=FEATURE_NAMES)
+        X = pd.DataFrame(X, columns=settings.FEATURE_NAMES)
         y = pd.Series(y)
 
         # Print training statistics
@@ -138,7 +112,7 @@ def train_model(df):
 
         # Build and train ensemble model
         model = _build_ensemble()
-        model.fit(pd.DataFrame(X, columns=FEATURE_NAMES), pd.Series(y))
+        model.fit(pd.DataFrame(X, columns=settings.FEATURE_NAMES), pd.Series(y))
 
         # Create models directory if it doesn't exist
         os.makedirs("models", exist_ok=True)
@@ -146,14 +120,14 @@ def train_model(df):
         # Save the model and features
         joblib.dump({
             "model":    model,
-            "features": FEATURE_NAMES,
-        }, MODEL_PATH)
+            "features": settings.FEATURE_NAMES,
+        }, settings.MODEL_PATH)
 
         global _cached_bundle
         _cached_bundle = None
 
         training_status.set("completed", "Model trained successfully")
-        print("[OK] Model trained and saved ->", MODEL_PATH)
+        print("[OK] Model trained and saved ->", settings.MODEL_PATH)
         logger.info("ML training completed successfully")
 
     except Exception as e:
@@ -170,10 +144,10 @@ def load_model():
     if _cached_bundle is not None:
         return _cached_bundle
 
-    if not os.path.exists(MODEL_PATH):
+    if not os.path.exists(settings.MODEL_PATH):
         return None
     
-    _cached_bundle = joblib.load(MODEL_PATH)
+    _cached_bundle = joblib.load(settings.MODEL_PATH)
     return _cached_bundle
 
 

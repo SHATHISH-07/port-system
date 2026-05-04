@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import hashlib
 from utils.datetime_utils import parse_datetime
-from utils.stay_utils import VESSEL_WINDOW_HOURS
+from config import settings
 
 # Check if a value is yes
 def is_yes(val):
@@ -31,7 +31,7 @@ def create_features(df):
         valid_dep = df["vessel_departure"].dropna()
         if not valid_dep.empty:
             vessel_dep = valid_dep.mode().iloc[0]
-            window_start = vessel_dep - pd.Timedelta(hours=VESSEL_WINDOW_HOURS)
+            window_start = vessel_dep - pd.Timedelta(hours=settings.VESSEL_WINDOW_HOURS)
             window_end = vessel_dep + pd.Timedelta(hours=1)
 
             df = df[

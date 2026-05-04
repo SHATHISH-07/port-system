@@ -7,6 +7,7 @@ from sqlalchemy import text, inspect
 from db.connection import get_engine, _ensure_database_exists, engine as _engine
 from db.schema import init_dataset_schema
 from fastapi import HTTPException
+from config import settings
 
 # Helper function for psql COPY
 def psql_insert_copy(table, conn, keys, data_iter):
@@ -24,11 +25,7 @@ def psql_insert_copy(table, conn, keys, data_iter):
         cur.copy_expert(sql=sql, file=s_buf)
 
 
-# Cache for storing DataFrames
-_df_cache = {}
 
-# Cache for storing API responses
-_api_cache = {}
 
 # Insert Data
 def bulk_insert_df(df: pd.DataFrame, dataset_type: str):
@@ -61,13 +58,7 @@ def bulk_insert_df(df: pd.DataFrame, dataset_type: str):
     containers_df['deleted_at'] = None
 
     # Define expected column order
-    expected_columns = [
-        "id", "actual_outbound_carrier_visit_id", "move_complete_time", 
-        "time_in", "time_out", "unit_id", "ctr_from_position", 
-        "ctr_to_position", "unit_weight_in_kg", "verified_gross_mass_kg", 
-        "reefer", "hazardous_flag", "oog_unit", "port_of_discharge", 
-        "created_at", "updated_at", "deleted_at"
-    ]
+    expected_columns = settings.DB_EXPECTED_COLUMNS
     valid_cols = [col for col in expected_columns if col in containers_df.columns]
     containers_df = containers_df[valid_cols]
 
@@ -85,20 +76,10 @@ def bulk_insert_df(df: pd.DataFrame, dataset_type: str):
             visits_df.to_sql("tmp_visits", conn, if_exists="replace", index=False, method=psql_insert_copy)
 
             # Upsert Vessels
-            conn.execute(text(f'''
-                INSERT INTO "{dataset_type}_vessels" ("outbound_service", "created_at", "updated_at", "deleted_at")
-                SELECT "outbound_service", "created_at", "updated_at", CAST("deleted_at" AS TIMESTAMP WITH TIME ZONE) FROM tmp_vessels 
-                ON CONFLICT (outbound_service) DO UPDATE 
-                SET updated_at = EXCLUDED.updated_at, deleted_at = NULL;
-            '''))
+            conn.execute(text(settings.UPSERT_VESSELS_QUERY.format(dataset_type=dataset_type)))
 
             # Upsert Visits
-            conn.execute(text(f'''
-                INSERT INTO "{dataset_type}_visits" ("actual_outbound_carrier_visit_id", "outbound_service", "created_at", "updated_at", "deleted_at")
-                SELECT "actual_outbound_carrier_visit_id", "outbound_service", "created_at", "updated_at", CAST("deleted_at" AS TIMESTAMP WITH TIME ZONE) FROM tmp_visits 
-                ON CONFLICT (actual_outbound_carrier_visit_id) DO UPDATE 
-                SET updated_at = EXCLUDED.updated_at, deleted_at = NULL;
-            '''))
+            conn.execute(text(settings.UPSERT_VISITS_QUERY.format(dataset_type=dataset_type)))
 
             # Insert Containers
             containers_df.to_sql(f"{dataset_type}_containers", conn, if_exists="append", index=False, method=psql_insert_copy)
@@ -107,18 +88,13 @@ def bulk_insert_df(df: pd.DataFrame, dataset_type: str):
             conn.execute(text("DROP TABLE tmp_vessels;"))
             conn.execute(text("DROP TABLE tmp_visits;"))
 
-    # Clear Caches
-    _df_cache.clear()
-    _api_cache.clear()
+
 
     return len(df)
 
 # Load Data from Database
 def load_df_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
-    cache_key = f"{dataset_type}_{vessel_id}" if vessel_id else dataset_type
-    
-    if cache_key in _df_cache:
-        return _df_cache[cache_key].copy()
+    # No cache, always fetch from DB
 
     # Get Engine
     engine = get_engine()
@@ -132,19 +108,7 @@ def load_df_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
         )
 
     # Query
-    query = f"""
-        SELECT 
-            c.*,
-            v.outbound_service
-        FROM "{dataset_type}_containers" c
-        JOIN "{dataset_type}_visits" v 
-          ON c.actual_outbound_carrier_visit_id = v.actual_outbound_carrier_visit_id
-        JOIN "{dataset_type}_vessels" ve 
-          ON v.outbound_service = ve.outbound_service
-        WHERE c.deleted_at IS NULL 
-          AND v.deleted_at IS NULL
-          AND ve.deleted_at IS NULL
-    """
+    query = settings.LOAD_CONTAINERS_QUERY.format(dataset_type=dataset_type)
 
     # Query Parameters
     params = {}
@@ -161,7 +125,6 @@ def load_df_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Cache Data
-    _df_cache[cache_key] = df
+
 
     return df.copy()

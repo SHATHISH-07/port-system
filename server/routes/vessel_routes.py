@@ -4,7 +4,7 @@ from services.vessel_service import analyze_vessel_dashboard
 from services.heatmap_service import get_vessel_heatmap
 from models.stay_model import predict_from_input
 import logging
-from db.queries import _api_cache
+from utils.cache_utils import vessel_cache
 
 logger = logging.getLogger("port_system")
 
@@ -21,8 +21,9 @@ async def vessel_history_analysis(
     try:
         # Check if the result is in the cache
         cache_key = f"history_{vessel_id}"
-        if cache_key in _api_cache:
-            return _api_cache[cache_key]
+        cached_result = vessel_cache.get(cache_key)
+        if cached_result:
+            return cached_result
         
         # Load the data from the database
         df = load_df_from_db("history", vessel_id)
@@ -30,7 +31,7 @@ async def vessel_history_analysis(
         result = analyze_vessel_dashboard(df, vessel_id)
         result["mode"] = "history"
         # Store the result in the cache
-        _api_cache[cache_key] = result
+        vessel_cache.set(cache_key, result)
         # Log the completion
         logger.info(f"Completed history vessel analysis for {vessel_id}")
         return result
@@ -50,8 +51,9 @@ async def current_vessel_analysis(
     try:
         # Check if the result is in the cache
         cache_key = f"current_{vessel_id}"
-        if cache_key in _api_cache:
-            result = dict(_api_cache[cache_key])
+        cached_result = vessel_cache.get(cache_key)
+        if cached_result:
+            result = dict(cached_result)
         else:
             # Load the data from the database
             df = load_df_from_db("current", vessel_id)
@@ -59,7 +61,7 @@ async def current_vessel_analysis(
             result = analyze_vessel_dashboard(df, vessel_id)
             # Store the result in the cache
             if "error" not in result:
-                _api_cache[cache_key] = result
+                vessel_cache.set(cache_key, result)
             result = dict(result)
         # Predict the result if loaded and discharged are provided
         if loaded is not None and discharged is not None:
@@ -88,14 +90,15 @@ async def heatmap_analysis(
     try:
         # Check if the result is in the cache
         cache_key = f"heatmap_{vessel_id}"
-        if cache_key in _api_cache:
-            return _api_cache[cache_key]
+        cached_result = vessel_cache.get(cache_key)
+        if cached_result:
+            return cached_result
         # Heatmap uses the same 'current' dataset
         df = load_df_from_db("current", vessel_id)
         result = get_vessel_heatmap(df, vessel_id)
         # Store the result in the cache
         if "error" not in result:
-            _api_cache[cache_key] = result
+            vessel_cache.set(cache_key, result)
         # Log the completion
         logger.info(f"Completed heatmap analysis for {vessel_id}")
         return result

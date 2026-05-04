@@ -10,9 +10,10 @@ from urllib.parse import urlparse
 load_dotenv()
 logger = logging.getLogger(__name__)
 
+from config import settings
+
 # Default database URL
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5432/portsystem")
-DATABASE_URL = DATABASE_URL.replace("@localhost", "@127.0.0.1")
+DATABASE_URL = settings.DATABASE_URL
 
 # Function to ensure the database exists
 def _ensure_database_exists():

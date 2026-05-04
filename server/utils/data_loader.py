@@ -22,16 +22,9 @@ def load_csv(file_bytes: bytes):
     if df.empty:
         raise ValueError("Uploaded CSV is empty")
 
-    required_cols = [
-        "move_complete_time",
-        "time_in",
-        "time_out",
-        "outbound_service",
-        "actual_outbound_carrier_visit_id",
-        "unit_id"
-    ]
+    from config import settings
 
-    missing = [c for c in required_cols if c not in df.columns]
+    missing = [c for c in settings.REQUIRED_COLS if c not in df.columns]
     if missing:
         raise ValueError(f"Missing columns: {missing}")
 
