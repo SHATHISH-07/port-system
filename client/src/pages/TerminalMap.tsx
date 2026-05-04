@@ -17,7 +17,6 @@ import {
 } from "@mui/icons-material";
 import * as THREE from "three";
 
-// Use your actual API wrapper
 import { api } from "../api/api";
 
 // ─── Scale & Coordinate System ────────────────────────────────────────────────
@@ -34,17 +33,17 @@ const TERM_W = 1000;
 const TERM_D = 680;
 const TERM_CX = 480;
 const TERM_CY = 410;
-const EDGE_N = TERM_CY - TERM_D / 2; // 70
-const EDGE_S = TERM_CY + TERM_D / 2; // 750
-const EDGE_E = TERM_CX + TERM_W / 2; // 980
-const EDGE_W = TERM_CX - TERM_W / 2; // -20
+const EDGE_N = TERM_CY - TERM_D / 2;
+const EDGE_S = TERM_CY + TERM_D / 2;
+const EDGE_E = TERM_CX + TERM_W / 2;
+const EDGE_W = TERM_CX - TERM_W / 2;
 const PARK_EDGE_W = -680;
 
-// Trench Constants (Track stops near the crane)
+// Trench Constants
 const TRENCH_Y = -0.15;
 const TRENCH_CY = 490;
-const TRENCH_START_X = PARK_EDGE_W; // -680
-const TRENCH_END_X = 320; // Ends just past the RMG Crane (X=260)
+const TRENCH_START_X = PARK_EDGE_W;
+const TRENCH_END_X = 320;
 
 // Block grid constants
 const BLK_W = 160;
@@ -69,27 +68,31 @@ const BERTHS = [
   { id: "R2", x: EDGE_E + 75, y: 620, rot: 90, defaultShip: { name: "MAERSK MCK" } },
 ];
 
-const CONTAINER_PALETTES = {
-  target: [0x0ea5e9, 0x0284c7, 0x38bdf8, 0x0369a1, 0x7dd3fc],
-  default: [0x8b0000, 0x003366, 0x006400, 0xb8860b, 0x4a4a4a],
-  high: [0xdc2626, 0xef4444, 0xb91c1c, 0xf87171, 0x991b1b],
-  medium: [0xd97706, 0xf59e0b, 0xb45309, 0xfcd34d, 0x92400e],
-  low: [0x059669, 0x10b981, 0x047857, 0x34d399, 0x065f46],
-};
+// Realistic, Industrial Container Colors
+const REALISTIC_CONTAINERS = [
+  0x1e293b,
+  0x0f172a,
+  0xca8a04,
+  0x991b1b,
+  0x0369a1,
+  0x064e3b,
+  0xd97706,
+  0xe2e8f0,
+];
 
 // Shared Materials
 const MAT_WHEEL = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-const MAT_CAB = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.4 });
-const MAT_CHASSIS = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 });
-const MAT_LOCO = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.5 });
-const MAT_GLASS = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.1, metalness: 0.8, transparent: true, opacity: 0.7 });
-const MAT_DARK_GLASS = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1, metalness: 0.9 });
-const MAT_TREE_TRUNK = new THREE.MeshStandardMaterial({ color: 0x4a3b32, roughness: 1.0 });
-const MAT_TREE_LEAVES = new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.9 });
+const MAT_CAB = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.5, metalness: 0.2 });
+const MAT_CHASSIS = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7, metalness: 0.5 });
+const MAT_LOCO = new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.5, metalness: 0.3 });
+const MAT_GLASS = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1, metalness: 0.9, transparent: true, opacity: 0.6 });
+const MAT_DARK_GLASS = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.1, metalness: 1.0 });
+const MAT_TREE_TRUNK = new THREE.MeshStandardMaterial({ color: 0x362c26, roughness: 1.0 });
+const MAT_TREE_LEAVES = new THREE.MeshStandardMaterial({ color: 0x1e3621, roughness: 0.9 });
 
-// Wheel Geometries (Fixed orientation)
-const GEO_WHEEL_Z = new THREE.CylinderGeometry(0.04, 0.04, 0.04, 12).rotateX(Math.PI / 2); // Train wheels roll along X
-const GEO_WHEEL_X = new THREE.CylinderGeometry(0.04, 0.04, 0.04, 12).rotateZ(Math.PI / 2); // Truck wheels roll local Z
+// Wheel Geometries
+const GEO_WHEEL_Z = new THREE.CylinderGeometry(0.04, 0.04, 0.04, 12).rotateX(Math.PI / 2);
+const GEO_WHEEL_X = new THREE.CylinderGeometry(0.04, 0.04, 0.04, 12).rotateZ(Math.PI / 2);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function makeLabel(text: string, fontSize: number, color: string): THREE.Mesh {
@@ -99,7 +102,7 @@ function makeLabel(text: string, fontSize: number, color: string): THREE.Mesh {
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = color;
-  ctx.font = `bold ${fontSize}px 'Roboto Mono', monospace`;
+  ctx.font = `bold ${fontSize}px 'Inter', sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, W / 2, H / 2);
@@ -134,6 +137,48 @@ function makeHeatBlob(colorHex: string, rx: number, rz: number, peakOpacity: num
   return plane;
 }
 
+// ─── Realism Helpers ──────────────────────────────────────────────────────────
+function makePavementTexture(size: number, lineColor: string, bgColor: string): THREE.Texture {
+  const c = document.createElement("canvas");
+  c.width = size; c.height = size;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, size, size);
+  // Subtle grid cracks / panel joints
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1.5;
+  const step = size / 4;
+  for (let i = 0; i <= 4; i++) {
+    ctx.beginPath(); ctx.moveTo(i * step, 0); ctx.lineTo(i * step, size); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i * step); ctx.lineTo(size, i * step); ctx.stroke();
+  }
+  // Noise dots for worn texture
+  ctx.fillStyle = lineColor;
+  for (let i = 0; i < 300; i++) {
+    const x = Math.random() * size, y = Math.random() * size;
+    ctx.fillRect(x, y, 1, 1);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(8, 8);
+  return tex;
+}
+
+function makeFadedText(text: string, color: string, size: number): THREE.Texture {
+  const c = document.createElement("canvas");
+  c.width = 256; c.height = 64;
+  const ctx = c.getContext("2d")!;
+  ctx.clearRect(0, 0, 256, 64);
+  ctx.fillStyle = color;
+  ctx.font = `bold ${size}px monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.globalAlpha = 0.6;
+  ctx.fillText(text, 128, 32);
+  return new THREE.CanvasTexture(c);
+}
+
 // ─── Scene ────────────────────────────────────────────────────────────────────
 class TerminalScene {
   renderer: THREE.WebGLRenderer;
@@ -151,7 +196,6 @@ class TerminalScene {
   train!: THREE.Group;
   trainWheels: THREE.Mesh[] = [];
   truckWheels: THREE.Mesh[] = [];
-  people: { mesh: THREE.Group; origin: THREE.Vector3; angle: number; speed: number }[] = [];
 
   rmg = {
     craneX: to3D(260, TRENCH_CY).x,
@@ -179,12 +223,14 @@ class TerminalScene {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
 
-    const skyColor = 0xbce6ff;
+    const skyColor = 0x7a8fa0;
     this.renderer.setClearColor(skyColor, 1);
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(skyColor, 0.007);
+    this.scene.fog = new THREE.FogExp2(skyColor, 0.004);
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 800);
     this.updateCamera();
@@ -196,7 +242,9 @@ class TerminalScene {
     this.buildDocks();
     this.buildSTSCranes();
     this.buildDefaultShips();
-    this.buildPeople();
+    this.buildYardMarkings();
+    this.buildFuelStation();
+    this.buildGateComplex();
     this.addEvents(canvas);
     this.animate();
   }
@@ -216,39 +264,73 @@ class TerminalScene {
   }
 
   buildLights() {
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0xe0e6ed, 0.8));
-    const sun = new THREE.DirectionalLight(0xfff5e6, 2.2);
-    sun.position.set(30, 55, -30);
+    // Overcast industrial sky - hemisphere
+    this.scene.add(new THREE.HemisphereLight(0xd0e8f5, 0x8fa890, 0.7));
+
+    // Primary sun - slightly warm, raking angle for long shadows
+    const sun = new THREE.DirectionalLight(0xfff5e0, 2.2);
+    sun.position.set(40, 70, -30);
     sun.castShadow = true;
     sun.shadow.mapSize.set(4096, 4096);
-    const d = 45;
+    const d = 50;
     sun.shadow.camera.left = -d; sun.shadow.camera.right = d;
     sun.shadow.camera.top = d; sun.shadow.camera.bottom = -d;
-    sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 150;
-    sun.shadow.bias = -0.0004;
+    sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 180;
+    sun.shadow.bias = -0.0005;
+    sun.shadow.radius = 2;
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xccddff, 0.6);
-    fill.position.set(-20, 25, 30);
+
+    // Cool fill from water side
+    const fill = new THREE.DirectionalLight(0xadd8f0, 0.5);
+    fill.position.set(-30, 20, 40);
     this.scene.add(fill);
+
+    // Ambient bounce from ground
+    const bounce = new THREE.DirectionalLight(0xd4b896, 0.2);
+    bounce.position.set(0, -10, 0);
+    this.scene.add(bounce);
+
+    // Crane floodlights (point lights near STS cranes)
+    [[150, EDGE_N], [550, EDGE_N], [350, EDGE_S]].forEach(([x, y]) => {
+      const pt = new THREE.PointLight(0xfff0cc, 1.5, 12);
+      pt.position.set(to3D(x, y).x, 3.5, to3D(x, y).z);
+      this.scene.add(pt);
+    });
   }
 
   buildWater() {
-    const geo = new THREE.PlaneGeometry(450, 450, 160, 160);
+    const geo = new THREE.PlaneGeometry(500, 500, 200, 200);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x1a75b8, roughness: 0.15, metalness: 0.7,
-      flatShading: true, transparent: true, opacity: 0.90,
+      color: 0x0d1f35,
+      roughness: 0.05,
+      metalness: 0.9,
+      flatShading: true,
+      transparent: true,
+      opacity: 0.97,
     });
     this.waterMesh = new THREE.Mesh(geo, mat);
     this.waterMesh.rotation.x = -Math.PI / 2;
     this.waterMesh.position.y = -0.35;
     this.waterMesh.receiveShadow = true;
     this.scene.add(this.waterMesh);
+
+    // Foam/wake lines along berths
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xd0e8f5, transparent: true, opacity: 0.15 });
+    [EDGE_N, EDGE_S].forEach(y => {
+      const foam = new THREE.Mesh(new THREE.PlaneGeometry(TERM_W * S, 0.5), foamMat);
+      foam.rotation.x = -Math.PI / 2;
+      foam.position.set(to3D(TERM_CX, y).x, -0.32, to3D(TERM_CX, y).z);
+      this.scene.add(foam);
+    });
   }
 
   buildGroundSlabs() {
-    const slabMat = new THREE.MeshStandardMaterial({ color: 0x949ba3, roughness: 0.95 });
-    const surfMat = new THREE.MeshStandardMaterial({ color: 0xb0b8c1, roughness: 0.9 });
-    const greenMat = new THREE.MeshStandardMaterial({ color: 0x4a5d43, roughness: 0.9 });
+    // Textured apron surface
+    const paveTex = makePavementTexture(512, "#3a424e", "#4a5568");
+    const slabMat = new THREE.MeshStandardMaterial({ color: 0x495670, roughness: 0.95, map: paveTex });
+    const surfMat = new THREE.MeshStandardMaterial({ color: 0x5a6580, roughness: 0.88 });
+    const greenMat = new THREE.MeshStandardMaterial({ color: 0x3a4a38, roughness: 1.0 });
+    const concreteMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7 });
 
     const createSlab = (startX: number, endX: number, startY: number, endY: number, material: THREE.Material) => {
       const w = (endX - startX) * S;
@@ -269,102 +351,345 @@ class TerminalScene {
       }
     };
 
-    // East Terminal (Solid, beyond the trench)
     createSlab(TRENCH_END_X, EDGE_E, EDGE_N, EDGE_S, slabMat);
-    // North West Terminal
     createSlab(EDGE_W, TRENCH_END_X, EDGE_N, 470, slabMat);
-    // South West Terminal
     createSlab(EDGE_W, TRENCH_END_X, 510, EDGE_S, slabMat);
-    // North Logistics Park
     createSlab(PARK_EDGE_W, EDGE_W, EDGE_N, 470, greenMat);
-    // South Logistics Park
     createSlab(PARK_EDGE_W, EDGE_W, 510, EDGE_S, greenMat);
 
-    // Trench Floor (Strictly bounded)
     const trenchW = (TRENCH_END_X - TRENCH_START_X) * S;
     const trenchCX = to3D((TRENCH_START_X + TRENCH_END_X) / 2, 0).x;
-    const trenchMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, roughness: 1.0 });
+    const trenchMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1f, roughness: 1.0 });
     const trenchFloor = new THREE.Mesh(new THREE.BoxGeometry(trenchW, 0.1, 40 * S), trenchMat);
     trenchFloor.position.set(trenchCX, TRENCH_Y, to3D(0, TRENCH_CY).z);
     trenchFloor.receiveShadow = true;
     this.scene.add(trenchFloor);
+
+    // Apron edge markings - yellow safety stripes
+    const stripeMat = new THREE.MeshBasicMaterial({ color: 0xf5b800, transparent: true, opacity: 0.7 });
+    const northZ = to3D(TERM_CX, EDGE_N).z;
+    const southZ = to3D(TERM_CX, EDGE_S).z;
+    const eastX = to3D(EDGE_E, TERM_CY).x;
+    const cx3 = to3D(TERM_CX, 0).x;
+
+    [northZ, southZ].forEach(z => {
+      for (let i = 0; i < 20; i++) {
+        const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.8), stripeMat);
+        stripe.rotation.x = -Math.PI / 2;
+        stripe.position.set(cx3 - 12 + i * 1.3, 0.04, z + (z === northZ ? 0.5 : -0.5));
+        this.scene.add(stripe);
+      }
+    });
+    for (let i = 0; i < 15; i++) {
+      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.3), stripeMat);
+      stripe.rotation.x = -Math.PI / 2;
+      stripe.position.set(eastX - 0.5, 0.04, to3D(EDGE_E, EDGE_N + 20).z + i * 1.3);
+      this.scene.add(stripe);
+    }
+
+    // Drain channels along apron edges
+    const drainMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 1.0 });
+    [northZ + 0.6, southZ - 0.6].forEach(z => {
+      const drain = new THREE.Mesh(new THREE.BoxGeometry(TERM_W * S, 0.05, 0.12), drainMat);
+      drain.position.set(cx3, 0.0, z);
+      this.scene.add(drain);
+    });
+
+    // Rubber fender system on quay walls
+    const fenderMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.95, metalness: 0.1 });
+    const fenderSpacing = 1.8;
+    const fenderCount = Math.floor(TERM_W * S / fenderSpacing);
+    [northZ - 0.05, southZ + 0.05].forEach(z => {
+      for (let i = 0; i < fenderCount; i++) {
+        const fender = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.55, 8), fenderMat);
+        fender.rotation.x = Math.PI / 2;
+        fender.position.set(cx3 - (TERM_W * S) / 2 + i * fenderSpacing + 0.9, 0.0, z);
+        fender.castShadow = true;
+        this.scene.add(fender);
+      }
+    });
+
+    // Bollards on quay
+    const bollardMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6, metalness: 0.6 });
+    const bollardGeo = new THREE.CylinderGeometry(0.12, 0.14, 0.55, 8);
+    const bollardCapGeo = new THREE.SphereGeometry(0.14, 8, 6);
+    [[EDGE_N, northZ], [EDGE_S, southZ]].forEach(([, z]) => {
+      for (let i = 0; i < 10; i++) {
+        const bx = cx3 - TERM_W * S / 2 + i * (TERM_W * S / 9);
+        const b = new THREE.Mesh(bollardGeo, bollardMat);
+        b.position.set(bx, 0.27, z as number);
+        b.castShadow = true;
+        this.scene.add(b);
+        const cap = new THREE.Mesh(bollardCapGeo, bollardMat);
+        cap.position.set(bx, 0.58, z as number);
+        this.scene.add(cap);
+      }
+    });
+
+    void concreteMat;
+  }
+
+  buildYardMarkings() {
+    // Bay numbers on pavement and slot lines between block rows
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 });
+    const yellowLineMat = new THREE.MeshBasicMaterial({ color: 0xf5b800, transparent: true, opacity: 0.55 });
+
+    // Container slot lines within each yard block area
+    for (let py = 0; py < 4; py++) {
+      for (let px = 0; px < 5; px++) {
+        const svgX = BLK_START_X + px * (BLK_W + BLK_GAP_X);
+        const svgY = BLK_START_Y + py * (BLK_H + BLK_GAP_Y);
+        const cx = to3D(svgX + BLK_W / 2, 0).x;
+        const cz = to3D(0, svgY + BLK_H / 2).z;
+        const bw = BLK_W * S;
+        const bd = BLK_H * S;
+
+        // Perimeter outline
+        const outline = new THREE.LineLoop(
+          new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-bw / 2, 0, -bd / 2),
+            new THREE.Vector3(bw / 2, 0, -bd / 2),
+            new THREE.Vector3(bw / 2, 0, bd / 2),
+            new THREE.Vector3(-bw / 2, 0, bd / 2),
+          ]),
+          new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12 })
+        );
+        outline.position.set(cx, 0.05, cz);
+        this.scene.add(outline);
+
+        // Slot dividers (7 columns)
+        const slotW = bw / 7;
+        for (let s = 1; s < 7; s++) {
+          const sl = new THREE.Mesh(new THREE.PlaneGeometry(0.015, bd * 0.9), lineMat);
+          sl.rotation.x = -Math.PI / 2;
+          sl.position.set(cx - bw / 2 + s * slotW, 0.05, cz);
+          this.scene.add(sl);
+        }
+      }
+    }
+
+    // Drive lane centre lines (dashed yellow)
+    const hLanes = [150, 330, 650];
+    hLanes.forEach(y => {
+      const lz = to3D(0, y).z;
+      for (let i = 0; i < 40; i++) {
+        const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.06), yellowLineMat);
+        dash.rotation.x = -Math.PI / 2;
+        dash.position.set(to3D(TERM_CX - 400 + i * 26 * S * 38, 0).x, 0.05, lz);
+        this.scene.add(dash);
+      }
+    });
+
+    // APPLIED FADED TEXT: Ground Decals on the main driving lanes for realism
+    const slowTex = makeFadedText("SLOW - 15 KPH", "#f5b800", 30);
+    const slowMat = new THREE.MeshBasicMaterial({
+      map: slowTex, transparent: true, opacity: 0.65, depthWrite: false
+    });
+
+    hLanes.forEach(y => {
+      // Paint 3 staggered warning stencils across the length of the lane
+      for (let i = 0; i < 3; i++) {
+        const slowDecal = new THREE.Mesh(new THREE.PlaneGeometry(120 * S, 30 * S), slowMat);
+        slowDecal.rotation.x = -Math.PI / 2;
+        slowDecal.position.set(to3D(TERM_CX - 250 + (i * 250), 0).x, 0.055, to3D(0, y).z);
+        this.scene.add(slowDecal);
+      }
+    });
+  }
+
+  buildFuelStation() {
+    const pos3 = to3D(-220, 560);
+    const g = new THREE.Group();
+
+    // Canopy
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.6 });
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 1.2), canopyMat);
+    canopy.position.y = 1.6; canopy.castShadow = true; g.add(canopy);
+
+    // Canopy pillars
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5, metalness: 0.4 });
+    [[-0.7, -0.4], [0.7, -0.4], [-0.7, 0.4], [0.7, 0.4]].forEach(([px, pz]) => {
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 6), pillarMat);
+      p.position.set(px, 0.8, pz); p.castShadow = true; g.add(p);
+    });
+
+    // Pumps
+    const pumpMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
+    [-0.3, 0.3].forEach(px => {
+      const pump = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.12), pumpMat);
+      pump.position.set(px, 0.32, 0); pump.castShadow = true; g.add(pump);
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.02), MAT_GLASS);
+      screen.position.set(px, 0.5, 0.07); g.add(screen);
+    });
+
+    // Building
+    const bldg = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.5),
+      new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.8 }));
+    bldg.position.set(0.9, 0.4, 0); bldg.castShadow = true; g.add(bldg);
+
+    g.position.set(pos3.x, 0, pos3.z);
+    this.scene.add(g);
+
+    // Ground stain
+    const stain = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.5, 1.8),
+      new THREE.MeshBasicMaterial({ color: 0x111827, transparent: true, opacity: 0.25 })
+    );
+    stain.rotation.x = -Math.PI / 2;
+    stain.position.set(pos3.x, 0.03, pos3.z);
+    this.scene.add(stain);
+  }
+
+  buildGateComplex() {
+    // Entry/exit gate at west side
+    const pos3 = to3D(EDGE_W - 40, TERM_CY);
+    const g = new THREE.Group();
+
+    const boothMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.7 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
+    const signMat = new THREE.MeshStandardMaterial({ color: 0x065f46, roughness: 0.6 });
+
+    [-0.5, 0.5].forEach(dx => {
+      const booth = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.9, 0.4), boothMat);
+      booth.position.set(dx, 0.45, 0); booth.castShadow = true; g.add(booth);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.44), roofMat);
+      roof.position.set(dx, 0.92, 0); g.add(roof);
+
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 0.04), MAT_GLASS);
+      win.position.set(dx + (dx > 0 ? -0.2 : 0.2), 0.52, 0); g.add(win);
+    });
+
+    // Barrier arm
+    const armMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5 });
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.04, 0.04), armMat);
+    arm.position.set(0.1, 0.7, 0); g.add(arm);
+
+    // Sign
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.25, 0.04), signMat);
+    sign.position.set(0, 1.3, 0); g.add(sign);
+
+    // Overhead gantry
+    const gantryMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.6, metalness: 0.5 });
+    const gantry = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 0.06), gantryMat);
+    gantry.position.set(0, 1.4, 0); g.add(gantry);
+    [-0.8, 0.8].forEach(dx => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), gantryMat);
+      post.position.set(dx, 0.7, 0); g.add(post);
+    });
+
+    // APPLIED FADED TEXT: Gate Checkpoint Signage
+    const gateTex = makeFadedText("GATE ENTRY", "#ffffff", 34);
+    const gateSignMat = new THREE.MeshBasicMaterial({ map: gateTex, transparent: true, opacity: 0.85, depthWrite: false });
+    const gateSign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), gateSignMat);
+    gateSign.position.set(0, 1.4, 0.031); // Place flat against the front of the gantry
+    g.add(gateSign);
+
+    g.position.set(pos3.x, 0, pos3.z);
+    this.scene.add(g);
   }
 
   buildTree(cx: number, cy: number, scale = 1) {
     const group = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * scale, 0.08 * scale, 0.4 * scale, 6), MAT_TREE_TRUNK);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.04 * scale, 0.06 * scale, 0.4 * scale, 6), MAT_TREE_TRUNK);
     trunk.position.set(0, 0.2 * scale, 0); trunk.castShadow = true; group.add(trunk);
-    const l1 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35 * scale), MAT_TREE_LEAVES);
+    const l1 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.25 * scale), MAT_TREE_LEAVES);
     l1.position.set(0, 0.5 * scale, 0); l1.castShadow = true; group.add(l1);
-    const l2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.25 * scale), MAT_TREE_LEAVES);
-    l2.position.set(0, 0.8 * scale, 0); l2.castShadow = true; group.add(l2);
 
     group.position.set(to3D(cx, cy).x, 0, to3D(cx, cy).z);
     group.rotation.y = Math.random() * Math.PI;
     this.scene.add(group);
   }
 
-  buildPeople() {
-    const pColors = [0xef4444, 0x3b82f6, 0x10b981, 0xf59e0b, 0x6366f1, 0xf8fafc, 0x1f2937];
-    for (let i = 0; i < 40; i++) {
-      const person = new THREE.Group();
-      const c = pColors[Math.floor(Math.random() * pColors.length)];
-      const bodyMat = new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
-      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.12), bodyMat);
-      body.position.y = 0.06;
-      const headMat = new THREE.MeshStandardMaterial({ color: 0xffccaa });
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.02), headMat);
-      head.position.y = 0.14;
-      person.add(body, head);
-
-      const startX = to3D(-600 + Math.random() * 600, 0).x;
-      let startZ = to3D(0, 150 + Math.random() * 500).z;
-      if (startZ > to3D(0, 460).z && startZ < to3D(0, 520).z) startZ += 2.0;
-
-      person.position.set(startX, 0.045, startZ);
-      const angle = Math.random() * Math.PI * 2;
-      person.rotation.y = angle;
-
-      this.scene.add(person);
-      this.people.push({ mesh: person, origin: new THREE.Vector3(startX, 0.045, startZ), angle, speed: 0.003 + Math.random() * 0.004 });
-    }
-  }
-
   buildArchitecture() {
     const concreteMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7 });
 
-    const hq = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 3), MAT_DARK_GLASS);
-    hq.position.set(to3D(-300, 200).x, 1.25, to3D(-300, 200).z);
-    hq.castShadow = true; this.scene.add(hq);
-    const hqRoof = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.1, 3.1), concreteMat);
-    hqRoof.position.set(to3D(-300, 200).x, 2.55, to3D(-300, 200).z);
-    this.scene.add(hqRoof);
+    // HQ Building - more detailed
+    const hqGroup = new THREE.Group();
+    const hqBody = new THREE.Mesh(new THREE.BoxGeometry(3, 3.5, 3), MAT_DARK_GLASS);
+    hqBody.position.y = 1.75; hqBody.castShadow = true; hqGroup.add(hqBody);
+    const hqConcrete = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.6 });
+    const hqBase = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.4, 3.4), hqConcrete);
+    hqBase.position.y = 0.2; hqGroup.add(hqBase);
+    const hqRoof = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.15, 3.1), concreteMat);
+    hqRoof.position.y = 3.57; hqGroup.add(hqRoof);
+    // Horizontal dividers (floor lines)
+    [1.1, 2.2, 3.3].forEach(hy => {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(3.05, 0.08, 3.05), concreteMat);
+      band.position.y = hy; hqGroup.add(band);
+    });
+    const hqFlagpole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.5), concreteMat);
+    hqFlagpole.position.set(0.5, 4.35, 0); hqGroup.add(hqFlagpole);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.28),
+      new THREE.MeshBasicMaterial({ color: 0x1d4ed8, side: THREE.DoubleSide }));
+    flag.position.set(0.76, 4.9, 0); hqGroup.add(flag);
+    hqGroup.position.set(to3D(-300, 200).x, 0, to3D(-300, 200).z);
+    this.scene.add(hqGroup);
 
+    // Control Tower - enhanced
     const towerGroup = new THREE.Group();
     const towerBase = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 5, 12), concreteMat);
     towerBase.position.y = 2.5; towerGroup.add(towerBase);
-    const obsDeck = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.4, 0.8, 8), MAT_GLASS);
-    obsDeck.position.y = 5.4; towerGroup.add(obsDeck);
-    const towerRoof = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.1, 8), concreteMat);
-    towerRoof.position.y = 5.85; towerGroup.add(towerRoof);
-    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.5), MAT_WHEEL);
-    antenna.position.y = 6.6; towerGroup.add(antenna);
+    // Elevator shaft
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.18, 5, 0.18), concreteMat);
+    shaft.position.set(0.38, 2.5, 0); towerGroup.add(shaft);
+    const obsDeck = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.4, 0.9, 8), MAT_GLASS);
+    obsDeck.position.y = 5.45; towerGroup.add(obsDeck);
+    const towerRoof = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.75, 0.12, 8), concreteMat);
+    towerRoof.position.y = 5.95; towerGroup.add(towerRoof);
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.8), MAT_WHEEL);
+    antenna.position.y = 6.8; towerGroup.add(antenna);
+    // Radar dish
+    const dish = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 4, 0, Math.PI),
+      new THREE.MeshStandardMaterial({ color: 0xb0bec5, roughness: 0.4, metalness: 0.6 }));
+    dish.position.set(0.25, 6.5, 0); dish.rotation.x = -Math.PI / 4; towerGroup.add(dish);
     towerGroup.position.set(to3D(-150, 300).x, 0, to3D(-150, 300).z);
     this.scene.add(towerGroup);
 
-    const whMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.9 });
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.8 });
-    [320, 580].forEach(y => {
+    // Warehouses - enhanced with loading docks
+    const whMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.85 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.75 });
+    const doorMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 });
+
+    [320, 580].forEach((y, i) => {
       const wh = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.BoxGeometry(5, 1.5, 2.5), whMat);
-      body.position.y = 0.75; body.castShadow = true; wh.add(body);
-      const roofGeo = new THREE.ConeGeometry(3, 1, 4).rotateY(Math.PI / 4);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(5.5, 1.8, 3.0), whMat);
+      body.position.y = 0.9; body.castShadow = true; body.receiveShadow = true; wh.add(body);
+
+      // Pitched roof
+      const roofGeo = new THREE.CylinderGeometry(0, 3.2, 0.9, 2, 1).rotateY(Math.PI / 2);
       const roof = new THREE.Mesh(roofGeo, roofMat);
-      roof.scale.set(1.2, 0.6, 0.65); roof.position.y = 1.8; wh.add(roof);
+      roof.scale.set(1.0, 1.0, 0.6); roof.position.y = 2.25; wh.add(roof);
+
+      // Loading dock doors
+      [-1.5, -0.4, 0.7].forEach(dx => {
+        const door = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.05), doorMat);
+        door.position.set(dx, 0.55, 1.53); wh.add(door);
+        // Dock leveller
+        const dock = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.04, 0.4),
+          new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.9 }));
+        dock.position.set(dx, 0.12, 1.72); wh.add(dock);
+      });
+
+      // Signage stripe
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.2, 0.02),
+        new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 }));
+      stripe.position.set(0, 1.5, 1.52); wh.add(stripe);
+
+      // APPLIED FADED TEXT: Warehouse painted wall signage
+      const whSignTex = makeFadedText(`WAREHOUSE ${i + 1}`, "#334155", 38);
+      const whSignMat = new THREE.MeshBasicMaterial({ map: whSignTex, transparent: true, opacity: 0.65, depthWrite: false });
+      const whSign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.9), whSignMat);
+      whSign.position.set(0, 1.25, 1.501); // Just above the blue stripe, slightly off wall to prevent z-fighting
+      wh.add(whSign);
+
       wh.position.set(to3D(-350, y).x, 0, to3D(-350, y).z);
       this.scene.add(wh);
+
+      // Parked RTG near warehouse
+      this.buildParkedRTG(to3D(-280, y).x, to3D(-280, y).z);
     });
 
+    // Trees
     for (let i = 0; i < 45; i++) {
       const rx = -100 - Math.random() * 500;
       const ry = 100 + Math.random() * 600;
@@ -372,8 +697,8 @@ class TerminalScene {
       this.buildTree(rx, ry, 1.5 + Math.random() * 1.5);
     }
 
-    // ROADS & BRIDGES
-    const roadMat = new THREE.MeshStandardMaterial({ color: 0x33383d, roughness: 0.8 });
+    // Roads
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x1e2332, roughness: 0.85 });
     const vRoads = [60, 260, 460, 660, 860];
     const hRoads = [150, 330, 650];
 
@@ -390,7 +715,7 @@ class TerminalScene {
         const rS = new THREE.Mesh(new THREE.BoxGeometry(40 * S, 0.02, 240 * S), roadMat);
         rS.position.set(to3D(x, 630).x, 0.045, to3D(x, 630).z); this.scene.add(rS);
 
-        const bridge = new THREE.Mesh(new THREE.BoxGeometry(40 * S, 0.1, 40 * S), roadMat);
+        const bridge = new THREE.Mesh(new THREE.BoxGeometry(40 * S, 0.12, 40 * S), roadMat);
         bridge.position.set(to3D(x, TRENCH_CY).x, 0.0, to3D(x, TRENCH_CY).z);
         bridge.castShadow = true; bridge.receiveShadow = true; this.scene.add(bridge);
 
@@ -407,19 +732,18 @@ class TerminalScene {
       }
     });
 
-    // RAILWAY IN THE TRENCH (Bounded geometry)
     const railZ = to3D(0, TRENCH_CY).z;
     const trenchWStr = (TRENCH_END_X - TRENCH_START_X) * S;
     const trenchCXStr = to3D((TRENCH_START_X + TRENCH_END_X) / 2, 0).x;
 
     const ballast = new THREE.Mesh(
       new THREE.BoxGeometry(trenchWStr, 0.08, 20 * S),
-      new THREE.MeshStandardMaterial({ color: 0x5a5a60, roughness: 0.9 })
+      new THREE.MeshStandardMaterial({ color: 0x3f3f46, roughness: 0.9 })
     );
     ballast.position.set(trenchCXStr, TRENCH_Y + 0.04, railZ);
     this.scene.add(ballast);
 
-    const matSleeper = new THREE.MeshStandardMaterial({ color: 0x4a3b32 });
+    const matSleeper = new THREE.MeshStandardMaterial({ color: 0x292524 });
     const startSleeperX = to3D(TRENCH_START_X, 0).x;
     const endSleeperX = to3D(TRENCH_END_X, 0).x;
     const sleeperCount = Math.floor((endSleeperX - startSleeperX) / 0.2);
@@ -430,7 +754,7 @@ class TerminalScene {
       this.scene.add(sleeper);
     }
 
-    const railMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.7, roughness: 0.4 });
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, metalness: 0.8, roughness: 0.3 });
     const r1 = new THREE.Mesh(new THREE.BoxGeometry(trenchWStr, 0.04, 2 * S), railMat);
     r1.position.set(trenchCXStr, TRENCH_Y + 0.12, railZ - 0.15); this.scene.add(r1);
     const r2 = r1.clone();
@@ -441,7 +765,29 @@ class TerminalScene {
     this.buildTrucks();
   }
 
-  createWheel(x: number, y: number, z: number, group: THREE.Group, type: "train" | "truck", rad = 0.05) {
+  // Parked RTG crane (static, for atmosphere)
+  buildParkedRTG(x: number, z: number) {
+    const g = new THREE.Group();
+    const steel = new THREE.MeshStandardMaterial({ color: 0xb0bec5, roughness: 0.5, metalness: 0.5 });
+    const accent = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4 });
+
+    [-0.4, 0.4].forEach(dz => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.2, 0.08), steel);
+      leg.position.set(0, 0.6, dz); leg.castShadow = true; g.add(leg);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 0.18), accent);
+      foot.position.set(0, 0.03, dz); g.add(foot);
+    });
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 1.0), steel);
+    bridge.position.y = 1.2; g.add(bridge);
+    const trolley = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.08, 0.3), accent);
+    trolley.position.set(0, 1.3, 0); g.add(trolley);
+
+    g.position.set(x, 0, z);
+    this.scene.add(g);
+  }
+
+  // FIX: Removed unused `rad` parameter
+  createWheel(x: number, y: number, z: number, group: THREE.Group, type: "train" | "truck") {
     const geo = type === "train" ? GEO_WHEEL_Z : GEO_WHEEL_X;
     const wheel = new THREE.Mesh(geo, MAT_WHEEL);
     wheel.position.set(x, y, z);
@@ -467,10 +813,10 @@ class TerminalScene {
     exhaust.position.set(-0.2, 0.35, 0); locoGroup.add(exhaust);
 
     [-0.3, 0.3].forEach(wx => {
-      this.createWheel(wx + 0.1, 0.05, 0.15, locoGroup, "train", 0.06);
-      this.createWheel(wx - 0.1, 0.05, 0.15, locoGroup, "train", 0.06);
-      this.createWheel(wx + 0.1, 0.05, -0.15, locoGroup, "train", 0.06);
-      this.createWheel(wx - 0.1, 0.05, -0.15, locoGroup, "train", 0.06);
+      this.createWheel(wx + 0.1, 0.05, 0.15, locoGroup, "train");
+      this.createWheel(wx - 0.1, 0.05, 0.15, locoGroup, "train");
+      this.createWheel(wx + 0.1, 0.05, -0.15, locoGroup, "train");
+      this.createWheel(wx - 0.1, 0.05, -0.15, locoGroup, "train");
     });
 
     locoGroup.position.set(0.8, 0, 0);
@@ -482,16 +828,17 @@ class TerminalScene {
       bed.position.set(0, 0.1, 0); carGroup.add(bed);
 
       [-0.22, 0.22].forEach(wx => {
-        this.createWheel(wx + 0.08, 0.05, 0.15, carGroup, "train", 0.05);
-        this.createWheel(wx - 0.08, 0.05, 0.15, carGroup, "train", 0.05);
-        this.createWheel(wx + 0.08, 0.05, -0.15, carGroup, "train", 0.05);
-        this.createWheel(wx - 0.08, 0.05, -0.15, carGroup, "train", 0.05);
+        this.createWheel(wx + 0.08, 0.05, 0.15, carGroup, "train");
+        this.createWheel(wx - 0.08, 0.05, 0.15, carGroup, "train");
+        this.createWheel(wx + 0.08, 0.05, -0.15, carGroup, "train");
+        this.createWheel(wx - 0.08, 0.05, -0.15, carGroup, "train");
       });
 
       if (i !== 1 && Math.random() > 0.2) {
+        const contColor = REALISTIC_CONTAINERS[i % REALISTIC_CONTAINERS.length];
         const cont = new THREE.Mesh(
           new THREE.BoxGeometry(0.60, 0.22, 0.23),
-          new THREE.MeshStandardMaterial({ color: CONTAINER_PALETTES.target[i % 5], roughness: 0.7 })
+          new THREE.MeshStandardMaterial({ color: contColor, roughness: 0.7 })
         );
         cont.position.set(0, 0.23, 0);
         carGroup.add(cont);
@@ -501,7 +848,7 @@ class TerminalScene {
     }
 
     const startX = to3D(TRENCH_START_X + 100, 0).x;
-    const craneAlignTargetX = this.rmg.craneX + 0.7; // Aligns flatcar i=1 perfectly
+    const craneAlignTargetX = this.rmg.craneX + 0.7;
 
     train.position.set(startX, trainY, zPos);
     train.userData = {
@@ -517,8 +864,8 @@ class TerminalScene {
 
   buildRMGCrane(xPos: number) {
     const craneGroup = new THREE.Group();
-    const steel = new THREE.MeshStandardMaterial({ color: 0xca8a04, roughness: 0.5, metalness: 0.4 });
-    const darkSteel = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 });
+    const steel = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.5, metalness: 0.6 });
+    const darkSteel = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7, metalness: 0.4 });
 
     const z1 = to3D(0, 450).z;
     const z2 = to3D(0, 530).z;
@@ -546,7 +893,7 @@ class TerminalScene {
 
     this.rmg.heldContainer = new THREE.Mesh(
       new THREE.BoxGeometry(0.60, 0.22, 0.23),
-      new THREE.MeshStandardMaterial({ color: CONTAINER_PALETTES.high[0] })
+      new THREE.MeshStandardMaterial({ color: REALISTIC_CONTAINERS[0] })
     );
     this.rmg.heldContainer.position.set(0, -0.15, 0);
     this.rmg.heldContainer.visible = false;
@@ -596,9 +943,10 @@ class TerminalScene {
       });
 
       if (Math.random() > 0.2) {
+        const contColor = REALISTIC_CONTAINERS[i % REALISTIC_CONTAINERS.length];
         const cont = new THREE.Mesh(
           new THREE.BoxGeometry(0.16, 0.22, 0.48),
-          new THREE.MeshStandardMaterial({ color: CONTAINER_PALETTES.target[i % 5], roughness: 0.6 })
+          new THREE.MeshStandardMaterial({ color: contColor, roughness: 0.6 })
         );
         cont.position.set(0, 0.21, -0.28);
         trailer.add(cont);
@@ -620,25 +968,26 @@ class TerminalScene {
   }
 
   buildDocks() {
-    const qMat = new THREE.MeshStandardMaterial({ color: 0x8a929a, roughness: 0.9 });
+    const qMat = new THREE.MeshStandardMaterial({ color: 0x7a8799, roughness: 0.85, metalness: 0.15 });
     const c = to3D(TERM_CX, TERM_CY);
 
-    const nw = new THREE.Mesh(new THREE.BoxGeometry(TERM_W * S + 1.2, 0.5, 1.0), qMat);
-    nw.position.set(c.x, 0.15, to3D(TERM_CX, EDGE_N).z - 0.5);
+    const nw = new THREE.Mesh(new THREE.BoxGeometry(TERM_W * S + 1.2, 0.55, 1.0), qMat);
+    nw.position.set(c.x, 0.17, to3D(TERM_CX, EDGE_N).z - 0.5);
     nw.castShadow = true; nw.receiveShadow = true;
     this.scene.add(nw);
 
     const sw = nw.clone();
-    sw.position.set(c.x, 0.15, to3D(TERM_CX, EDGE_S).z + 0.5);
+    sw.position.set(c.x, 0.17, to3D(TERM_CX, EDGE_S).z + 0.5);
     this.scene.add(sw);
 
-    const ew = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, TERM_D * S + 1.2), qMat);
-    ew.position.set(to3D(EDGE_E, TERM_CY).x + 0.5, 0.15, c.z);
+    const ew = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.55, TERM_D * S + 1.2), qMat);
+    ew.position.set(to3D(EDGE_E, TERM_CY).x + 0.5, 0.17, c.z);
     ew.castShadow = true; ew.receiveShadow = true;
     this.scene.add(ew);
 
+    // Mooring cleats
     const bGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 8);
-    const bMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.7, metalness: 0.2 });
+    const bMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6, metalness: 0.6 });
     const northZ = to3D(TERM_CX, EDGE_N).z - 0.9;
     const southZ = to3D(TERM_CX, EDGE_S).z + 0.9;
     const eastX = to3D(EDGE_E, TERM_CY).x + 0.9;
@@ -653,30 +1002,110 @@ class TerminalScene {
       const b = new THREE.Mesh(bGeo, bMat);
       b.position.set(eastX, 0.4, z); b.castShadow = true; this.scene.add(b);
     });
+
+    // Navigation lights on dock corners
+    const navLightMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+    [[c.x - TERM_W * S / 2, northZ], [c.x + TERM_W * S / 2, northZ],
+    [c.x - TERM_W * S / 2, southZ], [c.x + TERM_W * S / 2, southZ]].forEach(([lx, lz]) => {
+      const navLight = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), navLightMat);
+      navLight.position.set(lx as number, 0.8, lz as number);
+      this.scene.add(navLight);
+      const glow = new THREE.PointLight(0xff4400, 1.5, 3);
+      glow.position.set(lx as number, 0.8, lz as number);
+      this.scene.add(glow);
+    });
+
+    // Ladders on quay face
+    const ladderMat = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.7, metalness: 0.4 });
+    [-10, -5, 0, 5].forEach(lx => {
+      for (let r = 0; r < 4; r++) {
+        const rung = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.02, 0.02), ladderMat);
+        rung.position.set(lx, 0.35 - r * 0.12, northZ - 0.02);
+        this.scene.add(rung);
+      }
+    });
   }
 
   buildSTSCrane(svgX: number, svgY: number, rotDeg: number) {
     const pos = to3D(svgX, svgY);
     const g = new THREE.Group();
-    const steel = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.6 });
-    const boomMt = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4, metalness: 0.2 });
-    const cabMt = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+    const steel = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5, metalness: 0.55 });
+    const boomMt = new THREE.MeshStandardMaterial({ color: 0x1a56c4, roughness: 0.35, metalness: 0.4 });
+    const cabMt = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.3, metalness: 0.2 });
+    const accentMt = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4 });
 
-    [-0.38, 0.24].forEach(dx => {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.2, 0.18), steel);
-      leg.position.set(dx, 1.1, 0); leg.castShadow = true; g.add(leg);
+    // Rail bogies
+    [-0.55, 0.55].forEach(dz => {
+      const bogie = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.18), steel);
+      bogie.position.set(0, 0.05, dz); bogie.castShadow = true; g.add(bogie);
+      const wheel1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.06, 8).rotateX(Math.PI / 2), MAT_WHEEL);
+      wheel1.position.set(-0.2, 0.05, dz); g.add(wheel1);
+      const wheel2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.06, 8).rotateX(Math.PI / 2), MAT_WHEEL);
+      wheel2.position.set(0.2, 0.05, dz); g.add(wheel2);
     });
-    const xb = new THREE.Mesh(new THREE.BoxGeometry(0.80, 0.12, 0.18), steel);
-    xb.position.set(-0.07, 0.6, 0); g.add(xb);
-    const mast = new THREE.Mesh(new THREE.BoxGeometry(0.12, 4.0, 0.12), boomMt);
-    mast.position.set(-0.07, 3.1, 0); mast.castShadow = true; g.add(mast);
-    const jibL = 6.2;
-    const jib = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, jibL), boomMt);
-    jib.position.set(-0.07, 4.4, -jibL / 2 + 0.5); jib.castShadow = true; g.add(jib);
-    const bs = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 2.2), boomMt);
-    bs.position.set(-0.07, 4.4, 1.8); g.add(bs);
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.32, 0.45), cabMt);
-    cab.position.set(-0.07, 4.1, -0.65); g.add(cab);
+
+    // Legs - A-frame style
+    [-0.38, 0.24].forEach(dx => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.4, 0.16), steel);
+      leg.position.set(dx, 1.3, 0); leg.castShadow = true; g.add(leg);
+    });
+
+    // Cross bracing
+    const brace1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.65), steel);
+    brace1.position.set(-0.07, 1.0, 0); g.add(brace1);
+    const brace2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.65), steel);
+    brace2.position.set(-0.07, 1.8, 0); g.add(brace2);
+
+    // Spreader beam (A-frame top)
+    const xb = new THREE.Mesh(new THREE.BoxGeometry(0.80, 0.14, 0.14), steel);
+    xb.position.set(-0.07, 0.65, 0); g.add(xb);
+
+    // Mast
+    const mast = new THREE.Mesh(new THREE.BoxGeometry(0.14, 4.2, 0.14), boomMt);
+    mast.position.set(-0.07, 3.3, 0); mast.castShadow = true; g.add(mast);
+
+    // Boom - larger
+    const jibL = 6.8;
+    const jib = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, jibL), boomMt);
+    jib.position.set(-0.07, 4.5, -jibL / 2 + 0.6); jib.castShadow = true; g.add(jib);
+
+    // Back mast
+    const bs = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.5), boomMt);
+    bs.position.set(-0.07, 4.5, 2.0); g.add(bs);
+
+    // Stay cables (simplified as thin boxes)
+    [[-0.07, 4.5, -jibL + 0.6], [-0.07, 4.5, 2.4]].forEach(([, , bz]) => {
+      const cable = new THREE.Mesh(new THREE.BoxGeometry(0.015, 2.0, 0.015),
+        new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.5, metalness: 0.8 }));
+      cable.position.set(-0.07, 5.5, bz); cable.rotation.x = bz < 0 ? 0.4 : -0.4; g.add(cable);
+    });
+
+    // Operator cab
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.5), cabMt);
+    cab.position.set(-0.07, 4.2, -0.7); g.add(cab);
+    const cabWin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, 0.02), MAT_GLASS);
+    cabWin.position.set(-0.07, 4.22, -0.96); g.add(cabWin);
+
+    // Machinery house (top)
+    const mhouse = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.4, 0.45), steel);
+    mhouse.position.set(-0.07, 5.4, 0.8); g.add(mhouse);
+
+    // Warning stripe on boom
+    const stripes = [0xf59e0b, 0x1a56c4, 0xf59e0b];
+    stripes.forEach((col, si) => {
+      const s = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.105, 0.4),
+        new THREE.MeshStandardMaterial({ color: col, roughness: 0.4 }));
+      s.position.set(-0.07, 4.5, -1.5 - si * 0.42); g.add(s);
+    });
+
+    // Floodlights on boom tip
+    const floodMat = new THREE.MeshBasicMaterial({ color: 0xfffde7 });
+    const flood = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.08), floodMat);
+    flood.position.set(-0.07, 4.4, -jibL + 0.8); g.add(flood);
+
+    // Accent color on lower frame
+    const accentBar = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.06, 0.06), accentMt);
+    accentBar.position.set(-0.07, 0.15, 0); g.add(accentBar);
 
     g.position.set(pos.x, 0, pos.z);
     g.rotation.y = THREE.MathUtils.degToRad(-rotDeg);
@@ -689,23 +1118,41 @@ class TerminalScene {
     [200, 400, 600].forEach(cy => this.buildSTSCrane(EDGE_E, cy, -90));
   }
 
+  // FIX: Removed unused `containerData` parameter
   buildShip(
     id: string, svgX: number, svgY: number, rotDeg: number,
-    name: string, isTarget: boolean,
-    containerData?: { count: number; concentration: string }
+    name: string, isTarget: boolean
   ) {
     const g = new THREE.Group();
     const pos = to3D(svgX, svgY);
     const L = SHIP_LEN, W = SHIP_WID, DR = SHIP_DRAFT;
 
-    const hullColor = isTarget ? 0x1d4ed8 : 0x7f1d1d;
+    const hullColor = isTarget ? 0x1e3a8a : 0x451a03;
     const hullMat = new THREE.MeshStandardMaterial({
-      color: hullColor, roughness: 0.7, metalness: 0.2,
+      color: hullColor, roughness: 0.55, metalness: 0.45,
     });
+    const upperHullMat = new THREE.MeshStandardMaterial({
+      color: isTarget ? 0x1e40af : 0x5a1a04, roughness: 0.5, metalness: 0.3,
+    });
+
+    // Waterline stripe (anti-fouling red/copper)
+    const wlColor = isTarget ? 0xb91c1c : 0x7f1d1d;
+    const wl = new THREE.Mesh(new THREE.BoxGeometry(L + 0.05, DR * 0.3, W + 0.05),
+      new THREE.MeshStandardMaterial({ color: wlColor, roughness: 0.7 }));
+    wl.position.y = -DR * 0.22; g.add(wl);
 
     const hull = new THREE.Mesh(new THREE.BoxGeometry(L, DR, W), hullMat);
     hull.position.y = 0; hull.castShadow = true; g.add(hull);
 
+    // Visible hull plating lines
+    for (let i = 0; i < 5; i++) {
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(L + 0.01, 0.015, W + 0.01),
+        new THREE.MeshStandardMaterial({ color: hullColor === 0x1e3a8a ? 0x1e3580 : 0x3d1503, roughness: 0.8 }));
+      plate.position.y = -DR / 2 + (i + 1) * (DR / 6);
+      g.add(plate);
+    }
+
+    // Bow - improved shape
     const bV = new Float32Array([
       L / 2, DR / 2, -W / 2, L / 2, DR / 2, W / 2, L / 2 + 0.9, DR / 2, 0,
       L / 2, -DR / 2, -W / 2, L / 2, -DR / 2, W / 2, L / 2 + 0.9, -DR / 2, 0,
@@ -717,20 +1164,23 @@ class TerminalScene {
     const bow = new THREE.Mesh(bGeo, hullMat);
     bow.castShadow = true; g.add(bow);
 
+    // Deck
     const deck = new THREE.Mesh(
-      new THREE.BoxGeometry(L * 0.94, 0.05, W * 0.88),
-      new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 })
+      new THREE.BoxGeometry(L * 0.94, 0.06, W * 0.88),
+      new THREE.MeshStandardMaterial({ color: 0x1a2232, roughness: 0.92, metalness: 0.1 })
     );
-    deck.position.y = DR / 2 + 0.025; g.add(deck);
+    deck.position.y = DR / 2 + 0.03; g.add(deck);
 
-    let palette = isTarget ? CONTAINER_PALETTES.target : CONTAINER_PALETTES.default;
-    if (isTarget && containerData) {
-      const conc = containerData.concentration;
-      if (conc === "High") palette = CONTAINER_PALETTES.high;
-      if (conc === "Medium") palette = CONTAINER_PALETTES.medium;
-      if (conc === "Low") palette = CONTAINER_PALETTES.low;
+    // Hatch covers
+    const hatchMat = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.8 });
+    for (let h = 0; h < 5; h++) {
+      const hatch = new THREE.Mesh(new THREE.BoxGeometry(L * 0.13, 0.04, W * 0.75),
+        hatchMat);
+      hatch.position.set(-L * 0.38 + h * L * 0.19, DR / 2 + 0.06, 0);
+      g.add(hatch);
     }
 
+    // Container stacks
     const COLS = 13, ROWS = 3;
     const cW = (L * 0.72) / COLS;
     const cD = (W * 0.80) / ROWS;
@@ -738,32 +1188,66 @@ class TerminalScene {
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const stackH = 0.14 + (Math.sin((c / COLS) * Math.PI) * 0.20) + Math.random() * 0.08;
+        const contColor = REALISTIC_CONTAINERS[(r * COLS + c) % REALISTIC_CONTAINERS.length];
         const cm = new THREE.Mesh(
           new THREE.BoxGeometry(cW * 0.88, stackH, cD * 0.88),
-          new THREE.MeshStandardMaterial({ color: palette[(r * COLS + c) % palette.length], roughness: 0.60 })
+          new THREE.MeshStandardMaterial({ color: contColor, roughness: 0.65 })
         );
-        cm.position.set(-L * 0.34 + c * cW + cW / 2, DR / 2 + stackH / 2 + 0.02, -W * 0.38 + r * cD + cD / 2);
+        cm.position.set(-L * 0.34 + c * cW + cW / 2, DR / 2 + stackH / 2 + 0.07, -W * 0.38 + r * cD + cD / 2);
         cm.castShadow = true; g.add(cm);
       }
     }
 
-    const bridgeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55 });
-    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.9, W * 0.78), bridgeMat);
-    bridge.position.set(-L * 0.38, DR / 2 + 0.45, 0);
-    bridge.castShadow = true; g.add(bridge);
+    // Superstructure (bridge/accommodation)
+    const superMat = new THREE.MeshStandardMaterial({ color: 0xf0f4f8, roughness: 0.5, metalness: 0.1 });
+    const super1 = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.1, W * 0.78), superMat);
+    super1.position.set(-L * 0.39, DR / 2 + 0.55, 0);
+    super1.castShadow = true; g.add(super1);
+    // Bridge wings
+    [-W * 0.44, W * 0.44].forEach(wz => {
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.3), superMat);
+      wing.position.set(-L * 0.39, DR / 2 + 0.95, wz); g.add(wing);
+    });
+    // Windows on superstructure
+    const winMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1, metalness: 0.9, transparent: true, opacity: 0.7 });
+    for (let fl = 0; fl < 3; fl++) {
+      for (let w2 = 0; w2 < 4; w2++) {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.07, 0.1), winMat);
+        win.position.set(-L * 0.39 - 0.43, DR / 2 + 0.25 + fl * 0.3, -W * 0.28 + w2 * 0.2);
+        g.add(win);
+      }
+    }
+
+    // Funnel / chimney
+    const funnelColor = isTarget ? 0x1d4ed8 : 0x7f1d1d;
+    const funnel = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.5, 8),
+      new THREE.MeshStandardMaterial({ color: funnelColor, roughness: 0.5 }));
+    funnel.position.set(-L * 0.42, DR / 2 + 1.35, 0);
+    funnel.castShadow = true; g.add(funnel);
+
+    // Masts with radar
+    const mastMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.4, metalness: 0.6 });
+    [L * 0.3, -L * 0.15].forEach(mx => {
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.7, 6), mastMat);
+      mast.position.set(mx, DR / 2 + 0.7, 0);
+      g.add(mast);
+    });
+
+    // Mooring ropes (simplified)
+    void upperHullMat;
 
     if (isTarget) {
       const ringR = Math.max(L, W) * 0.62;
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(ringR, ringR + 0.12, 72),
-        new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = -0.18;
       g.add(ring);
     }
 
-    const labelColor = isTarget ? "#0284c7" : "#475569";
+    const labelColor = isTarget ? "#38bdf8" : "#94a3b8";
     const label = makeLabel(name.toUpperCase(), 30, labelColor);
     label.position.set(0, DR / 2 + 2.4, 0);
     label.rotation.x = -Math.PI / 7;
@@ -772,6 +1256,12 @@ class TerminalScene {
     g.position.set(pos.x, 0, pos.z);
     g.rotation.y = THREE.MathUtils.degToRad(-rotDeg);
     g.userData = { type: "ship", id, bobOffset: Math.random() * Math.PI * 2 };
+
+    // Vessel name on hull
+    const hullLabel = makeLabel(name, 18, "#aab8c8");
+    hullLabel.position.set(L * 0.1, 0, W / 2 + 0.01);
+    hullLabel.rotation.y = -Math.PI / 2;
+    g.add(hullLabel);
 
     this.scene.add(g);
     this.shipMeshes.set(id, g);
@@ -815,7 +1305,7 @@ class TerminalScene {
       const bd = BLK_H * S;
       const g = new THREE.Group();
 
-      const padColor = isMax ? 0xfecaca : isRec ? 0xe0f2fe : hasData ? 0xe2e8f0 : 0x9ca3af;
+      const padColor = isMax ? 0xfecaca : isRec ? 0xe0f2fe : hasData ? 0xe2e8f0 : 0x94a3b8;
       const pad = new THREE.Mesh(
         new THREE.BoxGeometry(bw, 0.12, bd),
         new THREE.MeshStandardMaterial({ color: padColor, roughness: 0.92 })
@@ -827,10 +1317,6 @@ class TerminalScene {
         heatGroups.push({ cx: wp.x, cz: wp.z, bw, bd, conc, isMax });
         const count = Math.min(blk.count, 60);
         const COLS = 7;
-        const palette = isMax ? CONTAINER_PALETTES.high
-          : conc === "High" ? CONTAINER_PALETTES.medium
-            : conc === "Medium" ? CONTAINER_PALETTES.low
-              : CONTAINER_PALETTES.default;
 
         const cubeSize = bw * 0.11;
         const dummy = new THREE.Object3D();
@@ -853,7 +1339,7 @@ class TerminalScene {
           );
           dummy.updateMatrix();
           iMesh.setMatrixAt(i, dummy.matrix);
-          iMesh.setColorAt(i, new THREE.Color(palette[i % palette.length]));
+          iMesh.setColorAt(i, new THREE.Color(REALISTIC_CONTAINERS[Math.floor(Math.random() * REALISTIC_CONTAINERS.length)]));
         }
         iMesh.instanceMatrix.needsUpdate = true;
         g.add(iMesh);
@@ -907,7 +1393,7 @@ class TerminalScene {
           posArr[i * 3 + 2] = cz + (Math.random() - 0.5) * bd * 2.0;
         }
         const pts = new THREE.Points(
-          (() => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(posArr, 3)); return g; })(),
+          (() => { const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.BufferAttribute(posArr, 3)); return gg; })(),
           new THREE.PointsMaterial({
             color: new THREE.Color(col), size: 0.14, transparent: true, opacity: 0.85,
             sizeAttenuation: true, depthWrite: false, blending: THREE.NormalBlending,
@@ -920,13 +1406,15 @@ class TerminalScene {
     });
 
     BERTHS.forEach(b => {
-      const g = this.shipMeshes.get(b.id);
-      if (g) { this.scene.remove(g); this.shipMeshes.delete(b.id); }
+      const gg = this.shipMeshes.get(b.id);
+      if (gg) { this.scene.remove(gg); this.shipMeshes.delete(b.id); }
     });
     BERTHS.forEach(b => {
       const isTarget = b.id === targetBerthId;
-      this.buildShip(b.id, b.x, b.y, b.rot, isTarget ? data.vessel : b.defaultShip.name, isTarget, isTarget ? maxBlockData : undefined);
+      this.buildShip(b.id, b.x, b.y, b.rot, isTarget ? data.vessel : b.defaultShip.name, isTarget);
     });
+
+    void maxBlockData;
   }
 
   checkHover() {
@@ -985,17 +1473,6 @@ class TerminalScene {
       pos.needsUpdate = true;
     });
 
-    this.people.forEach(p => {
-      const dir = new THREE.Vector3(Math.sin(p.angle), 0, Math.cos(p.angle));
-      p.mesh.position.addScaledVector(dir, p.speed);
-      p.mesh.children[0].position.y = 0.06 + Math.sin(t * 15 * (p.speed / 0.005)) * 0.006;
-      if (p.mesh.position.distanceTo(p.origin) > 3.0) {
-        p.angle += Math.PI + (Math.random() - 0.5);
-        p.mesh.rotation.y = p.angle;
-        p.origin.copy(p.mesh.position);
-      }
-    });
-
     this.trucks.forEach(truck => {
       const target = truck.path[truck.targetIdx];
       const dist = truck.mesh.position.distanceTo(target);
@@ -1008,10 +1485,9 @@ class TerminalScene {
       truck.mesh.lookAt(lookPos);
     });
 
-    // ─── TRAIN LOGIC & CRANE ANIMATION ───
     if (this.train.userData.state === 'INBOUND') {
       this.train.position.x += this.train.userData.speed;
-      this.trainWheels.forEach(w => w.rotation.z -= this.train.userData.speed * 5); // Train wheels spin forward
+      this.trainWheels.forEach(w => w.rotation.z -= this.train.userData.speed * 5);
 
       if (this.train.position.x >= this.train.userData.targetX) {
         this.train.position.x = this.train.userData.targetX;
@@ -1024,7 +1500,6 @@ class TerminalScene {
         this.train.userData.state = 'OUTBOUND';
         this.rmg.heldContainer.visible = false;
       } else {
-        // RMG Crane Loop
         const cycleLength = 10;
         const localT = elapsed % cycleLength;
         const progress = localT / cycleLength;
@@ -1054,14 +1529,13 @@ class TerminalScene {
       }
     } else if (this.train.userData.state === 'OUTBOUND') {
       this.train.position.x -= this.train.userData.speed;
-      this.trainWheels.forEach(w => w.rotation.z += this.train.userData.speed * 5); // Train wheels spin backward
+      this.trainWheels.forEach(w => w.rotation.z += this.train.userData.speed * 5);
 
       if (this.train.position.x <= this.train.userData.startX) {
         this.train.userData.state = 'INBOUND';
       }
     }
 
-    // Spin Truck Wheels relative to local direction
     this.truckWheels.forEach(w => w.rotation.x += 0.2);
 
     this.checkHover();
@@ -1107,15 +1581,17 @@ class TerminalScene {
 const KPI = ({ label, value, valueColor = "#f8fafc", isMono = false }: {
   label: string; value: string | number; valueColor?: string; isMono?: boolean;
 }) => (
-  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.2 }}>
+  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.2, minWidth: 0, flexShrink: 0 }}>
     <Typography sx={{
-      fontSize: "0.60rem", color: "#334155", fontWeight: 700,
+      fontSize: "0.58rem", color: "#334155", fontWeight: 700,
       letterSpacing: "0.6px", textTransform: "uppercase",
       fontFamily: "'Roboto Mono', monospace",
+      whiteSpace: "nowrap",
     }}>{label}</Typography>
     <Typography sx={{
-      fontSize: "0.92rem", fontWeight: 600, color: valueColor,
+      fontSize: "0.88rem", fontWeight: 600, color: valueColor,
       fontFamily: isMono ? "'Roboto Mono', monospace" : "'Inter', sans-serif",
+      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
     }}>{value}</Typography>
   </Box>
 );
@@ -1236,43 +1712,55 @@ export default function TerminalMap() {
       color: "#e2e8f0", display: "flex", flexDirection: "column",
       fontFamily: "'Inter', sans-serif", overflow: "hidden",
     }}>
+      {/* ── Header ── */}
       <Box sx={{
-        bgcolor: "#0b1220", borderBottom: "1px solid #111e30",
-        display: "flex", alignItems: "center", px: 3, py: 1.4, gap: 2.5,
-        flexShrink: 0, flexWrap: "wrap", zIndex: 10,
+        bgcolor: "#0b1220",
+        borderBottom: "1px solid #111e30",
+        display: "flex",
+        alignItems: "center",
+        px: 2,
+        py: 1,
+        gap: 2,
+        flexShrink: 0,
+        minHeight: 52,
+        overflow: "hidden", // NO scrollbar ever
+        zIndex: 10,
       }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: 0.5 }}>
-          <Box sx={{
-            width: 7, height: 7, borderRadius: "50%", bgcolor: "#38bdf8", boxShadow: "0 0 8px #38bdf8aa",
-            animation: "blinkDot 2.2s ease-in-out infinite",
-            "@keyframes blinkDot": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.2 } },
-          }} />
+        {/* Brand */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+
           <Typography sx={{
-            fontSize: "0.66rem", fontWeight: 800, color: "#1e5a7a",
-            letterSpacing: "2.5px", textTransform: "uppercase", fontFamily: "'Roboto Mono', monospace",
+            fontSize: "1rem", fontWeight: 800, color: "#1e5a7a",
+            letterSpacing: "2px", textTransform: "uppercase",
+            fontFamily: "'Roboto Mono', monospace", whiteSpace: "nowrap",
           }}>
-            TERMINAL 3D
+            TERMINAL
           </Typography>
         </Box>
 
-        <Divider orientation="vertical" flexItem sx={{ borderColor: "#111e30", my: 0.5 }} />
+        <Divider orientation="vertical" flexItem sx={{ borderColor: "#111e30", my: 0.5, flexShrink: 0 }} />
 
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+        {/* Search row */}
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexShrink: 0 }}>
           <StyledTextField
             variant="outlined" placeholder="Vessel ID" value={vesselInput}
             onChange={(e: any) => setVesselInput(e.target.value)}
-            onKeyDown={(e: any) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                load();
-              }
-            }}
+            onKeyDown={(e: any) => { if (e.key === "Enter") { e.preventDefault(); load(); } }}
             size="small"
-            InputProps={{ startAdornment: <InputAdornment position="start"><SearchRounded sx={{ fontSize: 14, color: "#1e4060" }} /></InputAdornment> }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchRounded sx={{ fontSize: 14, color: "#1e4060" }} />
+                </InputAdornment>
+              )
+            }}
             sx={{
+              width: 130,
               "& .MuiOutlinedInput-root": {
-                bgcolor: "#040a12", color: "#6aa4c0", fontSize: "0.8rem", fontFamily: "'Roboto Mono', monospace",
-                "& fieldset": { borderColor: "#0f2030" }, "&&:hover fieldset": { borderColor: "#1e4a6a" },
+                bgcolor: "#040a12", color: "#6aa4c0", fontSize: "0.78rem",
+                fontFamily: "'Roboto Mono', monospace",
+                "& fieldset": { borderColor: "#0f2030" },
+                "&&:hover fieldset": { borderColor: "#1e4a6a" },
                 "&.Mui-focused fieldset": { borderColor: "#38bdf8" },
               },
             }}
@@ -1283,47 +1771,64 @@ export default function TerminalMap() {
             disabled={loading || !vesselInput.trim()}
             disableElevation
             sx={{
-              bgcolor: loading ? "#0a1624" : "#38bdf8", color: loading ? "#1e3a5f" : "#020e1a",
-              fontSize: "0.70rem", fontWeight: 800, px: 2.5, py: "7px", textTransform: "none", borderRadius: "3px",
-              "&:hover": { bgcolor: "#7dd3fc" }, "&:disabled": { bgcolor: "#080f1a", color: "#1a3050" },
+              bgcolor: loading ? "#0a1624" : "#38bdf8",
+              color: loading ? "#1e3a5f" : "#020e1a",
+              fontSize: "0.68rem", fontWeight: 800, px: 2, py: "6px",
+              textTransform: "none", borderRadius: "3px", whiteSpace: "nowrap", flexShrink: 0,
+              "&:hover": { bgcolor: "#7dd3fc" },
+              "&:disabled": { bgcolor: "#080f1a", color: "#1a3050" },
             }}
           >
-            {loading ? "Loading…" : "Load Heatmap"}
+            {loading ? "Loading…" : "Load"}
           </Button>
         </Box>
 
-        <Divider orientation="vertical" flexItem sx={{ borderColor: "#111e30", my: 0.5 }} />
-
+        {/* KPI strip — takes remaining space, clips gracefully */}
         {data && (
-          <Box sx={{ display: "flex", gap: 4, alignItems: "center", flex: 1, overflowX: "auto" }}>
-            <KPI label="Vessel" value={data.vessel} />
-            <KPI label="Visit ID" value={data.visit_id || "—"} isMono />
-            <KPI label="Volume" value={`${totalMoves} CTN`} isMono valueColor="#38bdf8" />
-            <KPI label="Optimal Berth" value={targetBerthId} isMono valueColor="#34d399" />
-            <KPI label="Primary Block" value={computedMaxBlock || data.max_block || "—"} isMono valueColor="#ef4444" />
-            <Box sx={{ flex: 1 }} />
-            {(data.summary?.hazardous > 0 || data.summary?.reefer > 0) && (
-              <Box sx={{
-                px: 1.8, py: 0.7, bgcolor: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)",
-                borderRadius: 1, display: "flex", gap: 1, alignItems: "center",
-              }}>
-                <WarningAmberRounded sx={{ fontSize: 15, color: "#ef4444" }} />
-                <Typography sx={{ fontSize: "0.68rem", color: "#8a2020", fontWeight: 700 }}>
-                  HAZ / REEFER
-                </Typography>
-              </Box>
-            )}
-          </Box>
+          <>
+            <Divider orientation="vertical" flexItem sx={{ borderColor: "#111e30", my: 0.5, flexShrink: 0 }} />
+            <Box sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              flex: 1,
+              minWidth: 0,          // allow flex child to shrink
+              overflow: "hidden",   // clip, no scroll
+            }}>
+              <KPI label="Vessel" value={data.vessel} />
+              <KPI label="Visit" value={data.visit_id || "—"} isMono />
+              <KPI label="Volume" value={`${totalMoves} CTN`} isMono valueColor="#38bdf8" />
+              <KPI label="Berth" value={targetBerthId} isMono valueColor="#34d399" />
+              <KPI label="Block" value={computedMaxBlock || data.max_block || "—"} isMono valueColor="#ef4444" />
+
+              {(data.summary?.hazardous > 0 || data.summary?.reefer > 0) && (
+                <Box sx={{
+                  px: 1.4, py: 0.5, ml: "auto", flexShrink: 0,
+                  bgcolor: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)",
+                  borderRadius: 1, display: "flex", gap: 0.8, alignItems: "center",
+                }}>
+                  <WarningAmberRounded sx={{ fontSize: 14, color: "#ef4444" }} />
+                  <Typography sx={{ fontSize: "0.65rem", color: "#8a2020", fontWeight: 700, whiteSpace: "nowrap" }}>
+                    HAZ / REEFER
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </>
         )}
 
-        <Box sx={{ flex: 1 }} />
+        {/* Spacer when no data */}
+        {!data && <Box sx={{ flex: 1 }} />}
 
-        <IconButton onClick={toggleFullscreen} sx={{ color: "#6aa4c0", "&:hover": { color: "#38bdf8" } }}>
+        <IconButton
+          onClick={toggleFullscreen}
+          sx={{ color: "#6aa4c0", flexShrink: 0, "&:hover": { color: "#38bdf8" } }}
+        >
           {isFullscreen ? <FullscreenExitRounded /> : <FullscreenRounded />}
         </IconButton>
       </Box>
 
-      {/* 3-D canvas */}
+      {/* ── 3-D canvas ── */}
       <Box ref={containerRef} sx={{ flex: 1, position: "relative", overflow: "hidden" }}>
         {loading && (
           <Box sx={{
@@ -1334,43 +1839,51 @@ export default function TerminalMap() {
           }} />
         )}
 
+        {/* Legend */}
         <Box sx={{
-          position: "absolute", top: 14, right: 16, zIndex: 10, display: "flex", flexDirection: "column", gap: 0.9, px: 2, py: 1.4,
+          position: "absolute", top: 14, right: 16, zIndex: 10,
+          display: "flex", flexDirection: "column", gap: 0.8, px: 1.8, py: 1.2,
           bgcolor: "rgba(4,8,18,0.94)", border: "1px solid #0f1e30", borderRadius: 1,
         }}>
           <Typography sx={{
-            fontSize: "0.55rem", color: "#1e3a5f", fontWeight: 800, letterSpacing: "1.5px", fontFamily: "'Roboto Mono', monospace", mb: 0.2,
+            fontSize: "0.52rem", color: "#1e3a5f", fontWeight: 800,
+            letterSpacing: "1.5px", fontFamily: "'Roboto Mono', monospace", mb: 0.1,
           }}>
             HEAT INDEX
           </Typography>
           {[
-            { c: "#ef4444", l: "Critical" }, { c: "#f97316", l: "High" }, { c: "#f59e0b", l: "Medium" }, { c: "#10b981", l: "Low" },
+            { c: "#ef4444", l: "Critical" }, { c: "#f97316", l: "High" },
+            { c: "#f59e0b", l: "Medium" }, { c: "#10b981", l: "Low" },
           ].map(({ c, l }) => (
-            <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+            <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Box sx={{
-                width: 26, height: 9, borderRadius: "4px", background: `radial-gradient(ellipse at 30% 50%, ${c}cc 0%, ${c}55 50%, transparent 100%)`,
+                width: 22, height: 8, borderRadius: "3px",
+                background: `radial-gradient(ellipse at 30% 50%, ${c}cc 0%, ${c}55 50%, transparent 100%)`,
               }} />
-              <Typography sx={{ fontSize: "0.62rem", color: "#1e3a5f", fontWeight: 500 }}>{l}</Typography>
+              <Typography sx={{ fontSize: "0.60rem", color: "#1e3a5f", fontWeight: 500 }}>{l}</Typography>
             </Box>
           ))}
         </Box>
 
+        {/* Hover tooltip */}
         {hoveredBlock && (
           <Box sx={{
-            position: "absolute", top: 14, left: 14, zIndex: 10, px: 2.2, py: 1.6,
-            bgcolor: "rgba(4,8,18,0.97)", border: "1px solid #38bdf8", borderRadius: 1, boxShadow: "0 0 16px #38bdf822",
+            position: "absolute", top: 14, left: 14, zIndex: 10, px: 2, py: 1.4,
+            bgcolor: "rgba(4,8,18,0.97)", border: "1px solid #38bdf8",
+            borderRadius: 1, boxShadow: "0 0 16px #38bdf822",
           }}>
             <Typography sx={{
-              fontSize: "0.74rem", color: "#38bdf8", fontWeight: 800, fontFamily: "'Roboto Mono', monospace", letterSpacing: "1px",
+              fontSize: "0.72rem", color: "#38bdf8", fontWeight: 800,
+              fontFamily: "'Roboto Mono', monospace", letterSpacing: "1px",
             }}>
               BLOCK {hoveredBlock}
             </Typography>
             {hoveredData && (
               <>
-                <Typography sx={{ fontSize: "0.68rem", color: "#1e3a5f", mt: 0.5 }}>
+                <Typography sx={{ fontSize: "0.66rem", color: "#1e3a5f", mt: 0.4 }}>
                   Volume: <span style={{ color: "#aaccee" }}>{hoveredData.count} CTN</span>
                 </Typography>
-                <Typography sx={{ fontSize: "0.68rem", color: "#1e3a5f" }}>
+                <Typography sx={{ fontSize: "0.66rem", color: "#1e3a5f" }}>
                   Density: <span style={{ color: "#aaccee" }}>{hoveredData.concentration}</span>
                 </Typography>
               </>
@@ -1378,11 +1891,13 @@ export default function TerminalMap() {
           </Box>
         )}
 
+        {/* Controls hint */}
         <Box sx={{
-          position: "absolute", bottom: 14, left: "50%", transform: "translateX(-50%)", zIndex: 10, px: 2.5, py: 0.7,
+          position: "absolute", bottom: 14, left: "50%", transform: "translateX(-50%)",
+          zIndex: 10, px: 2, py: 0.6,
           bgcolor: "rgba(4,8,18,0.85)", border: "1px solid #111e30", borderRadius: 1,
         }}>
-          <Typography sx={{ fontSize: "0.62rem", color: "#1e3a5f", fontFamily: "'Roboto Mono', monospace" }}>
+          <Typography sx={{ fontSize: "0.60rem", color: "#1e3a5f", fontFamily: "'Roboto Mono', monospace" }}>
             drag to orbit · scroll to zoom · right-drag to pan
           </Typography>
         </Box>
