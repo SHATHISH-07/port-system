@@ -3,7 +3,7 @@ import os
 import logging
 from db.connection import get_engine
 from sqlalchemy import text
-from models.stay_model import train_model
+from models.stay_model import train_stay_model
 from models.training_status import training_status
 from config import settings
 from db.queries import load_df_from_db
@@ -47,7 +47,7 @@ def get_history_count() -> int:
 
 def background_train_and_update(df):
     try:
-        train_model(df)
+        train_stay_model(df)
         if training_status.get()["status"] == "completed":
             update_metadata(len(df))
     except Exception as e:

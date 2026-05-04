@@ -2,7 +2,7 @@ import re
 from collections import defaultdict
 
 from utils.stay_utils import compute_vessel_stay, prepare_visit_data
-from models.stay_model import predict_vessel
+from models.stay_model import predict_vessel_stay_duration
 
 from utils.extractContainerMoves import extract_container_moves
 from utils.classifyWeight import classify_weight
@@ -104,7 +104,7 @@ def analyze_vessel_dashboard(df, vessel_service: str):
     # Compute vessel stay
     actual_raw = compute_vessel_stay(prepared_visits)
     # Predict vessel
-    predicted = predict_vessel(prepared_visits)
+    predicted = predict_vessel_stay_duration(prepared_visits)
 
     # Get visit details
     visit_details = get_visit_details(prepared_visits)

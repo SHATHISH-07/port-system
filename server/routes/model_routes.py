@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, BackgroundTasks
 
-from models.stay_model import train_model
+from models.stay_model import train_stay_model
 from models.training_status import training_status
 from db.queries import load_df_from_db
 from services.retraining_service import background_train_and_update
@@ -10,12 +10,12 @@ logger = logging.getLogger("port_system")
 
 router = APIRouter(prefix="/model", tags=["Model"])
 
-# Train model from history database
-@router.post("/train-stay")
-async def train_stay(background_tasks: BackgroundTasks):
+# Train stay model from history database
+@router.post("/train/stay-model")
+async def train_stay_model(background_tasks: BackgroundTasks):
     try:
         # Log the request
-        logger.info("POST /model/train-stay — loading history from DB")
+        logger.info("POST /model/train/stay-model — loading history from DB")
 
         # Load the data from the database
         df = load_df_from_db("history")
@@ -39,7 +39,7 @@ async def train_stay(background_tasks: BackgroundTasks):
         }
 
     except Exception as e:
-        logger.error(f"POST /model/train-stay error: {e}")
+        logger.error(f"POST /model/train/stay-model error: {e}")
         return {"status": "error", "message": str(e)}
 
 # Get training status

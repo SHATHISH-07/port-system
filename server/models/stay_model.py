@@ -45,8 +45,8 @@ def _build_ensemble():
     return VotingRegressor(estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr)])
 
 
-# Function to train the model
-def train_model(df):
+# Function to train the stay model
+def train_stay_model(df):
     try:
         training_status.set("training", "Training started")
         logger.info("ML training started")
@@ -123,8 +123,8 @@ def train_model(df):
             "features": settings.FEATURE_NAMES,
         }, settings.MODEL_PATH)
 
-        global _cached_bundle
-        _cached_bundle = None
+        global _cached_model_bundle
+        _cached_model_bundle = None
 
         training_status.set("completed", "Model trained successfully")
         print("[OK] Model trained and saved ->", settings.MODEL_PATH)
@@ -136,24 +136,24 @@ def train_model(df):
         print("[ERR] Training failed:", str(e))
 
 
-_cached_bundle = None
+_cached_model_bundle = None
 
 # LOAD MODEL
-def load_model():
-    global _cached_bundle
-    if _cached_bundle is not None:
-        return _cached_bundle
+def load_stay_model():
+    global _cached_model_bundle
+    if _cached_model_bundle is not None:
+        return _cached_model_bundle
 
     if not os.path.exists(settings.MODEL_PATH):
         return None
     
-    _cached_bundle = joblib.load(settings.MODEL_PATH)
-    return _cached_bundle
+    _cached_model_bundle = joblib.load(settings.MODEL_PATH)
+    return _cached_model_bundle
 
 
 # PREDICT VISIT  (single visit DataFrame → predicted hours)
-def predict_visit(df):
-    bundle = load_model()
+def predict_visit_stay_duration(df):
+    bundle = load_stay_model()
 
     if bundle is None:
         return {"error": "Model not trained"}
@@ -176,7 +176,7 @@ def predict_visit(df):
 
 
 # PREDICT VESSEL  (all visits for one Outbound Service)
-def predict_vessel(prepared_visits: dict):
+def predict_vessel_stay_duration(prepared_visits: dict):
     if not prepared_visits:
         return {"error": "No data found for vessel"}
 
@@ -187,7 +187,7 @@ def predict_vessel(prepared_visits: dict):
             continue
 
         # Predict the stay time
-        pred = predict_visit(visit_df)
+        pred = predict_visit_stay_duration(visit_df)
 
         # Error dict → propagate
         if isinstance(pred, dict):
@@ -207,8 +207,8 @@ def predict_vessel(prepared_visits: dict):
 
 
 # Predict the stay time from input
-def predict_from_input(loaded: int, discharged: int, actual_visits=None):
-    bundle = load_model()
+def predict_stay_duration_from_metrics(loaded: int, discharged: int, actual_visits=None):
+    bundle = load_stay_model()
 
     if bundle is None:
         return {"error": "Model not trained"}

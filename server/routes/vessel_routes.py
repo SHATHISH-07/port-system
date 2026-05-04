@@ -2,7 +2,7 @@ from fastapi import APIRouter, Form
 from db.queries import load_df_from_db
 from services.vessel_service import analyze_vessel_dashboard
 from services.heatmap_service import get_vessel_heatmap
-from models.stay_model import predict_from_input
+from models.stay_model import predict_stay_duration_from_metrics
 import logging
 from utils.cache_utils import vessel_cache
 
@@ -66,7 +66,7 @@ async def current_vessel_analysis(
         # Predict the result if loaded and discharged are provided
         if loaded is not None and discharged is not None:
             actual_visits = result.get("actual", {}).get("visits", {}) if result and "actual" in result and result["actual"] else {}
-            manual = predict_from_input(loaded, discharged, actual_visits)
+            manual = predict_stay_duration_from_metrics(loaded, discharged, actual_visits)
             result["predicted"] = manual["predicted"]
             result["input"] = {
                 "loaded": loaded,
