@@ -35,7 +35,7 @@ PortSync bridges the gap between raw Terminal Operating System (TOS) data and ac
 ```mermaid
 graph TD
     Client["React Client (Vite)"]
-    subgraph FastAPI Backend
+    subgraph Backend[FastAPI Backend]
         API_Vessel["/vessel/* Endpoints"]
         API_Upload["/upload/* Endpoints"]
         API_Model["/model/* Endpoints"]
@@ -179,14 +179,14 @@ The system runs a continuous asynchronous background task attached to the FastAP
 sequenceDiagram
     participant Client as Client / External
     participant API as FastAPI App
-    participant Loop as Background Check (60s)
+    participant Checker as Background Check (60s)
     participant DB as PostgreSQL
     participant ML as Stay Model
 
-    Loop->>DB: Check total history records
-    DB-->>Loop: Returns count (e.g., 5200)
-    Note over Loop: count - last_size >= 1000
-    Loop->>ML: Trigger background_train_and_update()
+    Checker->>DB: Check total history records
+    DB-->>Checker: Returns count (e.g., 5200)
+    Note over Checker: count - last_size >= 1000
+    Checker->>ML: Trigger background_train_and_update()
     ML->>DB: Fetch latest data
     ML->>ML: Fit VotingRegressor
     ML->>ML: Update metadata & Save .pkl
