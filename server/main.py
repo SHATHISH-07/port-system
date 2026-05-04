@@ -5,8 +5,21 @@ from routes.vessel_routes import router as vessel_router
 from routes.model_routes import router as model_router
 from routes.upload_routes import router as upload_router
 
+from contextlib import asynccontextmanager
+import asyncio
+from services.retraining_service import continuous_retraining_check
+
+# Lifespan context manager for startup/shutdown tasks
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start the continuous retraining check task
+    task = asyncio.create_task(continuous_retraining_check())
+    yield
+    # Shutdown: Cancel the task
+    task.cancel()
+
 # Initialize FastAPI app
-app = FastAPI(title="Port System API", version="2.0.0")
+app = FastAPI(title="Port System API", version="2.0.0", lifespan=lifespan)
 
 import logging
 import time

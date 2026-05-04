@@ -32,26 +32,29 @@ PortSync bridges the gap between raw Terminal Operating System (TOS) data and ac
 
 ## System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     React Client (Vite)                     │
-│  CurrentVesselAnalysis │ HistoryAnalysis │ TerminalMap 3D   │
-└───────────────────┬────────────────────────────────────────-┘
-                    │  HTTP (axios, parallel fetch)
-┌───────────────────▼─────────────────────────────────────────┐
-│              FastAPI Backend (Python 3.11+)                  │
-│   /vessel/*  │  /upload/*  │  /model/*                      │
-│                                                             │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │ vessel_svc  │  │ heatmap_svc  │  │ stay_model (ML)  │   │
-│  └──────┬──────┘  └──────┬───────┘  └────────┬─────────┘   │
-│         └────────────────┼───────────────────┘              │
-│                   ┌──────▼──────┐                           │
-│                   │  PostgreSQL  │                           │
-│                   │  DB (auto-   │                           │
-│                   │  created)    │                           │
-│                   └─────────────┘                           │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Client["React Client (Vite)"]
+    subgraph FastAPI Backend
+        API_Vessel["/vessel/* Endpoints"]
+        API_Upload["/upload/* Endpoints"]
+        API_Model["/model/* Endpoints"]
+        SVC_Retrain["Background Retraining Service (60s loop)"]
+        ML["Stay Model (VotingRegressor)"]
+    end
+    DB[(PostgreSQL)]
+
+    Client -->|HTTP| API_Vessel
+    Client -->|HTTP| API_Upload
+    Client -->|HTTP| API_Model
+
+    API_Vessel --> ML
+    API_Vessel --> DB
+    API_Upload --> DB
+    
+    SVC_Retrain -->|Polls| DB
+    SVC_Retrain -->|Triggers| ML
+    API_Model --> ML
 ```
 
 ---
@@ -116,8 +119,7 @@ PortSync bridges the gap between raw Terminal Operating System (TOS) data and ac
 
 | Endpoint | Description |
 |---|---|
-| `POST /model/train-stay` | Train the ML model from an uploaded CSV file. |
-| `POST /model/retrain-from-db` | **Recommended.** Retrain the ML model directly from the history data already in PostgreSQL. Call this after every new `POST /upload/history`. |
+| `POST /model/vessel-stay/train` | Manually trigger a train/retrain of the ML model directly from the history data already in PostgreSQL. |
 | `GET /model/status` | Check training status. Returns `training`, `completed`, or `failed`. |
 
 ---
@@ -169,18 +171,30 @@ The model is trained exclusively on cargo-profile features. Duration-derived fea
 | `oog_count` | `oog_unit` flag | Out-of-gauge containers |
 | `service_hash` | `outbound_service` | MD5 hash of the carrier service name |
 
-### Train & Retrain Flow
+### Automated Retraining & Execution Flow
 
-```
-New history data available
-        ↓
-POST /upload/history      ← ingest CSV into PostgreSQL
-        ↓
-POST /model/retrain-from-db   ← retrain VotingRegressor on DB data
-        ↓
-GET /model/status         ← poll until "completed"
-        ↓
-Predictions auto-update at /vessel/current-vessel-analysis
+The system runs a continuous asynchronous background task attached to the FastAPI lifespan. It checks the PostgreSQL `history_containers` table every 60 seconds. If the row count exceeds the previous training size by `RETRAIN_THRESHOLD_NEW_RECORDS` (default: 1000), it automatically triggers a non-blocking model retraining process.
+
+```mermaid
+sequenceDiagram
+    participant Client as Client / External
+    participant API as FastAPI App
+    participant Loop as Background Check (60s)
+    participant DB as PostgreSQL
+    participant ML as Stay Model
+
+    Loop->>DB: Check total history records
+    DB-->>Loop: Returns count (e.g., 5200)
+    Note over Loop: count - last_size >= 1000
+    Loop->>ML: Trigger background_train_and_update()
+    ML->>DB: Fetch latest data
+    ML->>ML: Fit VotingRegressor
+    ML->>ML: Update metadata & Save .pkl
+    
+    Client->>API: POST /vessel/current-vessel-analysis
+    API->>ML: predict_stay_duration_from_metrics()
+    ML-->>API: Returns updated prediction
+    API-->>Client: Real-time insights
 ```
 
 ---
@@ -325,7 +339,7 @@ curl -X POST http://127.0.0.1:8000/upload/history -F "file=@history.csv"
 curl -X POST http://127.0.0.1:8000/upload/current -F "file=@current.csv"
 
 # 3. Train the ML model from the DB
-curl -X POST http://127.0.0.1:8000/model/retrain-from-db
+curl -X POST http://127.0.0.1:8000/model/vessel-stay/train
 
 # 4. Check training status
 curl http://127.0.0.1:8000/model/status

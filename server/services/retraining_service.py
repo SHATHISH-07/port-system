@@ -8,6 +8,7 @@ from models.training_status import training_status
 from config import settings
 from db.queries import load_df_from_db
 from fastapi import BackgroundTasks
+import asyncio
 
 logger = logging.getLogger("port_system")
 
@@ -74,3 +75,32 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
                 background_tasks.add_task(background_train_and_update, df)
         except Exception as e:
             logger.error(f"Failed to load history for retraining: {e}")
+
+async def continuous_retraining_check():
+    while True:
+        try:
+            # Check every 60 seconds
+            await asyncio.sleep(60)
+            
+            # Don't start if already training
+            if training_status.get().get("status") == "training":
+                continue
+
+            current_count = get_history_count()
+            if current_count == 0:
+                continue
+            
+            metadata = get_metadata()
+            last_size = metadata.get("last_trained_dataset_size", 0)
+            
+            difference = current_count - last_size
+            threshold = settings.RETRAIN_THRESHOLD_NEW_RECORDS
+            
+            if difference >= threshold or last_size == 0:
+                logger.info(f"Continuous Check: Retraining triggered for {difference} new records.")
+                df = await asyncio.to_thread(load_df_from_db, "history")
+                if not df.empty:
+                    training_status.set("training", "Automated continuous retraining started")
+                    await asyncio.to_thread(background_train_and_update, df)
+        except Exception as e:
+            logger.error(f"Error in continuous retraining check: {e}")

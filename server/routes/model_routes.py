@@ -10,12 +10,12 @@ logger = logging.getLogger("port_system")
 
 router = APIRouter(prefix="/model", tags=["Model"])
 
-# Train stay model from history database
-@router.post("/train/stay-model")
-async def train_stay_model(background_tasks: BackgroundTasks):
+# Train vessel stay model from history database
+@router.post("/vessel-stay/train")
+async def train_vessel_stay_model(background_tasks: BackgroundTasks):
     try:
         # Log the request
-        logger.info("POST /model/train/stay-model — loading history from DB")
+        logger.info("POST /model/vessel-stay/train — loading history from DB")
 
         # Load the data from the database
         df = load_df_from_db("history")
@@ -39,7 +39,7 @@ async def train_stay_model(background_tasks: BackgroundTasks):
         }
 
     except Exception as e:
-        logger.error(f"POST /model/train/stay-model error: {e}")
+        logger.error(f"POST /model/vessel-stay/train error: {e}")
         return {"status": "error", "message": str(e)}
 
 # Get training status
