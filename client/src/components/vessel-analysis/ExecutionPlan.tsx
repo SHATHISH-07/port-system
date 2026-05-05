@@ -64,7 +64,7 @@ export default function ExecutionPlan({ steps }: Props) {
                 sx={{
                   fontSize: "0.625rem",
                   fontWeight: 700,
-                  color: i === 0 ? theme.palette.primary.main : "text.disabled",
+                  color: i === 0 ? theme.palette.text.primary : "text.disabled",
                   fontFamily: "monospace",
                   letterSpacing: "0.05em",
                 }}

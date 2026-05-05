@@ -25,7 +25,7 @@ export default function BerthImpactTable({ data }: Props) {
   const rows = expanded ? data : data.slice(0, LIMIT);
 
   const levelColor = (v: string) => {
-    if (v === "High")   return theme.palette.error.main;
+    if (v === "High") return theme.palette.error.main;
     if (v === "Medium") return theme.palette.warning.main;
     return theme.palette.success.main;
   };
@@ -89,7 +89,7 @@ export default function BerthImpactTable({ data }: Props) {
                     <Typography
                       sx={{
                         fontSize: "0.6875rem",
-                        color: isTop ? theme.palette.primary.main : "text.disabled",
+                        color: isTop ? theme.palette.text.primary : "text.disabled",
                         fontFamily: "monospace",
                         fontWeight: 700,
                       }}
@@ -114,18 +114,18 @@ export default function BerthImpactTable({ data }: Props) {
                         <Box
                           sx={{
                             px: 1, py: 0.25, borderRadius: 1,
-                            bgcolor: alpha(theme.palette.primary.main, 0.1),
-                            border: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
+                            bgcolor: alpha(theme.palette.text.primary, 0.1),
+                            border: `1px solid ${alpha(theme.palette.text.primary, 0.25)}`,
                           }}
                         >
                           <Typography
                             sx={{
                               fontSize: "0.5625rem", fontWeight: 700,
-                              color: theme.palette.primary.main,
+                              color: theme.palette.text.primary,
                               textTransform: "uppercase", letterSpacing: "0.05em",
                             }}
                           >
-                            Recommended
+                            Recommendeds
                           </Typography>
                         </Box>
                       )}

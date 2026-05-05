@@ -23,13 +23,13 @@ export default function YardStrategy({ data }: Props) {
 
   const riskColor = (() => {
     const r = reshuffle_risk?.toLowerCase();
-    if (r === "high")   return theme.palette.error.main;
+    if (r === "high") return theme.palette.error.main;
     if (r === "medium") return theme.palette.warning.main;
     return theme.palette.success.main;
   })();
 
-  const portEntries  = Object.entries(top_discharge_ports).slice(0, 6);
-  const portMax      = portEntries.length > 0 ? (portEntries[0][1] as number) : 1;
+  const portEntries = Object.entries(top_discharge_ports).slice(0, 6);
+  const portMax = portEntries.length > 0 ? (portEntries[0][1] as number) : 1;
   const weightEntries = Object.entries(weight_distribution);
 
   const colDivider = `1px solid ${theme.palette.divider}`;
@@ -125,8 +125,8 @@ export default function YardStrategy({ data }: Props) {
                           height: "100%",
                           width: `${pct}%`,
                           bgcolor: i === 0
-                            ? theme.palette.primary.main
-                            : alpha(theme.palette.primary.main, 0.35),
+                            ? theme.palette.text.primary
+                            : alpha(theme.palette.text.primary, 0.35),
                           borderRadius: 2,
                           transition: "width 400ms ease",
                         }}

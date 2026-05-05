@@ -1,5 +1,4 @@
 import { Box, Typography, useTheme } from "@mui/material";
-import { alpha } from "@mui/material/styles";
 
 interface Props {
   actual: number;
@@ -22,7 +21,6 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
       value: actual.toFixed(1),
       unit: "hrs",
       sub: "Avg vessel stay time",
-      valueColor: theme.palette.text.primary,
     },
     {
       label: isOverride
@@ -70,7 +68,7 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
               sx={{
                 fontSize: "2.75rem",
                 fontWeight: 300,
-                color: s.valueColor,
+                color: "text.secondary",
                 lineHeight: 1,
                 letterSpacing: "-2px",
                 fontFamily: "'Inter', sans-serif",
@@ -79,11 +77,11 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
             >
               {s.value}
             </Typography>
-            <Typography sx={{ fontSize: "1rem", color: "text.disabled", fontWeight: 400 }}>
+            <Typography sx={{ fontSize: "1rem", color: "text.secondary", fontWeight: 400 }}>
               {s.unit}
             </Typography>
           </Box>
-          <Typography variant="caption" sx={{ color: alpha(s.valueColor, 0.7) }}>
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             {s.sub}
           </Typography>
         </Box>
