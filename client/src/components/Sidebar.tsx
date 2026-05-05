@@ -9,19 +9,19 @@ import {
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 
-const OPEN   = 248;
-const CLOSED =  56;
+const OPEN = 248;
+const CLOSED = 56;
 
 const NAV_ITEMS = [
-  { path: "/history-analysis", label: "History Analysis",  icon: HistoryOutlined },
-  { path: "/current-analysis", label: "Current Analysis",  icon: AnalyticsOutlined },
-  { path: "/heatmap",          label: "Terminal Heatmap",  icon: GridViewOutlined },
-  { path: "/train-model",      label: "Train Model",       icon: ModelTrainingOutlined },
+  { path: "/history-analysis", label: "History Analysis", icon: HistoryOutlined },
+  { path: "/current-analysis", label: "Current Analysis", icon: AnalyticsOutlined },
+  { path: "/heatmap", label: "Terminal Heatmap", icon: GridViewOutlined },
+  { path: "/train-model", label: "Train Model", icon: ModelTrainingOutlined },
 ];
 
 export default function Sidebar() {
   const [open, setOpen] = useState(true);
-  const loc   = useLocation();
+  const loc = useLocation();
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
 
@@ -140,21 +140,6 @@ export default function Sidebar() {
           );
         })}
       </Box>
-
-      {/* ─── Footer Label ─── */}
-      {open && (
-        <Box
-          sx={{
-            p: 2,
-            borderTop: `1px solid ${theme.palette.divider}`,
-            flexShrink: 0,
-          }}
-        >
-          <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
-            Berth &amp; Yard Optimization
-          </Typography>
-        </Box>
-      )}
     </Box>
   );
 }
