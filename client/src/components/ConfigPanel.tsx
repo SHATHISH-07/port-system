@@ -3,7 +3,6 @@ import {
   Box, Typography, TextField, Button, LinearProgress,
   Skeleton, useTheme, Tooltip,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
 import { InfoOutlined } from "@mui/icons-material";
 import { api } from "../api/api";
 
@@ -20,10 +19,10 @@ interface RetrainingConfig {
 export default function ConfigPanel() {
   const theme = useTheme();
 
-  const [cfg, setCfg]           = useState<RetrainingConfig | null>(null);
+  const [cfg, setCfg] = useState<RetrainingConfig | null>(null);
   const [threshold, setThreshold] = useState<string>("");
-  const [saving, setSaving]     = useState(false);
-  const [saved, setSaved]       = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const load = async () => {
     try {
@@ -70,8 +69,8 @@ export default function ConfigPanel() {
       sx={{
         p: 3,
         bgcolor: theme.palette.mode === "dark"
-          ? alpha(theme.palette.primary.main, 0.04)
-          : alpha(theme.palette.primary.main, 0.03),
+          ? "rgba(96,165,250,0.05)"
+          : "rgba(29,78,216,0.04)",
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: 2,
       }}
@@ -130,7 +129,11 @@ export default function ConfigPanel() {
               New Records Since Last Training
             </Typography>
             {cfg ? (
-              <Typography variant="body2" sx={{ fontFamily: "monospace", color: "primary.main", fontWeight: 600 }}>
+              <Typography variant="body2" sx={{
+                fontFamily: "monospace",
+                color: theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8",
+                fontWeight: 600,
+              }}>
                 {cfg.new_records_since_training.toLocaleString()} / {cfg.retrain_threshold.toLocaleString()}
               </Typography>
             ) : (
@@ -144,10 +147,12 @@ export default function ConfigPanel() {
             sx={{
               height: 6,
               borderRadius: 3,
-              bgcolor: alpha(theme.palette.primary.main, 0.1),
+              bgcolor: theme.palette.mode === "dark" ? "rgba(96,165,250,0.12)" : "rgba(29,78,216,0.10)",
               "& .MuiLinearProgress-bar": {
                 borderRadius: 3,
-                bgcolor: progress >= 100 ? "success.main" : "primary.main",
+                bgcolor: progress >= 100
+                  ? "success.main"
+                  : theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
               },
             }}
           />

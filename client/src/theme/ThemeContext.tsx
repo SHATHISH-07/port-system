@@ -34,26 +34,26 @@ function buildTheme(mode: PaletteMode) {
     palette: {
       mode,
       background: {
-        default: isDark ? "#0f1011" : "#f1f3f5",
-        paper:   isDark ? "#1a1b1e" : "#ffffff",
+        default: isDark ? "#202020" : "#ffffff",
+        paper:   isDark ? "#252525" : "#e9eef6",
       },
       primary: {
-        main:         isDark ? "#60a5fa" : "#1a73e8",
-        light:        isDark ? "#93c5fd" : "#4285f4",
-        dark:         isDark ? "#3b82f6" : "#1557b0",
-        contrastText: "#ffffff",
+        main:         isDark ? "#60a5fa" : "#ffffff",
+        light:        isDark ? "#93c5fd" : "rgba(255,255,255,0.85)",
+        dark:         isDark ? "#3b82f6" : "rgba(255,255,255,0.65)",
+        contrastText: isDark ? "#0a0a0b"  : "#1a73e8",
       },
-      secondary: { main: isDark ? "#a78bfa" : "#7c3aed" },
+      secondary: { main: isDark ? "#a78bfa" : "#e8f0fe" },
       success:   { main: isDark ? "#34d399" : "#059669" },
       warning:   { main: isDark ? "#fbbf24" : "#d97706" },
       error:     { main: isDark ? "#f87171" : "#dc2626" },
-      info:      { main: isDark ? "#38bdf8" : "#0284c7" },
+      info:      { main: isDark ? "#38bdf8" : "#4285f4" },
       text: {
-        primary:   isDark ? "#f0f2f5" : "#0f172a",
-        secondary: isDark ? "#9299a4" : "#64748b",
-        disabled:  isDark ? "#4b5563" : "#94a3b8",
+        primary:   isDark ? "#f0f2f5" : "#111827",
+        secondary: isDark ? "#9299a4" : "#4b5563",
+        disabled:  isDark ? "#4b5563" : "#6b7280",
       },
-      divider: isDark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.08)",
+      divider: isDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.12)",
     },
     typography: {
       fontFamily: "'Inter', 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -113,7 +113,8 @@ function buildTheme(mode: PaletteMode) {
         styleOverrides: {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             backgroundImage: "none",
-            backgroundColor: theme.palette.background.paper,
+            // Cards use a dedicated surface — NOT background.paper (that's sidebar)
+            backgroundColor: theme.palette.mode === "dark" ? "#2a2a2a" : "#e9eef6",
             border: `1px solid ${theme.palette.divider}`,
             borderRadius: 14,
             boxShadow: theme.palette.mode === "dark"
@@ -142,7 +143,8 @@ function buildTheme(mode: PaletteMode) {
         styleOverrides: {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             backgroundImage: "none",
-            backgroundColor: theme.palette.background.paper,
+            // Popups/menus
+            backgroundColor: theme.palette.mode === "dark" ? "#2a2a2a" : "#e9eef6",
             transition: "background-color 250ms ease",
           }),
           elevation1: ({ theme }: { theme: typeof baseTheme }) => ({
@@ -163,7 +165,7 @@ function buildTheme(mode: PaletteMode) {
         styleOverrides: {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             backgroundImage: "none",
-            backgroundColor: theme.palette.background.paper,
+            backgroundColor: theme.palette.mode === "dark" ? "#2a2a2a" : "#e9eef6",
             border: `1px solid ${theme.palette.divider}`,
             borderRadius: "12px !important",
             boxShadow: "none",
@@ -191,7 +193,9 @@ function buildTheme(mode: PaletteMode) {
             fontSize: "0.9375rem",
             color: theme.palette.text.primary,
             "& fieldset": {
-              borderColor: theme.palette.divider,
+              borderColor: theme.palette.mode === "dark"
+                ? "rgba(255,255,255,0.12)"
+                : "rgba(15,23,42,0.18)",
               transition: "border-color 150ms",
             },
             "&:hover fieldset": {
@@ -200,7 +204,9 @@ function buildTheme(mode: PaletteMode) {
                 : "rgba(15,23,42,0.25)",
             },
             "&.Mui-focused fieldset": {
-              borderColor: theme.palette.primary.main,
+              borderColor: theme.palette.mode === "dark"
+                ? theme.palette.info.main
+                : "#1a73e8",
               borderWidth: "1.5px",
             },
           }),
@@ -216,7 +222,9 @@ function buildTheme(mode: PaletteMode) {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             fontSize: "0.9375rem",
             color: theme.palette.text.secondary,
-            "&.Mui-focused": { color: theme.palette.primary.main },
+            "&.Mui-focused": {
+              color: theme.palette.mode === "dark" ? theme.palette.info.main : "#1a73e8",
+            },
           }),
         },
       },
@@ -234,26 +242,39 @@ function buildTheme(mode: PaletteMode) {
             "&:hover": { boxShadow: "none" },
           },
           contained: ({ theme }: { theme: typeof baseTheme }) => ({
-            backgroundColor: theme.palette.primary.main,
-            color: theme.palette.primary.contrastText,
-            "&:hover": { backgroundColor: theme.palette.primary.dark, boxShadow: "none" },
+            backgroundColor: theme.palette.mode === "dark"
+              ? theme.palette.primary.main
+              : "#1a73e8",
+            color: "#ffffff",
+            "&:hover": {
+              backgroundColor: theme.palette.mode === "dark"
+                ? theme.palette.primary.dark
+                : "#1557b0",
+              boxShadow: "none",
+            },
             "&.Mui-disabled": {
               backgroundColor: alpha(theme.palette.text.primary, 0.08),
               color: theme.palette.text.disabled,
             },
           }),
           outlined: ({ theme }: { theme: typeof baseTheme }) => ({
-            borderColor: theme.palette.divider,
-            color: theme.palette.primary.main,
+            borderColor: theme.palette.mode === "dark"
+              ? "rgba(255,255,255,0.15)"
+              : "rgba(15,23,42,0.20)",
+            color: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
             "&:hover": {
-              backgroundColor: alpha(theme.palette.primary.main, 0.06),
-              borderColor: theme.palette.primary.main,
+              backgroundColor: theme.palette.mode === "dark"
+                ? "rgba(96,165,250,0.08)"
+                : "rgba(26,115,232,0.06)",
+              borderColor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
             },
           }),
           text: ({ theme }: { theme: typeof baseTheme }) => ({
-            color: theme.palette.primary.main,
+            color: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
             "&:hover": {
-              backgroundColor: alpha(theme.palette.primary.main, 0.06),
+              backgroundColor: theme.palette.mode === "dark"
+                ? "rgba(96,165,250,0.08)"
+                : "rgba(26,115,232,0.06)",
             },
           }),
         },
@@ -358,8 +379,14 @@ function buildTheme(mode: PaletteMode) {
               backgroundColor: alpha(theme.palette.text.primary, 0.04),
             },
             "&.Mui-selected": {
-              backgroundColor: alpha(theme.palette.primary.main, 0.1),
-              "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.14) },
+              backgroundColor: theme.palette.mode === "dark"
+                ? "rgba(96,165,250,0.10)"
+                : "rgba(26,115,232,0.08)",
+              "&:hover": {
+                backgroundColor: theme.palette.mode === "dark"
+                  ? "rgba(96,165,250,0.14)"
+                  : "rgba(26,115,232,0.12)",
+              },
             },
           }),
         },
@@ -377,12 +404,13 @@ function buildTheme(mode: PaletteMode) {
         },
       },
 
-      // ── Radio & Checkbox ─────────────────────────────────────────────────
       MuiRadio: {
         styleOverrides: {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             color: theme.palette.text.disabled,
-            "&.Mui-checked": { color: theme.palette.primary.main },
+            "&.Mui-checked": {
+              color: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
+            },
           }),
         },
       },
@@ -390,7 +418,9 @@ function buildTheme(mode: PaletteMode) {
         styleOverrides: {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             color: theme.palette.text.disabled,
-            "&.Mui-checked": { color: theme.palette.primary.main },
+            "&.Mui-checked": {
+              color: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
+            },
           }),
         },
       },

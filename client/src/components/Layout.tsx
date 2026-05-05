@@ -1,24 +1,16 @@
 import React from "react";
-import { Box, Typography, IconButton, Tooltip, useTheme } from "@mui/material";
+import { Box, IconButton, Tooltip, useTheme } from "@mui/material";
 import { DarkModeOutlined, LightModeOutlined } from "@mui/icons-material";
 import Sidebar from "./Sidebar";
-import { useLocation } from "react-router-dom";
 import { useColorMode } from "../theme/ThemeContext";
 
-interface LayoutProps { children: React.ReactNode; }
-
-const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
-  "/history-analysis": { title: "History Analysis",   subtitle: "Vessel stay time patterns from historical records" },
-  "/current-analysis": { title: "Current Analysis",   subtitle: "Live vessel status and predictions" },
-  "/heatmap":          { title: "Terminal Heatmap",   subtitle: "Yard block container concentration" },
-  "/train-model":      { title: "Train Model",        subtitle: "Configure and trigger model training runs" },
-};
+interface LayoutProps {
+  children: React.ReactNode;
+}
 
 export default function Layout({ children }: LayoutProps) {
-  const { pathname } = useLocation();
   const { mode, toggleColorMode } = useColorMode();
   const theme = useTheme();
-  const page = PAGE_TITLES[pathname] ?? { title: "PortSync", subtitle: "" };
 
   const isDark = mode === "dark";
 
@@ -26,8 +18,16 @@ export default function Layout({ children }: LayoutProps) {
     <Box sx={{ display: "flex", height: "100vh", bgcolor: "background.default" }}>
       <Sidebar />
 
-      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", minWidth: 0 }}>
-        {/* ─── Top Header Bar ─── */}
+      <Box
+        sx={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          overflowY: "auto",
+          minWidth: 0,
+        }}
+      >
+        {/* ─── Header ─── */}
         <Box
           component="header"
           sx={{
@@ -36,37 +36,30 @@ export default function Layout({ children }: LayoutProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            bgcolor: "background.paper",
             borderBottom: `1px solid ${theme.palette.divider}`,
             flexShrink: 0,
-            position: "sticky",
-            top: 0,
-            zIndex: 100,
           }}
         >
           {/* Page title */}
-          <Box>
-            <Typography
-              sx={{
-                fontSize: "0.9375rem",
-                fontWeight: 600,
-                color: "text.primary",
-                lineHeight: 1.3,
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {page.title}
-            </Typography>
-            {page.subtitle && (
-              <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", lineHeight: 1.3 }}>
-                {page.subtitle}
-              </Typography>
-            )}
+          <Box
+            sx={{
+              fontSize: "0.9375rem",
+              fontWeight: 700,
+              color: "text.primary",
+              lineHeight: 1.3,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            BERTH OPTIMIZATION & YARD
+            PREPARATION FRAMEWORK
           </Box>
 
           {/* Right-side actions */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Tooltip title={isDark ? "Switch to Light mode" : "Switch to Dark mode"} placement="bottom">
+            <Tooltip
+              title={isDark ? "Switch to Light mode" : "Switch to Dark mode"}
+              placement="bottom"
+            >
               <IconButton
                 onClick={toggleColorMode}
                 size="small"
@@ -74,13 +67,17 @@ export default function Layout({ children }: LayoutProps) {
                   width: 34,
                   height: 34,
                   color: "text.secondary",
-                  "&:hover": { color: "text.primary" },
+                  "&:hover": {
+                    bgcolor: "rgba(0,0,0,0.04)",
+                    color: "text.primary",
+                  },
                 }}
               >
-                {isDark
-                  ? <LightModeOutlined sx={{ fontSize: 18 }} />
-                  : <DarkModeOutlined  sx={{ fontSize: 18 }} />
-                }
+                {isDark ? (
+                  <LightModeOutlined sx={{ fontSize: 18 }} />
+                ) : (
+                  <DarkModeOutlined sx={{ fontSize: 18 }} />
+                )}
               </IconButton>
             </Tooltip>
           </Box>
@@ -91,10 +88,11 @@ export default function Layout({ children }: LayoutProps) {
           component="main"
           sx={{
             flex: 1,
+            bgcolor: "background.default",
             p: { xs: "20px 16px", md: "28px 32px" },
           }}
         >
-          <Box sx={{ maxWidth: 1280, width: "100%", mx: "auto" }}>
+          <Box sx={{ width: "100%", mx: "auto" }}>
             {children}
           </Box>
         </Box>

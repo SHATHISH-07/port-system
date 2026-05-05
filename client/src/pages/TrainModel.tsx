@@ -4,7 +4,6 @@ import {
   FormControlLabel, FormControl, Alert, Snackbar, Divider,
   Collapse, Checkbox, FormGroup, useTheme,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
 import { UploadFileOutlined } from "@mui/icons-material";
 import { api } from "../api/api";
 import TrainingStatusCard from "../components/TrainingStatusCard";
@@ -15,14 +14,14 @@ export default function TrainModel() {
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [dataSource, setDataSource] = useState<"db" | "file">("db");
-  const [file, setFile]           = useState<File | null>(null);
-  const [updateDb, setUpdateDb]   = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [updateDb, setUpdateDb] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Training state ──────────────────────────────────────────────────────────
-  const [loading, setLoading]           = useState(false);
-  const [status, setStatus]             = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<any>(null);
   const [hasTriggered, setHasTriggered] = useState(false);
 
   // ── Toast ───────────────────────────────────────────────────────────────────
@@ -35,11 +34,11 @@ export default function TrainModel() {
 
   const startPolling = () => {
     // TrainingStatusCard handles its own polling — just refresh state indicator
-    api.get("/model/vessel-stay/training/status").then((r) => setStatus(r.data)).catch(() => {});
+    api.get("/model/vessel-stay/training/status").then((r) => setStatus(r.data)).catch(() => { });
   };
 
   useEffect(() => {
-    api.get("/model/vessel-stay/training/status").then((r) => setStatus(r.data)).catch(() => {});
+    api.get("/model/vessel-stay/training/status").then((r) => setStatus(r.data)).catch(() => { });
   }, []);
 
   // ── File handling ───────────────────────────────────────────────────────────
@@ -102,7 +101,7 @@ export default function TrainModel() {
       {/* Config card */}
       <Box
         sx={{
-          bgcolor: "background.paper",
+          bgcolor: theme.palette.mode === "dark" ? "#2a2a2a" : "#e9eef6",
           border: `1px solid ${theme.palette.divider}`,
           borderRadius: 2,
           mb: 3,
@@ -124,8 +123,8 @@ export default function TrainModel() {
                 control={<Radio size="small" />}
                 label={
                   <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Use Database</Typography>
-                    <Typography variant="caption" sx={{ color: "text.disabled" }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500, color: "text.secondary" }}>Use Database</Typography>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
                       Load from the existing history table
                     </Typography>
                   </Box>
@@ -136,8 +135,8 @@ export default function TrainModel() {
                 control={<Radio size="small" />}
                 label={
                   <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Upload CSV File</Typography>
-                    <Typography variant="caption" sx={{ color: "text.disabled" }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500, color: "text.secondary" }}>Upload CSV File</Typography>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
                       Train directly from an uploaded dataset
                     </Typography>
                   </Box>
@@ -155,7 +154,9 @@ export default function TrainModel() {
               onDrop={handleDrop}
               onClick={() => fileRef.current?.click()}
               sx={{
-                border: `2px dashed ${isDragging ? theme.palette.primary.main : theme.palette.divider}`,
+                border: `2px dashed ${isDragging
+                  ? (theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8")
+                  : theme.palette.divider}`,
                 borderRadius: 2,
                 p: 3,
                 display: "flex",
@@ -163,8 +164,12 @@ export default function TrainModel() {
                 gap: 2,
                 cursor: "pointer",
                 transition: "all 200ms",
-                bgcolor: isDragging ? alpha(theme.palette.primary.main, 0.04) : "transparent",
-                "&:hover": { borderColor: "primary.main" },
+                bgcolor: isDragging
+                  ? (theme.palette.mode === "dark" ? "rgba(96,165,250,0.06)" : "rgba(26,115,232,0.04)")
+                  : "transparent",
+                "&:hover": {
+                  borderColor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
+                },
               }}
             >
               <input ref={fileRef} type="file" accept=".csv" hidden

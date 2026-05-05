@@ -60,19 +60,7 @@ export default function AnalysisHeader({
               : "Historical performance review — visit records, stay times, and berth rankings."
             }
           </Typography>
-          {data && (
-            <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, mt: 1.5 }}>
-              <Box
-                sx={{
-                  width: 7, height: 7, borderRadius: "50%",
-                  bgcolor: theme.palette.success.main,
-                }}
-              />
-              <Typography variant="caption" sx={{ color: theme.palette.success.main, fontWeight: 600 }}>
-                Analysis complete
-              </Typography>
-            </Box>
-          )}
+
         </Box>
 
         {/* RIGHT: Controls */}
@@ -100,14 +88,14 @@ export default function AnalysisHeader({
               onKeyDown={handleEnter}
               sx={{ width: 220 }}
               slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchOutlined sx={{ fontSize: 16, color: "text.disabled" }} />
-                  </InputAdornment>
-                ),
-              },
-            }}
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchOutlined sx={{ fontSize: 16, color: "text.disabled" }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
           </Box>
 
