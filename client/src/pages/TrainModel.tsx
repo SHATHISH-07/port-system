@@ -1,182 +1,257 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-  Box, Typography, Button, RadioGroup, FormControlLabel, Radio,
-  Card, CardContent, Divider, Snackbar, Alert, Checkbox,
+  Box, Typography, Button, LinearProgress, Radio, RadioGroup,
+  FormControlLabel, FormControl, Alert, Snackbar, Divider,
+  Collapse, Checkbox, FormGroup, useTheme,
 } from "@mui/material";
-import { StorageOutlined, UploadFileOutlined, PlayArrowRounded } from "@mui/icons-material";
-import FileUpload from "../components/FileUpload";
-import TrainingStatusCard from "../components/TrainingStatusCard";
+import { alpha } from "@mui/material/styles";
+import { UploadFileOutlined } from "@mui/icons-material";
 import { api } from "../api/api";
+import TrainingStatusCard from "../components/TrainingStatusCard";
+import ConfigPanel, { type TrainingConfig } from "../components/ConfigPanel";
+
+const DEFAULT_CONFIG: TrainingConfig = {
+  min_hours: 2,
+  max_hours: 240,
+  min_visit_rows: 5,
+};
 
 export default function TrainModel() {
+  const theme = useTheme();
+
+  // ── Form state ──────────────────────────────────────────────────────────────
   const [dataSource, setDataSource] = useState<"db" | "file">("db");
-  const [file,       setFile]       = useState<File | null>(null);
-  const [updateDb,   setUpdateDb]   = useState(false);
-  const [loading,    setLoading]    = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [updateDb, setUpdateDb] = useState(false);
+  const [config, setConfig] = useState<TrainingConfig>(DEFAULT_CONFIG);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── Training state ──────────────────────────────────────────────────────────
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<any>(null);
+  const [lastConfig, setLastConfig] = useState<TrainingConfig | null>(null);
+
+  // ── Toast ───────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<{
     open: boolean; message: string; severity: "success" | "error" | "info" | "warning";
   }>({ open: false, message: "", severity: "info" });
 
-  const showToast = (message: string, severity: typeof toast.severity = "info") =>
+  const showToast = (message: string, severity: typeof toast.severity) =>
     setToast({ open: true, message, severity });
 
-  const handleCloseToast = () => setToast((p) => ({ ...p, open: false }));
+  const startPolling = () => {
+    // TrainingStatusCard handles its own polling — just refresh state indicator
+    api.get("/model/vessel-stay/training/status").then((r) => setStatus(r.data)).catch(() => {});
+  };
 
-  const handleTrain = async () => {
-    if (dataSource === "file" && !file) {
-      showToast("Please upload a CSV file.", "warning");
+  useEffect(() => {
+    api.get("/model/vessel-stay/training/status").then((r) => setStatus(r.data)).catch(() => {});
+  }, []);
+
+  // ── File handling ───────────────────────────────────────────────────────────
+  const handleFile = (f: File) => {
+    if (!f.name.endsWith(".csv")) {
+      showToast("Only CSV files are accepted.", "error");
       return;
     }
+    setFile(f);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleFile(f);
+  };
+
+  // ── Submit training ─────────────────────────────────────────────────────────
+  const handleTrain = async (overrideConfig?: TrainingConfig) => {
+    const cfg = overrideConfig || config;
     setLoading(true);
     try {
       const form = new FormData();
       form.append("data_source", dataSource);
       form.append("update_db", String(updateDb));
+      form.append("config", JSON.stringify(cfg));
       if (dataSource === "file" && file) form.append("file", file);
 
       const res = await api.post("/model/vessel-stay/training", form);
+
       if (res.data.status === "error") {
         showToast(res.data.message, "error");
       } else {
+        setLastConfig(cfg);
         showToast(res.data.message, "success");
-        if (dataSource === "file") setFile(null);
+        startPolling();
       }
     } catch (err: any) {
-      showToast(
-        err?.response?.data?.message || err?.response?.data?.detail || "Failed to start training",
-        "error"
-      );
+      showToast(err?.response?.data?.detail || "Training request failed.", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const radioSx = {
-    color: "text.disabled",
-    "&.Mui-checked": { color: "primary.main" },
-  };
+  const isTraining = status?.status === "training";
+  const canTrain = !loading && !isTraining && (dataSource === "db" || !!file);
 
   return (
-    <Box>
-      {/* ─── Page Header ─── */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600, color: "text.primary", mb: 0.5 }}>
+    <Box sx={{ maxWidth: 720, mx: "auto" }}>
+
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h5" sx={{ mb: 0.75, color: "text.primary" }}>
           Train Vessel Stay Model
         </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          Configure a new training run using historical database records or an uploaded CSV dataset.
+        <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 480 }}>
+          Configure a training run using historical database records or an uploaded CSV dataset.
         </Typography>
       </Box>
 
-      {/* ─── Configuration Card ─── */}
-      <Card>
-        <CardContent sx={{ p: 3 }}>
-          <Typography variant="overline" sx={{ color: "text.secondary", display: "block", mb: 2.5 }}>
+      {/* Config card */}
+      <Box
+        sx={{
+          bgcolor: "background.paper",
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: 2,
+          mb: 3,
+          overflow: "hidden",
+        }}
+      >
+        {/* Data source */}
+        <Box sx={{ p: 3 }}>
+          <Typography variant="overline" sx={{ color: "text.secondary", display: "block", mb: 2 }}>
             Data Source
           </Typography>
-
-          <RadioGroup
-            value={dataSource}
-            onChange={(e) => {
-              setDataSource(e.target.value as "db" | "file");
-              if (e.target.value === "db") setUpdateDb(false);
-            }}
-            sx={{ gap: 0.5 }}
-          >
-            <FormControlLabel
-              value="db"
-              control={<Radio size="small" sx={radioSx} />}
-              label={
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <StorageOutlined sx={{ fontSize: 18, color: "text.secondary" }} />
+          <FormControl disabled={loading || isTraining}>
+            <RadioGroup
+              value={dataSource}
+              onChange={(e) => { setDataSource(e.target.value as "db" | "file"); setFile(null); }}
+            >
+              <FormControlLabel
+                value="db"
+                control={<Radio size="small" />}
+                label={
                   <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: "text.primary" }}>
-                      Use Database
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Use Database</Typography>
+                    <Typography variant="caption" sx={{ color: "text.disabled" }}>
                       Load from the existing history table
                     </Typography>
                   </Box>
-                </Box>
-              }
-              sx={{ mr: 0, py: 0.75 }}
-            />
-            <FormControlLabel
-              value="file"
-              control={<Radio size="small" sx={radioSx} />}
-              label={
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <UploadFileOutlined sx={{ fontSize: 18, color: "text.secondary" }} />
+                }
+              />
+              <FormControlLabel
+                value="file"
+                control={<Radio size="small" />}
+                label={
                   <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: "text.primary" }}>
-                      Upload CSV File
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Upload CSV File</Typography>
+                    <Typography variant="caption" sx={{ color: "text.disabled" }}>
                       Train directly from an uploaded dataset
                     </Typography>
                   </Box>
-                </Box>
-              }
-              sx={{ mr: 0, py: 0.75 }}
-            />
-          </RadioGroup>
+                }
+                sx={{ mt: 1 }}
+              />
+            </RadioGroup>
+          </FormControl>
 
-          {/* File upload + DB option */}
-          {dataSource === "file" && (
-            <Box sx={{ mt: 3, ml: 0.5 }}>
-              <FileUpload onFileSelect={setFile} label="Drop your CSV dataset here" />
-              <Box sx={{ mt: 1.5 }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={updateDb}
-                      onChange={(e) => setUpdateDb(e.target.checked)}
-                      sx={{ color: "text.disabled", "&.Mui-checked": { color: "primary.main" } }}
-                    />
-                  }
-                  label={
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                      Also save uploaded data to the history database
-                    </Typography>
-                  }
-                  sx={{ m: 0 }}
-                />
+          {/* File dropzone */}
+          <Collapse in={dataSource === "file"} sx={{ mt: 2 }}>
+            <Box
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => fileRef.current?.click()}
+              sx={{
+                border: `2px dashed ${isDragging ? theme.palette.primary.main : theme.palette.divider}`,
+                borderRadius: 2,
+                p: 3,
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                cursor: "pointer",
+                transition: "all 200ms",
+                bgcolor: isDragging ? alpha(theme.palette.primary.main, 0.04) : "transparent",
+                "&:hover": { borderColor: "primary.main" },
+              }}
+            >
+              <input ref={fileRef} type="file" accept=".csv" hidden
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+              <UploadFileOutlined sx={{ color: "text.disabled", fontSize: 28, flexShrink: 0 }} />
+              <Box>
+                {file ? (
+                  <>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>{file.name}</Typography>
+                    <Typography variant="caption" sx={{ color: "text.disabled" }}>{(file.size / 1024).toFixed(1)} KB — click to change</Typography>
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                    Drop a CSV here or click to browse
+                  </Typography>
+                )}
               </Box>
             </Box>
-          )}
 
-          <Divider sx={{ my: 3 }} />
+            {/* Save to DB checkbox */}
+            <FormGroup sx={{ mt: 1.5, ml: 0.5 }}>
+              <FormControlLabel
+                control={<Checkbox size="small" checked={updateDb} onChange={(e) => setUpdateDb(e.target.checked)} disabled={loading || isTraining} />}
+                label={
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                    Also save this file to the history database
+                  </Typography>
+                }
+              />
+            </FormGroup>
+          </Collapse>
+        </Box>
 
-          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button
-              variant="contained"
-              size="medium"
-              disabled={loading || (dataSource === "file" && !file)}
-              onClick={handleTrain}
-              startIcon={<PlayArrowRounded />}
-              sx={{ px: 3 }}
-            >
-              {loading ? "Starting…" : "Start Training"}
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
+        <Divider />
 
-      <TrainingStatusCard onRetry={handleTrain} />
+        {/* Config panel */}
+        <Box sx={{ p: 3 }}>
+          <ConfigPanel config={config} onChange={setConfig} disabled={loading || isTraining} />
+        </Box>
+
+        <Divider />
+
+        {/* Actions */}
+        <Box sx={{ px: 3, py: 2, display: "flex", justifyContent: "flex-end", gap: 1.5 }}>
+          <Button
+            variant="text"
+            size="small"
+            sx={{ color: "text.secondary" }}
+            disabled={loading || isTraining}
+            onClick={() => setConfig(DEFAULT_CONFIG)}
+          >
+            Reset Defaults
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!canTrain}
+            onClick={() => handleTrain()}
+            sx={{ minWidth: 160 }}
+          >
+            {loading ? "Starting…" : "Start Training"}
+          </Button>
+        </Box>
+
+        {loading && <LinearProgress />}
+      </Box>
+
+      {/* Training Status Card */}
+      {status && (
+        <TrainingStatusCard onRetry={lastConfig ? () => handleTrain(lastConfig) : undefined} />
+      )}
 
       <Snackbar
         open={toast.open}
         autoHideDuration={6000}
-        onClose={handleCloseToast}
+        onClose={() => setToast((t) => ({ ...t, open: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert
-          onClose={handleCloseToast}
-          severity={toast.severity}
-          variant="filled"
-          sx={{ width: "100%" }}
-        >
+        <Alert severity={toast.severity} variant="filled" onClose={() => setToast((t) => ({ ...t, open: false }))}>
           {toast.message}
         </Alert>
       </Snackbar>

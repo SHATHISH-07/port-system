@@ -11,6 +11,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   "/history-analysis": { title: "History Analysis",   subtitle: "Vessel stay time patterns from historical records" },
   "/current-analysis": { title: "Current Analysis",   subtitle: "Live vessel status and predictions" },
   "/heatmap":          { title: "Terminal Heatmap",   subtitle: "Yard block container concentration" },
+  "/ingest":           { title: "Data Ingestion",     subtitle: "Upload CSV or JSON vessel data into history and current tables" },
   "/train-model":      { title: "Train Model",        subtitle: "Configure and trigger model training runs" },
 };
 

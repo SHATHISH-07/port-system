@@ -57,9 +57,9 @@ def get_history_count() -> int:
         return 0
 
 # Function to train and update the model in the background
-def background_train_and_update(df):
+def background_train_and_update(df, config: dict = None):
     try:
-        train_stay_model(df)
+        train_stay_model(df, config=config)
         # If the model is trained successfully, update the metadata
         if training_status.get()["status"] == "completed":
             update_metadata(len(df))
@@ -91,6 +91,7 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
         try:
             df = load_from_db("history")
             if not df.empty:
+                config = training_status.get_last_config()
                 training_status.set(
                     status="training", 
                     message="Automated retraining started",
@@ -98,9 +99,10 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
                     data_source="db",
                     training_type="automated"
                 )
-                background_tasks.add_task(background_train_and_update, df)
+                background_tasks.add_task(background_train_and_update, df, config)
         except Exception as e:
             logger.error(f"Failed to load history for retraining: {e}")
+
 
 # Nightly scheduled retraining job
 async def scheduled_retraining_job():

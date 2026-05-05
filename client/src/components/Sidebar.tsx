@@ -6,6 +6,7 @@ import {
   HistoryOutlined,
   ModelTrainingOutlined,
   MenuRounded,
+  UploadFileOutlined,
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 
@@ -13,10 +14,11 @@ const OPEN = 248;
 const CLOSED = 56;
 
 const NAV_ITEMS = [
-  { path: "/history-analysis", label: "History Analysis", icon: HistoryOutlined },
-  { path: "/current-analysis", label: "Current Analysis", icon: AnalyticsOutlined },
-  { path: "/heatmap", label: "Terminal Heatmap", icon: GridViewOutlined },
-  { path: "/train-model", label: "Train Model", icon: ModelTrainingOutlined },
+  { path: "/history-analysis", label: "History Analysis",  icon: HistoryOutlined },
+  { path: "/current-analysis", label: "Current Analysis",  icon: AnalyticsOutlined },
+  { path: "/heatmap",          label: "Terminal Heatmap",  icon: GridViewOutlined },
+  { path: "/ingest",           label: "Data Ingestion",    icon: UploadFileOutlined },
+  { path: "/train-model",      label: "Train Model",       icon: ModelTrainingOutlined },
 ];
 
 export default function Sidebar() {

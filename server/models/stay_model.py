@@ -50,10 +50,16 @@ def _build_ensemble():
 
 
 # Function to train the stay model
-def train_stay_model(df):
+def train_stay_model(df, config: dict = None):
     try:
         training_status.set("training", "Training started")
         logger.info("ML training started")
+
+        # Apply config overrides for training filters
+        cfg = config or {}
+        min_hours = cfg.get("min_hours", settings.TRAIN_MIN_HOURS)
+        max_hours = cfg.get("max_hours", settings.TRAIN_MAX_HOURS)
+        min_visit_rows = cfg.get("min_visit_rows", settings.MIN_VISIT_ROWS)
 
         # Group the dataset by visit ID (using the DB column name)
         grouped = df.groupby("actual_outbound_carrier_visit_id")
@@ -69,7 +75,7 @@ def train_stay_model(df):
         # Iterate through each visit ID and group
         for visit_id, group in grouped:
 
-            if len(group) < settings.MIN_VISIT_ROWS:
+            if len(group) < min_visit_rows:
                 skipped_rows += 1
                 continue
             visit_df = prepare_visit_data(group)
@@ -78,11 +84,11 @@ def train_stay_model(df):
             if stay is None:
                 continue
 
-            if stay < settings.TRAIN_MIN_HOURS:
+            if stay < min_hours:
                 skipped_noise += 1
                 continue
 
-            if stay > settings.TRAIN_MAX_HOURS:
+            if stay > max_hours:
                 skipped_error += 1
                 continue
             features = create_features(visit_df)

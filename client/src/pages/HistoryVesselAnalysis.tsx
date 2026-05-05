@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { Box, Typography, Snackbar, Alert, Accordion, AccordionSummary, AccordionDetails, Button } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { Box, Typography, Snackbar, Alert } from "@mui/material";
 import { api } from "../api/api";
 import { type VesselAnalysisData } from "../types/vessel";
 
 import AnalysisHeader from "../components/vessel-analysis/AnalysisHeader";
-import FileUpload from "../components/FileUpload";
 import PerformanceStats from "../components/vessel-analysis/PerformanceStats";
 import RiskAndStrategy from "../components/vessel-analysis/RiskAndStrategy";
 import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
@@ -65,25 +63,6 @@ const HistoryVesselAnalysis = () => {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{open: boolean, message: string, severity: "success" | "error" | "info" | "warning"}>({open: false, message: "", severity: "info"});
 
-  const [uploading, setUploading] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-
-  const handleUpload = async () => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await api.post("/upload/history", form);
-      showToast(res.data.message || "File uploaded successfully", "success");
-      setFile(null);
-    } catch (err: any) {
-      showToast(err?.response?.data?.detail || err?.response?.data?.message || "Upload failed", "error");
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const showToast = (message: string, severity: "success" | "error" | "info" | "warning" = "error") => {
     setToast({open: true, message, severity});
   };
@@ -94,17 +73,14 @@ const HistoryVesselAnalysis = () => {
     if (!vesselId.trim()) return;
     setLoading(true);
     try {
-      console.info(`Fetching history vessel analysis data for vessel ID: ${vesselId.trim()}`);
       const form = new FormData();
       form.append("vessel_id", vesselId.trim());
       const res = await api.post<VesselAnalysisData>("/vessel/vessel-history-analysis", form);
-      console.info("Successfully fetched vessel analysis data.");
       setData(res.data);
     } catch (err: any) {
-      console.error("Error fetching history vessel data:", err);
       const detail = err?.response?.data?.detail || "";
       if (detail.includes("No dataset")) {
-        showToast("No historical data found. Please upload via POST /upload/history.");
+        showToast("No historical data found. Use Data Ingestion (/ingest) to upload records.");
       } else {
         showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
       }
@@ -117,26 +93,6 @@ const HistoryVesselAnalysis = () => {
 
   return (
     <Box>
-      <Accordion sx={{ mb: 2 }}>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>Upload Historical Data</Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Box sx={{ maxWidth: 600 }}>
-            <FileUpload onFileSelect={setFile} label="Upload History Dataset (.csv)" />
-            <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
-              <Button
-                variant="contained"
-                onClick={handleUpload}
-                disabled={!file || uploading}
-              >
-                {uploading ? "Uploading…" : "Upload File"}
-              </Button>
-            </Box>
-          </Box>
-        </AccordionDetails>
-      </Accordion>
-
       {/* ── Command bar ── */}
       <AnalysisHeader
         mode="history"
