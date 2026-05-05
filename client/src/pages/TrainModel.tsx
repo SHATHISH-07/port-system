@@ -8,29 +8,22 @@ import { alpha } from "@mui/material/styles";
 import { UploadFileOutlined } from "@mui/icons-material";
 import { api } from "../api/api";
 import TrainingStatusCard from "../components/TrainingStatusCard";
-import ConfigPanel, { type TrainingConfig } from "../components/ConfigPanel";
-
-const DEFAULT_CONFIG: TrainingConfig = {
-  min_hours: 2,
-  max_hours: 240,
-  min_visit_rows: 5,
-};
+import ConfigPanel from "../components/ConfigPanel";
 
 export default function TrainModel() {
   const theme = useTheme();
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [dataSource, setDataSource] = useState<"db" | "file">("db");
-  const [file, setFile] = useState<File | null>(null);
-  const [updateDb, setUpdateDb] = useState(false);
-  const [config, setConfig] = useState<TrainingConfig>(DEFAULT_CONFIG);
+  const [file, setFile]           = useState<File | null>(null);
+  const [updateDb, setUpdateDb]   = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Training state ──────────────────────────────────────────────────────────
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<any>(null);
-  const [lastConfig, setLastConfig] = useState<TrainingConfig | null>(null);
+  const [loading, setLoading]           = useState(false);
+  const [status, setStatus]             = useState<any>(null);
+  const [hasTriggered, setHasTriggered] = useState(false);
 
   // ── Toast ───────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<{
@@ -66,14 +59,12 @@ export default function TrainModel() {
   };
 
   // ── Submit training ─────────────────────────────────────────────────────────
-  const handleTrain = async (overrideConfig?: TrainingConfig) => {
-    const cfg = overrideConfig || config;
+  const handleTrain = async () => {
     setLoading(true);
     try {
       const form = new FormData();
       form.append("data_source", dataSource);
       form.append("update_db", String(updateDb));
-      form.append("config", JSON.stringify(cfg));
       if (dataSource === "file" && file) form.append("file", file);
 
       const res = await api.post("/model/vessel-stay/training", form);
@@ -81,7 +72,7 @@ export default function TrainModel() {
       if (res.data.status === "error") {
         showToast(res.data.message, "error");
       } else {
-        setLastConfig(cfg);
+        setHasTriggered(true);
         showToast(res.data.message, "success");
         startPolling();
       }
@@ -211,22 +202,13 @@ export default function TrainModel() {
 
         {/* Config panel */}
         <Box sx={{ p: 3 }}>
-          <ConfigPanel config={config} onChange={setConfig} disabled={loading || isTraining} />
+          <ConfigPanel />
         </Box>
 
         <Divider />
 
         {/* Actions */}
-        <Box sx={{ px: 3, py: 2, display: "flex", justifyContent: "flex-end", gap: 1.5 }}>
-          <Button
-            variant="text"
-            size="small"
-            sx={{ color: "text.secondary" }}
-            disabled={loading || isTraining}
-            onClick={() => setConfig(DEFAULT_CONFIG)}
-          >
-            Reset Defaults
-          </Button>
+        <Box sx={{ px: 3, py: 2, display: "flex", justifyContent: "flex-end" }}>
           <Button
             variant="contained"
             disabled={!canTrain}
@@ -241,8 +223,8 @@ export default function TrainModel() {
       </Box>
 
       {/* Training Status Card */}
-      {status && (
-        <TrainingStatusCard onRetry={lastConfig ? () => handleTrain(lastConfig) : undefined} />
+      {hasTriggered && (
+        <TrainingStatusCard onRetry={handleTrain} />
       )}
 
       <Snackbar

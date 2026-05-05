@@ -1,29 +1,69 @@
-import { Box, Typography, Slider, TextField, useTheme } from "@mui/material";
+import { useState, useEffect } from "react";
+import {
+  Box, Typography, TextField, Button, LinearProgress,
+  Skeleton, useTheme, Tooltip,
+} from "@mui/material";
 import { alpha } from "@mui/material/styles";
+import { InfoOutlined } from "@mui/icons-material";
+import { api } from "../api/api";
 
-export interface TrainingConfig {
-  min_hours: number;
-  max_hours: number;
-  min_visit_rows: number;
+interface RetrainingConfig {
+  retrain_threshold: number;
+  scheduled_hour: number;
+  scheduled_minute: number;
+  history_record_count: number;
+  last_trained_record_count: number;
+  new_records_since_training: number;
+  last_trained_timestamp: string | null;
 }
 
-interface Props {
-  config: TrainingConfig;
-  onChange: (c: TrainingConfig) => void;
-  disabled?: boolean;
-}
-
-const DEFAULTS: TrainingConfig = {
-  min_hours: 2,
-  max_hours: 240,
-  min_visit_rows: 5,
-};
-
-export default function ConfigPanel({ config, onChange, disabled = false }: Props) {
+export default function ConfigPanel() {
   const theme = useTheme();
 
-  const set = <K extends keyof TrainingConfig>(key: K, value: TrainingConfig[K]) =>
-    onChange({ ...config, [key]: value });
+  const [cfg, setCfg]           = useState<RetrainingConfig | null>(null);
+  const [threshold, setThreshold] = useState<string>("");
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(false);
+
+  const load = async () => {
+    try {
+      const res = await api.get<RetrainingConfig>("/config/retraining");
+      setCfg(res.data);
+      setThreshold(String(res.data.retrain_threshold));
+    } catch {
+      // silently ignore — server may not yet have responded
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleSave = async () => {
+    const val = parseInt(threshold, 10);
+    if (isNaN(val) || val < 1) return;
+    setSaving(true);
+    try {
+      const res = await api.patch<{ config: RetrainingConfig }>("/config/retraining", {
+        retrain_threshold: val,
+      });
+      setCfg((prev) => prev ? { ...prev, retrain_threshold: res.data.config.retrain_threshold } : prev);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      // could add an error toast here
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isDirty = cfg ? parseInt(threshold, 10) !== cfg.retrain_threshold : false;
+
+  const scheduledLabel = cfg
+    ? `${String(cfg.scheduled_hour).padStart(2, "0")}:${String(cfg.scheduled_minute).padStart(2, "0")} (server time)`
+    : "—";
+
+  const progress = cfg && cfg.retrain_threshold > 0
+    ? Math.min(100, Math.round((cfg.new_records_since_training / cfg.retrain_threshold) * 100))
+    : 0;
 
   return (
     <Box
@@ -37,82 +77,134 @@ export default function ConfigPanel({ config, onChange, disabled = false }: Prop
       }}
     >
       <Typography variant="overline" sx={{ color: "text.secondary", display: "block", mb: 3 }}>
-        Training Parameters
+        Retraining Trigger Configuration
       </Typography>
 
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 3.5 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
 
-        {/* Min stay hours */}
+        {/* ── Threshold ───────────────────────────────────────── */}
         <Box>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1.25 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1 }}>
             <Typography variant="body2" sx={{ fontWeight: 500, color: "text.primary" }}>
-              Minimum Stay (hours)
+              Auto-Retrain Threshold
             </Typography>
-            <Typography variant="body2" sx={{ color: "primary.main", fontWeight: 600, fontFamily: "monospace" }}>
-              {config.min_hours}h
-            </Typography>
+            <Tooltip
+              title="When the number of new records added since the last training reaches this value, retraining triggers automatically on the next upload."
+              placement="top"
+              arrow
+            >
+              <InfoOutlined sx={{ fontSize: 15, color: "text.disabled", cursor: "default" }} />
+            </Tooltip>
           </Box>
-          <Slider
-            value={config.min_hours}
-            min={0}
-            max={24}
-            step={1}
-            disabled={disabled}
-            onChange={(_, v) => set("min_hours", v as number)}
-            size="small"
-            sx={{ color: "primary.main" }}
-          />
-          <Typography variant="caption" sx={{ color: "text.disabled" }}>
-            Visits shorter than this are excluded as noise (default: {DEFAULTS.min_hours}h)
-          </Typography>
-        </Box>
 
-        {/* Max stay hours */}
-        <Box>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1.25 }}>
-            <Typography variant="body2" sx={{ fontWeight: 500, color: "text.primary" }}>
-              Maximum Stay (hours)
-            </Typography>
-            <Typography variant="body2" sx={{ color: "primary.main", fontWeight: 600, fontFamily: "monospace" }}>
-              {config.max_hours}h
-            </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <TextField
+              type="number"
+              size="small"
+              value={threshold}
+              onChange={(e) => setThreshold(e.target.value)}
+              slotProps={{ input: { inputProps: { min: 1, step: 100 } } }}
+              sx={{ width: 160 }}
+              disabled={saving}
+            />
+            <Button
+              variant={saved ? "text" : "outlined"}
+              size="small"
+              disabled={!isDirty || saving}
+              onClick={handleSave}
+              sx={{ minWidth: 80, color: saved ? "success.main" : undefined }}
+            >
+              {saving ? "Saving…" : saved ? "Saved ✓" : "Apply"}
+            </Button>
           </Box>
-          <Slider
-            value={config.max_hours}
-            min={24}
-            max={720}
-            step={24}
-            disabled={disabled}
-            onChange={(_, v) => set("max_hours", v as number)}
-            size="small"
-            sx={{ color: "primary.main" }}
-          />
-          <Typography variant="caption" sx={{ color: "text.disabled" }}>
-            Visits longer than this are excluded as outliers (default: {DEFAULTS.max_hours}h)
-          </Typography>
-        </Box>
 
-        {/* Min visit rows */}
-        <Box>
-          <Typography variant="body2" sx={{ fontWeight: 500, color: "text.primary", mb: 1 }}>
-            Minimum Container Records per Visit
-          </Typography>
-          <TextField
-            type="number"
-            size="small"
-            value={config.min_visit_rows}
-            disabled={disabled}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              if (!isNaN(v) && v >= 1) set("min_visit_rows", v);
-            }}
-            slotProps={{ input: { inputProps: { min: 1, max: 100 } } }}
-            sx={{ width: 140 }}
-          />
           <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.75 }}>
-            Visits with fewer container records are skipped (default: {DEFAULTS.min_visit_rows})
+            Default: 1,000 records. Takes effect immediately — no server restart needed.
           </Typography>
         </Box>
+
+        {/* ── Live progress bar ────────────────────────────────── */}
+        <Box>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.75 }}>
+            <Typography variant="body2" sx={{ fontWeight: 500, color: "text.primary" }}>
+              New Records Since Last Training
+            </Typography>
+            {cfg ? (
+              <Typography variant="body2" sx={{ fontFamily: "monospace", color: "primary.main", fontWeight: 600 }}>
+                {cfg.new_records_since_training.toLocaleString()} / {cfg.retrain_threshold.toLocaleString()}
+              </Typography>
+            ) : (
+              <Skeleton width={80} height={20} />
+            )}
+          </Box>
+
+          <LinearProgress
+            variant="determinate"
+            value={progress}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+              "& .MuiLinearProgress-bar": {
+                borderRadius: 3,
+                bgcolor: progress >= 100 ? "success.main" : "primary.main",
+              },
+            }}
+          />
+          <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.5 }}>
+            {progress}% of threshold reached
+            {progress >= 100 ? " — retraining will trigger on next upload" : ""}
+          </Typography>
+        </Box>
+
+        {/* ── Stats row ────────────────────────────────────────── */}
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
+          {[
+            {
+              label: "Total History Records",
+              value: cfg ? cfg.history_record_count.toLocaleString() : null,
+            },
+            {
+              label: "Records at Last Training",
+              value: cfg ? cfg.last_trained_record_count.toLocaleString() : null,
+            },
+            {
+              label: "Nightly Schedule",
+              value: scheduledLabel,
+              tooltip: "The nightly scheduled retraining runs at this time every day (server local time). Changing the hour requires a server restart.",
+            },
+          ].map(({ label, value, tooltip }) => (
+            <Box key={label}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.25 }}>
+                <Typography variant="caption" sx={{ color: "text.disabled" }}>
+                  {label}
+                </Typography>
+                {tooltip && (
+                  <Tooltip title={tooltip} placement="top" arrow>
+                    <InfoOutlined sx={{ fontSize: 12, color: "text.disabled", cursor: "default" }} />
+                  </Tooltip>
+                )}
+              </Box>
+              {value !== null ? (
+                <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary", fontFamily: "monospace" }}>
+                  {value}
+                </Typography>
+              ) : (
+                <Skeleton width={60} height={20} />
+              )}
+            </Box>
+          ))}
+        </Box>
+
+        {/* ── Last trained ─────────────────────────────────────── */}
+        {cfg?.last_trained_timestamp && (
+          <Typography variant="caption" sx={{ color: "text.disabled" }}>
+            Last training completed:{" "}
+            <strong>
+              {new Date(cfg.last_trained_timestamp).toLocaleString()}
+            </strong>
+          </Typography>
+        )}
 
       </Box>
     </Box>

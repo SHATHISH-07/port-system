@@ -6,6 +6,7 @@ from sqlalchemy import text
 from models.stay_model import train_stay_model
 from models.training_status import training_status
 from config import settings
+from models.retraining_config import retraining_config
 from db.queries import load_from_db
 from fastapi import BackgroundTasks
 import asyncio
@@ -82,8 +83,8 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
     # Calculate the difference between the current count and the last trained dataset size
     difference = current_count - last_size
     
-    # Get the threshold for retraining
-    threshold = settings.RETRAIN_THRESHOLD_NEW_RECORDS
+    # Get the threshold for retraining (dynamic, can be updated via API)
+    threshold = retraining_config.threshold
     
     # Trigger retraining if the difference is greater than or equal to the threshold or if it's the first training
     if difference >= threshold or last_size == 0:
@@ -123,8 +124,8 @@ async def scheduled_retraining_job():
         # Get the difference between the current count and the last trained dataset size
         difference = current_count - last_size
         
-        # Get the threshold for retraining
-        threshold = settings.RETRAIN_THRESHOLD_NEW_RECORDS
+        # Get the threshold for retraining (dynamic, can be updated via API)
+        threshold = retraining_config.threshold
         
         # Start retraining if the difference is greater than or equal to the threshold or if it's the first training
         if difference >= threshold or last_size == 0:

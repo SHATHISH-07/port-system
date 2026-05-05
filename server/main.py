@@ -5,6 +5,7 @@ from routes.vessel_routes import router as vessel_router
 from routes.model_routes import router as model_router
 from routes.upload_routes import router as upload_router
 from routes.ingest_routes import router as ingest_router
+from routes.config_routes import router as config_router
 
 from contextlib import asynccontextmanager
 from services.retraining_service import scheduled_retraining_job
@@ -73,4 +74,6 @@ app.add_middleware(
 app.include_router(vessel_router)
 app.include_router(model_router)
 app.include_router(upload_router)
-app.include_router(ingest_router)
+app.include_router(ingest_router)
+app.include_router(config_router)
+
