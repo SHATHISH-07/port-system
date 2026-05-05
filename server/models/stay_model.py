@@ -17,11 +17,14 @@ logger = logging.getLogger("port_system")
 
 from config import settings
 
+# Build the ensemble model
 def _build_ensemble():
+    # Ridge regression pipeline
     ridge = Pipeline([
         ("scaler", StandardScaler()),
         ("ridge", Ridge(alpha=10.0)),
     ])
+    # XGBoost regressor
     xgb = XGBRegressor(
         n_estimators=80,
         max_depth=3,
@@ -34,6 +37,7 @@ def _build_ensemble():
         random_state=42,
         verbosity=0,
     )
+    # Gradient boosting regressor
     gbr = GradientBoostingRegressor(
         n_estimators=60,
         max_depth=2,
@@ -42,6 +46,7 @@ def _build_ensemble():
         min_samples_leaf=8,
         random_state=42,
     )
+    # Voting regressor
     return VotingRegressor(estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr)])
 
 

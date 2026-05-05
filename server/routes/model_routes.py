@@ -8,14 +8,15 @@ from services.retraining_service import background_train_and_update
 
 logger = logging.getLogger("port_system")
 
+# Router for model endpoints
 router = APIRouter(prefix="/model", tags=["Model"])
 
 # Train vessel stay model from history database
-@router.post("/vessel-stay/train")
+@router.post("/vessel-stay/training")
 async def train_vessel_stay_model(background_tasks: BackgroundTasks):
     try:
         # Log the request
-        logger.info("POST /model/vessel-stay/train — loading history from DB")
+        logger.info("POST /model/vessel-stay/training — loading history from DB")
 
         # Load the data from the database
         df = load_df_from_db("history")
@@ -39,10 +40,10 @@ async def train_vessel_stay_model(background_tasks: BackgroundTasks):
         }
 
     except Exception as e:
-        logger.error(f"POST /model/vessel-stay/train error: {e}")
+        logger.error(f"POST /model/vessel-stay/training error: {e}")
         return {"status": "error", "message": str(e)}
 
 # Get training status
-@router.get("/status")
+@router.get("/vessel-stay/training/status")
 def get_training_status():
     return training_status.get()

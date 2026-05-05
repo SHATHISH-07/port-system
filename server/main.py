@@ -6,17 +6,21 @@ from routes.model_routes import router as model_router
 from routes.upload_routes import router as upload_router
 
 from contextlib import asynccontextmanager
-import asyncio
-from services.retraining_service import continuous_retraining_check
+from services.retraining_service import scheduled_retraining_job
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+# Initialize the scheduler
+scheduler = AsyncIOScheduler()
 
 # Lifespan context manager for startup/shutdown tasks
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Start the continuous retraining check task
-    task = asyncio.create_task(continuous_retraining_check())
+    # Startup: Schedule the retraining check to run exactly at 2:00 AM every day
+    scheduler.add_job(scheduled_retraining_job, 'cron', hour=2, minute=0)
+    scheduler.start()
     yield
-    # Shutdown: Cancel the task
-    task.cancel()
+    # Shutdown: Stop the scheduler
+    scheduler.shutdown()
 
 # Initialize FastAPI app
 app = FastAPI(title="Port System API", version="2.0.0", lifespan=lifespan)

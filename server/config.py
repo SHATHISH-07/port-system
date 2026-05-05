@@ -43,6 +43,7 @@ class Settings:
 
     # Automated Retraining
     RETRAIN_THRESHOLD_NEW_RECORDS = int(os.getenv("RETRAIN_THRESHOLD_NEW_RECORDS", "1000"))
+    RETRAIN_CHECK_INTERVAL_SECONDS = int(os.getenv("RETRAIN_CHECK_INTERVAL_SECONDS", "60"))
 
     # Database Queries and Schemas
     DB_EXPECTED_COLUMNS = [
@@ -53,6 +54,7 @@ class Settings:
         "created_at", "updated_at", "deleted_at"
     ]
 
+    # Upsert vessels query
     UPSERT_VESSELS_QUERY = """
         INSERT INTO "{dataset_type}_vessels" ("outbound_service", "created_at", "updated_at", "deleted_at")
         SELECT "outbound_service", "created_at", "updated_at", CAST("deleted_at" AS TIMESTAMP WITH TIME ZONE) FROM tmp_vessels 
@@ -60,6 +62,7 @@ class Settings:
         SET updated_at = EXCLUDED.updated_at, deleted_at = NULL;
     """
 
+    # Upsert visits query
     UPSERT_VISITS_QUERY = """
         INSERT INTO "{dataset_type}_visits" ("actual_outbound_carrier_visit_id", "outbound_service", "created_at", "updated_at", "deleted_at")
         SELECT "actual_outbound_carrier_visit_id", "outbound_service", "created_at", "updated_at", CAST("deleted_at" AS TIMESTAMP WITH TIME ZONE) FROM tmp_visits 
@@ -67,6 +70,7 @@ class Settings:
         SET updated_at = EXCLUDED.updated_at, deleted_at = NULL;
     """
 
+    # Load containers query
     LOAD_CONTAINERS_QUERY = """
         SELECT 
             c.*,

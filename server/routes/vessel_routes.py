@@ -8,6 +8,7 @@ from utils.cache_utils import vessel_cache
 
 logger = logging.getLogger("port_system")
 
+# Router for vessel endpoints
 router = APIRouter(prefix="/vessel", tags=["Vessel"])
 
 

@@ -24,9 +24,6 @@ def psql_insert_copy(table, conn, keys, data_iter):
         sql = f'COPY {table_name} ({columns}) FROM STDIN WITH CSV'
         cur.copy_expert(sql=sql, file=s_buf)
 
-
-
-
 # Insert Data
 def bulk_insert_df(df: pd.DataFrame, dataset_type: str):
     # Ensure Database & Engine
@@ -88,8 +85,6 @@ def bulk_insert_df(df: pd.DataFrame, dataset_type: str):
             conn.execute(text("DROP TABLE tmp_vessels;"))
             conn.execute(text("DROP TABLE tmp_visits;"))
 
-
-
     return len(df)
 
 # Load Data from Database
@@ -124,7 +119,5 @@ def load_df_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
     for col in ["move_complete_time", "time_in", "time_out", "created_at", "updated_at", "deleted_at"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
-
-
 
     return df.copy()
