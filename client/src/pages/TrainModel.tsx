@@ -86,7 +86,7 @@ export default function TrainModel() {
   const canTrain = !loading && !isTraining && (dataSource === "db" || !!file);
 
   return (
-    <Box sx={{ maxWidth: 720, mx: "auto" }}>
+    <Box sx={{ mx: "auto" }}>
 
       {/* Header */}
       <Box sx={{ mb: 4 }}>
