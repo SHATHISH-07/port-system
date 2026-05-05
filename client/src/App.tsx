@@ -10,7 +10,6 @@ const HistoryVesselAnalysis = lazy(() => import("./pages/HistoryVesselAnalysis")
 const CurrentVesselAnalysis  = lazy(() => import("./pages/CurrentVesselAnalysis"));
 const TerminalMap            = lazy(() => import("./pages/TerminalMap"));
 const TrainModel             = lazy(() => import("./pages/TrainModel"));
-const DataIngestion          = lazy(() => import("./pages/DataIngestion"));
 
 function PageLoader() {
   return (
@@ -37,7 +36,6 @@ export default function App() {
               <Route path="/history-analysis"  element={<HistoryVesselAnalysis />} />
               <Route path="/current-analysis"  element={<CurrentVesselAnalysis />} />
               <Route path="/heatmap"           element={<TerminalMap />} />
-              <Route path="/ingest"            element={<DataIngestion />} />
               <Route path="/train-model"       element={<TrainModel />} />
             </Routes>
           </Suspense>

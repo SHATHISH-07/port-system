@@ -6,7 +6,6 @@ import {
   HistoryOutlined,
   ModelTrainingOutlined,
   MenuRounded,
-  UploadFileOutlined,
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 
@@ -17,7 +16,6 @@ const NAV_ITEMS = [
   { path: "/history-analysis", label: "History Analysis",  icon: HistoryOutlined },
   { path: "/current-analysis", label: "Current Analysis",  icon: AnalyticsOutlined },
   { path: "/heatmap",          label: "Terminal Heatmap",  icon: GridViewOutlined },
-  { path: "/ingest",           label: "Data Ingestion",    icon: UploadFileOutlined },
   { path: "/train-model",      label: "Train Model",       icon: ModelTrainingOutlined },
 ];
 
