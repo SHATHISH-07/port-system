@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Box, Typography, Snackbar, Alert } from "@mui/material";
+import { Box, Typography, Snackbar, Alert, Accordion, AccordionSummary, AccordionDetails, Button } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { api } from "../api/api";
 import { type VesselAnalysisData } from "../types/vessel";
 
 import AnalysisHeader from "../components/vessel-analysis/AnalysisHeader";
+import FileUpload from "../components/FileUpload";
 import PerformanceStats from "../components/vessel-analysis/PerformanceStats";
 import RiskAndStrategy from "../components/vessel-analysis/RiskAndStrategy";
 import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
@@ -30,14 +32,15 @@ function Section({
           gap: 2.5,
           mb: 2.5,
           pb: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.1)",
+          borderBottom: "1px solid",
+          borderColor: "divider",
         }}
       >
         <Typography
           sx={{
             fontSize: "2.25rem",
             fontWeight: 800,
-            color: "rgba(255,255,255,0.09)",
+            color: "text.disabled",
             lineHeight: 1,
             letterSpacing: "-2px",
             fontFamily: "monospace",
@@ -47,15 +50,7 @@ function Section({
         >
           {n}
         </Typography>
-        <Typography
-          sx={{
-            fontSize: "0.6875rem",
-            fontWeight: 600,
-            color: "#6b7280",
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-          }}
-        >
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
           {label}
         </Typography>
       </Box>
@@ -69,6 +64,25 @@ const HistoryVesselAnalysis = () => {
   const [data, setData] = useState<VesselAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{open: boolean, message: string, severity: "success" | "error" | "info" | "warning"}>({open: false, message: "", severity: "info"});
+
+  const [uploading, setUploading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await api.post("/upload/history", form);
+      showToast(res.data.message || "File uploaded successfully", "success");
+      setFile(null);
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || err?.response?.data?.message || "Upload failed", "error");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const showToast = (message: string, severity: "success" | "error" | "info" | "warning" = "error") => {
     setToast({open: true, message, severity});
@@ -102,7 +116,26 @@ const HistoryVesselAnalysis = () => {
   const isManual = data?.mode === "manual" || data?.mode === "current-override";
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: "auto" }}>
+    <Box>
+      <Accordion sx={{ mb: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>Upload Historical Data</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Box sx={{ maxWidth: 600 }}>
+            <FileUpload onFileSelect={setFile} label="Upload History Dataset (.csv)" />
+            <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
+              <Button
+                variant="contained"
+                onClick={handleUpload}
+                disabled={!file || uploading}
+              >
+                {uploading ? "Uploading…" : "Upload File"}
+              </Button>
+            </Box>
+          </Box>
+        </AccordionDetails>
+      </Accordion>
 
       {/* ── Command bar ── */}
       <AnalysisHeader
@@ -179,7 +212,7 @@ const HistoryVesselAnalysis = () => {
       )}
 
       <Snackbar open={toast.open} autoHideDuration={6000} onClose={handleCloseToast} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={handleCloseToast} severity={toast.severity} sx={{ width: '100%' }}>
+        <Alert onClose={handleCloseToast} severity={toast.severity} variant="filled" sx={{ width: '100%' }}>
           {toast.message}
         </Alert>
       </Snackbar>

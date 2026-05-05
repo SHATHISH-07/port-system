@@ -49,7 +49,8 @@ def init_dataset_schema(engine, dataset_type: str):
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 deleted_at TIMESTAMP WITH TIME ZONE NULL,
                 CONSTRAINT fk_{dataset_type}_visit FOREIGN KEY (actual_outbound_carrier_visit_id) 
-                    REFERENCES "{dataset_type}_visits" (actual_outbound_carrier_visit_id) ON DELETE CASCADE
+                    REFERENCES "{dataset_type}_visits" (actual_outbound_carrier_visit_id) ON DELETE CASCADE,
+                CONSTRAINT unique_container_{dataset_type} UNIQUE (actual_outbound_carrier_visit_id, unit_id)
             );
         """))
 

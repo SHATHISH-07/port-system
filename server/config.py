@@ -70,6 +70,39 @@ class Settings:
         SET updated_at = EXCLUDED.updated_at, deleted_at = NULL;
     """
 
+    # Upsert containers query
+    UPSERT_CONTAINERS_QUERY = """
+        INSERT INTO "{dataset_type}_containers" (
+            "id", "actual_outbound_carrier_visit_id", "move_complete_time", 
+            "time_in", "time_out", "unit_id", "ctr_from_position", 
+            "ctr_to_position", "unit_weight_in_kg", "verified_gross_mass_kg", 
+            "reefer", "hazardous_flag", "oog_unit", "port_of_discharge", 
+            "created_at", "updated_at", "deleted_at"
+        )
+        SELECT 
+            "id", "actual_outbound_carrier_visit_id", CAST("move_complete_time" AS TIMESTAMP WITH TIME ZONE), 
+            CAST("time_in" AS TIMESTAMP WITH TIME ZONE), CAST("time_out" AS TIMESTAMP WITH TIME ZONE), "unit_id", "ctr_from_position", 
+            "ctr_to_position", "unit_weight_in_kg", "verified_gross_mass_kg", 
+            "reefer", "hazardous_flag", "oog_unit", "port_of_discharge", 
+            "created_at", "updated_at", CAST("deleted_at" AS TIMESTAMP WITH TIME ZONE) 
+        FROM tmp_containers 
+        ON CONFLICT (actual_outbound_carrier_visit_id, unit_id) DO UPDATE 
+        SET 
+            move_complete_time = EXCLUDED.move_complete_time,
+            time_in = EXCLUDED.time_in,
+            time_out = EXCLUDED.time_out,
+            ctr_from_position = EXCLUDED.ctr_from_position,
+            ctr_to_position = EXCLUDED.ctr_to_position,
+            unit_weight_in_kg = EXCLUDED.unit_weight_in_kg,
+            verified_gross_mass_kg = EXCLUDED.verified_gross_mass_kg,
+            reefer = EXCLUDED.reefer,
+            hazardous_flag = EXCLUDED.hazardous_flag,
+            oog_unit = EXCLUDED.oog_unit,
+            port_of_discharge = EXCLUDED.port_of_discharge,
+            updated_at = EXCLUDED.updated_at,
+            deleted_at = NULL;
+    """
+
     # Load containers query
     LOAD_CONTAINERS_QUERY = """
         SELECT 

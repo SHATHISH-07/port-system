@@ -1,59 +1,49 @@
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
-// Props for the BerthRecommendation component
 interface Props { berth?: string; concentration?: string; }
 
-// Helper function to get the color for the badge based on the value
-const concColor = (c?: string) => {
-  if (c === "High") return { color: "#f28b82", bg: "rgba(242,139,130,0.1)", border: "rgba(242,139,130,0.22)" };
-  if (c === "Medium") return { color: "#fdd663", bg: "rgba(253,214,99,0.1)", border: "rgba(253,214,99,0.22)" };
-  return { color: "#81c995", bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.22)" };
-};
-
-// Main component to display the berth recommendation for vessels
 export default function BerthRecommendation({ berth, concentration }: Props) {
-  const s = concColor(concentration);
+  const theme = useTheme();
+
+  const concStyle = (() => {
+    const c = concentration;
+    if (c === "High")   return { color: theme.palette.error.main };
+    if (c === "Medium") return { color: theme.palette.warning.main };
+    return { color: theme.palette.success.main };
+  })();
 
   return (
     <Box
       sx={{
-        bgcolor: "#292a2d",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 1.5,
+        bgcolor: "background.paper",
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 2,
         overflow: "hidden",
         height: "100%",
         display: "flex",
         flexDirection: "column",
       }}
     >
-      {/* Header strip */}
+      {/* Header */}
       <Box
         sx={{
-          px: 3,
-          py: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          px: 3, py: 2,
+          borderBottom: `1px solid ${theme.palette.divider}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <Typography
-          sx={{
-            fontSize: "0.6875rem",
-            fontWeight: 500,
-            color: "#9aa0a6",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
           Recommended Berth
         </Typography>
-        <Typography sx={{ fontSize: "0.6875rem", color: "#5f6368" }}>
+        <Typography variant="caption" sx={{ color: "text.disabled" }}>
           Optimal assignment
         </Typography>
       </Box>
 
-      {/* Body */}
+      {/* Body — big berth number */}
       <Box
         sx={{
           flex: 1,
@@ -61,40 +51,38 @@ export default function BerthRecommendation({ berth, concentration }: Props) {
           flexDirection: "column",
           alignItems: "flex-start",
           justifyContent: "center",
-          px: 3,
-          py: 3,
+          px: 3, py: 3,
         }}
       >
         <Typography
           sx={{
-            fontSize: "5rem",
+            fontSize: "4.5rem",
             fontWeight: 200,
-            color: "#e8eaed",
+            color: "text.primary",
             lineHeight: 1,
             letterSpacing: "-3px",
-            fontFamily: "'Inter', 'Roboto', sans-serif",
-            mb: 0.75,
+            fontFamily: "'Inter', sans-serif",
+            mb: 0.5,
           }}
         >
           {berth || "—"}
         </Typography>
-        <Typography sx={{ fontSize: "0.75rem", color: "#5f6368" }}>
+        <Typography variant="caption" sx={{ color: "text.disabled" }}>
           Berth assignment
         </Typography>
       </Box>
 
-      {/* Footer */}
+      {/* Footer — concentration badge */}
       <Box
         sx={{
-          px: 3,
-          py: 2,
-          borderTop: "1px solid rgba(255,255,255,0.08)",
+          px: 3, py: 2,
+          borderTop: `1px solid ${theme.palette.divider}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6" }}>
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
           Cargo concentration
         </Typography>
         <Box
@@ -102,23 +90,14 @@ export default function BerthRecommendation({ berth, concentration }: Props) {
             display: "inline-flex",
             alignItems: "center",
             gap: 0.75,
-            px: 1.25,
-            py: 0.4,
-            borderRadius: 0.75,
-            bgcolor: s.bg,
-            border: `1px solid ${s.border}`,
+            px: 1.25, py: 0.4,
+            borderRadius: 1,
+            bgcolor: alpha(concStyle.color, 0.1),
+            border: `1px solid ${alpha(concStyle.color, 0.25)}`,
           }}
         >
-          <Box
-            sx={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              bgcolor: s.color,
-              flexShrink: 0,
-            }}
-          />
-          <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: s.color }}>
+          <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: concStyle.color, flexShrink: 0 }} />
+          <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: concStyle.color }}>
             {concentration ?? "Unknown"}
           </Typography>
         </Box>

@@ -24,20 +24,10 @@ def psql_insert_copy(table, conn, keys, data_iter):
         sql = f'COPY {table_name} ({columns}) FROM STDIN WITH CSV'
         cur.copy_expert(sql=sql, file=s_buf)
 
-# Insert Data
-def bulk_insert_df(df: pd.DataFrame, dataset_type: str):
-    # Ensure Database & Engine
-    _ensure_database_exists()
-    _engine.dispose()
-    engine = get_engine()
-
-    # Initialize Schema
-    init_dataset_schema(engine, dataset_type)
-
-    # Get current time
+# Prepare Common DataFrame Formatting
+def _prepare_dfs_for_insert(df: pd.DataFrame):
     now = datetime.datetime.now()
 
-    # Prepare DataFrames with audit columns
     vessels_df = df[['outbound_service']].drop_duplicates().reset_index(drop=True)
     vessels_df['created_at'] = now
     vessels_df['updated_at'] = now
@@ -54,41 +44,62 @@ def bulk_insert_df(df: pd.DataFrame, dataset_type: str):
     containers_df['updated_at'] = now
     containers_df['deleted_at'] = None
 
-    # Define expected column order
     expected_columns = settings.DB_EXPECTED_COLUMNS
     valid_cols = [col for col in expected_columns if col in containers_df.columns]
     containers_df = containers_df[valid_cols]
 
-    # Insert Data into Tables
+    return vessels_df, visits_df, containers_df
+
+# Append data to history (Never truncate or overwrite)
+def save_to_history(df: pd.DataFrame):
+    _ensure_database_exists()
+    _engine.dispose()
+    engine = get_engine()
+    init_dataset_schema(engine, "history")
+
+    vessels_df, visits_df, containers_df = _prepare_dfs_for_insert(df)
+
     with engine.begin() as conn:
-        if dataset_type == "current":
-            conn.execute(text(f'TRUNCATE TABLE "{dataset_type}_vessels" CASCADE;'))
-            
-            vessels_df.to_sql(f"{dataset_type}_vessels", conn, if_exists="append", index=False, method=psql_insert_copy)
-            visits_df.to_sql(f"{dataset_type}_visits", conn, if_exists="append", index=False, method=psql_insert_copy)
-            containers_df.to_sql(f"{dataset_type}_containers", conn, if_exists="append", index=False, method=psql_insert_copy)
+        vessels_df.to_sql("tmp_vessels", conn, if_exists="replace", index=False, method=psql_insert_copy)
+        visits_df.to_sql("tmp_visits", conn, if_exists="replace", index=False, method=psql_insert_copy)
 
-        else:
-            vessels_df.to_sql("tmp_vessels", conn, if_exists="replace", index=False, method=psql_insert_copy)
-            visits_df.to_sql("tmp_visits", conn, if_exists="replace", index=False, method=psql_insert_copy)
+        conn.execute(text(settings.UPSERT_VESSELS_QUERY.format(dataset_type="history")))
+        conn.execute(text(settings.UPSERT_VISITS_QUERY.format(dataset_type="history")))
+        
+        # Containers are simply appended for history
+        containers_df.to_sql("history_containers", conn, if_exists="append", index=False, method=psql_insert_copy)
 
-            # Upsert Vessels
-            conn.execute(text(settings.UPSERT_VESSELS_QUERY.format(dataset_type=dataset_type)))
+        conn.execute(text("DROP TABLE tmp_vessels;"))
+        conn.execute(text("DROP TABLE tmp_visits;"))
 
-            # Upsert Visits
-            conn.execute(text(settings.UPSERT_VISITS_QUERY.format(dataset_type=dataset_type)))
+    return len(df)
 
-            # Insert Containers
-            containers_df.to_sql(f"{dataset_type}_containers", conn, if_exists="append", index=False, method=psql_insert_copy)
+# UPSERT data to current (Insert or Update if exists)
+def save_to_current(df: pd.DataFrame):
+    _ensure_database_exists()
+    _engine.dispose()
+    engine = get_engine()
+    init_dataset_schema(engine, "current")
 
-            # Cleanup
-            conn.execute(text("DROP TABLE tmp_vessels;"))
-            conn.execute(text("DROP TABLE tmp_visits;"))
+    vessels_df, visits_df, containers_df = _prepare_dfs_for_insert(df)
+
+    with engine.begin() as conn:
+        vessels_df.to_sql("tmp_vessels", conn, if_exists="replace", index=False, method=psql_insert_copy)
+        visits_df.to_sql("tmp_visits", conn, if_exists="replace", index=False, method=psql_insert_copy)
+        containers_df.to_sql("tmp_containers", conn, if_exists="replace", index=False, method=psql_insert_copy)
+
+        conn.execute(text(settings.UPSERT_VESSELS_QUERY.format(dataset_type="current")))
+        conn.execute(text(settings.UPSERT_VISITS_QUERY.format(dataset_type="current")))
+        conn.execute(text(settings.UPSERT_CONTAINERS_QUERY.format(dataset_type="current")))
+
+        conn.execute(text("DROP TABLE tmp_vessels;"))
+        conn.execute(text("DROP TABLE tmp_visits;"))
+        conn.execute(text("DROP TABLE tmp_containers;"))
 
     return len(df)
 
 # Load Data from Database
-def load_df_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
+def load_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
     # No cache, always fetch from DB
 
     # Get Engine

@@ -1,10 +1,10 @@
 import {
   Box, Typography, Table, TableHead,
-  TableRow, TableCell, TableBody, Button,
+  TableRow, TableCell, TableBody, Button, useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { useState } from "react";
 
-// TSX component to display the berth impact table for vessels
 interface Row {
   berth: string;
   block: string;
@@ -13,57 +13,46 @@ interface Row {
   congestion_risk: "Low" | "Medium" | "High";
 }
 
-// Props for the BerthImpactTable component
 interface Props { data: Row[]; }
 
-// Helper function to get the color for the badge based on the value
-const badgeColor = (v: string) => {
-  if (v === "High") return { color: "#f28b82", bg: "rgba(242,139,130,0.1)", border: "rgba(242,139,130,0.22)" };
-  if (v === "Medium") return { color: "#fdd663", bg: "rgba(253,214,99,0.1)", border: "rgba(253,214,99,0.22)" };
-  return { color: "#81c995", bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.22)" };
-};
-
-// Limit for the number of rows to display
 const LIMIT = 5;
 
-// Main component to display the berth impact table for vessels
 export default function BerthImpactTable({ data }: Props) {
+  const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   if (!data?.length) return null;
+
   const rows = expanded ? data : data.slice(0, LIMIT);
+
+  const levelColor = (v: string) => {
+    if (v === "High")   return theme.palette.error.main;
+    if (v === "Medium") return theme.palette.warning.main;
+    return theme.palette.success.main;
+  };
 
   return (
     <Box
       sx={{
-        bgcolor: "#292a2d",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 1.5,
+        bgcolor: "background.paper",
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 2,
         overflow: "hidden",
       }}
     >
-      {/* Header strip */}
+      {/* Header */}
       <Box
         sx={{
-          px: 3,
-          py: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          px: 3, py: 2,
+          borderBottom: `1px solid ${theme.palette.divider}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <Typography
-          sx={{
-            fontSize: "0.6875rem",
-            fontWeight: 500,
-            color: "#9aa0a6",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
           Berth Impact Analysis
         </Typography>
-        <Typography sx={{ fontSize: "0.6875rem", color: "#5f6368", fontFamily: "monospace" }}>
+        <Typography variant="caption" sx={{ color: "text.disabled", fontFamily: "monospace" }}>
           {data.length} berths ranked
         </Typography>
       </Box>
@@ -72,21 +61,7 @@ export default function BerthImpactTable({ data }: Props) {
       <Box sx={{ overflowX: "auto" }}>
         <Table size="small">
           <TableHead>
-            <TableRow
-              sx={{
-                bgcolor: "rgba(255,255,255,0.025)",
-                "& th": {
-                  fontSize: "0.625rem",
-                  fontWeight: 600,
-                  color: "#5f6368",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  borderBottom: "1px solid rgba(255,255,255,0.08)",
-                  py: 1.5,
-                  whiteSpace: "nowrap",
-                },
-              }}
-            >
+            <TableRow>
               <TableCell sx={{ width: 48, pl: 3 }}>#</TableCell>
               <TableCell>Berth</TableCell>
               <TableCell>Cargo Concentration</TableCell>
@@ -96,19 +71,17 @@ export default function BerthImpactTable({ data }: Props) {
           </TableHead>
           <TableBody>
             {rows.map((row, i) => {
-              const concS = badgeColor(row.cargo_concentration);
-              const riskS = badgeColor(row.congestion_risk);
+              const concColor = levelColor(row.cargo_concentration);
+              const riskColor = levelColor(row.congestion_risk);
+              const isTop = i === 0;
+
               return (
                 <TableRow
                   key={i}
                   sx={{
-                    bgcolor: i === 0 ? "rgba(138,180,248,0.04)" : "transparent",
-                    "&:hover": { bgcolor: "rgba(255,255,255,0.03)" },
-                    "& td": {
-                      borderBottom: "1px solid rgba(255,255,255,0.06)",
-                      py: 1.75,
-                      fontSize: "0.8125rem",
-                    },
+                    bgcolor: isTop
+                      ? alpha(theme.palette.primary.main, 0.04)
+                      : "transparent",
                   }}
                 >
                   {/* Rank */}
@@ -116,7 +89,7 @@ export default function BerthImpactTable({ data }: Props) {
                     <Typography
                       sx={{
                         fontSize: "0.6875rem",
-                        color: i === 0 ? "#8ab4f8" : "#3c4043",
+                        color: isTop ? theme.palette.primary.main : "text.disabled",
                         fontFamily: "monospace",
                         fontWeight: 700,
                       }}
@@ -131,49 +104,46 @@ export default function BerthImpactTable({ data }: Props) {
                       <Typography
                         sx={{
                           fontSize: "0.875rem",
-                          fontWeight: i === 0 ? 600 : 400,
-                          color: i === 0 ? "#e8eaed" : "#bdc1c6",
+                          fontWeight: isTop ? 600 : 400,
+                          color: isTop ? "text.primary" : "text.secondary",
                         }}
                       >
                         {row.berth}
                       </Typography>
-                      {i === 0 && (
-                        <Typography
+                      {isTop && (
+                        <Box
                           sx={{
-                            fontSize: "0.5625rem",
-                            fontWeight: 700,
-                            px: 0.875,
-                            py: 0.25,
-                            borderRadius: 0.5,
-                            color: "#8ab4f8",
-                            bgcolor: "rgba(138,180,248,0.1)",
-                            border: "1px solid rgba(138,180,248,0.2)",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.05em",
+                            px: 1, py: 0.25, borderRadius: 1,
+                            bgcolor: alpha(theme.palette.primary.main, 0.1),
+                            border: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
                           }}
                         >
-                          Recommended
-                        </Typography>
+                          <Typography
+                            sx={{
+                              fontSize: "0.5625rem", fontWeight: 700,
+                              color: theme.palette.primary.main,
+                              textTransform: "uppercase", letterSpacing: "0.05em",
+                            }}
+                          >
+                            Recommended
+                          </Typography>
+                        </Box>
                       )}
                     </Box>
                   </TableCell>
 
-                  {/* Concentration */}
+                  {/* Concentration badge */}
                   <TableCell>
                     <Box
                       sx={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 0.75,
-                        px: 1,
-                        py: 0.3,
-                        borderRadius: 0.5,
-                        bgcolor: concS.bg,
-                        border: `1px solid ${concS.border}`,
+                        display: "inline-flex", alignItems: "center", gap: 0.75,
+                        px: 1, py: 0.3, borderRadius: 1,
+                        bgcolor: alpha(concColor, 0.1),
+                        border: `1px solid ${alpha(concColor, 0.25)}`,
                       }}
                     >
-                      <Box sx={{ width: 5, height: 5, borderRadius: "50%", bgcolor: concS.color }} />
-                      <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: concS.color }}>
+                      <Box sx={{ width: 5, height: 5, borderRadius: "50%", bgcolor: concColor }} />
+                      <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: concColor }}>
                         {row.cargo_concentration}
                       </Typography>
                     </Box>
@@ -181,27 +151,23 @@ export default function BerthImpactTable({ data }: Props) {
 
                   {/* Distance */}
                   <TableCell>
-                    <Typography sx={{ fontSize: "0.8125rem", color: "#9aa0a6" }}>
+                    <Typography variant="body2" sx={{ color: "text.secondary" }}>
                       {row.total_travel_distance}
                     </Typography>
                   </TableCell>
 
-                  {/* Risk */}
+                  {/* Risk badge */}
                   <TableCell>
                     <Box
                       sx={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 0.75,
-                        px: 1,
-                        py: 0.3,
-                        borderRadius: 0.5,
-                        bgcolor: riskS.bg,
-                        border: `1px solid ${riskS.border}`,
+                        display: "inline-flex", alignItems: "center", gap: 0.75,
+                        px: 1, py: 0.3, borderRadius: 1,
+                        bgcolor: alpha(riskColor, 0.1),
+                        border: `1px solid ${alpha(riskColor, 0.25)}`,
                       }}
                     >
-                      <Box sx={{ width: 5, height: 5, borderRadius: "50%", bgcolor: riskS.color }} />
-                      <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: riskS.color }}>
+                      <Box sx={{ width: 5, height: 5, borderRadius: "50%", bgcolor: riskColor }} />
+                      <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: riskColor }}>
                         {row.congestion_risk}
                       </Typography>
                     </Box>
@@ -213,21 +179,14 @@ export default function BerthImpactTable({ data }: Props) {
         </Table>
       </Box>
 
+      {/* Show more */}
       {data.length > LIMIT && (
-        <Box sx={{ px: 3, py: 1.5, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <Box sx={{ px: 3, py: 1.5, borderTop: `1px solid ${theme.palette.divider}` }}>
           <Button
-            onClick={() => setExpanded(v => !v)}
+            onClick={() => setExpanded((v) => !v)}
             variant="text"
             size="small"
-            sx={{
-              fontSize: "0.75rem",
-              color: "#9aa0a6",
-              textTransform: "none",
-              fontWeight: 500,
-              p: 0,
-              minWidth: 0,
-              "&:hover": { color: "#bdc1c6", bgcolor: "transparent" },
-            }}
+            sx={{ fontSize: "0.8125rem", color: "text.secondary", p: 0, minWidth: 0 }}
           >
             {expanded ? "Show fewer" : `+ ${data.length - LIMIT} more berths`}
           </Button>

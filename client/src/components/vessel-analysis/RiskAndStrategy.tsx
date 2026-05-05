@@ -1,57 +1,52 @@
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 
-// Props for the RiskAndStrategy component
 interface Props { risks: string[]; }
 
-// TSX component to display the risks and strategy for vessels
-const severityOf = (i: number, total: number) => {
-  if (total === 0) return null;
-  if (i === 0) return { label: "HIGH", color: "#f28b82" };
-  if (i === 1) return { label: "MED", color: "#fdd663" };
-  return { label: "LOW", color: "#9aa0a6" };
-};
+const SEVERITY = [
+  { label: "HIGH", colorKey: "error"   as const },
+  { label: "MED",  colorKey: "warning" as const },
+  { label: "LOW",  colorKey: "info"    as const },
+];
 
-// Main component to display the risks and strategy for vessels
 export default function RiskAndStrategy({ risks }: Props) {
+  const theme = useTheme();
   const safeRisks = risks || [];
   const hasRisks = safeRisks.length > 0;
 
   return (
     <Box
       sx={{
-        bgcolor: "#292a2d",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 1.5,
+        bgcolor: "background.paper",
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 2,
         overflow: "hidden",
         height: "100%",
         display: "flex",
         flexDirection: "column",
       }}
     >
-      {/* Header strip */}
+      {/* Header */}
       <Box
         sx={{
-          px: 3,
-          py: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          px: 3, py: 2,
+          borderBottom: `1px solid ${theme.palette.divider}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <Typography
-          sx={{
-            fontSize: "0.6875rem",
-            fontWeight: 500,
-            color: "#9aa0a6",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
           Operational Risks
         </Typography>
         {hasRisks && (
-          <Typography sx={{ fontSize: "0.6875rem", color: "#f28b82", fontFamily: "monospace", fontWeight: 700 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: theme.palette.error.main,
+              fontFamily: "monospace",
+              fontWeight: 700,
+            }}
+          >
             {safeRisks.length} flagged
           </Typography>
         )}
@@ -61,14 +56,16 @@ export default function RiskAndStrategy({ risks }: Props) {
       <Box sx={{ flex: 1 }}>
         {hasRisks ? (
           safeRisks.map((risk, i) => {
-            const sev = severityOf(i, safeRisks.length)!;
+            const sev = SEVERITY[Math.min(i, SEVERITY.length - 1)];
+            const color = theme.palette[sev.colorKey].main;
             return (
               <Box
                 key={i}
                 sx={{
                   display: "flex",
-                  gap: 0,
-                  borderBottom: i < safeRisks.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
+                  borderBottom: i < safeRisks.length - 1
+                    ? `1px solid ${theme.palette.divider}`
+                    : "none",
                 }}
               >
                 {/* Severity gutter */}
@@ -79,15 +76,15 @@ export default function RiskAndStrategy({ risks }: Props) {
                     display: "flex",
                     alignItems: "flex-start",
                     justifyContent: "center",
-                    pt: 2,
-                    borderRight: "1px solid rgba(255,255,255,0.06)",
+                    pt: 2.25,
+                    borderRight: `1px solid ${theme.palette.divider}`,
                   }}
                 >
                   <Typography
                     sx={{
                       fontSize: "0.5rem",
                       fontWeight: 700,
-                      color: sev.color,
+                      color,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
                       fontFamily: "monospace",
@@ -98,8 +95,8 @@ export default function RiskAndStrategy({ risks }: Props) {
                 </Box>
 
                 {/* Risk text */}
-                <Box sx={{ px: 2, py: 1.75, flex: 1 }}>
-                  <Typography sx={{ fontSize: "0.8125rem", color: "#bdc1c6", lineHeight: 1.6 }}>
+                <Box sx={{ px: 2, py: 2, flex: 1 }}>
+                  <Typography variant="body2" sx={{ color: "text.secondary", lineHeight: 1.6 }}>
                     {risk}
                   </Typography>
                 </Box>
@@ -108,8 +105,13 @@ export default function RiskAndStrategy({ risks }: Props) {
           })
         ) : (
           <Box sx={{ px: 3, py: 3, display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#81c995", flexShrink: 0 }} />
-            <Typography sx={{ fontSize: "0.8125rem", color: "#81c995" }}>
+            <Box
+              sx={{
+                width: 7, height: 7, borderRadius: "50%",
+                bgcolor: theme.palette.success.main, flexShrink: 0,
+              }}
+            />
+            <Typography variant="body2" sx={{ color: theme.palette.success.main }}>
               No operational risks identified
             </Typography>
           </Box>

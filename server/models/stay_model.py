@@ -10,7 +10,6 @@ from sklearn.pipeline import Pipeline
 
 from utils.stay_utils import prepare_visit_data, compute_visit_stay
 from utils.feature_utils import create_features
-from utils.data_loader import load_csv
 from models.training_status import training_status
 
 logger = logging.getLogger("port_system")

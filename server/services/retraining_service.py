@@ -6,7 +6,7 @@ from sqlalchemy import text
 from models.stay_model import train_stay_model
 from models.training_status import training_status
 from config import settings
-from db.queries import load_df_from_db
+from db.queries import load_from_db
 from fastapi import BackgroundTasks
 import asyncio
 
@@ -89,9 +89,15 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
     if difference >= threshold or last_size == 0:
         logger.info(f"Retraining triggered: {difference} new records (threshold: {threshold})")
         try:
-            df = load_df_from_db("history")
+            df = load_from_db("history")
             if not df.empty:
-                training_status.set("training", "Automated retraining started")
+                training_status.set(
+                    status="training", 
+                    message="Automated retraining started",
+                    records_count=len(df),
+                    data_source="db",
+                    training_type="automated"
+                )
                 background_tasks.add_task(background_train_and_update, df)
         except Exception as e:
             logger.error(f"Failed to load history for retraining: {e}")
@@ -121,9 +127,15 @@ async def scheduled_retraining_job():
         # Start retraining if the difference is greater than or equal to the threshold or if it's the first training
         if difference >= threshold or last_size == 0:
             logger.info(f"Nightly Cron: Retraining triggered for {difference} new records.")
-            df = await asyncio.to_thread(load_df_from_db, "history")
+            df = await asyncio.to_thread(load_from_db, "history")
             if not df.empty:
-                training_status.set("training", "Automated nightly retraining started")
+                training_status.set(
+                    status="training", 
+                    message="Automated nightly retraining started",
+                    records_count=len(df),
+                    data_source="db",
+                    training_type="scheduled"
+                )
                 await asyncio.to_thread(background_train_and_update, df)
     except Exception as e:
         logger.error(f"Error in nightly retraining job: {e}")

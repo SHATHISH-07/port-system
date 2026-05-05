@@ -1,6 +1,6 @@
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
-// Props for the YardStrategy component
 interface Props {
   data: {
     weight_distribution: Record<string, number>;
@@ -10,19 +10,10 @@ interface Props {
   };
 }
 
-// Helper function to get the color for the risk based on the value
-const riskColor = (risk: string) => {
-  const r = risk?.toLowerCase();
-  if (r === "high") return "#f28b82";
-  if (r === "medium") return "#fdd663";
-  return "#81c995";
-};
-
-// Main component to display the yard strategy for vessels
 export default function YardStrategy({ data }: Props) {
+  const theme = useTheme();
   if (!data) return null;
 
-  // Destructure the data from the props
   const {
     weight_distribution = {},
     top_discharge_ports = {},
@@ -30,46 +21,41 @@ export default function YardStrategy({ data }: Props) {
     reshuffle_risk = "Unknown",
   } = data;
 
-  // Get the color for the risk
-  const rc = riskColor(reshuffle_risk);
-  // Get the top discharge ports
-  const portEntries = Object.entries(top_discharge_ports).slice(0, 6);
-  // Get the max value for the port entries
-  const portMax = portEntries.length > 0 ? (portEntries[0][1] as number) : 1;
-  // Get the weight distribution
+  const riskColor = (() => {
+    const r = reshuffle_risk?.toLowerCase();
+    if (r === "high")   return theme.palette.error.main;
+    if (r === "medium") return theme.palette.warning.main;
+    return theme.palette.success.main;
+  })();
+
+  const portEntries  = Object.entries(top_discharge_ports).slice(0, 6);
+  const portMax      = portEntries.length > 0 ? (portEntries[0][1] as number) : 1;
   const weightEntries = Object.entries(weight_distribution);
 
-  // Styles for the column labels
-  const colLabel = {
-    fontSize: "0.6875rem",
-    fontWeight: 500,
-    color: "#9aa0a6",
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.08em",
-    mb: 2,
-  };
+  const colDivider = `1px solid ${theme.palette.divider}`;
 
-  // Main component to display the yard strategy for vessels
   return (
     <Box
       sx={{
-        bgcolor: "#292a2d",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 1.5,
+        bgcolor: "background.paper",
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 2,
         overflow: "hidden",
       }}
     >
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 2fr 1fr" } }}>
 
-        {/* Col 1: Weight Distribution */}
+        {/* Col 1 — Weight Distribution */}
         <Box
           sx={{
             p: 3,
-            borderRight: { md: "1px solid rgba(255,255,255,0.08)" },
-            borderBottom: { xs: "1px solid rgba(255,255,255,0.08)", md: "none" },
+            borderRight: { md: colDivider },
+            borderBottom: { xs: colDivider, md: "none" },
           }}
         >
-          <Typography sx={colLabel}>Weight Distribution</Typography>
+          <Typography variant="overline" sx={{ color: "text.secondary", display: "block", mb: 2 }}>
+            Weight Distribution
+          </Typography>
           {weightEntries.length > 0 ? (
             weightEntries.map(([k, v]) => (
               <Box
@@ -79,30 +65,32 @@ export default function YardStrategy({ data }: Props) {
                   justifyContent: "space-between",
                   alignItems: "center",
                   py: 1,
-                  borderBottom: "1px solid rgba(255,255,255,0.06)",
+                  borderBottom: colDivider,
                   "&:last-child": { borderBottom: "none" },
                 }}
               >
-                <Typography sx={{ fontSize: "0.8125rem", color: "#9aa0a6" }}>{k}</Typography>
-                <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, color: "#e8eaed", fontFamily: "monospace" }}>
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>{k}</Typography>
+                <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, color: "text.primary", fontFamily: "monospace" }}>
                   {v}
                 </Typography>
               </Box>
             ))
           ) : (
-            <Typography sx={{ fontSize: "0.8125rem", color: "#5f6368" }}>No data</Typography>
+            <Typography variant="body2" sx={{ color: "text.disabled" }}>No data</Typography>
           )}
         </Box>
 
-        {/* Col 2: Discharge Ports */}
+        {/* Col 2 — Discharge Ports */}
         <Box
           sx={{
             p: 3,
-            borderRight: { md: "1px solid rgba(255,255,255,0.08)" },
-            borderBottom: { xs: "1px solid rgba(255,255,255,0.08)", md: "none" },
+            borderRight: { md: colDivider },
+            borderBottom: { xs: colDivider, md: "none" },
           }}
         >
-          <Typography sx={colLabel}>Top Discharge Ports</Typography>
+          <Typography variant="overline" sx={{ color: "text.secondary", display: "block", mb: 2 }}>
+            Top Discharge Ports
+          </Typography>
           {portEntries.length > 0 ? (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {portEntries.map(([port, count], i) => {
@@ -111,25 +99,36 @@ export default function YardStrategy({ data }: Props) {
                   <Box key={port}>
                     <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.75 }}>
                       <Typography
+                        variant="body2"
                         sx={{
-                          fontSize: "0.8125rem",
-                          color: i === 0 ? "#e8eaed" : "#9aa0a6",
-                          fontWeight: i === 0 ? 500 : 400,
+                          color: i === 0 ? "text.primary" : "text.secondary",
+                          fontWeight: i === 0 ? 600 : 400,
                         }}
                       >
                         {port}
                       </Typography>
-                      <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: "#e8eaed", fontFamily: "monospace" }}>
+                      <Typography
+                        sx={{ fontSize: "0.8125rem", fontWeight: 600, color: "text.primary", fontFamily: "monospace" }}
+                      >
                         {count}
                       </Typography>
                     </Box>
-                    <Box sx={{ height: 2, bgcolor: "rgba(255,255,255,0.08)", borderRadius: 1 }}>
+                    <Box
+                      sx={{
+                        height: 3,
+                        bgcolor: alpha(theme.palette.text.primary, 0.08),
+                        borderRadius: 2,
+                      }}
+                    >
                       <Box
                         sx={{
                           height: "100%",
                           width: `${pct}%`,
-                          bgcolor: i === 0 ? "#8ab4f8" : "rgba(138,180,248,0.4)",
-                          borderRadius: 1,
+                          bgcolor: i === 0
+                            ? theme.palette.primary.main
+                            : alpha(theme.palette.primary.main, 0.35),
+                          borderRadius: 2,
+                          transition: "width 400ms ease",
                         }}
                       />
                     </Box>
@@ -138,50 +137,45 @@ export default function YardStrategy({ data }: Props) {
               })}
             </Box>
           ) : (
-            <Typography sx={{ fontSize: "0.8125rem", color: "#5f6368" }}>No data</Typography>
+            <Typography variant="body2" sx={{ color: "text.disabled" }}>No data</Typography>
           )}
         </Box>
 
-        {/* Col 3: Movement Stats */}
+        {/* Col 3 — Reshuffle Summary */}
         <Box sx={{ p: 3, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <Typography sx={colLabel}>Reshuffle Summary</Typography>
+          <Typography variant="overline" sx={{ color: "text.secondary", display: "block", mb: 2 }}>
+            Reshuffle Summary
+          </Typography>
 
           <Box sx={{ mb: 3 }}>
             <Typography
               sx={{
-                fontSize: "3.5rem",
+                fontSize: "3.25rem",
                 fontWeight: 200,
-                color: "#e8eaed",
+                color: "text.primary",
                 lineHeight: 1,
                 letterSpacing: "-2px",
-                fontFamily: "'Inter', 'Roboto', sans-serif",
+                fontFamily: "'Inter', sans-serif",
                 mb: 0.5,
               }}
             >
               {avg_moves_per_container}
             </Typography>
-            <Typography sx={{ fontSize: "0.75rem", color: "#5f6368" }}>
+            <Typography variant="caption" sx={{ color: "text.disabled" }}>
               avg moves per container
             </Typography>
           </Box>
 
           <Box>
-            <Typography
-              sx={{
-                fontSize: "0.6875rem",
-                color: "#5f6368",
-                mb: 0.5,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-              }}
-            >
+            <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mb: 0.5 }}>
               Reshuffle Risk
             </Typography>
-            <Typography sx={{ fontSize: "1.125rem", fontWeight: 700, color: rc }}>
+            <Typography sx={{ fontSize: "1.125rem", fontWeight: 700, color: riskColor }}>
               {reshuffle_risk}
             </Typography>
           </Box>
         </Box>
+
       </Box>
     </Box>
   );

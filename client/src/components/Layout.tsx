@@ -1,73 +1,100 @@
 import React from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, IconButton, Tooltip, useTheme } from "@mui/material";
+import { DarkModeOutlined, LightModeOutlined } from "@mui/icons-material";
 import Sidebar from "./Sidebar";
 import { useLocation } from "react-router-dom";
+import { useColorMode } from "../theme/ThemeContext";
 
-// Props for the Layout component
 interface LayoutProps { children: React.ReactNode; }
 
-// Page titles and subtitles
-const PAGE: Record<string, { title: string; sub: string }> = {
-  "/": { title: "Vessel Analysis", sub: "" },
-  "/heatmap": { title: "Terminal Heatmap", sub: "" },
+const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
+  "/history-analysis": { title: "History Analysis",   subtitle: "Vessel stay time patterns from historical records" },
+  "/current-analysis": { title: "Current Analysis",   subtitle: "Live vessel status and predictions" },
+  "/heatmap":          { title: "Terminal Heatmap",   subtitle: "Yard block container concentration" },
+  "/train-model":      { title: "Train Model",        subtitle: "Configure and trigger model training runs" },
 };
 
-// Main layout component
 export default function Layout({ children }: LayoutProps) {
-  // Get the current pathname from the location
   const { pathname } = useLocation();
-  // Get the page title and subtitle based on the current pathname
-  const page = PAGE[pathname] ?? { title: "Berth and Yard Optimization", sub: "" };
+  const { mode, toggleColorMode } = useColorMode();
+  const theme = useTheme();
+  const page = PAGE_TITLES[pathname] ?? { title: "PortSync", subtitle: "" };
+
+  const isDark = mode === "dark";
 
   return (
     <Box sx={{ display: "flex", height: "100vh", bgcolor: "background.default" }}>
       <Sidebar />
 
-      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", minWidth: 0 }}>
+        {/* ─── Top Header Bar ─── */}
         <Box
           component="header"
           sx={{
-            height: 64,
+            height: 56,
             px: { xs: 3, md: 4 },
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            bgcolor: "#1f2023",
-            zIndex: 100,
+            bgcolor: "background.paper",
+            borderBottom: `1px solid ${theme.palette.divider}`,
             flexShrink: 0,
+            position: "sticky",
+            top: 0,
+            zIndex: 100,
           }}
         >
+          {/* Page title */}
           <Box>
             <Typography
               sx={{
-                fontSize: "1rem",
-                fontWeight: 500,
-                color: "#e8eaed",
-                lineHeight: 1.25,
-                fontFamily: "'Google Sans', Roboto, sans-serif",
+                fontSize: "0.9375rem",
+                fontWeight: 600,
+                color: "text.primary",
+                lineHeight: 1.3,
+                letterSpacing: "-0.01em",
               }}
             >
               {page.title}
             </Typography>
-            <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", lineHeight: 1.3 }}>
-              {page.sub}
-            </Typography>
+            {page.subtitle && (
+              <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", lineHeight: 1.3 }}>
+                {page.subtitle}
+              </Typography>
+            )}
+          </Box>
+
+          {/* Right-side actions */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Tooltip title={isDark ? "Switch to Light mode" : "Switch to Dark mode"} placement="bottom">
+              <IconButton
+                onClick={toggleColorMode}
+                size="small"
+                sx={{
+                  width: 34,
+                  height: 34,
+                  color: "text.secondary",
+                  "&:hover": { color: "text.primary" },
+                }}
+              >
+                {isDark
+                  ? <LightModeOutlined sx={{ fontSize: 18 }} />
+                  : <DarkModeOutlined  sx={{ fontSize: 18 }} />
+                }
+              </IconButton>
+            </Tooltip>
           </Box>
         </Box>
 
+        {/* ─── Page Content ─── */}
         <Box
           component="main"
           sx={{
             flex: 1,
-            p: { xs: 3, md: "24px 32px" },
-            '& > div': {
-              maxWidth: 1320,
-              width: "100%",
-              mx: "auto",
-            }
+            p: { xs: "20px 16px", md: "28px 32px" },
           }}
         >
-          <Box sx={{ maxWidth: 1320, width: "100%", mx: "auto" }}>
+          <Box sx={{ maxWidth: 1280, width: "100%", mx: "auto" }}>
             {children}
           </Box>
         </Box>
