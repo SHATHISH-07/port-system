@@ -1,5 +1,4 @@
 import re
-from utils.data_loader import get_data
 
 # Constants
 VISIT_WINDOW_HOURS = 96
@@ -7,17 +6,13 @@ VISIT_WINDOW_HOURS = 96
 # Regex for extracting block ID
 BLOCK_REGEX = re.compile(r'Y-[A-Z0-9]+-(G\d+)')
 
-# Get all blocks
-def get_all_blocks():
-    # Load dataset
-    df = get_data()
-    
+# Get all blocks from a given dataframe
+def get_all_blocks(df):
     # Initialize set for blocks
     blocks = set()
-    
+
     # Iterate over container positions
     for pos in df["ctr_from_position"].dropna():
-
         pos = str(pos)
 
         # Skip if not starting with Y

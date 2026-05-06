@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import hashlib
 from utils.datetime_utils import parse_datetime
-from utils.stay_utils import VESSEL_WINDOW_HOURS
+from config import settings
 
 # Check if a value is yes
 def is_yes(val):
@@ -31,7 +31,7 @@ def create_features(df):
         valid_dep = df["vessel_departure"].dropna()
         if not valid_dep.empty:
             vessel_dep = valid_dep.mode().iloc[0]
-            window_start = vessel_dep - pd.Timedelta(hours=VESSEL_WINDOW_HOURS)
+            window_start = vessel_dep - pd.Timedelta(hours=settings.VESSEL_WINDOW_HOURS)
             window_end = vessel_dep + pd.Timedelta(hours=1)
 
             df = df[
@@ -45,11 +45,10 @@ def create_features(df):
     # Sort by event time
     df = df.sort_values("event_time")
 
-    # Calculate operation hours
+    # Calculate total duration in hours (for historical info if needed later)
     t_start = df["event_time"].min()
     t_end = df["event_time"].max()
     total_hours = max((t_end - t_start).total_seconds() / 3600, 1)
-    
     # Calculate loaded and discharged counts
     loaded = df[
         df["ctr_from_position"].astype(str).str.startswith("Y-") &
@@ -78,9 +77,6 @@ def create_features(df):
     hazard_count = int(df["hazardous_flag"].astype(str).str.upper().eq("YES").sum())
     oog_count = int(df["oog_unit"].astype(str).str.upper().eq("YES").sum())
 
-    # Calculate moves per hour
-    moves_per_hour = len(df) / total_hours
-
     # Get outbound service
     service_str = (
         str(df["outbound_service"].iloc[0]).strip()
@@ -103,7 +99,5 @@ def create_features(df):
         "reefer_count": reefer_count,
         "hazard_count": hazard_count,
         "oog_count": oog_count,
-        "operation_hours": round(float(total_hours), 4),
-        "moves_per_hour": round(float(moves_per_hour), 4),
         "service_hash": service_hash,
     }

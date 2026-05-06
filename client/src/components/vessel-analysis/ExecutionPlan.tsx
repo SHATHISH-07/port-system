@@ -1,45 +1,37 @@
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 
 interface Props { steps: string[]; }
 
 export default function ExecutionPlan({ steps }: Props) {
+  const theme = useTheme();
   const safeSteps = steps || [];
 
   return (
     <Box
       sx={{
-        bgcolor: "#292a2d",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 1.5,
+        bgcolor: "background.paper",
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 2,
         overflow: "hidden",
         height: "100%",
         display: "flex",
         flexDirection: "column",
       }}
     >
-      {/* Header strip */}
+      {/* Header */}
       <Box
         sx={{
-          px: 3,
-          py: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          px: 3, py: 2,
+          borderBottom: `1px solid ${theme.palette.divider}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <Typography
-          sx={{
-            fontSize: "0.6875rem",
-            fontWeight: 500,
-            color: "#9aa0a6",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
           Execution Plan
         </Typography>
-        <Typography sx={{ fontSize: "0.6875rem", color: "#5f6368", fontFamily: "monospace" }}>
+        <Typography variant="caption" sx={{ color: "text.disabled", fontFamily: "monospace" }}>
           {safeSteps.length} steps
         </Typography>
       </Box>
@@ -51,8 +43,9 @@ export default function ExecutionPlan({ steps }: Props) {
             key={i}
             sx={{
               display: "flex",
-              gap: 0,
-              borderBottom: i < safeSteps.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
+              borderBottom: i < safeSteps.length - 1
+                ? `1px solid ${theme.palette.divider}`
+                : "none",
             }}
           >
             {/* Number gutter */}
@@ -63,15 +56,15 @@ export default function ExecutionPlan({ steps }: Props) {
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: "center",
-                pt: 2,
-                borderRight: "1px solid rgba(255,255,255,0.06)",
+                pt: 2.25,
+                borderRight: `1px solid ${theme.palette.divider}`,
               }}
             >
               <Typography
                 sx={{
                   fontSize: "0.625rem",
                   fontWeight: 700,
-                  color: i === 0 ? "#8ab4f8" : "#3c4043",
+                  color: i === 0 ? theme.palette.text.primary : "text.disabled",
                   fontFamily: "monospace",
                   letterSpacing: "0.05em",
                 }}
@@ -81,11 +74,11 @@ export default function ExecutionPlan({ steps }: Props) {
             </Box>
 
             {/* Step text */}
-            <Box sx={{ px: 2, py: 1.75, flex: 1 }}>
+            <Box sx={{ px: 2, py: 2, flex: 1 }}>
               <Typography
+                variant="body2"
                 sx={{
-                  fontSize: "0.8125rem",
-                  color: i === 0 ? "#e8eaed" : "#bdc1c6",
+                  color: i === 0 ? "text.primary" : "text.secondary",
                   lineHeight: 1.6,
                   fontWeight: i === 0 ? 500 : 400,
                 }}
