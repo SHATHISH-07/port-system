@@ -55,35 +55,33 @@ The system supports:
 
 The PortSync platform is currently packed with the following fully-implemented capabilities:
 
-### 🚢 Vessel & Terminal Operations
+### Vessel & Terminal Operations
 * **Vessel Stay Prediction**: An advanced ML ensemble (VotingRegressor) that accurately predicts the vessel stay duration in hours based on historical operations.
 * **Current Operations Dashboard**: Live operational vessel intelligence tracking KPIs like crane productivity, reshuffle risks, and load/discharge balance.
 * **3D Terminal Heatmap**: Dynamic yard block concentration visualization allowing operators to visually spot congestion hotspots and heavy container stacks.
 * **Historical Analytics**: Deep-dive analysis of historical vessel operations to identify operational bottlenecks and past inefficiencies.
 
-### 🧠 Machine Learning & Data Pipeline
+### Machine Learning & Data Pipeline
 * **Unified Ingestion Endpoint**: A single, robust `/ingest/vessel-data` API that automatically processes and intelligently upserts both CSV and JSON operational payloads.
 * **Automated Threshold Retraining**: The ML model automatically triggers background retraining when a predefined threshold of new operational records (e.g., 1000) is reached.
 * **Scheduled Retraining**: Configurable APScheduler integration for nightly or weekly model maintenance.
 * **Training Metadata Tracking**: Persistent storage of model performance, dataset size, and timestamps to maintain a complete ML audit trail.
 
-### 🔒 Security & Administration
+### Security & Administration
 * **Role-Based Access Control (RBAC)**: Secure multi-tier authorization differentiating between general `Users` and highly-privileged `Admins`.
 * **Operations Center**: Centralized admin-only control panel for managing ingestion, users, system logs, and triggering manual model retraining.
 * **JWT Authentication & Bcrypt**: Industry-standard cryptographic security for all user sessions.
 * **SQL Injection & Payload Tampering Protection**: Fully parameterized SQLAlchemy architecture and rigorous Pydantic validation intercepting malicious inputs safely.
 
-### 🧪 QA & Reliability
+### QA & Reliability
 * **100% Automated Test Coverage**: A split architecture Pytest & Playwright E2E suite executed via `run_tests.py` generating `.xlsx` and `.docx` QA reports.
 * **PostgreSQL UPSERT Integrity**: Zero-downtime concurrent data ingestion utilizing `ON CONFLICT DO UPDATE` to gracefully handle duplicate streams.
 
 ---
 
 # System Architecture
-
 ```mermaid
 graph TD
-
     subgraph Frontend
         A[React 18 + TypeScript]
         B[Material UI Dashboard]
@@ -170,10 +168,8 @@ Users cannot:
 ---
 
 # Authentication Flow
-
 ```mermaid
 sequenceDiagram
-
     participant U as User
     participant F as Frontend
     participant B as FastAPI
@@ -190,10 +186,8 @@ sequenceDiagram
 ---
 
 # User Flow
-
 ```mermaid
 graph TD
-
     A[User Opens Platform] --> B{Authenticated?}
 
     B -- No --> C[Login Page]
@@ -245,7 +239,6 @@ graph TD
 ---
 
 # Project Structure
-
 ```text
 port-system/
 │
@@ -284,7 +277,6 @@ port-system/
 ---
 
 ## Backend Setup
-
 ```bash
 cd server
 python -m venv venv
@@ -402,10 +394,8 @@ The ingestion pipeline:
 ---
 
 # Ingestion Flow
-
 ```mermaid
 flowchart TD
-
     A[CSV / JSON Upload] --> B[Parse Data]
     B --> C[Validate Schema]
     C --> D[Clean Columns]
@@ -423,7 +413,6 @@ flowchart TD
 # Current Available Fields
 
 The current platform supports the following operational fields:
-
 ```text
 unit ID
 Unit Visit Gkey
@@ -479,10 +468,8 @@ The platform uses a VotingRegressor ensemble.
 ---
 
 # ML Pipeline Flow
-
 ```mermaid
 graph TD
-
     A[Historical Container Data] --> B[Feature Engineering]
 
     B --> C[Loaded Containers]
@@ -556,10 +543,8 @@ Runs automatically:
 ---
 
 # Retraining Flow Diagram
-
 ```mermaid
 sequenceDiagram
-
     participant I as Ingestion
     participant B as Backend
     participant DB as Database
@@ -636,10 +621,8 @@ Used for:
 ---
 
 # Database Flow
-
 ```mermaid
 flowchart LR
-
     A[Incoming Data]
 
     A --> B[History Tables]
@@ -677,10 +660,8 @@ The platform implements:
 ---
 
 # Security Flow
-
 ```mermaid
 graph TD
-
     A[Client Request] --> B[JWT Validation]
     B --> C{Valid Token?}
 
