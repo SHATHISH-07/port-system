@@ -1,680 +1,694 @@
 # PortSync — Berth & Yard Optimization Platform
 
-> **Enterprise-grade vessel stay time prediction and terminal intelligence system.**  
-> FastAPI · React 18 + TypeScript · PostgreSQL · VotingRegressor ML ensemble
+> Enterprise-grade vessel stay prediction, berth intelligence, and terminal optimization platform.
+>
+> Built with Python 3.13 · FastAPI · React 18 · TypeScript · PostgreSQL · Machine Learning Ensemble Models
 
 ---
 
-## Table of Contents
+# Table of Contents
 
-1. [Overview](#overview)
-2. [System Architecture](#system-architecture)
-3. [Tech Stack](#tech-stack)
-4. [Project Structure](#project-structure)
-5. [Getting Started](#getting-started)
-6. [Environment Variables](#environment-variables)
-7. [API Reference](#api-reference)
-8. [ML Pipeline](#ml-pipeline)
-9. [Automated Retraining](#automated-retraining)
-10. [Frontend Pages & Routing](#frontend-pages--routing)
-11. [Database Schema](#database-schema)
-12. [Data Flow](#data-flow)
-13. [Configuration Reference](#configuration-reference)
-
----
-
-## Overview
-
-PortSync ingests raw container movement data from a Terminal Operating System (TOS) export, stores it in a normalized PostgreSQL schema, trains a machine learning ensemble to predict vessel stay times, and surfaces actionable terminal intelligence through a professional React dashboard.
-
-**Core capabilities:**
-
-| Capability | Description |
-|---|---|
-| **Stay Time Prediction** | VotingRegressor (Ridge + XGBoost + GBR) predicts vessel stay in hours |
-| **History Analysis** | Retrospective review: visit records, berth rankings, stay trends |
-| **Current Analysis** | Live operational view: berth assignment, yard heatmap, execution plan |
-| **Terminal Heatmap** | 3D yard block map — container concentration (High / Medium / Low) |
-| **Unified Ingestion** | Single `POST /ingest/vessel-data` endpoint — CSV file, JSON file, or raw JSON body |
-| **Automated Retraining** | Nightly cron (02:00 AM) + ingest-triggered threshold check |
-| **DB-backed Metadata** | Training run history persisted in `training_metadata` PostgreSQL table |
-| **Light / Dark Mode** | MUI v6 two-step theme system — live toggle, all components adapt |
+1. Overview
+2. Core Features
+3. System Architecture
+4. Authentication & RBAC
+5. Technology Stack
+6. Project Structure
+7. Getting Started
+8. Environment Variables
+9. API Reference
+10. Data Ingestion Pipeline
+11. Machine Learning Pipeline
+12. Automated Retraining Flow
+13. Frontend Architecture
+14. Database Architecture
+15. Data Flow
+16. Request Flow
+17. Training Lifecycle
+18. Security Architecture
+19. Configuration Reference
+20. Future Scope
 
 ---
 
-## System Architecture
+# Overview
+
+PortSync is a production-grade vessel stay prediction and terminal intelligence platform designed for modern port and yard operations.
+
+The platform ingests raw container movement data from Terminal Operating System (TOS) exports, stores operational history in PostgreSQL, trains machine learning models for vessel stay prediction, and exposes operational intelligence through an enterprise React dashboard.
+
+The system supports:
+
+* Continuous ingestion of vessel/container movement data
+* Historical + live operational analytics
+* Vessel stay prediction using ML ensemble models
+* Terminal heatmap visualization
+* Automated retraining pipelines
+* Role-based access control (RBAC)
+* Admin-controlled operations center
+* Background ML processing
+* Automated threshold-based retraining
+
+---
+
+# Core Features
+
+| Feature                      | Description                                        |
+| ---------------------------- | -------------------------------------------------- |
+| Vessel Stay Prediction       | ML ensemble predicts vessel stay duration in hours |
+| Unified Ingestion            | Single ingestion endpoint for CSV and JSON         |
+| Historical Analytics         | Analyze historical vessel operations               |
+| Current Operations Dashboard | Live operational vessel intelligence               |
+| 3D Terminal Heatmap          | Yard block concentration visualization             |
+| Automated Retraining         | Threshold + scheduled retraining                   |
+| Role-Based Access            | Admin/User authorization system                    |
+| Operations Center            | Centralized admin operational controls             |
+| PostgreSQL Persistence       | History + current operational architecture         |
+| Training Metadata Tracking   | Persistent training lifecycle management           |
+
+---
+
+# System Architecture
 
 ```mermaid
 graph TD
-    subgraph PortSync System
-        F[React + TypeScript<br>Vite 8 · MUI v6<br>localhost:5173]
-        B[FastAPI Backend<br>Uvicorn · Python 3<br>localhost:8000]
-        DB[(PostgreSQL Database<br>history_* / current_*<br>training_metadata)]
+
+    subgraph Frontend
+        A[React 18 + TypeScript]
+        B[Material UI Dashboard]
+        C[Role-Based Routing]
     end
-    F <-->|HTTP| B
-    B --> DB
+
+    subgraph Backend
+        D[FastAPI]
+        E[JWT Authentication]
+        F[ML Training Services]
+        G[Ingestion Services]
+        H[Scheduler Services]
+    end
+
+    subgraph Database
+        I[(PostgreSQL)]
+        J[(History Tables)]
+        K[(Current Tables)]
+        L[(Training Metadata)]
+    end
+
+    subgraph ML
+        M[Feature Engineering]
+        N[VotingRegressor]
+        O[XGBoost]
+        P[Gradient Boosting]
+        Q[Ridge Regression]
+    end
+
+    A --> D
+    D --> I
+    G --> J
+    G --> K
+    F --> M
+    M --> N
+    M --> O
+    M --> P
+    M --> Q
+    F --> L
+    H --> F
 ```
 
-### User Flow Diagram
+---
+
+# Authentication & RBAC
+
+The platform uses JWT-based authentication with role-based access control.
+
+## Roles
+
+### Admin
+
+Admins can:
+
+* Access Operations Center
+* Upload CSV/JSON datasets
+* Trigger ML retraining
+* Configure retraining thresholds
+* Create users
+* Create additional admins
+* Monitor ingestion status
+* Monitor training status
+* View logs
+* Manage requests
+
+### User
+
+Users can:
+
+* View dashboards
+* View analytics
+* View heatmaps
+* View predictions
+* Create operational requests
+
+Users cannot:
+
+* Upload datasets
+* Trigger retraining
+* Access Operations Center
+* Manage users
+* Access ingestion endpoints
+
+---
+
+# Authentication Flow
+
+```mermaid
+sequenceDiagram
+
+    participant U as User
+    participant F as Frontend
+    participant B as FastAPI
+    participant DB as PostgreSQL
+
+    U->>F: Login Request
+    F->>B: POST /auth/login
+    B->>DB: Validate Credentials
+    DB-->>B: User Found
+    B-->>F: JWT Token
+    F-->>U: Redirect to Dashboard
+```
+
+---
+
+# User Flow
 
 ```mermaid
 graph TD
-    A[User Accesses Platform] --> B{Authenticated?}
+
+    A[User Opens Platform] --> B{Authenticated?}
+
     B -- No --> C[Login Page]
-    C --> D[Submit Credentials]
-    D --> E{Valid Admin/User?}
-    E -- No --> C
-    E -- Yes --> F[Dashboard]
-    B -- Yes --> F
-    F --> G{Role?}
-    G -- User --> H[View History & Current Analysis]
-    H --> I[View Heatmap & Requests]
-    G -- Admin --> J[Operations Center]
-    J --> K[Data Ingestion / File Upload]
-    J --> L[User Management]
-    J --> M[Train ML Model]
-```
+    B -- Yes --> D[Dashboard]
 
-### Automated Retraining Flow
+    C --> E[Submit Credentials]
+    E --> F{Valid Credentials?}
 
-```mermaid
-graph TD
-    A[POST /ingest/vessel-data] --> B[save_to_history]
-    B --> C[check_and_trigger_retraining]
-    C --> D{current_count - last_trained_size >= threshold?}
-    D -- YES --> E[background_train_and_update]
-    D -- NO --> F[skip]
-    E --> G[train_stay_model]
-    G --> H[stay_model.pkl saved]
-    H --> I[(PostgreSQL training_metadata)]
-    J[APScheduler cron 02:00 AM] --> K[scheduled_retraining_job]
-    K --> D
+    F -- No --> C
+    F -- Yes --> D
+
+    D --> G{Role}
+
+    G -- User --> H[Analytics + Heatmap + Predictions]
+    G -- Admin --> I[Operations Center]
 ```
 
 ---
 
-## Tech Stack
+# Technology Stack
 
-### Backend
+## Backend
 
-| Package | Purpose |
-|---|---|
-| **Python 3.11+** | Language runtime — type hints, `asyncio`, `match` statements |
-| **FastAPI** | REST API framework with automatic OpenAPI docs (`/docs`) |
-| **Uvicorn** | ASGI server (`--reload` in development) |
-| **SQLAlchemy + psycopg2** | PostgreSQL ORM + raw COPY driver |
-| **APScheduler** | `AsyncIOScheduler` — nightly cron job at 02:00 AM |
-| **XGBoost** | `XGBRegressor` — gradient boosted tree |
-| **scikit-learn** | `Ridge`, `GradientBoostingRegressor`, `VotingRegressor`, `Pipeline`, `StandardScaler` |
-| **pandas** | DataFrame processing + SQL reads |
-| **joblib** | Model serialization / deserialization |
-| **python-dotenv** | `.env` configuration loading |
+| Technology     | Purpose                 |
+| -------------- | ----------------------- |
+| Python 3.11+   | Runtime                 |
+| FastAPI        | REST API framework      |
+| PostgreSQL     | Primary database        |
+| SQLAlchemy     | ORM                     |
+| APScheduler    | Automated retraining    |
+| pandas         | Data processing         |
+| scikit-learn   | ML utilities            |
+| XGBoost        | Gradient boosting model |
+| joblib         | Model persistence       |
+| passlib/bcrypt | Password hashing        |
+| python-jose    | JWT authentication      |
 
-### Frontend
+## Frontend
 
-| Package | Purpose |
-|---|---|
-| **React 18** | UI framework with `lazy()` + `Suspense` per-page code splitting |
-| **TypeScript** | Full type safety, zero `tsc` errors |
-| **Vite 8** | Dev server + production bundler |
-| **MUI v6 (Material UI)** | Component library — Cards, Tables, Chips, Accordions, Buttons |
-| **React Router v7** | Client-side routing (`BrowserRouter`) |
-| **Axios** | HTTP client (`baseURL: http://localhost:8000`) |
+| Technology     | Purpose           |
+| -------------- | ----------------- |
+| React 18       | UI framework      |
+| TypeScript     | Type safety       |
+| Material UI v6 | Component system  |
+| React Router   | Routing           |
+| Axios          | API communication |
+| Vite           | Build system      |
 
 ---
 
-## Project Structure
+# Project Structure
 
-```
+```text
 port-system/
 │
-├── README.md
+├── client/
+│   ├── src/
+│   │   ├── api/
+│   │   ├── components/
+│   │   ├── context/
+│   │   ├── pages/
+│   │   ├── routes/
+│   │   ├── theme/
+│   │   └── utils/
 │
-├── client/                              # React Frontend
-│   ├── index.html                       # Inter font (Google Fonts), title: PortSync
-│   └── src/
-│       ├── App.tsx                      # Root: ThemeContextProvider + BrowserRouter + Routes
-│       ├── api/
-│       │   └── api.ts                   # Axios instance — baseURL: http://localhost:8000
-│       ├── theme/
-│       │   └── ThemeContext.tsx         # Two-step MUI theme factory + Light/Dark Context
-│       ├── components/
-│       │   ├── Layout.tsx               # Sticky 56px header + page title/subtitle + toggle
-│       │   ├── Sidebar.tsx              # Collapsible sidebar (248px open / 56px closed)
-│       │   ├── FileUpload.tsx           # Drag-and-drop CSV zone (theme-aware)
-│       │   ├── TrainingStatusCard.tsx   # Polling status (3s when active) + Retry button
-│       │   └── vessel-analysis/         # 8 data display components
-│       │       ├── AnalysisHeader.tsx   # Vessel ID input + Run Analysis button
-│       │       ├── PerformanceStats.tsx # 3-column stat grid (actual / predicted / variance)
-│       │       ├── BerthRecommendation.tsx  # Large berth ID + concentration badge
-│       │       ├── BerthImpactTable.tsx # Ranked berth table (expandable)
-│       │       ├── ExecutionPlan.tsx    # Numbered step list
-│       │       ├── RiskAndStrategy.tsx  # Severity-tagged risk list
-│       │       ├── VisitTable.tsx       # Visit history table + inline bar chart
-│       │       └── YardStrategy.tsx     # 3-col grid: weight / ports / reshuffle
-│       └── pages/
-│           ├── HistoryVesselAnalysis.tsx
-│           ├── CurrentVesselAnalysis.tsx
-│           ├── DataIngestion.tsx        # CSV / JSON file upload → POST /ingest/vessel-data
-│           ├── TerminalMap.tsx          # 3D interactive heatmap (lazy loaded)
-│           └── TrainModel.tsx           # Training status view + launch links
+├── server/
+│   ├── db/
+│   ├── models/
+│   ├── routes/
+│   ├── services/
+│   ├── utils/
+│   ├── config.py
+│   └── main.py
 │
-└── server/                              # FastAPI Backend
-    ├── main.py                          # App factory, CORS, scheduler, HTTP middleware
-    ├── config.py                        # Settings class — all constants + SQL templates
-    ├── .env                             # Local secrets (not committed)
-    │
-    ├── routes/
-    │   ├── vessel_routes.py             # /vessel/* — analysis + heatmap endpoints
-    │   ├── model_routes.py              # /model/* — training trigger + status
-    │   ├── ingest_routes.py             # /ingest/* — unified CSV/JSON ingestion
-    │   └── config_routes.py             # /config/* — retraining config read/write
-    │
-    ├── services/
-    │   ├── vessel_service.py            # Dashboard orchestration (predict + berth + risks)
-    │   ├── heatmap_service.py           # Yard block concentration logic
-    │   └── retraining_service.py        # Threshold trigger + nightly cron + metadata
-    │
-    ├── models/
-    │   ├── stay_model.py                # VotingRegressor train + predict functions
-    │   ├── training_status.py           # Thread-safe in-memory training state store
-    │   ├── retraining_config.py         # Runtime-mutable retraining threshold config
-    │   └── stay_model.pkl               # Auto-generated trained artifact
-    │
-    ├── db/
-    │   ├── connection.py                # SQLAlchemy engine factory + DB init
-    │   ├── schema.py                    # init_dataset_schema() — DDL per dataset type
-    │   ├── queries.py                   # load_from_db / save_to_history / save_to_current
-    │   └── training_metadata.py         # save_training_metadata / get_latest_training_metadata
-    │
-    └── utils/
-        ├── data_loader.py               # load_from_file, validate_dataframe, clean_column_names
-        ├── feature_utils.py             # create_features() — 13 ML features
-        ├── stay_utils.py                # prepare_visit_data, compute_visit_stay
-        ├── datetime_utils.py            # Timezone-aware datetime parsing
-        ├── cache_utils.py               # In-memory vessel result cache (TTL)
-        └── terminal_layout.py           # get_all_blocks(df) — yard position parsing
+└── README.md
 ```
 
 ---
 
-## Getting Started
+# Getting Started
 
-### Prerequisites
+## Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 14+ running on `localhost:5432`
+* Python 3.11+
+* Node.js 18+
+* PostgreSQL 14+
 
-### 1 — Clone the repository
+---
 
-```bash
-git clone https://github.com/SHATHISH-07/port-system.git
-cd port-system
-```
-
-### 2 — Backend setup
+## Backend Setup
 
 ```bash
 cd server
 python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # macOS / Linux
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Create `server/.env`:
+Create `.env`
 
 ```env
-DATABASE_URL=postgresql://postgres:yourpassword@127.0.0.1:5432/portsystem
+DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432/portsystem
 MODEL_PATH=models/stay_model.pkl
+JWT_SECRET_KEY=super_secret_key
 RETRAIN_THRESHOLD_NEW_RECORDS=1000
-RETRAIN_CHECK_INTERVAL_SECONDS=60
 ```
 
-Start the server:
+Start Backend:
 
 ```bash
 uvicorn main:app --reload
-# API:   http://localhost:8000
-# Docs:  http://localhost:8000/docs
 ```
 
-### 3 — Frontend setup
+---
+
+## Frontend Setup
 
 ```bash
 cd client
 npm install
 npm run dev
-# App:   http://localhost:5173
 ```
 
 ---
 
-## Environment Variables
+# Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `postgresql://postgres:postgres@127.0.0.1:5432/portsystem` | PostgreSQL connection string |
-| `MODEL_PATH` | `models/stay_model.pkl` | Path where the trained model artifact is saved |
-| `RETRAIN_THRESHOLD_NEW_RECORDS` | `1000` | New history records required to auto-trigger retraining |
-| `RETRAIN_CHECK_INTERVAL_SECONDS` | `60` | *(reserved — actual check is event-driven on ingest)* |
-
----
-
-## API Reference
-
-### Vessel Analysis — `POST /vessel/*`
-
-All vessel endpoints accept `multipart/form-data` and return JSON.
-
-| Endpoint | Description |
-|---|---|
-| `POST /vessel/vessel-history-analysis` | Historical dashboard for a vessel |
-| `POST /vessel/current-vessel-analysis` | Live dashboard; optional manual override |
-| `POST /vessel/heatmap` | Yard block concentration heatmap |
-
-**Request fields:**
-
-| Field | Type | Endpoints | Description |
-|---|---|---|---|
-| `vessel_id` | `string` | all | Outbound service / vessel identifier |
-| `loaded` | `int` | current only | Override: loaded container count |
-| `discharged` | `int` | current only | Override: discharged container count |
-
-> Results are cached in memory (`vessel_cache`). The cache is cleared on every ingest.
-
-**Analysis response shape:**
-
-```json
-{
-  "mode": "history | current | current-override",
-  "actual":   { "avg_hours": 42.5, "visits": { "VISIT_001": {...} } },
-  "predicted": { "avg_hours": 39.2, "visits": 3 },
-  "input":    { "loaded": 120, "discharged": 95 },
-  "berth_analysis": [ { "berth": "B3", "cargo_concentration": "Low", "congestion_risk": "Low" } ],
-  "execution_plan": ["Step 1...", "Step 2..."],
-  "risks": ["Risk A...", "Risk B..."],
-  "yard_strategy": { "weight_distribution": {}, "top_discharge_ports": {}, "reshuffle_risk": "Medium" }
-}
-```
+| Variable                       | Description                  |
+| ------------------------------ | ---------------------------- |
+| DATABASE_URL                   | PostgreSQL connection string |
+| MODEL_PATH                     | ML model artifact path       |
+| JWT_SECRET_KEY                 | JWT signing secret           |
+| RETRAIN_THRESHOLD_NEW_RECORDS  | Retraining threshold         |
+| RETRAIN_CHECK_INTERVAL_SECONDS | Retraining interval          |
 
 ---
 
-### Data Ingestion — `POST /ingest/vessel-data`
+# API Reference
 
-Single unified endpoint that accepts data in three forms:
+## Authentication APIs
 
-| Input mode | How to send |
-|---|---|
-| **CSV file** | `multipart/form-data` — `file` field with a `.csv` file |
-| **JSON file** | `multipart/form-data` — `file` field with a `.json` file |
-| **Raw JSON** | `multipart/form-data` — `json_data` field as a JSON string |
-
-After a successful ingest the endpoint:
-1. Validates required columns and drops null-key rows
-2. Appends rows to `history_*` tables
-3. Upserts rows into `current_*` tables
-4. Clears the vessel analysis cache
-5. Fires `check_and_trigger_retraining()` in the background if new history rows were saved
-
-**Response:**
-
-```json
-{
-  "status": "ok",
-  "records_processed": 4230,
-  "history_rows_saved": 4230,
-  "current_rows_saved": 4230,
-  "errors": [],
-  "message": "Successfully ingested 4230 records into history and current tables."
-}
-```
-
-**Validation rules:**
-1. File extension must be `.csv` or `.json` (if uploading a file)
-2. Required columns must be present: `move_complete_time`, `time_in`, `time_out`, `outbound_service`, `actual_outbound_carrier_visit_id`, `unit_id`
-3. Rows with null primary key fields are dropped automatically
-4. Extra columns beyond `DB_EXPECTED_COLUMNS` are discarded
+| Endpoint     | Method | Description          |
+| ------------ | ------ | -------------------- |
+| /auth/login  | POST   | User login           |
+| /auth/me     | GET    | Current user profile |
+| /auth/logout | POST   | Logout               |
 
 ---
 
-### Model Training — `POST /model/*`
+## User Management APIs
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/model/vessel-stay/training` | `POST` | Start a training run |
-| `/model/vessel-stay/training/status` | `GET` | Poll training state |
-
-**Training request (`multipart/form-data`):**
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `data_source` | `"db"` \| `"file"` | `"db"` | Load from PostgreSQL or uploaded CSV |
-| `file` | `UploadFile` (.csv) | — | Required when `data_source = "file"` |
-| `update_db` | `bool` | `false` | Also persist uploaded CSV into `history_*` tables |
-| `config` | `JSON string` | — | Optional hyperparameter overrides (see below) |
-
-**Hyperparameter config keys (all optional):**
-
-```json
-{ "n_estimators": 200, "max_depth": 12, "min_samples_leaf": 5, "random_state": 42 }
-```
-
-**Training response:**
-
-```json
-{ "status": "started", "message": "Training started on 12,540 records from database.", "config": {...} }
-```
-
-**Status response:**
-
-```json
-{
-  "status": "idle | training | completed | error",
-  "message": "Model trained successfully",
-  "records_count": 12540,
-  "data_source": "db",
-  "training_type": "manual | automated | scheduled"
-}
-```
-
-> A concurrent training request is rejected while one is already running.
+| Endpoint            | Method | Description        |
+| ------------------- | ------ | ------------------ |
+| /users/create       | POST   | Create user        |
+| /users/create-admin | POST   | Create admin       |
+| /users/list         | GET    | List users         |
+| /users/deactivate   | PUT    | Deactivate account |
 
 ---
 
-### Retraining Config — `/config/*`
+## Vessel APIs
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/config/retraining` | `GET` | Read current threshold and interval |
-| `/config/retraining` | `PUT` | Update threshold / interval at runtime |
+| Endpoint                        | Method | Description             |
+| ------------------------------- | ------ | ----------------------- |
+| /vessel/vessel-history-analysis | POST   | Historical analysis     |
+| /vessel/current-vessel-analysis | POST   | Current vessel analysis |
+| /vessel/heatmap                 | POST   | Heatmap generation      |
 
 ---
 
-## ML Pipeline
+## Ingestion APIs
 
-### Model Architecture
+| Endpoint            | Method | Description        |
+| ------------------- | ------ | ------------------ |
+| /ingest/vessel-data | POST   | CSV/JSON ingestion |
 
-```python
-VotingRegressor(estimators=[
-    ("ridge", Pipeline([
-        ("scaler", StandardScaler()),
-        ("ridge",  Ridge(alpha=10.0)),
-    ])),
-    ("xgb", XGBRegressor(
-        n_estimators=80, max_depth=3, learning_rate=0.08,
-        subsample=0.8, colsample_bytree=0.8,
-        min_child_weight=5, reg_alpha=1.0, reg_lambda=5.0,
-    )),
-    ("gbr", GradientBoostingRegressor(
-        n_estimators=60, max_depth=2, learning_rate=0.10,
-        subsample=0.75, min_samples_leaf=8,
-    )),
-])
-```
+---
 
-### Feature Set (13 features)
+## Model APIs
 
-| Feature | Derivation |
-|---|---|
-| `loaded` | Loaded container count per visit |
-| `discharged` | Discharged container count per visit |
-| `total_moves` | `loaded + discharged` |
-| `imbalance` | `abs(loaded - discharged)` |
-| `load_ratio` | `loaded / (total_moves + 1)` |
-| `discharge_ratio` | `discharged / (total_moves + 1)` |
-| `container_count` | Total containers in visit |
-| `avg_weight` | Mean `unit_weight_in_kg` |
-| `heavy_count` | Containers with weight > threshold |
-| `reefer_count` | `reefer == True` count |
-| `hazard_count` | `hazardous_flag == True` count |
-| `oog_count` | `oog_unit == True` count |
-| `service_hash` | `hash(outbound_service) % 1_000_000` |
+| Endpoint                           | Method | Description      |
+| ---------------------------------- | ------ | ---------------- |
+| /model/vessel-stay/training        | POST   | Trigger training |
+| /model/vessel-stay/training/status | GET    | Training status  |
 
-### Training Filters
+---
 
-| Filter | Threshold | Reason |
-|---|---|---|
-| Min stay | `TRAIN_MIN_HOURS = 2h` | Discard noise / incomplete ops |
-| Max stay | `TRAIN_MAX_HOURS = 240h` | Discard outliers / data errors |
-| Min rows/visit | `MIN_VISIT_ROWS = 5` | Require enough container records |
+# Data Ingestion Pipeline
 
-### Target Variable
+The ingestion system accepts:
 
-Stay time is calculated per visit group:
+* CSV files
+* JSON files
+* Raw JSON payloads
 
-```
-stay = compute_visit_stay(visit_df)
-     = mean of (time_out - time_in) per session within VESSEL_WINDOW_HOURS (96h)
+The ingestion pipeline:
+
+1. Parses incoming data
+2. Validates schema
+3. Cleans columns
+4. Stores history records
+5. Updates current operational state
+6. Clears cache
+7. Checks retraining threshold
+
+---
+
+# Ingestion Flow
+
+```mermaid
+flowchart TD
+
+    A[CSV / JSON Upload] --> B[Parse Data]
+    B --> C[Validate Schema]
+    C --> D[Clean Columns]
+    D --> E[Save History Tables]
+    D --> F[UPSERT Current Tables]
+    E --> G[Increment Retraining Counter]
+    G --> H{Threshold Reached?}
+
+    H -- Yes --> I[Trigger Background Retraining]
+    H -- No --> J[Finish]
 ```
 
 ---
 
-## Automated Retraining
+# Current Available Fields
 
-Two independent triggers share the same threshold logic.
+The current platform supports the following operational fields:
 
-### 1 — Ingest-triggered (event-driven)
-
-Called immediately after every successful `POST /ingest/vessel-data` that saves new history rows:
-
-```python
-check_and_trigger_retraining(background_tasks)
-  ├── get_history_count()       # SELECT COUNT(*) FROM history_containers WHERE deleted_at IS NULL
-  ├── get_metadata()            # reads training_metadata table (latest row)
-  ├── difference = current_count - last_trained_size
-  └── if difference >= RETRAIN_THRESHOLD_NEW_RECORDS OR first_run:
-          training_type = "automated"
-          background_tasks.add_task(background_train_and_update, df, config)
+```text
+unit ID
+Unit Visit Gkey
+Complex Id
+Facility Id
+Yard Id
+Category Id
+Equipment Class
+Container Length
+Equipment type
+Freight Kind
+Destination
+Unit Weight in kg
+Verified Gross Mass (Kg)
+Reefer
+OOG Unit
+Hazardous Flag
+Hazard UN Numbers
+IMDG Code
+Stow Code 1
+Stow Code 2
+Stow Code 3
+Port of Discharge
+Actual Inbound Carrier visit ID
+Inbound Service
+Actual Outbound Carrier visit ID
+Outbound Service
+Arrival Mode
+Current Position
+Visit State
+Transit State
+Time Out
+Time In
+Move Complete Time
+Ctr From Position
+Ctr To Position
 ```
-
-### 2 — Nightly cron (APScheduler)
-
-Registered at startup via `lifespan()`:
-
-```python
-scheduler.add_job(scheduled_retraining_job, 'cron', hour=2, minute=0)
-```
-
-Applies the same threshold logic. Uses `asyncio.to_thread()` for non-blocking DB reads. Sets `training_type = "scheduled"`.
-
-### Metadata persistence
-
-After each successful training run, a row is inserted into the `training_metadata` PostgreSQL table:
-
-| Column | Description |
-|---|---|
-| `last_trained_dataset_size` | Number of history rows trained on |
-| `last_trained_timestamp` | UTC timestamp of training completion |
-| `data_source` | `"db"` or `"file"` |
-| `training_type` | `"manual"`, `"automated"`, or `"scheduled"` |
-| `status` | `"completed"` or `"error"` |
-| `notes` | Error message if failed |
 
 ---
 
-## Frontend Pages & Routing
+# Machine Learning Pipeline
 
-| Route | Page | Description |
-|---|---|---|
-| `/` | → redirect | Redirects to `/history-analysis` |
-| `/history-analysis` | `HistoryVesselAnalysis` | Historical vessel dashboard |
-| `/current-analysis` | `CurrentVesselAnalysis` | Live vessel dashboard |
-| `/heatmap` | `TerminalMap` | 3D yard container heatmap |
-| `/data-ingestion` | `DataIngestion` | CSV / JSON file upload UI |
-| `/train-model` | `TrainModel` | Training status + launch links |
+## Model Architecture
 
-All pages are **lazy-loaded** (`React.lazy`) with a `CircularProgress` fallback. `TerminalMap` is pre-fetched 2 seconds after initial load.
+The platform uses a VotingRegressor ensemble.
 
-### Page Sections
+### Ensemble Models
 
-#### History Analysis (`/history-analysis`)
-- **AnalysisHeader** — Vessel ID input + Run Analysis (calls `POST /vessel/vessel-history-analysis`)
-- Section 01: **PerformanceStats** — actual / predicted / variance
-- Section 02: **VisitTable** — sorted visit records + inline stay bar
-- Section 03: **Operational Intelligence** — BerthRecommendation + ExecutionPlan + RiskAndStrategy
-- Section 04: **YardStrategy** — weight distribution + top discharge ports + reshuffle risk
-- Section 05: **BerthImpactTable** — ranked berths (expandable beyond top 5)
-
-#### Current Analysis (`/current-analysis`)
-- **AnalysisHeader** — Vessel ID + optional Loaded / Discharged override
-- Same sections as History + **Live Yard Heatmap** (Section 02, embedded from `POST /vessel/heatmap`)
-
-#### Terminal Heatmap (`/heatmap`)
-- Full-page 3D terminal map
-- Yard block color = container concentration (`High`→Red, `Medium`→Amber, `Low`→Green)
-- Vessel ID search + block-level drill-down
-
-#### Data Ingestion (`/data-ingestion`)
-- **CSV mode** — drag-and-drop or click-to-browse `.csv` file → `POST /ingest/vessel-data`
-- **JSON mode** — paste raw JSON array/object → `POST /ingest/vessel-data`
-- Inline result card: records processed, history rows saved, current rows saved
-- Required column reference displayed below the upload zone
-
-#### Train Model (`/train-model`)
-- Live training status snapshot (polls `GET /model/vessel-stay/training/status`)
-- Links to trigger training via API (`POST /model/vessel-stay/training`)
-- **TrainingStatusCard** — full polling UI shown when training is active
+* Ridge Regression
+* XGBoost Regressor
+* GradientBoostingRegressor
 
 ---
 
-## Database Schema
-
-Two parallel schema groups — `history_*` for training, `current_*` for live analysis.
-
-```sql
--- {type}_vessels
-CREATE TABLE {type}_vessels (
-    outbound_service  TEXT PRIMARY KEY,
-    created_at        TIMESTAMPTZ,
-    updated_at        TIMESTAMPTZ,
-    deleted_at        TIMESTAMPTZ
-);
-
--- {type}_visits
-CREATE TABLE {type}_visits (
-    actual_outbound_carrier_visit_id  TEXT PRIMARY KEY,
-    outbound_service                  TEXT REFERENCES {type}_vessels(outbound_service),
-    created_at                        TIMESTAMPTZ,
-    updated_at                        TIMESTAMPTZ,
-    deleted_at                        TIMESTAMPTZ
-);
-
--- {type}_containers
-CREATE TABLE {type}_containers (
-    id                                UUID,
-    actual_outbound_carrier_visit_id  TEXT REFERENCES {type}_visits,
-    unit_id                           TEXT,
-    move_complete_time                TIMESTAMPTZ,
-    time_in                           TIMESTAMPTZ,
-    time_out                          TIMESTAMPTZ,
-    ctr_from_position                 TEXT,
-    ctr_to_position                   TEXT,
-    unit_weight_in_kg                 NUMERIC,
-    verified_gross_mass_kg            NUMERIC,
-    reefer                            BOOLEAN,
-    hazardous_flag                    BOOLEAN,
-    oog_unit                          BOOLEAN,
-    port_of_discharge                 TEXT,
-    created_at                        TIMESTAMPTZ,
-    updated_at                        TIMESTAMPTZ,
-    deleted_at                        TIMESTAMPTZ,
-    PRIMARY KEY (actual_outbound_carrier_visit_id, unit_id)
-);
-
--- training_metadata  (auto-initialized on startup)
-CREATE TABLE training_metadata (
-    id                         SERIAL PRIMARY KEY,
-    last_trained_dataset_size  INTEGER,
-    last_trained_timestamp     TIMESTAMPTZ,
-    data_source                TEXT,
-    training_type              TEXT,
-    status                     TEXT,
-    notes                      TEXT,
-    created_at                 TIMESTAMPTZ,
-    updated_at                 TIMESTAMPTZ,
-    deleted_at                 TIMESTAMPTZ
-);
-```
-
-### Write Strategies
-
-| Table group | Strategy | SQL mechanism |
-|---|---|---|
-| `history_*` | **Append** — never delete existing rows | Containers: `to_sql(if_exists="append")`; Vessels/Visits: `ON CONFLICT DO UPDATE` |
-| `current_*` | **Upsert** — full replace on conflict | All three tables: `ON CONFLICT DO UPDATE` via temp table + `COPY` |
-
-Both strategies use PostgreSQL's `COPY` command for high-throughput bulk ingestion.
-
----
-
-## Data Flow
+# ML Pipeline Flow
 
 ```mermaid
 graph TD
-    A[POST /ingest/vessel-data<br>CSV/JSON] --> B[load_from_file / pd.DataFrame]
-    B --> C[validate_dataframe<br>clean cols, drop nulls]
-    C --> D[save_to_history UPSERT]
-    C --> E[save_to_current UPSERT]
-    D --> F[check_and_trigger_retraining]
-    E --> G[vessel_cache.clear]
-    F --> H[background_train_and_update]
-    H --> I[(stay_model.pkl)]
-    H --> J[(training_metadata)]
-    
-    K[GET/POST Analysis Request] --> L[load_from_db]
-    L --> M[analyze_vessel_dashboard]
-    M --> N[predict_vessel_stay_duration]
-    M --> O[berth_analysis]
-    M --> P[execution_plan]
-    M --> Q[risk_assessment]
-    M --> R[yard_strategy]
-    L --> S[get_vessel_heatmap]
-    S --> T[per-block concentration]
+
+    A[Historical Container Data] --> B[Feature Engineering]
+
+    B --> C[Loaded Containers]
+    B --> D[Discharged Containers]
+    B --> E[Weight Features]
+    B --> F[Hazard Features]
+    B --> G[Service Features]
+
+    C --> H[VotingRegressor]
+    D --> H
+    E --> H
+    F --> H
+    G --> H
+
+    H --> I[Predicted Vessel Stay Time]
 ```
 
-### Ingestion Sequence Diagram
+---
+
+# Feature Engineering
+
+| Feature      | Description                  |
+| ------------ | ---------------------------- |
+| loaded       | Loaded container count       |
+| discharged   | Discharged container count   |
+| total_moves  | Total operational moves      |
+| imbalance    | Operational imbalance        |
+| avg_weight   | Average container weight     |
+| reefer_count | Reefer container count       |
+| hazard_count | Hazardous container count    |
+| oog_count    | Out-of-gauge container count |
+| service_hash | Encoded service identifier   |
+
+---
+
+# Automated Retraining Flow
+
+The platform supports:
+
+## Threshold Retraining
+
+Triggered after:
+
+* 1000 new records
+
+## Scheduled Retraining
+
+Runs automatically:
+
+* Daily at 2:00 AM
+
+---
+
+# Retraining Flow Diagram
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant F as Frontend (React)
-    participant B as Backend (FastAPI)
-    participant DB as PostgreSQL
 
-    U->>F: Upload CSV/JSON File
-    F->>B: POST /ingest/vessel-data (multipart)
-    B->>B: Validate & Clean Data
-    B->>DB: Upsert Vessels, Visits, Containers
-    DB-->>B: Success
-    B->>B: Check Retraining Threshold
-    alt Threshold Met
-        B-)DB: Background Training Triggered
+    participant I as Ingestion
+    participant B as Backend
+    participant DB as Database
+    participant ML as ML Pipeline
+
+    I->>B: New Records
+    B->>DB: Save History
+    B->>DB: Update Current
+    B->>B: Check Threshold
+
+    alt Threshold Reached
+        B->>ML: Start Retraining
+        ML->>DB: Save Metadata
     end
-    B-->>F: Ingestion Results & Status
-    F-->>U: Show Success Dashboard
 ```
 
 ---
 
-## Configuration Reference
+# Frontend Architecture
 
-All tunable parameters are in `server/config.py` (`Settings` class):
+## Main Pages
 
-| Setting | Default | Env Override | Description |
-|---|---|---|---|
-| `DATABASE_URL` | `postgresql://...` | ✅ | PostgreSQL connection |
-| `MODEL_PATH` | `models/stay_model.pkl` | ✅ | Artifact save path |
-| `TRAIN_MIN_HOURS` | `2` | ❌ | Min stay for training sample |
-| `TRAIN_MAX_HOURS` | `240` | ❌ | Max stay for training sample |
-| `MIN_VISIT_ROWS` | `5` | ❌ | Min container rows per visit |
-| `VESSEL_WINDOW_HOURS` | `96` | ❌ | Session grouping window |
-| `RETRAIN_THRESHOLD_NEW_RECORDS` | `1000` | ✅ | New records to trigger auto-retrain |
-| `RETRAIN_CHECK_INTERVAL_SECONDS` | `60` | ✅ | Reserved config key |
+| Route              | Description                |
+| ------------------ | -------------------------- |
+| /dashboard         | Main analytics dashboard   |
+| /history-analysis  | Historical vessel analysis |
+| /current-analysis  | Current vessel analysis    |
+| /heatmap           | 3D yard heatmap            |
+| /operations-center | Admin operations dashboard |
+| /user-management   | User administration        |
+| /train-model       | Training controls          |
 
 ---
 
-## License
+# Operations Center
 
-MIT © [SHATHISH-07](https://github.com/SHATHISH-07)
+The Operations Center is admin-only.
+
+Contains:
+
+* Data Ingestion
+* Model Training
+* Retraining Configuration
+* Training Status
+* Pending Requests
+* System Monitoring
+
+---
+
+# Database Architecture
+
+The platform uses dual-table operational architecture.
+
+## History Tables
+
+Append-only storage.
+
+Used for:
+
+* ML training
+* historical analytics
+* retraining
+
+## Current Tables
+
+UPSERT latest operational state.
+
+Used for:
+
+* live dashboards
+* current analysis
+* heatmaps
+
+---
+
+# Database Flow
+
+```mermaid
+flowchart LR
+
+    A[Incoming Data]
+
+    A --> B[History Tables]
+    A --> C[Current Tables]
+
+    B --> D[ML Training]
+    C --> E[Live Dashboard]
+```
+
+---
+
+# Request System
+
+Users can create:
+
+* Upload Requests
+* Retraining Requests
+* Config Update Requests
+
+Admins review requests and manually execute operational tasks.
+
+---
+
+# Security Architecture
+
+The platform implements:
+
+* JWT authentication
+* bcrypt password hashing
+* role-based authorization
+* protected API routes
+* admin-only routes
+* token validation middleware
+
+---
+
+# Security Flow
+
+```mermaid
+graph TD
+
+    A[Client Request] --> B[JWT Validation]
+    B --> C{Valid Token?}
+
+    C -- No --> D[401 Unauthorized]
+    C -- Yes --> E[Role Validation]
+
+    E --> F{Admin Route?}
+
+    F -- Yes --> G[Admin Access]
+    F -- No --> H[User Access]
+```
+
+---
+
+# Configuration Reference
+
+| Config                        | Description               |
+| ----------------------------- | ------------------------- |
+| DATABASE_URL                  | PostgreSQL connection     |
+| MODEL_PATH                    | Trained model path        |
+| JWT_SECRET_KEY                | JWT secret                |
+| RETRAIN_THRESHOLD_NEW_RECORDS | Auto retraining threshold |
+| TRAIN_MIN_HOURS               | Minimum stay threshold    |
+| TRAIN_MAX_HOURS               | Maximum stay threshold    |
+| MIN_VISIT_ROWS                | Minimum rows per visit    |
+
+---
+
+# Future Scope
+
+Future operational enhancements may include:
+
+* Crane intelligence
+* Berth optimization
+* ITV tracking
+* Congestion simulation
+* Real-time ETA recalculation
+* Yard optimization AI
+* Predictive congestion analysis
+
+---

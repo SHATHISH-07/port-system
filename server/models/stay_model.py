@@ -125,7 +125,7 @@ def train_stay_model(df, config: dict = None):
         model.fit(pd.DataFrame(X, columns=settings.FEATURE_NAMES), pd.Series(y))
 
         # Create models directory if it doesn't exist
-        os.makedirs("models", exist_ok=True)
+        os.makedirs(os.path.dirname(settings.MODEL_PATH), exist_ok=True)
 
         # Save the model and features
         joblib.dump({

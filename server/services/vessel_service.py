@@ -232,12 +232,13 @@ def analyze_vessel_dashboard(df, vessel_service: str):
             risks.append("Load-heavy imbalance — yard congestion likely.")
 
     # Check for extended vessel stay
-    if actual["avg_hours"] > 40:
+    avg_hours = actual.get("avg_hours") or 0
+    if avg_hours > 40:
         risks.append("Extended vessel stay — possible inefficiency.")
 
     # Check for low crane productivity
-    moves_per_hour = total_loaded / max(actual["avg_hours"], 1)
-    if moves_per_hour < 20:
+    moves_per_hour = total_loaded / max(avg_hours, 1)
+    if moves_per_hour < 20 and avg_hours > 0:
         risks.append("Low crane productivity detected.")
 
     # If no risks, add stable
