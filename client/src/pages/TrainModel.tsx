@@ -89,8 +89,8 @@ export default function TrainModel() {
     <Box sx={{ mx: "auto" }}>
 
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" sx={{ mb: 0.75, color: "text.primary" }}>
+      <Box sx={{ mb: 4, pb: 3, borderBottom: "1px solid", borderColor: "divider" }}>
+        <Typography variant="h5" sx={{ mb: 0.5, color: "text.primary" }}>
           Train Vessel Stay Model
         </Typography>
         <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 480 }}>

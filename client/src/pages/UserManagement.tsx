@@ -77,20 +77,23 @@ const UserManagement: React.FC = () => {
     };
 
     return (
-        <Box sx={{ p: 3 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
-                <Typography variant="h4" sx={{ fontWeight: "bold" }}>User Management</Typography>
+        <Box sx={{ p: 0 }}>
+            <Box sx={{ mb: 4, pb: 3, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <Box>
+                    <Typography variant="h5" sx={{ mb: 0.5, color: "text.primary" }}>User Management</Typography>
+                    <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 380 }}>Manage platform access, role permissions, and account security.</Typography>
+                </Box>
                 <Button 
                     variant="contained" 
                     disableElevation
                     onClick={() => setOpenModal(true)}
-                    sx={{ textTransform: "none", fontWeight: 600 }}
+                    sx={{ textTransform: "none", fontWeight: 600, height: 40 }}
                 >
                     Add User
                 </Button>
             </Box>
 
-            <TableContainer component={Paper} elevation={3}>
+            <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, overflow: "hidden" }}>
                 <Table>
                     <TableHead sx={{ backgroundColor: "background.paper" }}>
                         <TableRow>
