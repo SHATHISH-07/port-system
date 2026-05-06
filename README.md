@@ -89,6 +89,7 @@ APScheduler (cron 02:00 AM) ──► scheduled_retraining_job()                
 
 | Package | Purpose |
 |---|---|
+| **Python 3.11+** | Language runtime — type hints, `asyncio`, `match` statements |
 | **FastAPI** | REST API framework with automatic OpenAPI docs (`/docs`) |
 | **Uvicorn** | ASGI server (`--reload` in development) |
 | **SQLAlchemy + psycopg2** | PostgreSQL ORM + raw COPY driver |
