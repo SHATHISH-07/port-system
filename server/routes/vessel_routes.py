@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Form
-from db.queries import load_df_from_db
+from db.queries import load_from_db
 from services.vessel_service import analyze_vessel_dashboard
 from services.heatmap_service import get_vessel_heatmap
 from models.stay_model import predict_stay_duration_from_metrics
@@ -27,7 +27,7 @@ async def vessel_history_analysis(
             return cached_result
         
         # Load the data from the database
-        df = load_df_from_db("history", vessel_id)
+        df = load_from_db("history", vessel_id)
         # Analyze the data
         result = analyze_vessel_dashboard(df, vessel_id)
         result["mode"] = "history"
@@ -57,7 +57,7 @@ async def current_vessel_analysis(
             result = dict(cached_result)
         else:
             # Load the data from the database
-            df = load_df_from_db("current", vessel_id)
+            df = load_from_db("current", vessel_id)
             # Analyze the data
             result = analyze_vessel_dashboard(df, vessel_id)
             # Store the result in the cache
@@ -95,7 +95,7 @@ async def heatmap_analysis(
         if cached_result:
             return cached_result
         # Heatmap uses the same 'current' dataset
-        df = load_df_from_db("current", vessel_id)
+        df = load_from_db("current", vessel_id)
         result = get_vessel_heatmap(df, vessel_id)
         # Store the result in the cache
         if "error" not in result:

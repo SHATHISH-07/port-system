@@ -3,11 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routes.vessel_routes import router as vessel_router
 from routes.model_routes import router as model_router
-from routes.upload_routes import router as upload_router
+from routes.ingest_routes import router as ingest_router
+from routes.config_routes import router as config_router
 
 from contextlib import asynccontextmanager
 from services.retraining_service import scheduled_retraining_job
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from db.schema import init_training_metadata_schema
+from db.connection import get_engine
 
 # Initialize the scheduler
 scheduler = AsyncIOScheduler()
@@ -15,7 +18,12 @@ scheduler = AsyncIOScheduler()
 # Lifespan context manager for startup/shutdown tasks
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Schedule the retraining check to run exactly at 2:00 AM every day
+    # Startup: Ensure DB schema (training_metadata table)
+    try:
+        init_training_metadata_schema(get_engine())
+    except Exception as e:
+        import logging; logging.getLogger("port_system").error(f"Schema init failed: {e}")
+    # Schedule the nightly retraining check at 2:00 AM
     scheduler.add_job(scheduled_retraining_job, 'cron', hour=2, minute=0)
     scheduler.start()
     yield
@@ -71,4 +79,7 @@ app.add_middleware(
 # Register routes
 app.include_router(vessel_router)
 app.include_router(model_router)
-app.include_router(upload_router)
+app.include_router(ingest_router)
+app.include_router(config_router)
+
+

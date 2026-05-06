@@ -8,7 +8,9 @@ import {
   TextField,
   InputAdornment,
   IconButton,
+  useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import {
   WarningAmberRounded,
   SearchRounded,
@@ -186,6 +188,9 @@ class TerminalScene {
   camera: THREE.PerspectiveCamera;
   animId = 0;
 
+  hemiLight!: THREE.HemisphereLight;
+  sunLight!: THREE.DirectionalLight;
+
   blockMeshes: Map<string, THREE.Group> = new Map();
   heatBlobs: { mesh: THREE.Mesh; baseOp: number }[] = [];
   shipMeshes: Map<string, THREE.Group> = new Map();
@@ -226,11 +231,8 @@ class TerminalScene {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
 
-    const skyColor = 0x7a8fa0;
-    this.renderer.setClearColor(skyColor, 1);
-
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(skyColor, 0.004);
+    this.scene.fog = new THREE.FogExp2(0x060c14, 0.004); // Default to dark sky
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 800);
     this.updateCamera();
@@ -246,7 +248,34 @@ class TerminalScene {
     this.buildFuelStation();
     this.buildGateComplex();
     this.addEvents(canvas);
+
     this.animate();
+  }
+
+  setTheme(mode: 'light' | 'dark') {
+    const isDark = mode === 'dark';
+    const skyColor = isDark ? 0x060c14 : 0x8ab4f8;
+
+    this.renderer.setClearColor(skyColor, 1);
+    if (this.scene.fog) {
+      (this.scene.fog as THREE.FogExp2).color.setHex(skyColor);
+    }
+
+    if (this.hemiLight) {
+      this.hemiLight.color.setHex(isDark ? 0xd0e8f5 : 0xffffff);
+      this.hemiLight.groundColor.setHex(isDark ? 0x8fa890 : 0xa1b4c7);
+      this.hemiLight.intensity = isDark ? 0.7 : 1.1;
+    }
+
+    if (this.sunLight) {
+      this.sunLight.intensity = isDark ? 2.2 : 3.0;
+      this.sunLight.color.setHex(isDark ? 0xfff5e0 : 0xffffff);
+    }
+
+    if (this.waterMesh && this.waterMesh.material) {
+      // Brighter navy for dark mode, vibrant blue for light mode
+      (this.waterMesh.material as THREE.MeshStandardMaterial).color.setHex(isDark ? 0x18385e : 0x2b6ca3);
+    }
   }
 
   updateCamera() {
@@ -264,33 +293,29 @@ class TerminalScene {
   }
 
   buildLights() {
-    // Overcast industrial sky - hemisphere
-    this.scene.add(new THREE.HemisphereLight(0xd0e8f5, 0x8fa890, 0.7));
+    this.hemiLight = new THREE.HemisphereLight(0xd0e8f5, 0x8fa890, 0.7);
+    this.scene.add(this.hemiLight);
 
-    // Primary sun - slightly warm, raking angle for long shadows
-    const sun = new THREE.DirectionalLight(0xfff5e0, 2.2);
-    sun.position.set(40, 70, -30);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(4096, 4096);
+    this.sunLight = new THREE.DirectionalLight(0xfff5e0, 2.2);
+    this.sunLight.position.set(40, 70, -30);
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.set(4096, 4096);
     const d = 50;
-    sun.shadow.camera.left = -d; sun.shadow.camera.right = d;
-    sun.shadow.camera.top = d; sun.shadow.camera.bottom = -d;
-    sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 180;
-    sun.shadow.bias = -0.0005;
-    sun.shadow.radius = 2;
-    this.scene.add(sun);
+    this.sunLight.shadow.camera.left = -d; this.sunLight.shadow.camera.right = d;
+    this.sunLight.shadow.camera.top = d; this.sunLight.shadow.camera.bottom = -d;
+    this.sunLight.shadow.camera.near = 0.5; this.sunLight.shadow.camera.far = 180;
+    this.sunLight.shadow.bias = -0.0005;
+    this.sunLight.shadow.radius = 2;
+    this.scene.add(this.sunLight);
 
-    // Cool fill from water side
     const fill = new THREE.DirectionalLight(0xadd8f0, 0.5);
     fill.position.set(-30, 20, 40);
     this.scene.add(fill);
 
-    // Ambient bounce from ground
     const bounce = new THREE.DirectionalLight(0xd4b896, 0.2);
     bounce.position.set(0, -10, 0);
     this.scene.add(bounce);
 
-    // Crane floodlights (point lights near STS cranes)
     [[150, EDGE_N], [550, EDGE_N], [350, EDGE_S]].forEach(([x, y]) => {
       const pt = new THREE.PointLight(0xfff0cc, 1.5, 12);
       pt.position.set(to3D(x, y).x, 3.5, to3D(x, y).z);
@@ -301,7 +326,7 @@ class TerminalScene {
   buildWater() {
     const geo = new THREE.PlaneGeometry(500, 500, 200, 200);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x0d1f35,
+      color: 0x18385e, // Setup with new lighter dark-mode water color
       roughness: 0.05,
       metalness: 0.9,
       flatShading: true,
@@ -314,7 +339,6 @@ class TerminalScene {
     this.waterMesh.receiveShadow = true;
     this.scene.add(this.waterMesh);
 
-    // Foam/wake lines along berths
     const foamMat = new THREE.MeshBasicMaterial({ color: 0xd0e8f5, transparent: true, opacity: 0.15 });
     [EDGE_N, EDGE_S].forEach(y => {
       const foam = new THREE.Mesh(new THREE.PlaneGeometry(TERM_W * S, 0.5), foamMat);
@@ -325,7 +349,6 @@ class TerminalScene {
   }
 
   buildGroundSlabs() {
-    // Textured apron surface
     const paveTex = makePavementTexture(512, "#3a424e", "#4a5568");
     const slabMat = new THREE.MeshStandardMaterial({ color: 0x495670, roughness: 0.95, map: paveTex });
     const surfMat = new THREE.MeshStandardMaterial({ color: 0x5a6580, roughness: 0.88 });
@@ -1578,25 +1601,27 @@ class TerminalScene {
   destroy() { cancelAnimationFrame(this.animId); this.renderer.dispose(); }
 }
 
-const KPI = ({ label, value, valueColor = "#f8fafc", isMono = false }: {
-  label: string; value: string | number; valueColor?: string; isMono?: boolean;
-}) => (
-  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.2, minWidth: 0, flexShrink: 0 }}>
-    <Typography sx={{
-      fontSize: "0.58rem", color: "#334155", fontWeight: 700,
-      letterSpacing: "0.6px", textTransform: "uppercase",
-      fontFamily: "'Roboto Mono', monospace",
-      whiteSpace: "nowrap",
-    }}>{label}</Typography>
-    <Typography sx={{
-      fontSize: "0.88rem", fontWeight: 600, color: valueColor,
-      fontFamily: isMono ? "'Roboto Mono', monospace" : "'Inter', sans-serif",
-      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-    }}>{value}</Typography>
-  </Box>
-);
-
 const StyledTextField = TextField as any;
+
+const KPI = ({ label, value, valueColor, isMono = false }: {
+  label: string; value: string | number; valueColor?: string; isMono?: boolean;
+}) => {
+  const theme = useTheme();
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.2, minWidth: 0, flexShrink: 0 }}>
+      <Typography sx={{
+        fontSize: "0.58rem", color: theme.palette.text.secondary, fontWeight: 700,
+        letterSpacing: "0.6px", textTransform: "uppercase", fontFamily: "'Roboto Mono', monospace",
+        whiteSpace: "nowrap",
+      }}>{label}</Typography>
+      <Typography sx={{
+        fontSize: "0.88rem", fontWeight: 600, color: valueColor || theme.palette.text.primary,
+        fontFamily: isMono ? "'Roboto Mono', monospace" : "'Inter', sans-serif",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>{value}</Typography>
+    </Box>
+  );
+};
 
 export default function TerminalMap() {
   const [searchParams] = useSearchParams();
@@ -1610,6 +1635,10 @@ export default function TerminalMap() {
   const sceneRef = useRef<TerminalScene | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // We read the mode from the GLOBAL theme provider wrapping your app
+  const theme = useTheme();
+  const mode = theme.palette.mode;
 
   let targetBerthId = "R1";
   let totalMoves = 0;
@@ -1681,6 +1710,9 @@ export default function TerminalMap() {
       ts.onHover = id => setHoveredBlock(id);
       sceneRef.current = ts;
 
+      // Ensure theme is set immediately after initialization using global mode
+      ts.setTheme(mode);
+
       ro = new ResizeObserver(() => {
         if (containerRef.current && sceneRef.current)
           sceneRef.current.resize(containerRef.current.clientWidth, containerRef.current.clientHeight);
@@ -1697,7 +1729,14 @@ export default function TerminalMap() {
       if (ro) ro.disconnect();
       if (ts) ts.destroy();
     };
-  }, []);
+  }, []); // Initialization run once
+
+  // Update scene theme dynamically when global UI mode changes
+  useEffect(() => {
+    if (sceneRef.current) {
+      sceneRef.current.setTheme(mode);
+    }
+  }, [mode]);
 
   useEffect(() => {
     if (!sceneRef.current || !data) return;
@@ -1708,14 +1747,15 @@ export default function TerminalMap() {
 
   return (
     <Box ref={wrapperRef} sx={{
-      width: "100%", height: isFullscreen ? "100vh" : "100vh", bgcolor: "#060c14",
-      color: "#e2e8f0", display: "flex", flexDirection: "column",
+      width: "100%", height: isFullscreen ? "100vh" : "100vh", bgcolor: "background.default",
+      color: "text.primary", display: "flex", flexDirection: "column",
       fontFamily: "'Inter', sans-serif", overflow: "hidden",
     }}>
       {/* ── Header ── */}
       <Box sx={{
-        bgcolor: "#0b1220",
-        borderBottom: "1px solid #111e30",
+        bgcolor: theme.palette.mode === "dark" ? "#2a2a2a" : "#e9eef6",
+        borderBottom: "1px solid",
+        borderColor: "divider",
         display: "flex",
         alignItems: "center",
         px: 2,
@@ -1723,14 +1763,14 @@ export default function TerminalMap() {
         gap: 2,
         flexShrink: 0,
         minHeight: 52,
-        overflow: "hidden", // NO scrollbar ever
+        overflow: "hidden",
         zIndex: 10,
       }}>
         {/* Brand */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
-
           <Typography sx={{
-            fontSize: "1rem", fontWeight: 800, color: "#1e5a7a",
+            fontSize: "1rem", fontWeight: 800,
+            color: theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8",
             letterSpacing: "2px", textTransform: "uppercase",
             fontFamily: "'Roboto Mono', monospace", whiteSpace: "nowrap",
           }}>
@@ -1738,7 +1778,7 @@ export default function TerminalMap() {
           </Typography>
         </Box>
 
-        <Divider orientation="vertical" flexItem sx={{ borderColor: "#111e30", my: 0.5, flexShrink: 0 }} />
+        <Divider orientation="vertical" flexItem sx={{ my: 0.5, flexShrink: 0 }} />
 
         {/* Search row */}
         <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexShrink: 0 }}>
@@ -1750,33 +1790,23 @@ export default function TerminalMap() {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchRounded sx={{ fontSize: 14, color: "#1e4060" }} />
+                  <SearchRounded sx={{ fontSize: 14, color: "text.secondary" }} />
                 </InputAdornment>
               )
             }}
-            sx={{
-              width: 130,
-              "& .MuiOutlinedInput-root": {
-                bgcolor: "#040a12", color: "#6aa4c0", fontSize: "0.78rem",
-                fontFamily: "'Roboto Mono', monospace",
-                "& fieldset": { borderColor: "#0f2030" },
-                "&&:hover fieldset": { borderColor: "#1e4a6a" },
-                "&.Mui-focused fieldset": { borderColor: "#38bdf8" },
-              },
-            }}
+            sx={{ width: 130 }}
           />
           <Button
             type="button"
             onClick={load}
             disabled={loading || !vesselInput.trim()}
             disableElevation
+            variant="contained"
             sx={{
-              bgcolor: loading ? "#0a1624" : "#38bdf8",
-              color: loading ? "#1e3a5f" : "#020e1a",
-              fontSize: "0.68rem", fontWeight: 800, px: 2, py: "6px",
-              textTransform: "none", borderRadius: "3px", whiteSpace: "nowrap", flexShrink: 0,
-              "&:hover": { bgcolor: "#7dd3fc" },
-              "&:disabled": { bgcolor: "#080f1a", color: "#1a3050" },
+              bgcolor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
+              color: "#ffffff",
+              "&:hover": { bgcolor: theme.palette.mode === "dark" ? "#3b82f6" : "#1557b0" },
+              "&:disabled": { bgcolor: "action.disabledBackground", color: "text.disabled" },
             }}
           >
             {loading ? "Loading…" : "Load"}
@@ -1786,7 +1816,7 @@ export default function TerminalMap() {
         {/* KPI strip — takes remaining space, clips gracefully */}
         {data && (
           <>
-            <Divider orientation="vertical" flexItem sx={{ borderColor: "#111e30", my: 0.5, flexShrink: 0 }} />
+            <Divider orientation="vertical" flexItem sx={{ my: 0.5, flexShrink: 0 }} />
             <Box sx={{
               display: "flex",
               alignItems: "center",
@@ -1797,18 +1827,18 @@ export default function TerminalMap() {
             }}>
               <KPI label="Vessel" value={data.vessel} />
               <KPI label="Visit" value={data.visit_id || "—"} isMono />
-              <KPI label="Volume" value={`${totalMoves} CTN`} isMono valueColor="#38bdf8" />
-              <KPI label="Berth" value={targetBerthId} isMono valueColor="#34d399" />
-              <KPI label="Block" value={computedMaxBlock || data.max_block || "—"} isMono valueColor="#ef4444" />
+              <KPI label="Volume" value={`${totalMoves} CTN`} isMono valueColor={theme.palette.info.main} />
+              <KPI label="Berth" value={targetBerthId} isMono valueColor={theme.palette.success.main} />
+              <KPI label="Block" value={computedMaxBlock || data.max_block || "—"} isMono valueColor={theme.palette.error.main} />
 
               {(data.summary?.hazardous > 0 || data.summary?.reefer > 0) && (
                 <Box sx={{
                   px: 1.4, py: 0.5, ml: "auto", flexShrink: 0,
-                  bgcolor: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)",
+                  bgcolor: alpha(theme.palette.error.main, 0.1), border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
                   borderRadius: 1, display: "flex", gap: 0.8, alignItems: "center",
                 }}>
-                  <WarningAmberRounded sx={{ fontSize: 14, color: "#ef4444" }} />
-                  <Typography sx={{ fontSize: "0.65rem", color: "#8a2020", fontWeight: 700, whiteSpace: "nowrap" }}>
+                  <WarningAmberRounded sx={{ fontSize: 14, color: "error.main" }} />
+                  <Typography sx={{ fontSize: "0.65rem", color: "error.main", fontWeight: 700, whiteSpace: "nowrap" }}>
                     HAZ / REEFER
                   </Typography>
                 </Box>
@@ -1822,7 +1852,7 @@ export default function TerminalMap() {
 
         <IconButton
           onClick={toggleFullscreen}
-          sx={{ color: "#6aa4c0", flexShrink: 0, "&:hover": { color: "#38bdf8" } }}
+          sx={{ color: "text.secondary", flexShrink: 0, "&:hover": { color: "primary.main" } }}
         >
           {isFullscreen ? <FullscreenExitRounded /> : <FullscreenRounded />}
         </IconButton>
@@ -1833,7 +1863,7 @@ export default function TerminalMap() {
         {loading && (
           <Box sx={{
             position: "absolute", top: 0, left: 0, right: 0, height: 160,
-            background: "linear-gradient(transparent, rgba(56,189,248,0.12), transparent)",
+            background: `linear-gradient(transparent, ${alpha(theme.palette.primary.main, 0.12)}, transparent)`,
             animation: "scan 1.8s linear infinite", pointerEvents: "none", zIndex: 99,
             "@keyframes scan": { "0%": { transform: "translateY(-160px)" }, "100%": { transform: "translateY(100vh)" } },
           }} />
@@ -1843,16 +1873,17 @@ export default function TerminalMap() {
         <Box sx={{
           position: "absolute", top: 14, right: 16, zIndex: 10,
           display: "flex", flexDirection: "column", gap: 0.8, px: 1.8, py: 1.2,
-          bgcolor: "rgba(4,8,18,0.94)", border: "1px solid #0f1e30", borderRadius: 1,
+          bgcolor: theme.palette.mode === "dark" ? "rgba(42,42,42,0.94)" : "rgba(233,238,246,0.96)",
+          border: "1px solid", borderColor: "divider", borderRadius: 1,
         }}>
           <Typography sx={{
-            fontSize: "0.52rem", color: "#1e3a5f", fontWeight: 800,
+            fontSize: "0.52rem", color: "text.secondary", fontWeight: 800,
             letterSpacing: "1.5px", fontFamily: "'Roboto Mono', monospace", mb: 0.1,
           }}>
             HEAT INDEX
           </Typography>
           {[
-            { c: "#ef4444", l: "Critical" }, { c: "#f97316", l: "High" },
+            { c: "#f97316", l: "High" },
             { c: "#f59e0b", l: "Medium" }, { c: "#10b981", l: "Low" },
           ].map(({ c, l }) => (
             <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -1860,7 +1891,7 @@ export default function TerminalMap() {
                 width: 22, height: 8, borderRadius: "3px",
                 background: `radial-gradient(ellipse at 30% 50%, ${c}cc 0%, ${c}55 50%, transparent 100%)`,
               }} />
-              <Typography sx={{ fontSize: "0.60rem", color: "#1e3a5f", fontWeight: 500 }}>{l}</Typography>
+              <Typography sx={{ fontSize: "0.60rem", color: "text.primary", fontWeight: 500 }}>{l}</Typography>
             </Box>
           ))}
         </Box>
@@ -1869,38 +1900,30 @@ export default function TerminalMap() {
         {hoveredBlock && (
           <Box sx={{
             position: "absolute", top: 14, left: 14, zIndex: 10, px: 2, py: 1.4,
-            bgcolor: "rgba(4,8,18,0.97)", border: "1px solid #38bdf8",
-            borderRadius: 1, boxShadow: "0 0 16px #38bdf822",
+            bgcolor: theme.palette.mode === "dark" ? "rgba(42,42,42,0.97)" : "rgba(233,238,246,0.97)",
+            border: "1px solid", borderColor: "primary.main",
+            borderRadius: 1, boxShadow: `0 0 16px ${alpha(theme.palette.primary.main, 0.22)}`,
           }}>
             <Typography sx={{
-              fontSize: "0.72rem", color: "#38bdf8", fontWeight: 800,
+              fontSize: "0.72rem", color: "primary.main", fontWeight: 800,
               fontFamily: "'Roboto Mono', monospace", letterSpacing: "1px",
             }}>
               BLOCK {hoveredBlock}
             </Typography>
             {hoveredData && (
               <>
-                <Typography sx={{ fontSize: "0.66rem", color: "#1e3a5f", mt: 0.4 }}>
-                  Volume: <span style={{ color: "#aaccee" }}>{hoveredData.count} CTN</span>
+                <Typography sx={{ fontSize: "0.66rem", color: "text.primary", mt: 0.4 }}>
+                  Volume: <span style={{ color: theme.palette.info.main }}>{hoveredData.count} CTN</span>
                 </Typography>
-                <Typography sx={{ fontSize: "0.66rem", color: "#1e3a5f" }}>
-                  Density: <span style={{ color: "#aaccee" }}>{hoveredData.concentration}</span>
+                <Typography sx={{ fontSize: "0.66rem", color: "text.primary" }}>
+                  Density: <span style={{ color: theme.palette.info.main }}>{hoveredData.concentration}</span>
                 </Typography>
               </>
             )}
           </Box>
         )}
 
-        {/* Controls hint */}
-        <Box sx={{
-          position: "absolute", bottom: 14, left: "50%", transform: "translateX(-50%)",
-          zIndex: 10, px: 2, py: 0.6,
-          bgcolor: "rgba(4,8,18,0.85)", border: "1px solid #111e30", borderRadius: 1,
-        }}>
-          <Typography sx={{ fontSize: "0.60rem", color: "#1e3a5f", fontFamily: "'Roboto Mono', monospace" }}>
-            drag to orbit · scroll to zoom · right-drag to pan
-          </Typography>
-        </Box>
+
 
         <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
       </Box>

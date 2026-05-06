@@ -49,7 +49,8 @@ def init_dataset_schema(engine, dataset_type: str):
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 deleted_at TIMESTAMP WITH TIME ZONE NULL,
                 CONSTRAINT fk_{dataset_type}_visit FOREIGN KEY (actual_outbound_carrier_visit_id) 
-                    REFERENCES "{dataset_type}_visits" (actual_outbound_carrier_visit_id) ON DELETE CASCADE
+                    REFERENCES "{dataset_type}_visits" (actual_outbound_carrier_visit_id) ON DELETE CASCADE,
+                CONSTRAINT unique_container_{dataset_type} UNIQUE (actual_outbound_carrier_visit_id, unit_id)
             );
         """))
 
@@ -58,3 +59,28 @@ def init_dataset_schema(engine, dataset_type: str):
         conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{dataset_type}_containers_visit ON "{dataset_type}_containers" (actual_outbound_carrier_visit_id);'))
         
         logger.info(f"[DB] Schema verified/initialized for dataset type: {dataset_type}")
+
+# Creates training_metadata table for tracking model training
+def init_training_metadata_schema(engine):
+    # Creates a single row table to store metadata about the last model training run
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS training_metadata (
+                id                      SERIAL PRIMARY KEY,
+                last_trained_dataset_size INTEGER NOT NULL,
+                last_trained_timestamp  TIMESTAMP WITH TIME ZONE NOT NULL,
+                data_source             VARCHAR(50)  DEFAULT 'db',
+                training_type           VARCHAR(50)  DEFAULT 'manual',
+                status                  VARCHAR(50)  DEFAULT 'completed',
+                notes                   TEXT         NULL,
+                created_at              TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at              TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                deleted_at              TIMESTAMP WITH TIME ZONE NULL
+            );
+        """))
+        # Index for retrieving the most recent training run
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_training_metadata_timestamp
+            ON training_metadata (last_trained_timestamp DESC);
+        """))
+        logger.info("[DB] training_metadata schema verified/initialized")
