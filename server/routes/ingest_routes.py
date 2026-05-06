@@ -15,20 +15,15 @@ logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/ingest", tags=["Ingest"])
 
 
-# ─── Unified ingestion endpoint ───────────────────────────────────────────────
+# Unified ingestion endpoint
 @router.post("/vessel-data")
 async def ingest_vessel_data(
     file: Optional[UploadFile] = File(None),
     json_data: Optional[str] = Form(None),
 ):
-    """
-    Unified vessel data ingestion.
-    Accepts either a CSV file upload OR a raw JSON string (form field: json_data).
-    Data is saved to BOTH history (append) and current (upsert) tables.
-    """
     errors: list[str] = []
 
-    # ── Parse input ──────────────────────────────────────────────────────────
+    # Parse input
     if file is not None:
         if not file.filename.endswith(".csv"):
             raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
@@ -53,7 +48,7 @@ async def ingest_vessel_data(
             detail="No data provided. Supply either a CSV 'file' or a 'json_data' form field.",
         )
 
-    # ── Validate ─────────────────────────────────────────────────────────────
+    # Validate
     try:
         df = validate_dataframe(df)
     except ValueError as e:
@@ -64,7 +59,7 @@ async def ingest_vessel_data(
 
     records_processed = len(df)
 
-    # ── Save to history (append) and current (upsert) ────────────────────────
+    # Save to history (append) and current (upsert)
     history_count = 0
     current_count = 0
 
@@ -80,7 +75,7 @@ async def ingest_vessel_data(
         logger.error(f"ingest: save_to_current failed: {e}")
         errors.append(f"Current upsert failed: {str(e)}")
 
-    # ── Invalidate vessel cache ───────────────────────────────────────────────
+    # Invalidate vessel cache
     vessel_cache.clear()
 
     logger.info(

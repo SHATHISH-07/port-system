@@ -15,7 +15,7 @@ import asyncio
 logger = logging.getLogger("port_system")
 
 
-# ─── History record count ─────────────────────────────────────────────────────
+# History record count
 def get_history_count() -> int:
     try:
         engine = get_engine()
@@ -33,12 +33,8 @@ def get_history_count() -> int:
         return 0
 
 
-# ─── Metadata helpers (now DB-backed) ────────────────────────────────────────
+# Metadata helpers (now DB-backed)
 def get_metadata() -> dict:
-    """
-    Returns the latest training run metadata from the DB.
-    Falls back to a default dict if none exists yet.
-    """
     row = get_latest_training_metadata()
     if not row:
         return {"last_trained_dataset_size": 0, "last_trained_timestamp": None}
@@ -48,10 +44,8 @@ def get_metadata() -> dict:
     }
 
 
+# Update metadata
 def update_metadata(size: int, data_source: str = "db", training_type: str = "manual"):
-    """
-    Writes a completed training run row to the training_metadata table.
-    """
     try:
         save_training_metadata(
             dataset_size=size,
@@ -59,12 +53,12 @@ def update_metadata(size: int, data_source: str = "db", training_type: str = "ma
             training_type=training_type,
             status="completed",
         )
-        logger.info(f"[DB] Training metadata saved — size={size}, source={data_source}, type={training_type}")
+        logger.info(f"Training metadata saved — size={size}, source={data_source}, type={training_type}")
     except Exception as e:
-        logger.error(f"[DB] Failed to save training metadata: {e}")
+        logger.error(f"Failed to save training metadata: {e}")
 
 
-# ─── Background training ──────────────────────────────────────────────────────
+# Background training
 def background_train_and_update(df, config: dict = None):
     current_status = training_status.get()
     data_source   = current_status.get("data_source", "db")
@@ -88,7 +82,7 @@ def background_train_and_update(df, config: dict = None):
             pass
 
 
-# ─── Upload-triggered threshold check ────────────────────────────────────────
+# Upload-triggered threshold check
 def check_and_trigger_retraining(background_tasks: BackgroundTasks):
     current_count = get_history_count()
     if current_count == 0:
@@ -117,7 +111,7 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
             logger.error(f"Failed to load history for retraining: {e}")
 
 
-# ─── Nightly scheduled job (APScheduler cron at 02:00) ───────────────────────
+# Nightly scheduled job (APScheduler cron at 02:00)
 async def scheduled_retraining_job():
     try:
         if training_status.get().get("status") == "training":

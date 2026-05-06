@@ -14,28 +14,23 @@ logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/model", tags=["Model"])
 
 
-# ─── Training endpoint ────────────────────────────────────────────────────────
+# Training endpoint
 @router.post("/vessel-stay/training")
 async def train_vessel_stay_model(
     background_tasks: BackgroundTasks,
     data_source: str = Form("db"),
     update_db: bool = Form(False),
     file: Optional[UploadFile] = File(None),
-    config: Optional[str] = Form(None),   # JSON string e.g. '{"min_hours":2,"max_hours":240}'
+    config: Optional[str] = Form(None),
 ):
-    """
-    Trigger a manual training run.
-    Accepts data from the database or an uploaded CSV file.
-    Optional 'config' JSON overrides model training parameters.
-    """
     try:
-        # ── Prevent concurrent training ──────────────────────────────────────
+        # Prevent concurrent training
         if training_status.get().get("status") == "training":
             return {"status": "error", "message": "A training process is already running."}
 
         logger.info(f"POST /model/vessel-stay/training — source: {data_source}, update_db: {update_db}")
 
-        # ── Parse config ─────────────────────────────────────────────────────
+        # Parse config
         parsed_config = training_status.get_last_config()   # start from last known config
         if config:
             try:
@@ -44,7 +39,7 @@ async def train_vessel_stay_model(
             except json.JSONDecodeError:
                 return {"status": "error", "message": "Invalid config JSON."}
 
-        # ── Load data ─────────────────────────────────────────────────────────
+        # Load data
         if data_source == "db":
             df = load_from_db("history")
             if df.empty:
@@ -77,7 +72,7 @@ async def train_vessel_stay_model(
         else:
             return {"status": "error", "message": "Invalid data_source. Must be 'db' or 'file'."}
 
-        # ── Start training ────────────────────────────────────────────────────
+        # Start training
         source_label = "database" if data_source == "db" else "uploaded file"
         training_status.set(
             status="training",
@@ -101,7 +96,7 @@ async def train_vessel_stay_model(
         return {"status": "error", "message": str(e)}
 
 
-# ─── Status endpoint ──────────────────────────────────────────────────────────
+# Status endpoint
 @router.get("/vessel-stay/training/status")
 def get_training_status():
     return training_status.get()

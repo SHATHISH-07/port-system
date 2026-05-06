@@ -118,4 +118,38 @@ class Settings:
           AND ve.deleted_at IS NULL
     """
 
+    # Training metadata queries
+    INSERT_TRAINING_METADATA_QUERY = """
+        INSERT INTO training_metadata
+            (last_trained_dataset_size, last_trained_timestamp,
+             data_source, training_type, status, notes,
+             created_at, updated_at)
+        VALUES
+            (:size, :ts, :source, :ttype, :status, :notes,
+             :created, :updated)
+        RETURNING id, last_trained_dataset_size, last_trained_timestamp,
+                  data_source, training_type, status, notes,
+                  created_at, updated_at, deleted_at
+    """
+
+    GET_LATEST_TRAINING_METADATA_QUERY = """
+        SELECT id, last_trained_dataset_size, last_trained_timestamp,
+               data_source, training_type, status, notes,
+               created_at, updated_at, deleted_at
+        FROM training_metadata
+        WHERE deleted_at IS NULL
+        ORDER BY last_trained_timestamp DESC
+        LIMIT 1
+    """
+
+    GET_TRAINING_METADATA_HISTORY_QUERY = """
+        SELECT id, last_trained_dataset_size, last_trained_timestamp,
+               data_source, training_type, status, notes,
+               created_at, updated_at, deleted_at
+        FROM training_metadata
+        WHERE deleted_at IS NULL
+        ORDER BY last_trained_timestamp DESC
+        LIMIT :lim
+    """
+
 settings = Settings()

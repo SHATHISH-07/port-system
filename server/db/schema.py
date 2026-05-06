@@ -60,12 +60,9 @@ def init_dataset_schema(engine, dataset_type: str):
         
         logger.info(f"[DB] Schema verified/initialized for dataset type: {dataset_type}")
 
-
+# Creates training_metadata table for tracking model training
 def init_training_metadata_schema(engine):
-    """
-    Creates the `training_metadata` table if it does not exist.
-    Stores one row per completed training run.
-    """
+    # Creates a single row table to store metadata about the last model training run
     with engine.begin() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS training_metadata (
@@ -81,8 +78,9 @@ def init_training_metadata_schema(engine):
                 deleted_at              TIMESTAMP WITH TIME ZONE NULL
             );
         """))
+        # Index for retrieving the most recent training run
         conn.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_training_metadata_timestamp
             ON training_metadata (last_trained_timestamp DESC);
         """))
-        logger.info("[DB] training_metadata schema verified/initialized")
+        logger.info("[DB] training_metadata schema verified/initialized")
