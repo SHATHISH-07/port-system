@@ -53,18 +53,29 @@ The system supports:
 
 # Core Features
 
-| Feature                      | Description                                        |
-| ---------------------------- | -------------------------------------------------- |
-| Vessel Stay Prediction       | ML ensemble predicts vessel stay duration in hours |
-| Unified Ingestion            | Single ingestion endpoint for CSV and JSON         |
-| Historical Analytics         | Analyze historical vessel operations               |
-| Current Operations Dashboard | Live operational vessel intelligence               |
-| 3D Terminal Heatmap          | Yard block concentration visualization             |
-| Automated Retraining         | Threshold + scheduled retraining                   |
-| Role-Based Access            | Admin/User authorization system                    |
-| Operations Center            | Centralized admin operational controls             |
-| PostgreSQL Persistence       | History + current operational architecture         |
-| Training Metadata Tracking   | Persistent training lifecycle management           |
+The PortSync platform is currently packed with the following fully-implemented capabilities:
+
+### 🚢 Vessel & Terminal Operations
+* **Vessel Stay Prediction**: An advanced ML ensemble (VotingRegressor) that accurately predicts the vessel stay duration in hours based on historical operations.
+* **Current Operations Dashboard**: Live operational vessel intelligence tracking KPIs like crane productivity, reshuffle risks, and load/discharge balance.
+* **3D Terminal Heatmap**: Dynamic yard block concentration visualization allowing operators to visually spot congestion hotspots and heavy container stacks.
+* **Historical Analytics**: Deep-dive analysis of historical vessel operations to identify operational bottlenecks and past inefficiencies.
+
+### 🧠 Machine Learning & Data Pipeline
+* **Unified Ingestion Endpoint**: A single, robust `/ingest/vessel-data` API that automatically processes and intelligently upserts both CSV and JSON operational payloads.
+* **Automated Threshold Retraining**: The ML model automatically triggers background retraining when a predefined threshold of new operational records (e.g., 1000) is reached.
+* **Scheduled Retraining**: Configurable APScheduler integration for nightly or weekly model maintenance.
+* **Training Metadata Tracking**: Persistent storage of model performance, dataset size, and timestamps to maintain a complete ML audit trail.
+
+### 🔒 Security & Administration
+* **Role-Based Access Control (RBAC)**: Secure multi-tier authorization differentiating between general `Users` and highly-privileged `Admins`.
+* **Operations Center**: Centralized admin-only control panel for managing ingestion, users, system logs, and triggering manual model retraining.
+* **JWT Authentication & Bcrypt**: Industry-standard cryptographic security for all user sessions.
+* **SQL Injection & Payload Tampering Protection**: Fully parameterized SQLAlchemy architecture and rigorous Pydantic validation intercepting malicious inputs safely.
+
+### 🧪 QA & Reliability
+* **100% Automated Test Coverage**: A split architecture Pytest & Playwright E2E suite executed via `run_tests.py` generating `.xlsx` and `.docx` QA reports.
+* **PostgreSQL UPSERT Integrity**: Zero-downtime concurrent data ingestion utilizing `ON CONFLICT DO UPDATE` to gracefully handle duplicate streams.
 
 ---
 
@@ -491,19 +502,38 @@ graph TD
 
 ---
 
-# Feature Engineering
+# Dataset Features Used
 
-| Feature      | Description                  |
-| ------------ | ---------------------------- |
-| loaded       | Loaded container count       |
-| discharged   | Discharged container count   |
-| total_moves  | Total operational moves      |
-| imbalance    | Operational imbalance        |
-| avg_weight   | Average container weight     |
-| reefer_count | Reefer container count       |
-| hazard_count | Hazardous container count    |
-| oog_count    | Out-of-gauge container count |
-| service_hash | Encoded service identifier   |
+To power the analytics and machine learning pipeline, PortSync extracts and utilizes the following raw fields from the Terminal Operating System (TOS) export dataset:
+
+### 1. Extracted Raw Data Fields
+| Raw Dataset Column | Usage / Purpose |
+| :--- | :--- |
+| `actual_outbound_carrier_visit_id` | Primary grouping key for isolating individual vessel visits. |
+| `unit_id` | Unique identifier for tracking individual container lifecycle. |
+| `move_complete_time` | Core timestamp for calculating the start and end of yard moves. |
+| `time_in` / `time_out` | Used as fallbacks to calculate vessel stay windows and arrival bounds. |
+| `ctr_from_position` / `ctr_to_position` | Parsed to determine move types (Loaded vs. Discharged) and Yard Block layout (e.g., `Y-A01` -> Block `A`). |
+| `verified_gross_mass_kg` | Analyzed to classify container weight (Light, Medium, Heavy, Extra Heavy). |
+| `hazardous_flag` | Boolean flag used to assess safety buffer requirements. |
+| `reefer` | Boolean flag used to assess power point allocation. |
+| `oog_unit` | Out-Of-Gauge boolean to detect oversized cargo requiring special handling. |
+| `port_of_discharge` | Grouped to calculate yard strategy and stowage concentration. |
+
+### 2. Engineered ML Features
+The raw fields above are transformed into the following structured features used directly by the `VotingRegressor` ML Model:
+
+| Engineered Feature | Description |
+| :--- | :--- |
+| `loaded` | Total count of containers moved from Yard to Vessel. |
+| `discharged` | Total count of containers moved from Vessel to Yard. |
+| `total_moves` | The sum of loaded and discharged containers for a visit. |
+| `imbalance` | The absolute difference between loaded and discharged volumes. |
+| `avg_weight` | The mean `verified_gross_mass_kg` across all containers in the visit. |
+| `reefer_count` | Sum of all containers flagged as refrigerated. |
+| `hazard_count` | Sum of all containers flagged as hazardous. |
+| `oog_count` | Sum of all containers flagged as out-of-gauge. |
+| `service_hash` | A deterministic integer hash of the outbound service string for categorical encoding. |
 
 ---
 
@@ -662,6 +692,34 @@ graph TD
     F -- Yes --> G[Admin Access]
     F -- No --> H[User Access]
 ```
+
+---
+
+# QA & Testing Framework
+
+PortSync features a robust, enterprise-grade automated testing suite designed to validate the entire platform from the database layer up to the React frontend.
+
+## Testing Architecture
+
+The QA system uses **Pytest** and **Playwright** completely isolated from each other to prevent asynchronous event loop collisions.
+
+* **API Tests**: Validates FastAPI endpoints, security logic, RBAC, DB integrity, and ML inference.
+* **E2E Tests**: Playwright scripts simulate actual user interactions (Login, Navigation, Dashboard viewing).
+* **Isolated Environment**: Uses a dedicated PostgreSQL test database and securely sandboxes ML models (`tests/models/stay_model_test.pkl`) to prevent production pollution.
+
+## Executing Tests
+
+To run the complete automated suite:
+```bash
+python tests/run_tests.py
+```
+
+To run tests with a visible browser (headful mode):
+```bash
+python tests/run_tests.py --headful
+```
+
+The orchestrator runs the API suite and E2E suite sequentially, automatically generating professional `.xlsx` and `.docx` QA reports in the `tests/reports/` directory.
 
 ---
 
