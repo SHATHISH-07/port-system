@@ -35,9 +35,9 @@ PortSync ingests raw container movement data from a Terminal Operating System (T
 | **History Analysis** | Retrospective review: visit records, berth rankings, stay trends |
 | **Current Analysis** | Live operational view: berth assignment, yard heatmap, execution plan |
 | **Terminal Heatmap** | 3D yard block map — container concentration (High / Medium / Low) |
-| **Manual Training** | Trigger training from the UI — DB data or uploaded CSV |
-| **Automated Retraining** | Nightly cron (02:00 AM) + upload-triggered threshold check |
-| **Dual Upload Endpoints** | `history` (append only) and `current` (upsert) CSV ingestion |
+| **Unified Ingestion** | Single `POST /ingest/vessel-data` endpoint — CSV file, JSON file, or raw JSON body |
+| **Automated Retraining** | Nightly cron (02:00 AM) + ingest-triggered threshold check |
+| **DB-backed Metadata** | Training run history persisted in `training_metadata` PostgreSQL table |
 | **Light / Dark Mode** | MUI v6 two-step theme system — live toggle, all components adapt |
 
 ---
@@ -57,8 +57,7 @@ PortSync ingests raw container movement data from a Terminal Operating System (T
 │                                         ┌────────────▼────────────┐  │
 │                                         │   PostgreSQL Database    │  │
 │                                         │  history_* / current_*   │  │
-│                                         │  (containers/visits/     │  │
-│                                         │   vessels tables)        │  │
+│                                         │  training_metadata       │  │
 │                                         └─────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -66,19 +65,20 @@ PortSync ingests raw container movement data from a Terminal Operating System (T
 ### Automated Retraining Flow
 
 ```
-Upload → save_to_history()
-              │
-              ▼
-    check_and_trigger_retraining()
-              │
-              ├── current_count - last_trained_size ≥ 1000? ──► YES ──►  background_train_and_update(df)
-              │                                                                      │
-              └── NO: skip                                                           ▼
-                                                                         train_stay_model(df)
-                                                                                     │
-APScheduler (cron 02:00 AM) ──► scheduled_retraining_job()                          ▼
-              │                  (same threshold check)                  stay_model.pkl saved
-              └──────────────────────────────────────────────────────►  update_metadata(size)
+POST /ingest/vessel-data → save_to_history()
+                                  │
+                                  ▼
+                    check_and_trigger_retraining()
+                                  │
+                                  ├── current_count - last_trained_size ≥ 1000? ──► YES ──► background_train_and_update(df)
+                                  │                                                                    │
+                                  └── NO: skip                                                         ▼
+                                                                                        train_stay_model(df)
+                                                                                                    │
+APScheduler (cron 02:00 AM) ──► scheduled_retraining_job()                                          ▼
+                │                  (same threshold check)                              stay_model.pkl saved
+                └──────────────────────────────────────────────────────►           save_training_metadata()
+                                                                                   (PostgreSQL training_metadata)
 ```
 
 ---
@@ -144,8 +144,9 @@ port-system/
 │       └── pages/
 │           ├── HistoryVesselAnalysis.tsx
 │           ├── CurrentVesselAnalysis.tsx
+│           ├── DataIngestion.tsx        # CSV / JSON file upload → POST /ingest/vessel-data
 │           ├── TerminalMap.tsx          # 3D interactive heatmap (lazy loaded)
-│           └── TrainModel.tsx
+│           └── TrainModel.tsx           # Training status view + launch links
 │
 └── server/                              # FastAPI Backend
     ├── main.py                          # App factory, CORS, scheduler, HTTP middleware
@@ -155,7 +156,8 @@ port-system/
     ├── routes/
     │   ├── vessel_routes.py             # /vessel/* — analysis + heatmap endpoints
     │   ├── model_routes.py              # /model/* — training trigger + status
-    │   └── upload_routes.py            # /upload/* — CSV ingestion
+    │   ├── ingest_routes.py             # /ingest/* — unified CSV/JSON ingestion
+    │   └── config_routes.py             # /config/* — retraining config read/write
     │
     ├── services/
     │   ├── vessel_service.py            # Dashboard orchestration (predict + berth + risks)
@@ -164,24 +166,23 @@ port-system/
     │
     ├── models/
     │   ├── stay_model.py                # VotingRegressor train + predict functions
-    │   ├── training_status.py           # Thread-safe training state store
-    │   └── stay_model.pkl              # Auto-generated trained artifact
+    │   ├── training_status.py           # Thread-safe in-memory training state store
+    │   ├── retraining_config.py         # Runtime-mutable retraining threshold config
+    │   └── stay_model.pkl               # Auto-generated trained artifact
     │
     ├── db/
     │   ├── connection.py                # SQLAlchemy engine factory + DB init
     │   ├── schema.py                    # init_dataset_schema() — DDL per dataset type
-    │   └── queries.py                   # load_from_db / save_to_history / save_to_current
+    │   ├── queries.py                   # load_from_db / save_to_history / save_to_current
+    │   └── training_metadata.py         # save_training_metadata / get_latest_training_metadata
     │
-    ├── utils/
-    │   ├── data_loader.py               # load_from_file, validate_dataframe, clean_column_names
-    │   ├── feature_utils.py             # create_features() — 13 ML features
-    │   ├── stay_utils.py                # prepare_visit_data, compute_visit_stay
-    │   ├── datetime_utils.py            # Timezone-aware datetime parsing
-    │   ├── cache_utils.py               # In-memory vessel result cache
-    │   └── terminal_layout.py           # get_all_blocks(df) — yard position parsing
-    │
-    └── data/
-        └── training_metadata.json       # Auto-generated: last_trained_dataset_size + timestamp
+    └── utils/
+        ├── data_loader.py               # load_from_file, validate_dataframe, clean_column_names
+        ├── feature_utils.py             # create_features() — 13 ML features
+        ├── stay_utils.py                # prepare_visit_data, compute_visit_stay
+        ├── datetime_utils.py            # Timezone-aware datetime parsing
+        ├── cache_utils.py               # In-memory vessel result cache (TTL)
+        └── terminal_layout.py           # get_all_blocks(df) — yard position parsing
 ```
 
 ---
@@ -245,8 +246,8 @@ npm run dev
 |---|---|---|
 | `DATABASE_URL` | `postgresql://postgres:postgres@127.0.0.1:5432/portsystem` | PostgreSQL connection string |
 | `MODEL_PATH` | `models/stay_model.pkl` | Path where the trained model artifact is saved |
-| `RETRAIN_THRESHOLD_NEW_RECORDS` | `1000` | Number of new records required to auto-trigger retraining |
-| `RETRAIN_CHECK_INTERVAL_SECONDS` | `60` | *(reserved — actual check is event-driven on upload)* |
+| `RETRAIN_THRESHOLD_NEW_RECORDS` | `1000` | New history records required to auto-trigger retraining |
+| `RETRAIN_CHECK_INTERVAL_SECONDS` | `60` | *(reserved — actual check is event-driven on ingest)* |
 
 ---
 
@@ -270,7 +271,7 @@ All vessel endpoints accept `multipart/form-data` and return JSON.
 | `loaded` | `int` | current only | Override: loaded container count |
 | `discharged` | `int` | current only | Override: discharged container count |
 
-> Results are cached in memory (`vessel_cache`). The cache is cleared on every upload.
+> Results are cached in memory (`vessel_cache`). The cache is cleared on every ingest.
 
 **Analysis response shape:**
 
@@ -280,12 +281,50 @@ All vessel endpoints accept `multipart/form-data` and return JSON.
   "actual":   { "avg_hours": 42.5, "visits": { "VISIT_001": {...} } },
   "predicted": { "avg_hours": 39.2, "visits": 3 },
   "input":    { "loaded": 120, "discharged": 95 },
-  "berth_analysis": [ { "berth": "B3", "cargo_concentration": "Low", "congestion_risk": "Low", ... } ],
+  "berth_analysis": [ { "berth": "B3", "cargo_concentration": "Low", "congestion_risk": "Low" } ],
   "execution_plan": ["Step 1...", "Step 2..."],
   "risks": ["Risk A...", "Risk B..."],
-  "yard_strategy": { "weight_distribution": {}, "top_discharge_ports": {}, "reshuffle_risk": "Medium", "avg_moves_per_container": 1.3 }
+  "yard_strategy": { "weight_distribution": {}, "top_discharge_ports": {}, "reshuffle_risk": "Medium" }
 }
 ```
+
+---
+
+### Data Ingestion — `POST /ingest/vessel-data`
+
+Single unified endpoint that accepts data in three forms:
+
+| Input mode | How to send |
+|---|---|
+| **CSV file** | `multipart/form-data` — `file` field with a `.csv` file |
+| **JSON file** | `multipart/form-data` — `file` field with a `.json` file |
+| **Raw JSON** | `multipart/form-data` — `json_data` field as a JSON string |
+
+After a successful ingest the endpoint:
+1. Validates required columns and drops null-key rows
+2. Appends rows to `history_*` tables
+3. Upserts rows into `current_*` tables
+4. Clears the vessel analysis cache
+5. Fires `check_and_trigger_retraining()` in the background if new history rows were saved
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "records_processed": 4230,
+  "history_rows_saved": 4230,
+  "current_rows_saved": 4230,
+  "errors": [],
+  "message": "Successfully ingested 4230 records into history and current tables."
+}
+```
+
+**Validation rules:**
+1. File extension must be `.csv` or `.json` (if uploading a file)
+2. Required columns must be present: `move_complete_time`, `time_in`, `time_out`, `outbound_service`, `actual_outbound_carrier_visit_id`, `unit_id`
+3. Rows with null primary key fields are dropped automatically
+4. Extra columns beyond `DB_EXPECTED_COLUMNS` are discarded
 
 ---
 
@@ -303,11 +342,18 @@ All vessel endpoints accept `multipart/form-data` and return JSON.
 | `data_source` | `"db"` \| `"file"` | `"db"` | Load from PostgreSQL or uploaded CSV |
 | `file` | `UploadFile` (.csv) | — | Required when `data_source = "file"` |
 | `update_db` | `bool` | `false` | Also persist uploaded CSV into `history_*` tables |
+| `config` | `JSON string` | — | Optional hyperparameter overrides (see below) |
+
+**Hyperparameter config keys (all optional):**
+
+```json
+{ "n_estimators": 200, "max_depth": 12, "min_samples_leaf": 5, "random_state": 42 }
+```
 
 **Training response:**
 
 ```json
-{ "status": "started", "message": "Training started on 12,540 records from database." }
+{ "status": "started", "message": "Training started on 12,540 records from database.", "config": {...} }
 ```
 
 **Status response:**
@@ -326,31 +372,12 @@ All vessel endpoints accept `multipart/form-data` and return JSON.
 
 ---
 
-### Data Upload — `POST /upload/*`
+### Retraining Config — `/config/*`
 
-| Endpoint | Strategy | Post-upload actions |
+| Endpoint | Method | Description |
 |---|---|---|
-| `POST /upload/history` | **Append** rows to `history_*` tables | Clears cache → triggers threshold retraining check |
-| `POST /upload/current` | **Upsert** rows into `current_*` tables | Clears cache |
-
-**Request:** `multipart/form-data` with `file` field (`.csv` only).
-
-**Upload response:**
-
-```json
-{
-  "status": "ok",
-  "dataset_type": "history",
-  "rows_inserted": 4230,
-  "message": "Successfully stored 4230 rows for historical analysis."
-}
-```
-
-**Validation rules applied before insert:**
-1. File must be `.csv`
-2. Required columns must be present: `move_complete_time`, `time_in`, `time_out`, `outbound_service`, `actual_outbound_carrier_visit_id`, `unit_id`
-3. Rows with null primary key fields are dropped
-4. Extra columns beyond `DB_EXPECTED_COLUMNS` are discarded
+| `/config/retraining` | `GET` | Read current threshold and interval |
+| `/config/retraining` | `PUT` | Update threshold / interval at runtime |
 
 ---
 
@@ -415,20 +442,20 @@ stay = compute_visit_stay(visit_df)
 
 ## Automated Retraining
 
-Two independent triggers:
+Two independent triggers share the same threshold logic.
 
-### 1 — Upload-triggered (event-driven)
+### 1 — Ingest-triggered (event-driven)
 
-Called immediately after every `POST /upload/history` succeeds:
+Called immediately after every successful `POST /ingest/vessel-data` that saves new history rows:
 
 ```python
 check_and_trigger_retraining(background_tasks)
   ├── get_history_count()       # SELECT COUNT(*) FROM history_containers WHERE deleted_at IS NULL
-  ├── get_metadata()            # reads data/training_metadata.json
-  ├── difference = current - last_trained_size
+  ├── get_metadata()            # reads training_metadata table (latest row)
+  ├── difference = current_count - last_trained_size
   └── if difference >= RETRAIN_THRESHOLD_NEW_RECORDS OR first_run:
           training_type = "automated"
-          background_tasks.add_task(background_train_and_update, df)
+          background_tasks.add_task(background_train_and_update, df, config)
 ```
 
 ### 2 — Nightly cron (APScheduler)
@@ -439,18 +466,20 @@ Registered at startup via `lifespan()`:
 scheduler.add_job(scheduled_retraining_job, 'cron', hour=2, minute=0)
 ```
 
-Applies the same threshold logic. Uses `asyncio.to_thread()` for non-blocking DB reads.
+Applies the same threshold logic. Uses `asyncio.to_thread()` for non-blocking DB reads. Sets `training_type = "scheduled"`.
 
 ### Metadata persistence
 
-After each successful training run, `data/training_metadata.json` is updated:
+After each successful training run, a row is inserted into the `training_metadata` PostgreSQL table:
 
-```json
-{
-  "last_trained_dataset_size": 12540,
-  "last_trained_timestamp": "2026-05-05T02:00:04.123456"
-}
-```
+| Column | Description |
+|---|---|
+| `last_trained_dataset_size` | Number of history rows trained on |
+| `last_trained_timestamp` | UTC timestamp of training completion |
+| `data_source` | `"db"` or `"file"` |
+| `training_type` | `"manual"`, `"automated"`, or `"scheduled"` |
+| `status` | `"completed"` or `"error"` |
+| `notes` | Error message if failed |
 
 ---
 
@@ -462,14 +491,14 @@ After each successful training run, `data/training_metadata.json` is updated:
 | `/history-analysis` | `HistoryVesselAnalysis` | Historical vessel dashboard |
 | `/current-analysis` | `CurrentVesselAnalysis` | Live vessel dashboard |
 | `/heatmap` | `TerminalMap` | 3D yard container heatmap |
-| `/train-model` | `TrainModel` | ML training configuration & status |
+| `/data-ingestion` | `DataIngestion` | CSV / JSON file upload UI |
+| `/train-model` | `TrainModel` | Training status + launch links |
 
 All pages are **lazy-loaded** (`React.lazy`) with a `CircularProgress` fallback. `TerminalMap` is pre-fetched 2 seconds after initial load.
 
 ### Page Sections
 
 #### History Analysis (`/history-analysis`)
-- **Upload Accordion** — drag-and-drop CSV → `POST /upload/history`
 - **AnalysisHeader** — Vessel ID input + Run Analysis (calls `POST /vessel/vessel-history-analysis`)
 - Section 01: **PerformanceStats** — actual / predicted / variance
 - Section 02: **VisitTable** — sorted visit records + inline stay bar
@@ -478,21 +507,24 @@ All pages are **lazy-loaded** (`React.lazy`) with a `CircularProgress` fallback.
 - Section 05: **BerthImpactTable** — ranked berths (expandable beyond top 5)
 
 #### Current Analysis (`/current-analysis`)
-- **Upload Accordion** — drag-and-drop CSV → `POST /upload/current`
 - **AnalysisHeader** — Vessel ID + optional Loaded / Discharged override
 - Same sections as History + **Live Yard Heatmap** (Section 02, embedded from `POST /vessel/heatmap`)
 
 #### Terminal Heatmap (`/heatmap`)
-- Full-page 3D terminal map (Three.js / React Three Fiber)
+- Full-page 3D terminal map
 - Yard block color = container concentration (`High`→Red, `Medium`→Amber, `Low`→Green)
 - Vessel ID search + block-level drill-down
 
+#### Data Ingestion (`/data-ingestion`)
+- **CSV mode** — drag-and-drop or click-to-browse `.csv` file → `POST /ingest/vessel-data`
+- **JSON mode** — paste raw JSON array/object → `POST /ingest/vessel-data`
+- Inline result card: records processed, history rows saved, current rows saved
+- Required column reference displayed below the upload zone
+
 #### Train Model (`/train-model`)
-- Radio: **Use Database** or **Upload CSV File**
-- CSV mode: drag-and-drop zone + "Also save to DB" checkbox
-- **Start Training** → `POST /model/vessel-stay/training`
-- **TrainingStatusCard** — polls `GET /model/vessel-stay/training/status` every 3s while active
-- **Retry** button on failure (reuses last configuration)
+- Live training status snapshot (polls `GET /model/vessel-stay/training/status`)
+- Links to trigger training via API (`POST /model/vessel-stay/training`)
+- **TrainingStatusCard** — full polling UI shown when training is active
 
 ---
 
@@ -539,6 +571,20 @@ CREATE TABLE {type}_containers (
     deleted_at                        TIMESTAMPTZ,
     PRIMARY KEY (actual_outbound_carrier_visit_id, unit_id)
 );
+
+-- training_metadata  (auto-initialized on startup)
+CREATE TABLE training_metadata (
+    id                         SERIAL PRIMARY KEY,
+    last_trained_dataset_size  INTEGER,
+    last_trained_timestamp     TIMESTAMPTZ,
+    data_source                TEXT,
+    training_type              TEXT,
+    status                     TEXT,
+    notes                      TEXT,
+    created_at                 TIMESTAMPTZ,
+    updated_at                 TIMESTAMPTZ,
+    deleted_at                 TIMESTAMPTZ
+);
 ```
 
 ### Write Strategies
@@ -556,10 +602,11 @@ Both strategies use PostgreSQL's `COPY` command for high-throughput bulk ingesti
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  CSV Upload                                                  │
-│       │                                                      │
+│  POST /ingest/vessel-data                                   │
+│       │  (CSV file / JSON file / json_data form field)      │
 │       ▼                                                      │
 │  load_from_file(bytes)   ← clean_column_names()             │
+│    or pd.DataFrame(json_records)                            │
 │       │                                                      │
 │  validate_dataframe()    ← check required cols              │
 │       │                    drop null PKs                     │
@@ -570,11 +617,12 @@ Both strategies use PostgreSQL's `COPY` command for high-throughput bulk ingesti
 │       │                                                      │
 │       ├──► check_and_trigger_retraining() (history only)    │
 │       │         └──► background_train_and_update(df)        │
-│       │                   └──► stay_model.pkl               │
+│       │                   ├──► stay_model.pkl               │
+│       │                   └──► save_training_metadata()     │
 │       │                                                      │
 │       └──► vessel_cache.clear()                             │
 │                                                              │
-│  GET Analysis Request                                        │
+│  GET/POST Analysis Request                                   │
 │       │                                                      │
 │       ▼                                                      │
 │  load_from_db(type, vessel_id)                              │
