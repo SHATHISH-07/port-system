@@ -7,6 +7,13 @@ class Settings:
     # Database
     DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5432/portsystem").replace("@localhost", "@127.0.0.1")
 
+    # Authentication & Admin
+    JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-jwt-key-for-portsync")
+    JWT_ALGORITHM = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 days
+    DEFAULT_ADMIN_USER = os.getenv("DEFAULT_ADMIN_USER", "admin")
+    DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
+
     # Data Loading
     REQUIRED_COLS = [
         "move_complete_time",
@@ -80,7 +87,7 @@ class Settings:
             "created_at", "updated_at", "deleted_at"
         )
         SELECT 
-            "id", "actual_outbound_carrier_visit_id", CAST("move_complete_time" AS TIMESTAMP WITH TIME ZONE), 
+            CAST("id" AS UUID), "actual_outbound_carrier_visit_id", CAST("move_complete_time" AS TIMESTAMP WITH TIME ZONE), 
             CAST("time_in" AS TIMESTAMP WITH TIME ZONE), CAST("time_out" AS TIMESTAMP WITH TIME ZONE), "unit_id", "ctr_from_position", 
             "ctr_to_position", "unit_weight_in_kg", "verified_gross_mass_kg", 
             "reefer", "hazardous_flag", "oog_unit", "port_of_discharge", 

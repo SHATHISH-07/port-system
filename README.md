@@ -44,41 +44,51 @@ PortSync ingests raw container movement data from a Terminal Operating System (T
 
 ## System Architecture
 
+```mermaid
+graph TD
+    subgraph PortSync System
+        F[React + TypeScript<br>Vite 8 · MUI v6<br>localhost:5173]
+        B[FastAPI Backend<br>Uvicorn · Python 3<br>localhost:8000]
+        DB[(PostgreSQL Database<br>history_* / current_*<br>training_metadata)]
+    end
+    F <-->|HTTP| B
+    B --> DB
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          PortSync System                             │
-│                                                                      │
-│   ┌───────────────────────┐     HTTP      ┌──────────────────────┐  │
-│   │  React + TypeScript   │◄────────────►│   FastAPI Backend     │  │
-│   │  Vite 8 · MUI v6      │              │   Uvicorn · Python 3  │  │
-│   │  localhost:5173        │              │   localhost:8000      │  │
-│   └───────────────────────┘              └──────────┬───────────┘  │
-│                                                      │               │
-│                                         ┌────────────▼────────────┐  │
-│                                         │   PostgreSQL Database    │  │
-│                                         │  history_* / current_*   │  │
-│                                         │  training_metadata       │  │
-│                                         └─────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────┘
+
+### User Flow Diagram
+
+```mermaid
+graph TD
+    A[User Accesses Platform] --> B{Authenticated?}
+    B -- No --> C[Login Page]
+    C --> D[Submit Credentials]
+    D --> E{Valid Admin/User?}
+    E -- No --> C
+    E -- Yes --> F[Dashboard]
+    B -- Yes --> F
+    F --> G{Role?}
+    G -- User --> H[View History & Current Analysis]
+    H --> I[View Heatmap & Requests]
+    G -- Admin --> J[Operations Center]
+    J --> K[Data Ingestion / File Upload]
+    J --> L[User Management]
+    J --> M[Train ML Model]
 ```
 
 ### Automated Retraining Flow
 
-```
-POST /ingest/vessel-data → save_to_history()
-                                  │
-                                  ▼
-                    check_and_trigger_retraining()
-                                  │
-                                  ├── current_count - last_trained_size ≥ 1000? ──► YES ──► background_train_and_update(df)
-                                  │                                                                    │
-                                  └── NO: skip                                                         ▼
-                                                                                        train_stay_model(df)
-                                                                                                    │
-APScheduler (cron 02:00 AM) ──► scheduled_retraining_job()                                          ▼
-                │                  (same threshold check)                              stay_model.pkl saved
-                └──────────────────────────────────────────────────────►           save_training_metadata()
-                                                                                   (PostgreSQL training_metadata)
+```mermaid
+graph TD
+    A[POST /ingest/vessel-data] --> B[save_to_history]
+    B --> C[check_and_trigger_retraining]
+    C --> D{current_count - last_trained_size >= threshold?}
+    D -- YES --> E[background_train_and_update]
+    D -- NO --> F[skip]
+    E --> G[train_stay_model]
+    G --> H[stay_model.pkl saved]
+    H --> I[(PostgreSQL training_metadata)]
+    J[APScheduler cron 02:00 AM] --> K[scheduled_retraining_job]
+    K --> D
 ```
 
 ---
@@ -601,44 +611,49 @@ Both strategies use PostgreSQL's `COPY` command for high-throughput bulk ingesti
 
 ## Data Flow
 
+```mermaid
+graph TD
+    A[POST /ingest/vessel-data<br>CSV/JSON] --> B[load_from_file / pd.DataFrame]
+    B --> C[validate_dataframe<br>clean cols, drop nulls]
+    C --> D[save_to_history UPSERT]
+    C --> E[save_to_current UPSERT]
+    D --> F[check_and_trigger_retraining]
+    E --> G[vessel_cache.clear]
+    F --> H[background_train_and_update]
+    H --> I[(stay_model.pkl)]
+    H --> J[(training_metadata)]
+    
+    K[GET/POST Analysis Request] --> L[load_from_db]
+    L --> M[analyze_vessel_dashboard]
+    M --> N[predict_vessel_stay_duration]
+    M --> O[berth_analysis]
+    M --> P[execution_plan]
+    M --> Q[risk_assessment]
+    M --> R[yard_strategy]
+    L --> S[get_vessel_heatmap]
+    S --> T[per-block concentration]
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  POST /ingest/vessel-data                                   │
-│       │  (CSV file / JSON file / json_data form field)      │
-│       ▼                                                      │
-│  load_from_file(bytes)   ← clean_column_names()             │
-│    or pd.DataFrame(json_records)                            │
-│       │                                                      │
-│  validate_dataframe()    ← check required cols              │
-│       │                    drop null PKs                     │
-│       │                    parse datetimes                   │
-│       ▼                                                      │
-│  save_to_history()  ─── vessels/visits/containers UPSERT    │
-│  save_to_current()  ─── vessels/visits/containers UPSERT    │
-│       │                                                      │
-│       ├──► check_and_trigger_retraining() (history only)    │
-│       │         └──► background_train_and_update(df)        │
-│       │                   ├──► stay_model.pkl               │
-│       │                   └──► save_training_metadata()     │
-│       │                                                      │
-│       └──► vessel_cache.clear()                             │
-│                                                              │
-│  GET/POST Analysis Request                                   │
-│       │                                                      │
-│       ▼                                                      │
-│  load_from_db(type, vessel_id)                              │
-│       │                                                      │
-│       ▼                                                      │
-│  analyze_vessel_dashboard(df, vessel_id)                    │
-│       ├─ predict_vessel_stay_duration()  ← stay_model.pkl   │
-│       ├─ berth_analysis()               ← travel distance   │
-│       ├─ execution_plan()               ← step generator    │
-│       ├─ risk_assessment()              ← congestion flags  │
-│       └─ yard_strategy()               ← weight/port dist  │
-│                                                              │
-│  get_vessel_heatmap(df, vessel_id)                          │
-│       └─ per-block concentration (High / Medium / Low)      │
-└─────────────────────────────────────────────────────────────┘
+
+### Ingestion Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend (React)
+    participant B as Backend (FastAPI)
+    participant DB as PostgreSQL
+
+    U->>F: Upload CSV/JSON File
+    F->>B: POST /ingest/vessel-data (multipart)
+    B->>B: Validate & Clean Data
+    B->>DB: Upsert Vessels, Visits, Containers
+    DB-->>B: Success
+    B->>B: Check Retraining Threshold
+    alt Threshold Met
+        B-)DB: Background Training Triggered
+    end
+    B-->>F: Ingestion Results & Status
+    F-->>U: Show Success Dashboard
 ```
 
 ---

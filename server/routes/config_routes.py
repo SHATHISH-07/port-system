@@ -1,11 +1,13 @@
 import logging
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
 
 from models.retraining_config import retraining_config
 from services.retraining_service import get_history_count, get_metadata
 from db.training_metadata import get_training_metadata_history
+from auth.dependencies import require_admin
+from auth.utils import log_audit
 
 logger = logging.getLogger("port_system")
 
@@ -18,7 +20,7 @@ class RetrainingConfigPatch(BaseModel):
 
 # ─── GET current retraining config + live stats ───────────────────────────────
 @router.get("/retraining")
-def get_retraining_config():
+def get_retraining_config(admin: dict = Depends(require_admin)):
     """
     Returns the current retraining trigger configuration along with
     live stats (current DB record count vs threshold) — sourced from DB.
@@ -40,19 +42,20 @@ def get_retraining_config():
 
 # ─── PATCH retraining config ──────────────────────────────────────────────────
 @router.patch("/retraining")
-def patch_retraining_config(body: RetrainingConfigPatch):
+def patch_retraining_config(body: RetrainingConfigPatch, admin: dict = Depends(require_admin)):
     """
     Update the retraining trigger threshold at runtime.
     Takes effect immediately — no server restart required.
     """
     updated = retraining_config.update(threshold=body.retrain_threshold)
+    log_audit("Config Updated", f"Retraining threshold set to {body.retrain_threshold}", admin["id"])
     logger.info(f"Retraining config updated: threshold={updated['retrain_threshold']}")
     return {"status": "ok", "config": updated}
 
 
 # ─── GET training history (audit log) ────────────────────────────────────────
 @router.get("/training-history")
-def get_training_history(limit: int = Query(default=20, ge=1, le=100)):
+def get_training_history(limit: int = Query(default=20, ge=1, le=100), admin: dict = Depends(require_admin)):
     """
     Returns the most recent training run records from training_metadata table.
     Each row includes id, dataset_size, timestamp, data_source, training_type,
@@ -65,4 +68,3 @@ def get_training_history(limit: int = Query(default=20, ge=1, le=100)):
             if row.get(key) is not None:
                 row[key] = row[key].isoformat()
     return {"count": len(rows), "rows": rows}
-

@@ -1,7 +1,7 @@
 import logging
 import json
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException, Depends
 
 import pandas as pd
 
@@ -9,6 +9,8 @@ from utils.data_loader import load_from_file, validate_dataframe
 from db.queries import save_to_history, save_to_current
 from services.retraining_service import check_and_trigger_retraining
 from utils.cache_utils import vessel_cache
+from auth.dependencies import require_admin
+from auth.utils import log_audit
 
 logger = logging.getLogger("port_system")
 
@@ -21,6 +23,7 @@ async def ingest_vessel_data(
     background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
     json_data: Optional[str] = Form(None),
+    admin: dict = Depends(require_admin)
 ):
     errors: list[str] = []
 
@@ -98,6 +101,8 @@ async def ingest_vessel_data(
 
     if history_count > 0:
         check_and_trigger_retraining(background_tasks)
+
+    log_audit("Data Ingestion", f"Ingested {records_processed} rows (History: {history_count}, Current: {current_count})", admin["id"])
 
     logger.info(
         f"Ingestion complete — {records_processed} rows; "

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Form, Depends
 from db.queries import load_from_db
 from services.vessel_service import analyze_vessel_dashboard
 from services.heatmap_service import get_vessel_heatmap
 from models.stay_model import predict_stay_duration_from_metrics
 import logging
 from utils.cache_utils import vessel_cache
+from auth.dependencies import get_current_user
 
 logger = logging.getLogger("port_system")
 
@@ -15,7 +16,8 @@ router = APIRouter(prefix="/vessel", tags=["Vessel"])
 # Vessel history analysis
 @router.post("/vessel-history-analysis")
 async def vessel_history_analysis(
-    vessel_id: str = Form(None)
+    vessel_id: str = Form(None),
+    user: dict = Depends(get_current_user)
 ):
     # Log the request
     logger.info(f"Starting history vessel analysis for {vessel_id}")
@@ -46,6 +48,7 @@ async def current_vessel_analysis(
     vessel_id: str = Form(None),
     loaded: int = Form(None),
     discharged: int = Form(None),
+    user: dict = Depends(get_current_user)
 ):
     # Log the request
     logger.info(f"Starting current vessel analysis for {vessel_id}")
@@ -84,7 +87,8 @@ async def current_vessel_analysis(
 # Heatmap analysis
 @router.post("/heatmap")
 async def heatmap_analysis(
-    vessel_id: str = Form(None)
+    vessel_id: str = Form(None),
+    user: dict = Depends(get_current_user)
 ):
     # Log the request
     logger.info(f"Starting heatmap analysis for {vessel_id}")

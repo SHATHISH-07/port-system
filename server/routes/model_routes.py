@@ -1,13 +1,15 @@
 import json
 import logging
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, Depends
 
 from models.stay_model import train_stay_model
 from models.training_status import training_status, DEFAULT_CONFIG
 from db.queries import load_from_db, save_to_history
 from services.retraining_service import background_train_and_update
 from utils.data_loader import load_from_file, validate_dataframe
+from auth.dependencies import require_admin
+from auth.utils import log_audit
 
 logger = logging.getLogger("port_system")
 
@@ -22,6 +24,7 @@ async def train_vessel_stay_model(
     update_db: bool = Form(False),
     file: Optional[UploadFile] = File(None),
     config: Optional[str] = Form(None),
+    admin: dict = Depends(require_admin)
 ):
     try:
         # Prevent concurrent training
@@ -84,6 +87,8 @@ async def train_vessel_stay_model(
         )
 
         background_tasks.add_task(background_train_and_update, df, parsed_config)
+        
+        log_audit("Model Training Started", f"Source: {data_source}, Records: {len(df)}", admin["id"])
 
         return {
             "status": "started",
@@ -96,7 +101,7 @@ async def train_vessel_stay_model(
         return {"status": "error", "message": str(e)}
 
 
-# Status endpoint
+# Status endpoint (Open for polling, or could be protected, let's protect it)
 @router.get("/vessel-stay/training/status")
-def get_training_status():
+def get_training_status(admin: dict = Depends(require_admin)):
     return training_status.get()

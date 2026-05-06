@@ -3,6 +3,7 @@ import { Box, IconButton, Tooltip, useTheme } from "@mui/material";
 import { DarkModeOutlined, LightModeOutlined } from "@mui/icons-material";
 import Sidebar from "./Sidebar";
 import { useColorMode } from "../theme/ThemeContext";
+import { useLocation } from "react-router-dom";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,8 +12,14 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { mode, toggleColorMode } = useColorMode();
   const theme = useTheme();
+  const location = useLocation();
 
   const isDark = mode === "dark";
+  const isLoginPage = location.pathname === "/login";
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
   return (
     <Box sx={{ display: "flex", height: "100vh", bgcolor: "background.default" }}>
