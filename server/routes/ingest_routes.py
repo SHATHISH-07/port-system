@@ -1,13 +1,13 @@
 import logging
 import json
-from io import StringIO
 from typing import Optional
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException
 
 import pandas as pd
 
 from utils.data_loader import load_from_file, validate_dataframe
 from db.queries import save_to_history, save_to_current
+from services.retraining_service import check_and_trigger_retraining
 from utils.cache_utils import vessel_cache
 
 logger = logging.getLogger("port_system")
@@ -15,23 +15,41 @@ logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/ingest", tags=["Ingest"])
 
 
-# Unified ingestion endpoint
+# Unified ingestion endpoint — accepts CSV file, JSON file, or raw JSON form field
 @router.post("/vessel-data")
 async def ingest_vessel_data(
+    background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
     json_data: Optional[str] = Form(None),
 ):
     errors: list[str] = []
 
-    # Parse input
+    # ── Parse input ────────────────────────────────────────────────────────────
     if file is not None:
-        if not file.filename.endswith(".csv"):
-            raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
-        try:
-            content = await file.read()
-            df = load_from_file(content)
-        except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Failed to parse CSV: {e}")
+        filename = file.filename or ""
+
+        if filename.endswith(".csv"):
+            try:
+                content = await file.read()
+                df = load_from_file(content)
+            except Exception as e:
+                raise HTTPException(status_code=422, detail=f"Failed to parse CSV: {e}")
+
+        elif filename.endswith(".json"):
+            try:
+                content = await file.read()
+                records = json.loads(content.decode("utf-8"))
+                if isinstance(records, dict):
+                    records = [records]
+                df = pd.DataFrame(records)
+            except Exception as e:
+                raise HTTPException(status_code=422, detail=f"Failed to parse JSON file: {e}")
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type. Only .csv or .json files are accepted.",
+            )
 
     elif json_data is not None:
         try:
@@ -40,15 +58,15 @@ async def ingest_vessel_data(
                 records = [records]
             df = pd.DataFrame(records)
         except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Failed to parse JSON: {e}")
+            raise HTTPException(status_code=422, detail=f"Failed to parse JSON body: {e}")
 
     else:
         raise HTTPException(
             status_code=400,
-            detail="No data provided. Supply either a CSV 'file' or a 'json_data' form field.",
+            detail="No data provided. Supply a .csv or .json file, or a 'json_data' form field.",
         )
 
-    # Validate
+    # ── Validate ───────────────────────────────────────────────────────────────
     try:
         df = validate_dataframe(df)
     except ValueError as e:
@@ -59,7 +77,7 @@ async def ingest_vessel_data(
 
     records_processed = len(df)
 
-    # Save to history (append) and current (upsert)
+    # ── Persist ────────────────────────────────────────────────────────────────
     history_count = 0
     current_count = 0
 
@@ -75,8 +93,11 @@ async def ingest_vessel_data(
         logger.error(f"ingest: save_to_current failed: {e}")
         errors.append(f"Current upsert failed: {str(e)}")
 
-    # Invalidate vessel cache
+    # ── Side-effects ───────────────────────────────────────────────────────────
     vessel_cache.clear()
+
+    if history_count > 0:
+        check_and_trigger_retraining(background_tasks)
 
     logger.info(
         f"Ingestion complete — {records_processed} rows; "

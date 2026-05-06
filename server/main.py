@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routes.vessel_routes import router as vessel_router
 from routes.model_routes import router as model_router
-from routes.upload_routes import router as upload_router
 from routes.ingest_routes import router as ingest_router
 from routes.config_routes import router as config_router
 
@@ -80,7 +79,7 @@ app.add_middleware(
 # Register routes
 app.include_router(vessel_router)
 app.include_router(model_router)
-app.include_router(upload_router)
 app.include_router(ingest_router)
 app.include_router(config_router)
-
+
+
