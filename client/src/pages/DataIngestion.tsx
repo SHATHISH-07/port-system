@@ -1,34 +1,60 @@
 import { useState, useRef } from "react";
 import {
   Box, Typography, Button, LinearProgress,
-  Alert, Snackbar, Chip, Divider, useTheme,
+  Alert, Snackbar, Chip, Divider, useTheme, Card, CardContent, Grid,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { UploadFileOutlined, CheckCircleOutlined, ErrorOutlined, } from "@mui/icons-material";
+import {
+  HistoryOutlined,
+  SettingsInputComponentOutlined,
+  PrecisionManufacturingOutlined,
+  UploadFileOutlined,
+  CheckCircleOutlined,
+  ErrorOutlined
+} from "@mui/icons-material";
 import { api } from "../api/api";
+
+type IngestType = "history" | "current" | "crane";
 
 interface IngestResult {
   status: string;
-  records_processed: number;
-  history_rows_saved: number;
-  current_rows_saved: number;
-  errors: string[];
-  message: string;
+  dataset_type: string;
+  accepted_count: number;
+  rejected_count: number;
+  ingestion_id: number;
+  rejections: Array<{ row: any; reason: string }>;
 }
 
 export default function DataIngestion() {
   const theme = useTheme();
+  const fileRef = useRef<HTMLInputElement>(null);
 
+  const [activeType, setActiveType] = useState<IngestType>("history");
   const [file, setFile] = useState<File | null>(null);
-  const [jsonText, setJsonText] = useState("");
-  const [mode, setMode] = useState<"file" | "json">("file");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<IngestResult | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState<{ open: boolean; message: string; severity: "success" | "error" | "warning" }>({
     open: false, message: "", severity: "success",
   });
-  const fileRef = useRef<HTMLInputElement>(null);
+
+  const SCHEMAS = {
+    history: [
+      "unit_id", "actual_outbound_carrier_visit_id", "outbound_service",
+      "move_complete_time", "time_in", "time_out", "ctr_from_position",
+      "ctr_to_position", "verified_gross_mass_kg", "unit_weight_in_kg",
+      "reefer", "hazardous_flag", "oog_unit", "port_of_discharge"
+    ],
+    current: [
+      "unit_id", "actual_outbound_carrier_visit_id", "outbound_service",
+      "ctr_from_position", "ctr_to_position", "move_complete_time",
+      "reefer", "hazardous_flag", "port_of_discharge"
+    ],
+    crane: [
+      "crane_id", "unit_id", "carrier_visit", "move_kind",
+      "from_position", "to_position", "time_completed", "line_op"
+    ]
+  };
 
   const handleFile = (f: File) => {
     if (!f.name.endsWith(".csv")) {
@@ -39,283 +65,188 @@ export default function DataIngestion() {
     setResult(null);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) handleFile(f);
-  };
-
   const handleIngest = async () => {
+    if (!file) return;
     setLoading(true);
     setResult(null);
     try {
       const form = new FormData();
-      if (mode === "file" && file) {
-        form.append("file", file);
-      } else if (mode === "json" && jsonText.trim()) {
-        form.append("json_data", jsonText.trim());
-      } else {
-        setToast({ open: true, message: "Please provide a CSV file or JSON data.", severity: "error" });
-        setLoading(false);
-        return;
-      }
-      const res = await api.post<IngestResult>("/ingest/vessel-data", form);
+      form.append("file", file);
+
+      const res = await api.post<IngestResult>("/ingest/upload", form);
       setResult(res.data);
-      if (res.data.status === "ok") {
-        setToast({ open: true, message: res.data.message, severity: "success" });
-        setFile(null);
-        setJsonText("");
-      } else {
-        setToast({ open: true, message: res.data.message, severity: "warning" });
+
+      if (res.data.status === "success" || res.data.status === "partial") {
+        setToast({
+          open: true,
+          message: `Ingestion completed with ${res.data.accepted_count} rows accepted.`,
+          severity: res.data.status === "success" ? "success" : "warning"
+        });
+        if (res.data.status === "success") setFile(null);
       }
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { detail?: unknown } } };
-      let msg = "Ingestion failed. Please try again.";
-      if (e?.response?.data?.detail) {
-         msg = typeof e.response.data.detail === "string" 
-           ? e.response.data.detail 
-           : JSON.stringify(e.response.data.detail);
-      }
-      setToast({ open: true, message: msg, severity: "error" });
+    } catch (err: any) {
+      setToast({
+        open: true,
+        message: err.response?.data?.detail || "Ingestion failed.",
+        severity: "error"
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const isReady = mode === "file" ? !!file : jsonText.trim().length > 0;
-
   return (
-    <Box sx={{ maxWidth: 760, mx: "auto" }}>
-
-      {/* Page description */}
-      <Box sx={{ mb: 4, pb: 3, borderBottom: "1px solid", borderColor: "divider" }}>
-        <Typography variant="h5" sx={{ mb: 0.5, color: "text.primary" }}>
+    <Box sx={{ maxWidth: 1000, mx: "auto", p: 2 }}>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={700} color="text.primary">
           Data Ingestion
         </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 520 }}>
-          Upload container movement records via CSV file or JSON. Data is automatically saved
-          to both the history (training) table and the current (live) table.
+        <Typography variant="body1" color="text.secondary">
+          Upload raw CSV data using fixed schemas for History, Current, and Crane movements.
         </Typography>
       </Box>
 
-      {/* Mode toggle */}
-      <Box sx={{ display: "flex", gap: 1, mb: 3 }}>
-        {(["file", "json"] as const).map((m) => (
-          <Chip
-            key={m}
-            label={m === "file" ? "CSV File" : "JSON"}
-            variant={mode === m ? "filled" : "outlined"}
-            color={mode === m ? "primary" : "default"}
-            onClick={() => { setMode(m); setResult(null); }}
-            sx={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", letterSpacing: "0.05em" }}
-          />
-        ))}
-      </Box>
+      <Grid container spacing={3}>
+        {/* Sidebar Selection */}
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {[
+              { id: "history", label: "History Ingestion", icon: <HistoryOutlined />, desc: "Historical container moves for ML training." },
+              { id: "current", label: "Current Ingestion", icon: <SettingsInputComponentOutlined />, desc: "Live yard snapshot for operational analysis." },
+              { id: "crane", label: "Crane Ingestion", icon: <PrecisionManufacturingOutlined />, desc: "Crane move events for productivity tracking." }
+            ].map((t) => (
+              <Card
+                key={t.id}
+                onClick={() => { setActiveType(t.id as IngestType); setFile(null); setResult(null); }}
+                sx={{
+                  cursor: "pointer",
+                  border: `2px solid ${activeType === t.id ? theme.palette.primary.main : "transparent"}`,
+                  bgcolor: activeType === t.id ? alpha(theme.palette.primary.main, 0.05) : "background.paper",
+                  transition: "all 0.2s"
+                }}
+              >
+                <CardContent sx={{ display: "flex", alignItems: "flex-start", gap: 2, p: "16px !important" }}>
+                  <Box sx={{
+                    p: 1, borderRadius: 1,
+                    bgcolor: activeType === t.id ? "primary.main" : "action.hover",
+                    color: activeType === t.id ? "white" : "text.secondary"
+                  }}>
+                    {t.icon}
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700}>{t.label}</Typography>
+                    <Typography variant="caption" color="text.secondary">{t.desc}</Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        </Grid>
 
-      {/* Main card */}
-      <Box
-        sx={{
-          bgcolor: "background.paper",
-          border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 2,
-          overflow: "hidden",
-        }}
-      >
-        {/* CSV file mode */}
-        {mode === "file" && (
-          <Box sx={{ p: 3 }}>
+        {/* Upload Area */}
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Paper variant="outlined" sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
             <Box
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
               onClick={() => fileRef.current?.click()}
               sx={{
-                border: `2px dashed ${isDragging ? theme.palette.primary.main : theme.palette.divider}`,
+                border: "2px dashed",
+                borderColor: file ? "primary.main" : "divider",
                 borderRadius: 2,
-                p: 5,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
+                p: 6,
                 cursor: "pointer",
-                transition: "all 200ms ease",
-                bgcolor: isDragging
-                  ? alpha(theme.palette.primary.main, 0.04)
-                  : "transparent",
-                "&:hover": {
-                  borderColor: theme.palette.primary.main,
-                  bgcolor: alpha(theme.palette.primary.main, 0.03),
-                },
+                bgcolor: file ? alpha(theme.palette.primary.main, 0.02) : "transparent",
+                "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.05), borderColor: "primary.main" }
               }}
             >
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".csv"
-                hidden
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-              />
-              <UploadFileOutlined sx={{ fontSize: 40, color: "text.disabled", mb: 1.5 }} />
+              <input ref={fileRef} type="file" accept=".csv" hidden onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+              <UploadFileOutlined sx={{ fontSize: 48, color: file ? "primary.main" : "text.disabled", mb: 2 }} />
               {file ? (
                 <>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
-                    {file.name}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: "text.disabled", mt: 0.5 }}>
-                    {(file.size / 1024).toFixed(1)} KB — click to change
-                  </Typography>
+                  <Typography variant="h6" fontWeight={700}>{file.name}</Typography>
+                  <Typography variant="body2" color="text.secondary">{(file.size / 1024).toFixed(1)} KB</Typography>
                 </>
               ) : (
                 <>
-                  <Typography variant="body2" sx={{ fontWeight: 500, color: "text.secondary" }}>
-                    Drop a CSV file here or click to browse
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: "text.disabled", mt: 0.5 }}>
-                    Required columns: vessel_id, move_complete_time, time_in, time_out, …
-                  </Typography>
+                  <Typography variant="h6" fontWeight={600}>Click to upload {activeType} CSV</Typography>
+                  <Typography variant="body2" color="text.secondary">File must exactly match the required headers.</Typography>
                 </>
               )}
             </Box>
-          </Box>
-        )}
 
-        {/* JSON mode */}
-        {mode === "json" && (
-          <Box sx={{ p: 3 }}>
-            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 1 }}>
-              Paste JSON array or single object
-            </Typography>
-            <Box
-              component="textarea"
-              value={jsonText}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setJsonText(e.target.value)}
-              placeholder={`[\n  {\n    "outbound_service": "SERVICE_A",\n    "actual_outbound_carrier_visit_id": "VISIT_001",\n    ...\n  }\n]`}
-              sx={{
-                width: "100%",
-                minHeight: 200,
-                resize: "vertical",
-                fontFamily: "monospace",
-                fontSize: "0.8125rem",
-                p: 1.5,
-                border: `1px solid ${theme.palette.divider}`,
-                borderRadius: 1.5,
-                bgcolor: theme.palette.mode === "dark"
-                  ? alpha(theme.palette.common.white, 0.04)
-                  : alpha(theme.palette.common.black, 0.02),
-                color: "text.primary",
-                outline: "none",
-                "&:focus": { borderColor: "primary.main" },
-                boxSizing: "border-box",
-              }}
-            />
-          </Box>
-        )}
-
-        {loading && <LinearProgress />}
-
-        <Divider />
-
-        {/* Footer actions */}
-        <Box sx={{ px: 3, py: 2, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1.5 }}>
-          {file && mode === "file" && (
-            <Button variant="text" size="small" sx={{ color: "text.secondary" }}
-              onClick={() => { setFile(null); setResult(null); }}>
-              Clear
-            </Button>
-          )}
-          <Button
-            variant="contained"
-            disabled={loading || !isReady}
-            onClick={handleIngest}
-            sx={{ minWidth: 140 }}
-          >
-            {loading ? "Ingesting…" : "Ingest Data"}
-          </Button>
-        </Box>
-
-        {/* Result summary */}
-        {result && (
-          <Box sx={{ px: 3, pb: 3, pt: 0 }}>
-            <Box
-              sx={{
-                p: 2.5,
-                borderRadius: 2,
-                bgcolor: result.status === "ok"
-                  ? alpha(theme.palette.success.main, 0.06)
-                  : alpha(theme.palette.warning.main, 0.06),
-                border: `1px solid ${result.status === "ok"
-                  ? alpha(theme.palette.success.main, 0.2)
-                  : alpha(theme.palette.warning.main, 0.2)}`,
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
-                {result.status === "ok"
-                  ? <CheckCircleOutlined sx={{ color: "success.main", fontSize: 20 }} />
-                  : <ErrorOutlined sx={{ color: "warning.main", fontSize: 20 }} />}
-                <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
-                  {result.message}
-                </Typography>
+            <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Box sx={{ textAlign: "left" }}>
+                <Typography variant="caption" fontWeight={700} color="text.secondary" display="block">REQUIRED HEADERS:</Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                  {SCHEMAS[activeType].map(h => <Chip key={h} label={h} size="small" variant="outlined" sx={{ fontSize: "10px", height: "20px" }} />)}
+                </Box>
               </Box>
+              <Button
+                variant="contained"
+                size="large"
+                disabled={!file || loading}
+                onClick={handleIngest}
+                sx={{ px: 4, borderRadius: 2 }}
+              >
+                {loading ? "Processing..." : "Start Ingestion"}
+              </Button>
+            </Box>
+          </Paper>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2 }}>
-                {[
-                  { label: "Records Processed", value: result.records_processed },
-                  { label: "History Rows Saved", value: result.history_rows_saved },
-                  { label: "Current Rows Saved", value: result.current_rows_saved },
-                ].map(({ label, value }) => (
-                  <Box key={label}>
-                    <Typography variant="caption" sx={{ color: "text.disabled" }}>{label}</Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: "text.primary", fontFamily: "monospace" }}>
-                      {value.toLocaleString()}
+          {loading && <LinearProgress sx={{ mt: 1, borderRadius: 1 }} />}
+
+          {/* Results section */}
+          {result && (
+            <Card sx={{ mt: 3, borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
+              <CardContent>
+                <Box sx={{ display: "flex", gap: 4, mb: 3 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">STATUS</Typography>
+                    <Typography variant="h6" fontWeight={800} color={result.status === "success" ? "success.main" : "warning.main"}>
+                      {result.status.toUpperCase()}
                     </Typography>
                   </Box>
-                ))}
-              </Box>
-
-              {result.errors.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  {result.errors.map((e, i) => (
-                    <Typography key={i} variant="caption" sx={{ display: "block", color: "error.main", fontFamily: "monospace" }}>
-                      • {e}
-                    </Typography>
-                  ))}
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">ACCEPTED</Typography>
+                    <Typography variant="h6" fontWeight={800}>{result.accepted_count}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">REJECTED</Typography>
+                    <Typography variant="h6" fontWeight={800} color="error.main">{result.rejected_count}</Typography>
+                  </Box>
                 </Box>
-              )}
-            </Box>
-          </Box>
-        )}
-      </Box>
 
-      {/* Schema reference */}
-      <Box
-        sx={{
-          mt: 3, p: 2.5,
-          bgcolor: theme.palette.mode === "dark"
-            ? alpha(theme.palette.common.white, 0.03)
-            : alpha(theme.palette.common.black, 0.02),
-          border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 2,
-        }}
-      >
-        <Typography variant="overline" sx={{ color: "text.secondary", display: "block", mb: 1.5 }}>
-          Required CSV Columns
-        </Typography>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-          {["move_complete_time", "time_in", "time_out", "outbound_service",
-            "actual_outbound_carrier_visit_id", "unit_id"].map((col) => (
-              <Chip key={col} label={col} size="small"
-                sx={{ fontFamily: "monospace", fontSize: "0.75rem", bgcolor: "background.paper" }} />
-            ))}
-        </Box>
-        <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 1.5 }}>
-          Extra columns are accepted and ignored. Rows with null primary keys are dropped automatically.
-        </Typography>
-      </Box>
+                {result.rejections.length > 0 && (
+                  <>
+                    <Divider sx={{ mb: 2 }} />
+                    <Typography variant="subtitle2" color="error" fontWeight={700} mb={1}>Rejection Samples (First 10)</Typography>
+                    <TableContainer component={Paper} variant="outlined">
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: "action.hover" }}>
+                            <TableCell sx={{ fontWeight: 700 }}>Row Content</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Reason</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {result.rejections.map((rej, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell sx={{ fontSize: "11px", fontFamily: "monospace" }}>{JSON.stringify(rej.row)}</TableCell>
+                              <TableCell sx={{ fontSize: "11px", color: "error.main", fontWeight: 600 }}>{rej.reason}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </Grid>
+      </Grid>
 
-      <Snackbar open={toast.open} autoHideDuration={5000} onClose={() => setToast((t) => ({ ...t, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
-        <Alert severity={toast.severity} variant="filled" onClose={() => setToast((t) => ({ ...t, open: false }))}>
+      <Snackbar open={toast.open} autoHideDuration={6000} onClose={() => setToast(t => ({ ...t, open: false }))}>
+        <Alert severity={toast.severity} sx={{ width: "100%" }} variant="filled" onClose={() => setToast(t => ({ ...t, open: false }))}>
           {toast.message}
         </Alert>
       </Snackbar>

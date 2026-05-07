@@ -47,3 +47,24 @@ def log_audit(action: str, details: str, user_id: Optional[int] = None):
     except Exception as e:
         import logging
         logging.getLogger("port_system").error(f"Failed to write audit log: {e}")
+
+def authenticate_user(username: str, password: str) -> Optional[dict]:
+    from db.connection import get_engine
+    from sqlalchemy import text
+    engine = get_engine()
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT id, username, password_hash, role, is_active FROM users WHERE username = :username"),
+            {"username": username}
+        ).fetchone()
+    
+    if not result:
+        return None
+    
+    user = dict(result._mapping)
+    if not user["is_active"]:
+        return None
+        
+    if verify_password(password, user["password_hash"]):
+        return user
+    return None

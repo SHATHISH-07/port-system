@@ -155,7 +155,7 @@ def train_stay_model(df, config: dict = None):
                 # Ensure default feature_config exists
                 fc_row = _conn.execute(text("""
                     INSERT INTO feature_configs (name, description, feature_names, created_at, updated_at)
-                    VALUES ('default', 'Default VotingRegressor features', :fn::jsonb, :now, :now)
+                    VALUES ('default', 'Default VotingRegressor features', CAST(:fn AS JSONB), :now, :now)
                     ON CONFLICT (name) DO UPDATE SET updated_at = EXCLUDED.updated_at
                     RETURNING id
                 """), {
@@ -178,7 +178,7 @@ def train_stay_model(df, config: dict = None):
                          trained_at, promoted_at, created_at, updated_at)
                     VALUES
                         ('vessel_stay', :ver, :path, :fcid,
-                         :size, :metrics::jsonb, 'active',
+                         :size, CAST(:metrics AS JSONB), 'active',
                          'Auto-trained via pipeline',
                          :now, :now, :now, :now)
                     ON CONFLICT (model_name, version) DO UPDATE SET
@@ -314,10 +314,27 @@ def predict_stay_duration_from_metrics(loaded: int, discharged: int, actual_visi
     }
 
     # Prepare input features in the same order as training
+    # Fallback for dynamic features
+    for f in feature_names:
+        if f not in features:
+            features[f] = 0.0
+
     X = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
 
     # Predict the stay time
     pred = model.predict(X)[0]
+    avg_hours = round(float(pred), 2)
+    
+    # Predict cranes required (assuming ~25 moves per hour per crane)
+    if avg_hours > 0:
+        crane_moves_per_hour = total_moves / avg_hours
+        predicted_cranes = max(1, round(crane_moves_per_hour / 25))
+    else:
+        predicted_cranes = 1
+        
+    # Predict suitable berth
+    suitable_berth = "PEB-1" if total_moves > 1000 else "PEB-2" if total_moves > 500 else "PEB-3"
+    cargo_concentration = "100.0%" if total_moves > 1000 else "50.0%"
 
     # Return predicted stay time
     return {
@@ -328,12 +345,26 @@ def predict_stay_duration_from_metrics(loaded: int, discharged: int, actual_visi
             "avg_hours": None
         },
         "predicted": {
-            "avg_hours": round(float(pred), 2),
+            "avg_hours": avg_hours,
             "visits": 1
         },
-        "risks": [],
-        "execution_plan": [],
-        "berth_analysis": [],
+        "risks": [
+            f"Expected {predicted_cranes} cranes required to maintain standard productivity."
+        ],
+        "execution_plan": [
+            f"Assign vessel to {suitable_berth} based on volume.",
+            f"Deploy {predicted_cranes} cranes for {avg_hours} hours."
+        ],
+        "berth_analysis": [
+            {
+                "berth": suitable_berth,
+                "block": "A",
+                "cargo_concentration": cargo_concentration,
+                "recommended_cranes": predicted_cranes,
+                "total_travel_distance": "Low",
+                "congestion_risk": "Low"
+            }
+        ],
         "input": {
             "loaded": loaded,
             "discharged": discharged

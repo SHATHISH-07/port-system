@@ -75,7 +75,8 @@ const HistoryVesselAnalysis = () => {
     try {
       const form = new FormData();
       form.append("vessel_id", vesselId.trim());
-      const res = await api.post<VesselAnalysisData>("/vessel/vessel-history-analysis", form);
+      form.append("mode", "history");
+      const res = await api.post<VesselAnalysisData>("/analytics/vessel-analysis", form);
       setData(res.data);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: unknown; error?: unknown } } };
@@ -126,8 +127,8 @@ const HistoryVesselAnalysis = () => {
               actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
               predicted={data.predicted?.avg_hours ?? 0}
               mode={data.mode || "history"}
-              loaded={data.input?.loaded}
-              discharged={data.input?.discharged}
+              loaded={data.input?.loaded ?? data.top_visit_stats?.loaded}
+              discharged={data.input?.discharged ?? data.top_visit_stats?.discharged}
             />
           </Section>
 

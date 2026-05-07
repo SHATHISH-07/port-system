@@ -1,67 +1,64 @@
 import pandas as pd
 from utils.datetime_utils import parse_datetime
-
 from config import settings
 
-def prepare_visit_data(df):
-    # Copy dataframe
+
+def _safe_parse(df: pd.DataFrame, col: str) -> pd.Series:
+    """Parse a datetime column if it exists, else return a null Series."""
+    if col in df.columns:
+        return parse_datetime(df[col], col)
+    return pd.Series([pd.NaT] * len(df), index=df.index)
+
+
+def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepare a container visit DataFrame for stay-time analysis.
+    Works with both history (has time_in / time_out) and current data.
+    Crane timestamps are pre-merged into move_complete_time before this call.
+    """
     df = df.copy()
-    # Strip whitespace from column names
     df.columns = df.columns.str.strip()
 
-    # Parse event time
-    move_time = parse_datetime(df["move_complete_time"], "move_complete_time")
-    time_in   = parse_datetime(df["time_in"],            "time_in")
-    
-    # Combine move time and time in
+    # Build event_time: move_complete_time → time_in → fallback
+    move_time = _safe_parse(df, "move_complete_time")
+    time_in   = _safe_parse(df, "time_in")
     df["event_time"] = move_time.fillna(time_in)
 
-    # Parse vessel departure
-    time_out = parse_datetime(df["time_out"], "time_out")
+    # Vessel departure = time_out (if present)
+    time_out = _safe_parse(df, "time_out")
     df["vessel_departure"] = time_out
 
-    # Drop rows with no event time
+    # Drop rows with no event_time
     df = df.dropna(subset=["event_time"])
-
-    # Check if the dataframe is empty
     if df.empty:
         return df
 
-    # Get valid vessel departure
+    # Apply time window if vessel_departure is available
     valid_out = df["vessel_departure"].dropna()
-
     if not valid_out.empty:
-        vessel_dep = valid_out.mode().iloc[0]
-    
-        # Calculate time window
+        vessel_dep   = valid_out.mode().iloc[0]
         window_start = vessel_dep - pd.Timedelta(hours=settings.VESSEL_WINDOW_HOURS)
-        window_end   = vessel_dep + pd.Timedelta(hours=1) 
-
-        # Filter data within the time window
+        window_end   = vessel_dep + pd.Timedelta(hours=1)
         df = df[
             (df["event_time"] >= window_start) &
             (df["event_time"] <= window_end)
         ].copy()
-
         df["vessel_departure"] = vessel_dep
-        
-    df = df.dropna(subset=["event_time"])
+    else:
+        # No departure time — use the full event span (typical for current data)
+        pass
 
-    # Check if the dataframe is empty
+    df = df.dropna(subset=["event_time"])
     if df.empty:
         return df
 
-    # Sort by event time
-    df = df.sort_values("event_time").reset_index(drop=True)
+    return df.sort_values("event_time").reset_index(drop=True)
 
-    return df
 
-# Compute visit stay
-def compute_visit_stay(df):
-    if df.empty:
+def compute_visit_stay(df: pd.DataFrame):
+    if df is None or df.empty:
         return None
-    
-    # Get start time
+
     start = df["event_time"].min()
 
     if "vessel_departure" in df.columns:
@@ -70,40 +67,27 @@ def compute_visit_stay(df):
     else:
         end = df["event_time"].max()
 
-    # Calculate stay hours
     stay_hours = (end - start).total_seconds() / 3600
-
-    # Return stay hours if positive
     if stay_hours <= 0:
         return None
-
     return round(stay_hours, 2)
 
 
-# Compute vessel stay
 def compute_vessel_stay(prepared_visits: dict):
-    # Initialize result dictionary
     result = {}
-    
-    # Compute stay for each visit
     for visit_id, visit_df in prepared_visits.items():
-        if visit_df.empty:
+        if visit_df is None or visit_df.empty:
             continue
-        
-        # Compute stay for each visit
         stay_hours = compute_visit_stay(visit_df)
-        
         if stay_hours is not None and stay_hours > 0:
             result[str(visit_id).strip()] = stay_hours
 
-    # Return result if not empty
     if result:
         stay_values = list(result.values())
         return {
-            "visits": result,
+            "visits":    result,
             "avg_hours": round(sum(stay_values) / len(stay_values), 2),
             "max_hours": round(max(stay_values), 2),
-            "min_hours": round(min(stay_values), 2)
+            "min_hours": round(min(stay_values), 2),
         }
-
     return {}

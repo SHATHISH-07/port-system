@@ -17,7 +17,7 @@ const SystemLogs: React.FC = () => {
     useEffect(() => {
         const fetchLogs = async () => {
             try {
-                const res = await api.get("/users/audit-logs");
+                const res = await api.get("/audit-logs");
                 setLogs(res.data);
             } catch (error) {
                 console.error("Failed to fetch logs", error);

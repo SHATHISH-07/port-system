@@ -1,405 +1,381 @@
 import logging
-import json
 import hashlib
+import json
 from datetime import datetime, timezone
-from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException, Depends
-
+from typing import Optional, List
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks
 import pandas as pd
 from io import BytesIO
-
-from utils.data_loader import validate_dataframe
-from db.queries import save_to_history, save_to_current
-from db.connection import get_engine
-from services.retraining_service import check_and_trigger_retraining
-from services.schema_mapper import (
-    detect_dataset_type,
-    suggest_mappings,
-    apply_mappings,
-    load_confirmed_mappings,
-    get_default_terminal_id,
-)
-from services.canonical_transformer import (
-    transform_container_inventory,
-    transform_crane_moves,
-    persist_canonical_data,
-)
-from utils.cache_utils import vessel_cache
-from auth.dependencies import require_admin
-from auth.utils import log_audit
 from sqlalchemy import text
 
+from config import settings
+from db.connection import get_engine
+from auth.dependencies import require_admin
+from auth.utils import log_audit
+from services.retraining_service import check_and_trigger_retraining
+
 logger = logging.getLogger("port_system")
-router = APIRouter(prefix="/ingest", tags=["Ingest"])
+router = APIRouter(prefix="/ingest", tags=["Ingestion"])
 
+# ── Fixed Schemas (Aligned with config.py) ──────────────────────────────────
+HISTORY_HEADERS = settings.EXPECTED_HEADERS["history"]
+CURRENT_HEADERS = settings.EXPECTED_HEADERS["current"]
+CRANE_HEADERS   = settings.EXPECTED_HEADERS["crane"]
 
-def _hash_content(content: bytes) -> str:
+def _get_file_hash(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()[:16]
 
+def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize headers: lowercase, strip, and apply comprehensive alias mapping."""
+    # Step 1: Basic cleanup — lowercase, strip, replace spaces/dashes/parens
+    new_cols = []
+    for c in df.columns:
+        c = str(c).lower().strip()
+        c = c.replace(" ", "_").replace("-", "_")
+        c = c.replace("(", "").replace(")", "")
+        new_cols.append(c)
+    df.columns = new_cols
 
-def _create_raw_upload(
-    conn,
-    terminal_id: int,
-    source_profile_id: Optional[int],
-    filename: str,
-    file_hash: str,
-    file_size: int,
-    dataset_type: str,
-    detection_confidence: float,
-    raw_row_count: int,
-    uploaded_by: int,
-) -> int:
-    now = datetime.now(timezone.utc)
-    row = conn.execute(text("""
-        INSERT INTO raw_uploads
-            (terminal_id, source_profile_id, filename, file_hash, file_size_bytes,
-             dataset_type_detected, detection_confidence, status,
-             uploaded_by, raw_row_count, created_at, updated_at)
-        VALUES
-            (:tid, :spid, :fn, :fhash, :fsize,
-             :dtype, :dconf, 'processing',
-             :uid, :rc, :now, :now)
-        RETURNING id
-    """), {
-        "tid":   terminal_id,
-        "spid":  source_profile_id,
-        "fn":    filename,
-        "fhash": file_hash,
-        "fsize": file_size,
-        "dtype": dataset_type,
-        "dconf": detection_confidence,
-        "uid":   uploaded_by,
-        "rc":    raw_row_count,
-        "now":   now,
-    }).fetchone()
-    return row[0]
+    # Step 2: Comprehensive alias mapping covering all known dataset variants
+    mapping = {
+        # Unit / container ID
+        "unit_id":                              "unit_id",
+        "unit": "unit_id",
+        "unit_nbr":                             "unit_id",
+        "container_id":                         "unit_id",
 
+        # Carrier visit / vessel visit
+        "actual_outbound_carrier_visit_id":     "actual_outbound_carrier_visit_id",
+        "actual_outbound_carrier_visit":        "actual_outbound_carrier_visit_id",
+        "vessel_visit_id":                      "actual_outbound_carrier_visit_id",
+        "visit_id":                             "actual_outbound_carrier_visit_id",
+        "vessel_visit":                         "actual_outbound_carrier_visit_id",
 
-def _create_ingestion_job(conn, raw_upload_id: int, records_total: int) -> int:
-    now = datetime.now(timezone.utc)
-    row = conn.execute(text("""
-        INSERT INTO ingestion_jobs
-            (raw_upload_id, status, records_total, started_at, created_at, updated_at)
-        VALUES (:uid, 'processing', :total, :now, :now, :now)
-        RETURNING id
-    """), {"uid": raw_upload_id, "total": records_total, "now": now}).fetchone()
-    return row[0]
+        # Outbound service / vessel name
+        "outbound_service":                     "outbound_service",
+        "vessel":                               "outbound_service",
+        "service":                              "outbound_service",
+        "vessel_id":                            "outbound_service",
 
+        # Timestamps — history
+        "move_complete_time":                   "move_complete_time",
+        "completed":                            "move_complete_time",
+        "time_in":                              "time_in",
+        "time_out":                             "time_out",
 
-def _update_job(conn, job_id: int, status: str, success: int, failed: int, errors: list):
-    now = datetime.now(timezone.utc)
-    conn.execute(text("""
-        UPDATE ingestion_jobs
-        SET status = :status, records_success = :ok, records_failed = :fail,
-            error_log = :elog::jsonb, completed_at = :now, updated_at = :now
-        WHERE id = :id
-    """), {
-        "id":     job_id,
-        "status": status,
-        "ok":     success,
-        "fail":   failed,
-        "elog":   json.dumps(errors[:20]),
-        "now":    now,
-    })
+        # Container positions
+        "ctr_from_position":                    "ctr_from_position",
+        "from_position":                        "ctr_from_position",
+        "from":                                 "ctr_from_position",
+        "current_position":                     "ctr_from_position",  # current dataset
+        "ctr_to_position":                      "ctr_to_position",
+        "to_position":                          "ctr_to_position",
+        "to":                                   "ctr_to_position",
 
+        # Weight
+        "verified_gross_mass_kg":               "verified_gross_mass_kg",
+        "verified_gross_mass_kg_":              "verified_gross_mass_kg",  # paren removed variant
+        "vgm":                                  "verified_gross_mass_kg",
+        "gross_mass_kg":                        "verified_gross_mass_kg",
+        "unit_weight_in_kg":                    "unit_weight_in_kg",
+        "weight":                               "unit_weight_in_kg",
 
-def _update_upload_status(conn, upload_id: int, status: str):
-    conn.execute(text(
-        "UPDATE raw_uploads SET status = :s, updated_at = :now WHERE id = :id"
-    ), {"s": status, "id": upload_id, "now": datetime.now(timezone.utc)})
+        # Flags
+        "reefer":                               "reefer",
+        "oog_unit":                             "oog_unit",
+        "hazardous_flag":                       "hazardous_flag",
+        "hazardous":                            "hazardous_flag",
+        "port_of_discharge":                    "port_of_discharge",
 
+        # Crane dataset specific
+        "crane_id":                             "crane_id",
+        "crane_che":                            "crane_id",
+        "crane":                                "crane_id",
+        "move_kind":                            "move_kind",
+        "kind":                                 "move_kind",
+        "event_type":                           "move_kind",   # crane event type → move_kind
+        "carrier_visit":                        "carrier_visit",
+        "time_completed":                       "time_completed",
+        "line_op":                              "line_op",
 
-# ── Unified ingestion endpoint ──────────────────────────────────────────────
-@router.post("/vessel-data")
-async def ingest_vessel_data(
-    background_tasks: BackgroundTasks,
-    file: Optional[UploadFile] = File(None),
-    json_data: Optional[str] = Form(None),
-    source_profile_id: Optional[int] = Form(None),
-    admin: dict = Depends(require_admin),
-):
-    """
-    Unified ingestion endpoint.
+        # Alternate crane column names
+        "unit_nbr":                             "unit_id",  # crane dataset uses Unit Nbr
+    }
 
-    Flow:
-      1. Parse file / JSON
-      2. Save raw_upload record (always, for auditability)
-      3. Detect dataset type
-      4. Check for confirmed mappings for this source profile
-         → If confirmed: apply silently
-         → If none: return suggestions (status = pending_mapping)
-      5. Apply canonical transformation
-      6. Persist to canonical entity tables + legacy tables (backward compat)
-      7. Trigger retraining check
-    """
-    errors: list[str] = []
-    raw_content: bytes = b""
-    filename: str = "raw_json_payload"
-
-    # ── 1. Parse input ─────────────────────────────────────────────────────
-    if file is not None:
-        filename = file.filename or ""
-        raw_content = await file.read()
-
-        if filename.endswith(".csv"):
-            try:
-                df = pd.read_csv(BytesIO(raw_content))
-            except Exception as e:
-                raise HTTPException(422, f"Failed to parse CSV: {e}")
-
-        elif filename.endswith(".json"):
-            try:
-                records = json.loads(raw_content.decode("utf-8"))
-                if isinstance(records, dict):
-                    records = [records]
-                df = pd.DataFrame(records)
-            except Exception as e:
-                raise HTTPException(422, f"Failed to parse JSON file: {e}")
-
+    # Apply mapping while protecting against duplicate column names
+    current_cols = list(df.columns)
+    final_cols = []
+    for col in current_cols:
+        mapped = mapping.get(col, col)
+        if mapped in final_cols:
+            suffix = 1
+            temp_name = f"{mapped}_{suffix}"
+            while temp_name in final_cols:
+                suffix += 1
+                temp_name = f"{mapped}_{suffix}"
+            final_cols.append(temp_name)
         else:
-            raise HTTPException(400, "Unsupported file type. Only .csv or .json files are accepted.")
+            final_cols.append(mapped)
 
-    elif json_data is not None:
-        raw_content = json_data.encode("utf-8")
-        try:
-            records = json.loads(json_data)
-            if isinstance(records, dict):
-                records = [records]
-            df = pd.DataFrame(records)
-        except Exception as e:
-            raise HTTPException(422, f"Failed to parse JSON body: {e}")
+    df.columns = final_cols
+    return df
 
-    else:
-        raise HTTPException(400, "No data provided. Supply a .csv or .json file, or a 'json_data' form field.")
+def parse_dates(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
+    """Explicitly parse date columns to avoid DB format errors."""
+    for col in columns:
+        if col in df.columns:
+            try:
+                # Use errors='coerce' to turn unparseable dates into NaT
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+            except Exception as e:
+                logger.warning(f"Failed to parse date column {col}: {e}")
+    return df
+
+def _log_ingestion(conn, filename, fhash, dtype, status, total, accepted, rejected, user_id, error=""):
+    now = datetime.now(timezone.utc)
+    res = conn.execute(text("""
+        INSERT INTO ingestion_logs 
+            (filename, file_hash, dataset_type, status, records_total, 
+             records_accepted, records_rejected, uploaded_by, completed_at, error_summary)
+        VALUES 
+            (:fn, :hash, :type, :status, :total, :acc, :rej, :uid, :now, :err)
+        RETURNING id
+    """), {
+        "fn": filename, "hash": fhash, "type": dtype, "status": status,
+        "total": total, "acc": accepted, "rej": rejected, "uid": user_id,
+        "now": now, "err": error
+    })
+    return res.fetchone()[0]
+
+class IngestionEncoder(json.JSONEncoder):
+    """Custom JSON encoder for ingestion logs (handles Timestamps/NaN)."""
+    def default(self, obj):
+        if pd.isna(obj): return None
+        if isinstance(obj, pd.Timestamp): return obj.isoformat()
+        if hasattr(obj, 'tolist'): return obj.tolist()
+        return super().default(obj)
+
+def _log_rejection(conn, ingestion_id, row_data, reason):
+    # Ensure row_data is serializable
+    clean_data = {k: (None if pd.isna(v) else (v.isoformat() if isinstance(v, pd.Timestamp) else v)) 
+                  for k, v in row_data.items()}
+    conn.execute(text("""
+        INSERT INTO rejection_logs (ingestion_id, row_data, reason)
+        VALUES (:id, :data, :reason)
+    """), {"id": ingestion_id, "data": json.dumps(clean_data, cls=IngestionEncoder), "reason": reason})
+
+# ── Validation ──────────────────────────────────────────────────────────────
+
+def validate_row(dtype: str, row: dict) -> Optional[str]:
+    """Basic row-level validation — only reject on truly critical missing fields."""
+    if dtype == "history":
+        if not row.get("unit_id"): return "Missing unit_id"
+        if not row.get("actual_outbound_carrier_visit_id"): return "Missing vessel visit ID"
+        if not row.get("outbound_service"): return "Missing outbound_service"
+        # Only reject if the timestamp was provided but is invalid (NaT)
+        for f in ["move_complete_time"]:
+            val = row.get(f)
+            if val is not None and pd.isnull(val):
+                return f"Invalid timestamp in {f}"
+
+    elif dtype == "current":
+        if not row.get("unit_id"): return "Missing unit_id"
+        if not row.get("actual_outbound_carrier_visit_id"): return "Missing vessel visit ID"
+        if not row.get("outbound_service"): return "Missing outbound_service"
+
+    elif dtype == "crane":
+        if not row.get("crane_id"): return "Missing crane_id"
+        if not row.get("carrier_visit"): return "Missing carrier_visit"
+        val = row.get("time_completed")
+        if val is None or (hasattr(val, '__class__') and val.__class__.__name__ == 'NaTType'):
+            pass  # Allow null timestamps for crane — use None
+
+    return None
+
+# ── Endpoints ────────────────────────────────────────────────────────────────
+
+@router.post("/upload")
+async def upload_data(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    admin: dict = Depends(require_admin)
+):
+    """Simplified ingestion endpoint with header normalization."""
+    content = await file.read()
+    fhash = _get_file_hash(content)
+    
+    try:
+        df = pd.read_csv(BytesIO(content), low_memory=False)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid CSV file: {str(e)}")
 
     if df.empty:
-        raise HTTPException(422, "Dataset is empty.")
+        raise HTTPException(400, "File is empty")
 
-    raw_columns = list(df.columns)
-    file_hash   = _hash_content(raw_content)
-    terminal_id = get_default_terminal_id()
+    # Normalize Headers
+    df = normalize_dataframe(df)
+    
+    # DROP NULL/EMPTY ROWS EARLY
+    # 1. Drop rows that are completely empty
+    df = df.dropna(how='all')
+    # 2. Drop rows where unit_id is null/empty (if it exists)
+    if 'unit_id' in df.columns:
+        df = df[df['unit_id'].notna() & (df['unit_id'].astype(str).str.strip() != "")]
+    
+    headers = list(df.columns)
+    dataset_type = None
 
-    # ── 2. Detect dataset type ─────────────────────────────────────────────
-    source_profile = None
-    if source_profile_id:
-        engine = get_engine()
-        with engine.connect() as conn:
-            sp_row = conn.execute(text(
-                "SELECT alias_map, detection_rules FROM source_profiles WHERE id = :id"
-            ), {"id": source_profile_id}).fetchone()
-            if sp_row:
-                source_profile = {"alias_map": sp_row[0] or {}, "detection_rules": sp_row[1] or {}}
-
-    detection   = detect_dataset_type(raw_columns, source_profile)
-    dataset_type = detection["dataset_type"]
-    d_confidence = detection["confidence"]
-
-    # ── 3. Create raw_upload + ingestion_job ───────────────────────────────
-    engine = get_engine()
-    upload_id = None
-    job_id = None
-    try:
-        with engine.begin() as conn:
-            upload_id = _create_raw_upload(
-                conn, terminal_id, source_profile_id,
-                filename, file_hash, len(raw_content),
-                dataset_type, d_confidence, len(df),
-                admin["id"]
-            )
-            job_id = _create_ingestion_job(conn, upload_id, len(df))
-    except Exception as e:
-        logger.warning(f"[Ingest] Could not create audit records (canonical schema may not be initialized): {e}")
-
-    # ── 4. Load or suggest mappings ────────────────────────────────────────
-    confirmed_mappings = []
-    if source_profile_id:
-        confirmed_mappings = load_confirmed_mappings(source_profile_id)
-
-    # If no confirmed mappings exist → return suggestions and halt ingestion
-    # If no source_profile_id was provided, skip mapping gate entirely (backward compat)
-    if not confirmed_mappings and source_profile_id and dataset_type != "unknown":
-        suggestions = suggest_mappings(raw_columns, dataset_type, source_profile)
-        try:
-            with engine.begin() as conn:
-                if upload_id:
-                    _update_upload_status(conn, upload_id, "pending_mapping")
-                if job_id:
-                    conn.execute(text(
-                        "UPDATE ingestion_jobs SET status = 'pending_mapping', updated_at = :now WHERE id = :id"
-                    ), {"id": job_id, "now": datetime.now(timezone.utc)})
-        except Exception as e:
-            logger.warning(f"[Ingest] Could not update pending_mapping status: {e}")
-
-        return {
-            "status":             "pending_mapping",
-            "message":            "No confirmed mappings found for this source profile. Please confirm the suggested field mappings and re-upload.",
-            "upload_id":          upload_id,
-            "job_id":             job_id,
-            "dataset_type":       dataset_type,
-            "detection_confidence": d_confidence,
-            "suggested_mappings": suggestions,
-            "total_columns":      len(raw_columns),
-            "unmapped_columns":   sum(1 for s in suggestions if s.get("is_unmapped")),
-        }
-
-    # ── 5. Apply mappings → separate canonical from legacy ─────────────────
-    # For container_inventory — legacy flow requires specific column names
-    # Apply confirmed mappings if available, else treat as already-standard
-    dynamic_attrs_series = None
-    if confirmed_mappings:
-        df_transformed, dynamic_attrs_series = apply_mappings(df, confirmed_mappings)
-    else:
-        df_transformed = df.copy()
-
-    # ── 6a. Legacy persist (history + current) — backward compatible ───────
-    history_count = 0
-    current_count = 0
-
-    if dataset_type == "container_inventory":
-        try:
-            legacy_df = validate_dataframe(df_transformed)
-            if not legacy_df.empty:
-                history_count = save_to_history(legacy_df)
-                current_count = save_to_current(legacy_df)
-        except Exception as e:
-            logger.warning(f"[Ingest] Legacy pipeline skipped: {e}")
-            errors.append(f"Legacy persist skipped: {str(e)}")
-
-    # ── 6b. Canonical persist ─────────────────────────────────────────────
-    canonical_counts = {"vessel_visits_saved": 0, "containers_saved": 0, "crane_moves_saved": 0}
-    try:
-        if dataset_type == "container_inventory":
-            canonical_data = transform_container_inventory(
-                df_transformed, terminal_id, source_profile_id, job_id, dynamic_attrs_series
-            )
-        elif dataset_type == "crane_moves":
-            canonical_data = transform_crane_moves(
-                df_transformed, terminal_id, source_profile_id, job_id, dynamic_attrs_series
-            )
+    # Identify dataset type based on post-normalization columns.
+    # Priority: crane (has crane_id), history (has time_in/time_out), current (everything else)
+    if "crane_id" in headers and "carrier_visit" in headers:
+        dataset_type = "crane"
+    elif "unit_id" in headers and "actual_outbound_carrier_visit_id" in headers:
+        if "time_in" in headers or "time_out" in headers:
+            dataset_type = "history"
         else:
-            canonical_data = {}
+            dataset_type = "current"
 
-        if canonical_data:
-            canonical_counts = persist_canonical_data(canonical_data, dataset_type)
-    except Exception as e:
-        logger.error(f"[Ingest] Canonical persist error: {e}", exc_info=True)
-        errors.append(f"Canonical persist error: {str(e)}")
+    if not dataset_type:
+        raise HTTPException(400, f"Invalid headers. Could not identify dataset type. Found: {headers}")
 
-    # ── 7. Finalise job record ─────────────────────────────────────────────
-    total_canonical = canonical_counts["containers_saved"] + canonical_counts["crane_moves_saved"]
-    final_success   = max(history_count, total_canonical)
-    final_status    = "completed" if not errors else "completed_with_errors"
+    engine = get_engine()
+    
+    # Idempotency Check
+    with engine.connect() as conn:
+        existing = conn.execute(text(
+            "SELECT id FROM ingestion_logs WHERE file_hash = :h AND status = 'success'"
+        ), {"h": fhash}).fetchone()
+        if existing:
+            return {"status": "skipped", "message": "File already ingested successfully", "ingestion_id": existing[0]}
 
-    if job_id is not None:
-        try:
-            with engine.begin() as conn:
-                _update_job(conn, job_id, final_status, final_success, len(errors), errors)
-                if upload_id is not None:
-                    _update_upload_status(conn, upload_id, final_status)
-        except Exception as e:
-            logger.warning(f"[Ingest] Could not update audit records: {e}")
+    # Ensure all expected headers exist in df (fill with None if missing)
+    expected = []
+    date_cols = []
+    if dataset_type == "history": 
+        expected = HISTORY_HEADERS
+        date_cols = ["move_complete_time", "time_in", "time_out"]
+    elif dataset_type == "current": 
+        expected = CURRENT_HEADERS
+        date_cols = ["move_complete_time"]
+    elif dataset_type == "crane": 
+        expected = CRANE_HEADERS
+        date_cols = ["time_completed"]
+    
+    # Pre-parse dates to avoid psycopg2 format issues
+    df = parse_dates(df, date_cols)
 
-    # ── 8. Side-effects ────────────────────────────────────────────────────
-    vessel_cache.clear()
-    if history_count > 0:
+    for col in expected:
+        if col not in df.columns:
+            df[col] = None
+
+    records = df.to_dict('records')
+    total = len(records)
+    accepted = []
+    rejected = []
+
+    for row in records:
+        error = validate_row(dataset_type, row)
+        if error:
+            rejected.append({"row": row, "reason": error})
+        else:
+            # Clean up NaN for JSON/DB
+            clean_row = {k: (None if pd.isna(v) else v) for k, v in row.items()}
+            accepted.append(clean_row)
+
+    status = "success" if not rejected else ("partial" if accepted else "failed")
+    
+    with engine.begin() as conn:
+        ingestion_id = _log_ingestion(
+            conn, file.filename, fhash, dataset_type, status, 
+            total, len(accepted), len(rejected), admin["id"]
+        )
+        
+        for rej in rejected:
+            _log_rejection(conn, ingestion_id, rej["row"], rej["reason"])
+            
+        if accepted:
+            if dataset_type == "history":
+                conn.execute(text("""
+                    INSERT INTO history_containers 
+                        (unit_id, actual_outbound_carrier_visit_id, outbound_service, 
+                         move_complete_time, time_in, time_out, ctr_from_position, 
+                         ctr_to_position, verified_gross_mass_kg, unit_weight_in_kg, 
+                         reefer, hazardous_flag, oog_unit, port_of_discharge, ingestion_id)
+                    VALUES 
+                        (:unit_id, :actual_outbound_carrier_visit_id, :outbound_service, 
+                         :move_complete_time, :time_in, :time_out, :ctr_from_position, 
+                         :ctr_to_position, :verified_gross_mass_kg, :unit_weight_in_kg, 
+                         :reefer, :hazardous_flag, :oog_unit, :port_of_discharge, :ingestion_id)
+                """), [ {**r, "ingestion_id": ingestion_id} for r in accepted ])
+                
+            elif dataset_type == "current":
+                for r in accepted:
+                    conn.execute(text("""
+                        INSERT INTO current_containers 
+                            (unit_id, actual_outbound_carrier_visit_id, outbound_service, 
+                             ctr_from_position, ctr_to_position, move_complete_time, 
+                             reefer, hazardous_flag, port_of_discharge, ingestion_id, is_active, updated_at)
+                        VALUES 
+                            (:unit_id, :actual_outbound_carrier_visit_id, :outbound_service, 
+                             :ctr_from_position, :ctr_to_position, :move_complete_time, 
+                             :reefer, :hazardous_flag, :port_of_discharge, :ingestion_id, TRUE, CURRENT_TIMESTAMP)
+                        ON CONFLICT (unit_id) DO UPDATE SET
+                            actual_outbound_carrier_visit_id = EXCLUDED.actual_outbound_carrier_visit_id,
+                            outbound_service = EXCLUDED.outbound_service,
+                            ctr_from_position = EXCLUDED.ctr_from_position,
+                            ctr_to_position = EXCLUDED.ctr_to_position,
+                            move_complete_time = EXCLUDED.move_complete_time,
+                            reefer = EXCLUDED.reefer,
+                            hazardous_flag = EXCLUDED.hazardous_flag,
+                            port_of_discharge = EXCLUDED.port_of_discharge,
+                            ingestion_id = EXCLUDED.ingestion_id,
+                            updated_at = CURRENT_TIMESTAMP
+                    """), {**r, "ingestion_id": ingestion_id})
+                    
+            elif dataset_type == "crane":
+                conn.execute(text("""
+                    INSERT INTO crane_movements 
+                        (crane_id, unit_id, carrier_visit, move_kind, 
+                         from_position, to_position, time_completed, line_op, ingestion_id)
+                    VALUES 
+                        (:crane_id, :unit_id, :carrier_visit, :move_kind, 
+                         :from_position, :to_position, :time_completed, :line_op, :ingestion_id)
+                """), [ {**r, "ingestion_id": ingestion_id} for r in accepted ])
+
+    # Side effects
+    if dataset_type == "history" and len(accepted) > 0:
         check_and_trigger_retraining(background_tasks)
 
-    log_audit(
-        "Data Ingestion",
-        f"Ingested {len(df)} rows | type={dataset_type} | job_id={job_id} | "
-        f"legacy_history={history_count} legacy_current={current_count} | "
-        f"canonical_containers={canonical_counts['containers_saved']} "
-        f"crane_moves={canonical_counts['crane_moves_saved']}",
-        admin["id"]
-    )
+    log_audit("Ingestion", f"Ingested {dataset_type} file {file.filename}: {len(accepted)} accepted, {len(rejected)} rejected", admin["id"])
 
     return {
-        "status":              "ok" if not errors else "partial",
-        "upload_id":           upload_id,
-        "job_id":              job_id,
-        "dataset_type":        dataset_type,
-        "detection_confidence": d_confidence,
-        "records_processed":   len(df),
-        # ── Backward-compatible top-level keys ──────────────────────────────
-        "history_rows_saved":  history_count,
-        "current_rows_saved":  current_count,
-        # ── Structured breakdown for new consumers ──────────────────────────
-        "legacy": {
-            "history_rows_saved": history_count,
-            "current_rows_saved": current_count,
-        },
-        "canonical": canonical_counts,
-        "errors":  errors,
-        "message": (
-            f"Successfully ingested {len(df)} records."
-            if not errors else
-            f"Ingested {len(df)} records with {len(errors)} non-critical error(s)."
-        ),
+        "status": status,
+        "dataset_type": dataset_type,
+        "accepted_count": len(accepted),
+        "rejected_count": len(rejected),
+        "ingestion_id": ingestion_id,
+        "rejections": rejected[:10]  # Return first 10 for immediate feedback
     }
 
-
-# ── Ingestion job status ────────────────────────────────────────────────────
-@router.get("/jobs")
-def list_ingestion_jobs(limit: int = 20, admin: dict = Depends(require_admin)):
-    """List recent ingestion jobs with status and record counts."""
+@router.get("/logs")
+def get_ingestion_logs(limit: int = 50, admin: dict = Depends(require_admin)):
     engine = get_engine()
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT ij.id, ij.status, ij.records_total, ij.records_success,
-                   ij.records_failed, ij.started_at, ij.completed_at,
-                   ru.filename, ru.dataset_type_detected, ru.detection_confidence
-            FROM ingestion_jobs ij
-            LEFT JOIN raw_uploads ru ON ru.id = ij.raw_upload_id
-            ORDER BY ij.created_at DESC
-            LIMIT :lim
+            SELECT id, filename, dataset_type, status, records_total, 
+                   records_accepted, records_rejected, completed_at, error_summary
+            FROM ingestion_logs
+            ORDER BY created_at DESC LIMIT :lim
         """), {"lim": limit}).fetchall()
+    return {"logs": [dict(r._mapping) for r in rows]}
 
-    return {
-        "jobs": [
-            {
-                "job_id":              r[0],
-                "status":              r[1],
-                "records_total":       r[2],
-                "records_success":     r[3],
-                "records_failed":      r[4],
-                "started_at":          r[5].isoformat() if r[5] else None,
-                "completed_at":        r[6].isoformat() if r[6] else None,
-                "filename":            r[7],
-                "dataset_type":        r[8],
-                "detection_confidence": float(r[9]) if r[9] else None,
-            }
-            for r in rows
-        ]
-    }
-
-
-# ── Raw upload history ──────────────────────────────────────────────────────
-@router.get("/uploads")
-def list_raw_uploads(limit: int = 20, admin: dict = Depends(require_admin)):
-    """List raw upload records with auditability metadata."""
+@router.get("/rejections/{ingestion_id}")
+def get_rejections(ingestion_id: int, admin: dict = Depends(require_admin)):
     engine = get_engine()
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT id, filename, file_hash, file_size_bytes,
-                   dataset_type_detected, detection_confidence,
-                   status, raw_row_count, created_at
-            FROM raw_uploads
-            ORDER BY created_at DESC
-            LIMIT :lim
-        """), {"lim": limit}).fetchall()
-    return {
-        "uploads": [
-            {
-                "id":                   r[0],
-                "filename":             r[1],
-                "file_hash":            r[2],
-                "file_size_bytes":      r[3],
-                "dataset_type":         r[4],
-                "detection_confidence": float(r[5]) if r[5] else None,
-                "status":               r[6],
-                "raw_row_count":        r[7],
-                "uploaded_at":          r[8].isoformat() if r[8] else None,
-            }
-            for r in rows
-        ]
-    }
+            SELECT row_data, reason, created_at
+            FROM rejection_logs
+            WHERE ingestion_id = :id
+        """), {"id": ingestion_id}).fetchall()
+    return {"rejections": [dict(r._mapping) for r in rows]}

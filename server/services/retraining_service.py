@@ -25,7 +25,7 @@ def get_history_count() -> int:
             return 0
         with engine.connect() as conn:
             result = conn.execute(
-                text('SELECT COUNT(*) FROM "history_containers" WHERE deleted_at IS NULL')
+                text('SELECT COUNT(*) FROM history_containers')
             )
             return result.scalar() or 0
     except Exception as e:

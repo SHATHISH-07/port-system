@@ -82,16 +82,17 @@ const CurrentVesselAnalysis = () => {
     try {
       const form = new FormData();
       form.append("vessel_id", vesselId.trim());
+      form.append("mode", "current");
       if (loaded) form.append("loaded", loaded);
       if (discharged) form.append("discharged", discharged);
 
-      const analysisPromise = api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form)
+      const analysisPromise = api.post<VesselAnalysisData>("/analytics/vessel-analysis", form)
         .then(res => {
           setData(res.data);
           setLoading(false);
         });
 
-      const heatmapPromise = api.post("/vessel/heatmap", form)
+      const heatmapPromise = api.post("/analytics/heatmap", form)
         .then(res => setHeatmapData(res.data));
 
       await Promise.allSettled([analysisPromise, heatmapPromise]);
@@ -143,11 +144,11 @@ const CurrentVesselAnalysis = () => {
           {/* ── 01 · Performance ── */}
           <Section n="01" label="Performance Metrics">
             <PerformanceStats
-              actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
-              predicted={data.predicted?.avg_hours ?? 0}
+              actual={data?.actual?.avg_hours ?? data?.predicted?.avg_hours ?? 0}
+              predicted={data?.predicted?.avg_hours ?? 0}
               mode={data.mode || "current"}
-              loaded={data.input?.loaded}
-              discharged={data.input?.discharged}
+              loaded={data.input?.loaded ?? data.top_visit_stats?.loaded}
+              discharged={data.input?.discharged ?? data.top_visit_stats?.discharged}
             />
           </Section>
 

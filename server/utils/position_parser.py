@@ -1,4 +1,64 @@
 import re
+from typing import Optional
+
+
+def _normalise(s: str) -> str:
+    """Strip, uppercase, collapse whitespace."""
+    return " ".join(s.strip().upper().split())
+
+
+def parse_position(pos, position_format: Optional[str] = None) -> Optional[dict]:
+    """
+    Parse common terminal yard position formats into a structured result.
+
+    Returns a dict with keys: FullStack, Block, Row, Bay, Bays, Tier
+    or None if the position cannot be parsed.
+    """
+    if not pos:
+        return None
+    value = str(pos).strip()
+    if not value:
+        return None
+
+    def as_result(block, row=None, bay=None, tier=None):
+        return {
+            "FullStack": "-".join(str(v) for v in [block, row, bay] if v not in (None, "")),
+            "Block":     str(block),
+            "Row":       str(row) if row is not None else "UNKNOWN",
+            "Bay":       str(bay) if bay is not None else None,
+            "Bays":      {str(bay)} if bay is not None else {str(block)},
+            "Tier":      int(tier) if tier is not None and str(tier).isdigit() else tier,
+        }
+
+    # ── Specialized terminal formats ─────────────────────────────────────────
+    cgsa = extract_stack_tier_cgsa(value)
+    if cgsa:
+        return cgsa
+
+    cwit = extract_stack_tier_cwit(value)
+    if cwit:
+        return cwit
+
+    # ── Dotted formats: BLOCK.ROW.BAY.TIER  or  BLOCK.BAY.TIER ──────────────
+    if re.fullmatch(r"[A-Za-z0-9]+[.][A-Za-z0-9]+[.]\d+[.]\d+", value):
+        block, row, bay, tier = value.split(".")
+        return as_result(block, row, bay, tier)
+
+    if re.fullmatch(r"[A-Za-z0-9]+[.]\d+[.]\d+", value):
+        block, bay, tier = value.split(".")
+        return as_result(block, None, bay, tier)
+
+    # ── Y-SITE-... compound formats ──────────────────────────────────────────
+    y_result = extract_stack_tier(value)
+    if y_result:
+        return y_result
+
+    # ── Vessel-side slot: V-{visit}-{number} → treat block as "VESSEL" ──────
+    if re.match(r"^V-", value, re.IGNORECASE):
+        return as_result("VESSEL", None, None, None)
+
+    return None
+
 
 def is_cwit_transfer_zone(pos):
     """Check if a position is a CWIT transfer zone (W=Waterside, L=Landside).

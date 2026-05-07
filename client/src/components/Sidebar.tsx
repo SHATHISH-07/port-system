@@ -32,8 +32,6 @@ const USER_ITEMS = [
 const ADMIN_ITEMS = [
   { path: "/ingest", label: "Data Ingestion" },
   { path: "/train-model", label: "Train Model" },
-  { path: "/schema-mapping", label: "Schema Mapping" },
-  { path: "/source-profiles", label: "Source Profiles" },
   { path: "/user-management", label: "User Management" },
   { path: "/system-logs", label: "System Logs" },
 ];

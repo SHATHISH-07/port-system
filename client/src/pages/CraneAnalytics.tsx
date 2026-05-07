@@ -1,35 +1,31 @@
 import { useEffect, useState } from 'react';
 import {
-  Box, Typography, Grid, Chip,
+  Box, Typography, Chip, Grid,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Skeleton, Alert, Select, MenuItem, FormControl,
   Divider,
 } from '@mui/material';
-import axios from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { api } from '../api/api';
 
 const MOVE_COLOR: Record<string, string> = {
-  LOAD:      '#4ade80',
+  LOAD: '#4ade80',
   DISCHARGE: '#60a5fa',
-  SHIFT:     '#facc15',
-  RESTOW:    '#f97316',
+  SHIFT: '#facc15',
+  RESTOW: '#f97316',
 };
 
 interface CraneMove {
   id: string;
-  canonical_crane_id: string | null;
-  canonical_unit_id: string | null;
+  crane_id: string | null;
+  unit_id: string | null;
   carrier_visit: string | null;
   move_kind: string | null;
   from_position: string | null;
   to_position: string | null;
   time_completed: string | null;
   line_op: string | null;
-  excluded: boolean;
 }
 
-/** Minimal KPI tile — matches the vessel analysis "number + label" pattern */
 function KpiTile({ n, label, value, sub }: { n: string; label: string; value: string | number; sub?: string }) {
   return (
     <Box
@@ -59,7 +55,7 @@ function KpiTile({ n, label, value, sub }: { n: string; label: string; value: st
       >
         {value}
       </Typography>
-      <Typography variant="caption" color="text.secondary" fontWeight={500}>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
         {label}
       </Typography>
       {sub && (
@@ -78,42 +74,35 @@ export default function CraneAnalytics() {
   const [filterCrane, setFilterCrane] = useState('');
   const [filterKind, setFilterKind] = useState('');
 
-  const token = localStorage.getItem('token');
-
   useEffect(() => {
-    const headers = { Authorization: `Bearer ${token}` };
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    axios
-      .get<{ moves: CraneMove[] }>(`${API_BASE}/analytics/crane-moves?limit=500`, { headers })
+    api.get<{ moves: CraneMove[] }>('/analytics/crane-performance?limit=1000')
       .then(r => setMoves(r.data.moves || []))
       .catch(() =>
         setError('No crane move data available yet. Upload a crane moves dataset to populate this dashboard.'),
       )
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []);
 
-  const cranes = [...new Set(moves.map(m => m.canonical_crane_id).filter((c): c is string => c !== null))];
-  const kinds  = [...new Set(moves.map(m => m.move_kind).filter((k): k is string => k !== null))];
+  const cranes = [...new Set(moves.map(m => m.crane_id).filter((c): c is string => c !== null))];
+  const kinds = [...new Set(moves.map(m => m.move_kind).filter((k): k is string => k !== null))];
 
   const filtered = moves.filter(m => {
-    if (filterCrane && m.canonical_crane_id !== filterCrane) return false;
-    if (filterKind  && m.move_kind !== filterKind) return false;
+    if (filterCrane && m.crane_id !== filterCrane) return false;
+    if (filterKind && m.move_kind !== filterKind) return false;
     return true;
   });
 
-  const totalMoves     = filtered.length;
-  const loadMoves      = filtered.filter(m => m.move_kind?.toUpperCase().includes('LOAD')).length;
+  const totalMoves = filtered.length;
+  const loadMoves = filtered.filter(m => m.move_kind?.toUpperCase().includes('LOAD')).length;
   const dischargeMoves = filtered.filter(m => m.move_kind?.toUpperCase().includes('DISCHARGE')).length;
-  const excludedCount  = filtered.filter(m => m.excluded).length;
 
   const craneSummary: Record<string, { total: number; load: number; discharge: number }> = {};
   filtered.forEach(m => {
-    const c = m.canonical_crane_id ?? 'Unknown';
+    const c = m.crane_id ?? 'Unknown';
     if (!craneSummary[c]) craneSummary[c] = { total: 0, load: 0, discharge: 0 };
     craneSummary[c].total++;
-    if (m.move_kind?.toUpperCase().includes('LOAD'))      craneSummary[c].load++;
+    if (m.move_kind?.toUpperCase().includes('LOAD')) craneSummary[c].load++;
     if (m.move_kind?.toUpperCase().includes('DISCHARGE')) craneSummary[c].discharge++;
   });
 
@@ -142,7 +131,7 @@ export default function CraneAnalytics() {
         <FormControl size="small" sx={{ minWidth: 200 }}>
           <Select
             value={filterCrane}
-            onChange={e => setFilterCrane(e.target.value)}
+            onChange={(e: any) => setFilterCrane(e.target.value as string)}
             displayEmpty
           >
             <MenuItem value=""><em>All Cranes</em></MenuItem>
@@ -152,7 +141,7 @@ export default function CraneAnalytics() {
         <FormControl size="small" sx={{ minWidth: 200 }}>
           <Select
             value={filterKind}
-            onChange={e => setFilterKind(e.target.value)}
+            onChange={(e: any) => setFilterKind(e.target.value as string)}
             displayEmpty
           >
             <MenuItem value=""><em>All Move Types</em></MenuItem>
@@ -162,35 +151,26 @@ export default function CraneAnalytics() {
       </Box>
 
       {/* ── KPI Tiles ── */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={6} md={3}>
-          <KpiTile n="01" label="Total Moves" value={loading ? '—' : totalMoves} />
-        </Grid>
-        <Grid item xs={6} md={3}>
-          <KpiTile
-            n="02"
-            label="Load Moves"
-            value={loading ? '—' : loadMoves}
-            sub={totalMoves ? `${((loadMoves / totalMoves) * 100).toFixed(0)}% of total` : undefined}
-          />
-        </Grid>
-        <Grid item xs={6} md={3}>
-          <KpiTile
-            n="03"
-            label="Discharge Moves"
-            value={loading ? '—' : dischargeMoves}
-            sub={totalMoves ? `${((dischargeMoves / totalMoves) * 100).toFixed(0)}% of total` : undefined}
-          />
-        </Grid>
-        <Grid item xs={6} md={3}>
-          <KpiTile
-            n="04"
-            label="Active Cranes"
-            value={loading ? '—' : cranes.length}
-            sub={`${excludedCount} excluded moves`}
-          />
-        </Grid>
-      </Grid>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, mb: 4 }}>
+        <KpiTile n="01" label="Total Moves" value={loading ? '—' : totalMoves} />
+        <KpiTile
+          n="02"
+          label="Load Moves"
+          value={loading ? '—' : loadMoves}
+          sub={totalMoves ? `${((loadMoves / totalMoves) * 100).toFixed(0)}% of total` : undefined}
+        />
+        <KpiTile
+          n="03"
+          label="Discharge Moves"
+          value={loading ? '—' : dischargeMoves}
+          sub={totalMoves ? `${((dischargeMoves / totalMoves) * 100).toFixed(0)}% of total` : undefined}
+        />
+        <KpiTile
+          n="04"
+          label="Active Cranes"
+          value={loading ? '—' : cranes.length}
+        />
+      </Box>
 
       {/* ── Section 01 · Move Type Breakdown + Per-Crane Productivity ── */}
       <Box sx={{ pt: 3 }}>
@@ -215,7 +195,7 @@ export default function CraneAnalytics() {
 
         <Grid container spacing={3}>
           {/* Move kind breakdown */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Box>
               <Typography variant="overline" sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
                 By Type
@@ -223,29 +203,29 @@ export default function CraneAnalytics() {
               {loading
                 ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} height={32} sx={{ mb: 1 }} />)
                 : Object.entries(kindDist).sort((a, b) => b[1] - a[1]).map(([kind, count]) => (
-                    <Box key={kind} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: MOVE_COLOR[kind.toUpperCase()] ?? '#94a3b8', flexShrink: 0 }} />
-                        <Typography variant="body2" fontWeight={500}>{kind}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" fontWeight={700} fontFamily="monospace">{count}</Typography>
-                        <Typography variant="caption" color="text.disabled">
-                          {totalMoves > 0 ? `${((count / totalMoves) * 100).toFixed(0)}%` : '0%'}
-                        </Typography>
-                      </Box>
+                  <Box key={kind} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: MOVE_COLOR[kind.toUpperCase()] ?? '#94a3b8', flexShrink: 0 }} />
+                      <Typography variant="body2" fontWeight={500}>{kind}</Typography>
                     </Box>
-                  ))
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" fontWeight={700} fontFamily="monospace">{count}</Typography>
+                      <Typography variant="caption" color="text.disabled">
+                        {totalMoves > 0 ? `${((count / totalMoves) * 100).toFixed(0)}%` : '0%'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))
               }
             </Box>
           </Grid>
 
-          <Grid item xs={0} md={0.1}>
+          <Grid size={{ xs: 0, md: 0.1 }}>
             <Divider orientation="vertical" flexItem sx={{ height: '100%' }} />
           </Grid>
 
           {/* Per-crane productivity */}
-          <Grid item xs={12} md={7.9}>
+          <Grid size={{ xs: 12, md: 7.9 }}>
             <Typography variant="overline" sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
               Per-Crane Productivity
             </Typography>
@@ -263,37 +243,37 @@ export default function CraneAnalytics() {
                 <TableBody>
                   {loading
                     ? Array.from({ length: 5 }).map((_, i) => (
-                        <TableRow key={i}>
-                          {Array.from({ length: 5 }).map((_, j) => (
-                            <TableCell key={j}><Skeleton /></TableCell>
-                          ))}
-                        </TableRow>
-                      ))
+                      <TableRow key={i}>
+                        {Array.from({ length: 5 }).map((_, j) => (
+                          <TableCell key={j}><Skeleton /></TableCell>
+                        ))}
+                      </TableRow>
+                    ))
                     : Object.entries(craneSummary).sort((a, b) => b[1].total - a[1].total).map(([crane, s]) => (
-                        <TableRow key={crane} hover>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight={600} fontFamily="monospace">
-                              {crane}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="body2" fontWeight={700}>{s.total}</Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="body2" color="text.secondary">{s.load}</Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="body2" color="text.secondary">{s.discharge}</Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Chip
-                              label={totalMoves > 0 ? `${((s.total / totalMoves) * 100).toFixed(1)}%` : '0%'}
-                              size="small"
-                              variant="outlined"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      <TableRow key={crane} hover>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                            {crane}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>{s.total}</Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" color="text.secondary">{s.load}</Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" color="text.secondary">{s.discharge}</Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Chip
+                            label={totalMoves > 0 ? `${((s.total / totalMoves) * 100).toFixed(1)}%` : '0%'}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
                   }
                 </TableBody>
               </Table>
@@ -339,52 +319,52 @@ export default function CraneAnalytics() {
             <TableBody>
               {loading
                 ? Array.from({ length: 8 }).map((_, i) => (
-                    <TableRow key={i}>
-                      {Array.from({ length: 7 }).map((_, j) => (
-                        <TableCell key={j}><Skeleton /></TableCell>
-                      ))}
-                    </TableRow>
-                  ))
+                  <TableRow key={i}>
+                    {Array.from({ length: 7 }).map((_, j) => (
+                      <TableCell key={j}><Skeleton /></TableCell>
+                    ))}
+                  </TableRow>
+                ))
                 : filtered.slice(0, 100).map(m => (
-                    <TableRow key={m.id} hover>
-                      <TableCell>
-                        <Typography variant="caption" color="text.secondary">
-                          {m.time_completed ? new Date(m.time_completed).toLocaleString() : '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={600} fontFamily="monospace">
-                          {m.canonical_crane_id ?? '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontFamily="monospace" fontSize={11} color="text.secondary">
-                          {m.canonical_unit_id ?? '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={m.move_kind ?? '—'}
-                          size="small"
-                          sx={{
-                            bgcolor: MOVE_COLOR[(m.move_kind ?? '').toUpperCase()] ?? 'transparent',
-                            color: '#111',
-                            fontWeight: 700,
-                            border: 'none',
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption" fontFamily="monospace">{m.from_position ?? '—'}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption" fontFamily="monospace">{m.to_position ?? '—'}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption" color="text.secondary">{m.carrier_visit ?? '—'}</Typography>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  <TableRow key={m.id} hover>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">
+                        {m.time_completed ? new Date(m.time_completed).toLocaleString() : '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: "monospace" }}>
+                        {m.crane_id ?? '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: 11 }}>
+                        {m.unit_id ?? '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={m.move_kind ?? '—'}
+                        size="small"
+                        sx={{
+                          bgcolor: MOVE_COLOR[(m.move_kind ?? '').toUpperCase()] ?? 'transparent',
+                          color: '#111',
+                          fontWeight: 700,
+                          border: 'none',
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" sx={{ fontFamily: "monospace" }}>{m.from_position ?? '—'}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" sx={{ fontFamily: "monospace" }}>{m.to_position ?? '—'}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">{m.carrier_visit ?? '—'}</Typography>
+                    </TableCell>
+                  </TableRow>
+                ))
               }
             </TableBody>
           </Table>

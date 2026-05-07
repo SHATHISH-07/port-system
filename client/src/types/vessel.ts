@@ -74,4 +74,13 @@ export interface VesselAnalysisData {
     loaded: number;
     discharged: number;
   };
+
+  top_visit_stats?: {
+    loaded: number;
+    discharged: number;
+    hazardous: number;
+    reefer: number;
+    oog: number;
+    total_units: number;
+  };
 }

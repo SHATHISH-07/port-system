@@ -20,6 +20,7 @@ import {
 import * as THREE from "three";
 
 import { api } from "../api/api";
+import { type VesselHeatmapResponse } from "../types/vessel";
 
 // ─── Scale & Coordinate System ────────────────────────────────────────────────
 const S = 0.028;
@@ -197,7 +198,7 @@ class TerminalScene {
   waterMesh!: THREE.Mesh;
   particleSystems: THREE.Points[] = [];
 
-  trucks: THREE.Group[] = [];
+  trucks: { mesh: THREE.Group, path: { x: number, z: number }[], speed: number, targetIdx: number }[] = [];
   train!: THREE.Group;
   trainWheels: THREE.Mesh[] = [];
   truckWheels: THREE.Mesh[] = [];
@@ -1628,7 +1629,7 @@ const KPI = ({ label, value, valueColor, isMono = false }: {
 export default function TerminalMap() {
   const [searchParams] = useSearchParams();
   const [vesselInput, setVesselInput] = useState(searchParams.get("vessel") || "AA7");
-  const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [data, setData] = useState<VesselHeatmapResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [hoveredBlock, setHoveredBlock] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1649,7 +1650,7 @@ export default function TerminalMap() {
 
   if (data) {
     let maxCount = -1;
-    Object.entries((data.blocks as Record<string, { count: number; concentration: string }>) || {}).forEach(([id, b]) => {
+    Object.entries(data.blocks || {}).forEach(([id, b]) => {
       totalMoves += b.count;
       if (b.count > maxCount) { maxCount = b.count; computedMaxBlock = id; maxBlockData = b; }
     });
@@ -1673,7 +1674,7 @@ export default function TerminalMap() {
     try {
       const form = new FormData();
       form.append("vessel_id", vesselInput.trim());
-      const res = await api.post("/vessel/heatmap", form);
+      const res = await api.post("/analytics/heatmap", form);
       setData(res.data);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string; error?: string } } };
@@ -1790,12 +1791,14 @@ export default function TerminalMap() {
             onChange={(e) => setVesselInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); load(); } }}
             size="small"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchRounded sx={{ fontSize: 14, color: "text.secondary" }} />
-                </InputAdornment>
-              )
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRounded sx={{ fontSize: 14, color: "text.secondary" }} />
+                  </InputAdornment>
+                )
+              }
             }}
             sx={{ width: 130 }}
           />

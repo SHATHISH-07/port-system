@@ -1,107 +1,99 @@
-import json
 import logging
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from sqlalchemy import text
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, Depends
+from datetime import datetime, timezone
 
-from models.stay_model import train_stay_model
-from models.training_status import training_status, DEFAULT_CONFIG
-from db.queries import load_from_db, save_to_history
-from services.retraining_service import background_train_and_update
-from utils.data_loader import load_from_file, validate_dataframe
+from db.connection import get_engine
 from auth.dependencies import require_admin
-from auth.utils import log_audit
+from services.retraining_service import check_and_trigger_retraining, background_train_and_update
+from db.training_metadata import get_latest_training_metadata
+from db.queries import load_from_db
+from models.training_status import training_status
 
 logger = logging.getLogger("port_system")
+router = APIRouter(prefix="/model", tags=["ML Model"])
 
-router = APIRouter(prefix="/model", tags=["Model"])
-
-
-# Training endpoint
-@router.post("/vessel-stay/training")
-async def train_vessel_stay_model(
-    background_tasks: BackgroundTasks,
-    data_source: str = Form("db"),
-    update_db: bool = Form(False),
-    file: Optional[UploadFile] = File(None),
-    config: Optional[str] = Form(None),
-    admin: dict = Depends(require_admin)
-):
+@router.get("/status")
+def get_model_status(admin: dict = Depends(require_admin)):
+    """Return the current status of the stay-time model."""
     try:
-        # Prevent concurrent training
-        if training_status.get().get("status") == "training":
-            return {"status": "error", "message": "A training process is already running."}
-
-        logger.info(f"POST /model/vessel-stay/training — source: {data_source}, update_db: {update_db}")
-
-        # Parse config
-        parsed_config = training_status.get_last_config()   # start from last known config
-        if config:
-            try:
-                overrides = json.loads(config)
-                parsed_config.update({k: v for k, v in overrides.items() if v is not None})
-            except json.JSONDecodeError:
-                return {"status": "error", "message": "Invalid config JSON."}
-
-        # Load data
-        if data_source == "db":
-            df = load_from_db("history")
-            if df.empty:
-                return {
-                    "status": "error",
-                    "message": "No history data in database. Upload data via POST /ingest/vessel-data first.",
-                }
-
-        elif data_source == "file":
-            if not file:
-                return {"status": "error", "message": "A CSV file is required when data_source is 'file'."}
-            if not file.filename.endswith(".csv"):
-                return {"status": "error", "message": "Only CSV files are accepted."}
-
-            content = await file.read()
-            try:
-                df = load_from_file(content)
-                df = validate_dataframe(df)
-            except ValueError as e:
-                return {"status": "error", "message": str(e)}
-
-            # Optionally persist to history
-            if update_db:
-                try:
-                    save_to_history(df)
-                    logger.info(f"Appended {len(df)} records to history from uploaded file.")
-                except Exception as db_err:
-                    return {"status": "error", "message": f"Failed to save to database: {db_err}"}
-
-        else:
-            return {"status": "error", "message": "Invalid data_source. Must be 'db' or 'file'."}
-
-        # Start training
-        source_label = "database" if data_source == "db" else "uploaded file"
-        training_status.set(
-            status="training",
-            message=f"Training from {source_label} started",
-            records_count=len(df),
-            data_source=data_source,
-            training_type="manual",
-            config=parsed_config,
-        )
-
-        background_tasks.add_task(background_train_and_update, df, parsed_config)
-        
-        log_audit("Model Training Started", f"Source: {data_source}, Records: {len(df)}", admin["id"])
-
+        metadata = get_latest_training_metadata()
+        if not metadata:
+            return {"status": "no_data", "message": "No training metadata found."}
         return {
-            "status": "started",
-            "message": f"Training started on {len(df):,} records from {source_label}.",
-            "config": parsed_config,
+            "status": "active",
+            "last_trained": metadata.get("training_date"),
+            "dataset_size": metadata.get("dataset_size"),
+            "training_type": metadata.get("training_type")
         }
-
     except Exception as e:
-        logger.error(f"POST /model/vessel-stay/training error: {e}")
+        logger.error(f"Error fetching model status: {e}")
         return {"status": "error", "message": str(e)}
 
-
-# Status endpoint (Open for polling, or could be protected, let's protect it)
 @router.get("/vessel-stay/training/status")
-def get_training_status(admin: dict = Depends(require_admin)):
+def get_training_progress(admin: dict = Depends(require_admin)):
+    """Return current training progress/status from memory."""
     return training_status.get()
+
+@router.post("/retrain")
+def trigger_manual_retraining(background_tasks: BackgroundTasks, admin: dict = Depends(require_admin)):
+    """Manually trigger a background retraining job."""
+    df = load_from_db("history")
+    if df.empty:
+        raise HTTPException(400, "No historical data available for training.")
+    
+    config = training_status.get_last_config()
+    training_status.set(
+        status="training",
+        message="Manual retraining started",
+        records_count=len(df),
+        data_source="db",
+        training_type="manual",
+    )
+    background_tasks.add_task(background_train_and_update, df, config)
+    return {"message": "Retraining job submitted to background."}
+
+@router.get("/versions")
+def list_model_versions(admin: dict = Depends(require_admin)):
+    """List all trained model versions."""
+    engine = get_engine()
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT id, model_name, version, artifact_path,
+                   dataset_size, metrics, status,
+                   trained_at, promoted_at, notes
+            FROM model_versions
+            ORDER BY trained_at DESC LIMIT 50
+        """)).fetchall()
+    
+    return {
+        "versions": [
+            dict(r._mapping) for r in rows
+        ]
+    }
+
+@router.post("/versions/{version_id}/promote")
+def promote_model_version(version_id: int, admin: dict = Depends(require_admin)):
+    """Promote a specific model version to 'active'."""
+    engine = get_engine()
+    now = datetime.now(timezone.utc)
+    with engine.begin() as conn:
+        row = conn.execute(text(
+            "SELECT model_name FROM model_versions WHERE id = :id"
+        ), {"id": version_id}).fetchone()
+        if not row:
+            raise HTTPException(404, "Model version not found")
+
+        conn.execute(text("""
+            UPDATE model_versions SET status = 'retired', updated_at = :now
+            WHERE model_name = :name AND status = 'active'
+        """), {"name": row[0], "now": now})
+
+        conn.execute(text("""
+            UPDATE model_versions
+            SET status = 'active', promoted_at = :now, updated_at = :now
+            WHERE id = :id
+        """), {"id": version_id, "now": now})
+
+    return {"status": "ok", "promoted_version_id": version_id}
