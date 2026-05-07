@@ -69,8 +69,14 @@ export default function DataIngestion() {
       } else {
         setToast({ open: true, message: res.data.message, severity: "warning" });
       }
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Ingestion failed. Please try again.";
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: unknown } } };
+      let msg = "Ingestion failed. Please try again.";
+      if (e?.response?.data?.detail) {
+         msg = typeof e.response.data.detail === "string" 
+           ? e.response.data.detail 
+           : JSON.stringify(e.response.data.detail);
+      }
       setToast({ open: true, message: msg, severity: "error" });
     } finally {
       setLoading(false);

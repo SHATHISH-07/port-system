@@ -3,6 +3,7 @@ import {
   InputAdornment, TextField, useTheme,
 } from "@mui/material";
 import { SearchOutlined } from "@mui/icons-material";
+import { type VesselAnalysisData } from "../../types/vessel";
 
 interface Props {
   mode?: "history" | "current";
@@ -14,7 +15,7 @@ interface Props {
   setDischarged?: (v: string) => void;
   onAnalyze: () => void;
   loading: boolean;
-  data: any;
+  data: VesselAnalysisData | null;
 }
 
 export default function AnalysisHeader({

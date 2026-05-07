@@ -39,8 +39,9 @@ const Login: React.FC = () => {
 
             login(token, userResponse.data);
             navigate(from, { replace: true });
-        } catch (err: any) {
-            setError(err.response?.data?.detail || "Invalid username or password");
+        } catch (err: unknown) {
+            const e = err as { response?: { data?: { detail?: string } } };
+            setError(e?.response?.data?.detail || "Invalid username or password");
         } finally {
             setLoading(false);
         }

@@ -1,0 +1,6 @@
+__pycache__
+
+reports
+
+*.db
+db_test.sqlite3

@@ -140,6 +140,70 @@ def train_stay_model(df, config: dict = None):
         print("[OK] Model trained and saved ->", settings.MODEL_PATH)
         logger.info("ML training completed successfully")
 
+        # ── Record model version in DB ─────────────────────────────────────
+        try:
+            from db.connection import get_engine
+            from sqlalchemy import text
+            import json as _json
+            from datetime import datetime, timezone
+
+            _engine = get_engine()
+            _now = datetime.now(timezone.utc)
+            _version_tag = _now.strftime("%Y%m%d_%H%M%S")
+
+            with _engine.begin() as _conn:
+                # Ensure default feature_config exists
+                fc_row = _conn.execute(text("""
+                    INSERT INTO feature_configs (name, description, feature_names, created_at, updated_at)
+                    VALUES ('default', 'Default VotingRegressor features', :fn::jsonb, :now, :now)
+                    ON CONFLICT (name) DO UPDATE SET updated_at = EXCLUDED.updated_at
+                    RETURNING id
+                """), {
+                    "fn":  _json.dumps(settings.FEATURE_NAMES),
+                    "now": _now,
+                }).fetchone()
+                fc_id = fc_row[0]
+
+                # Demote existing active version
+                _conn.execute(text("""
+                    UPDATE model_versions SET status = 'retired', updated_at = :now
+                    WHERE model_name = 'vessel_stay' AND status = 'active'
+                """), {"now": _now})
+
+                # Record this version as active
+                _conn.execute(text("""
+                    INSERT INTO model_versions
+                        (model_name, version, artifact_path, feature_config_id,
+                         dataset_size, metrics, status, notes,
+                         trained_at, promoted_at, created_at, updated_at)
+                    VALUES
+                        ('vessel_stay', :ver, :path, :fcid,
+                         :size, :metrics::jsonb, 'active',
+                         'Auto-trained via pipeline',
+                         :now, :now, :now, :now)
+                    ON CONFLICT (model_name, version) DO UPDATE SET
+                        status       = 'active',
+                        promoted_at  = EXCLUDED.promoted_at,
+                        updated_at   = EXCLUDED.updated_at
+                """), {
+                    "ver":     _version_tag,
+                    "path":    settings.MODEL_PATH,
+                    "fcid":    fc_id,
+                    "size":    len(X),
+                    "metrics": _json.dumps({
+                        "sample_count":  len(X),
+                        "target_mean":   round(float(y.mean()), 2),
+                        "target_min":    round(float(y.min()), 2),
+                        "target_max":    round(float(y.max()), 2),
+                        "skipped_noise": skipped_noise,
+                        "skipped_error": skipped_error,
+                    }),
+                    "now":     _now,
+                })
+                logger.info(f"[ML] Model version recorded: vessel_stay@{_version_tag}")
+        except Exception as _ve:
+            logger.warning(f"[ML] Could not record model version (non-fatal): {_ve}")
+
     except Exception as e:
         training_status.set("failed", str(e))
         logger.error(f"ML training failed: {e}")

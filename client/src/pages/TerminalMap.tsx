@@ -197,7 +197,7 @@ class TerminalScene {
   waterMesh!: THREE.Mesh;
   particleSystems: THREE.Points[] = [];
 
-  trucks: any[] = [];
+  trucks: THREE.Group[] = [];
   train!: THREE.Group;
   trainWheels: THREE.Mesh[] = [];
   truckWheels: THREE.Mesh[] = [];
@@ -1295,7 +1295,11 @@ class TerminalScene {
   }
 
   applyData(
-    data: any,
+    data: {
+      layout: Record<string, { x: number; y: number }>;
+      blocks?: Record<string, { count: number; concentration: string; intensity: number; hazardous?: number; reefer?: number; oog?: number }>;
+      recommended_berth?: string;
+    },
     computedMaxBlock: string | null,
     targetBerthId: string,
     maxBlockData?: { count: number; concentration: string }
@@ -1309,7 +1313,7 @@ class TerminalScene {
     const recRaw = data.recommended_berth || "";
     const heatGroups: { cx: number; cz: number; bw: number; bd: number; conc: string; isMax: boolean }[] = [];
 
-    Object.entries(data.layout).forEach(([id, pos]: [string, any]) => {
+    Object.entries(data.layout).forEach(([id, pos]: [string, { x: number; y: number }]) => {
       const px = Math.max(0, pos.x);
       const py = Math.max(0, pos.y);
 
@@ -1601,8 +1605,6 @@ class TerminalScene {
   destroy() { cancelAnimationFrame(this.animId); this.renderer.dispose(); }
 }
 
-const StyledTextField = TextField as any;
-
 const KPI = ({ label, value, valueColor, isMono = false }: {
   label: string; value: string | number; valueColor?: string; isMono?: boolean;
 }) => {
@@ -1626,7 +1628,7 @@ const KPI = ({ label, value, valueColor, isMono = false }: {
 export default function TerminalMap() {
   const [searchParams] = useSearchParams();
   const [vesselInput, setVesselInput] = useState(searchParams.get("vessel") || "AA7");
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [hoveredBlock, setHoveredBlock] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1647,7 +1649,7 @@ export default function TerminalMap() {
 
   if (data) {
     let maxCount = -1;
-    Object.entries(data.blocks || {}).forEach(([id, b]: [string, any]) => {
+    Object.entries((data.blocks as Record<string, { count: number; concentration: string }>) || {}).forEach(([id, b]) => {
       totalMoves += b.count;
       if (b.count > maxCount) { maxCount = b.count; computedMaxBlock = id; maxBlockData = b; }
     });
@@ -1673,11 +1675,12 @@ export default function TerminalMap() {
       form.append("vessel_id", vesselInput.trim());
       const res = await api.post("/vessel/heatmap", form);
       setData(res.data);
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail || "";
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string; error?: string } } };
+      const detail = e?.response?.data?.detail || "";
       alert(detail.includes("No dataset")
         ? "No current data found. Upload via POST /upload/current."
-        : err?.response?.data?.error || "Error loading heatmap.");
+        : e?.response?.data?.error || "Error loading heatmap.");
     } finally { setLoading(false); }
   };
 
@@ -1729,7 +1732,7 @@ export default function TerminalMap() {
       if (ro) ro.disconnect();
       if (ts) ts.destroy();
     };
-  }, []); // Initialization run once
+  }, [mode]); // Initialization run once
 
   // Update scene theme dynamically when global UI mode changes
   useEffect(() => {
@@ -1782,10 +1785,10 @@ export default function TerminalMap() {
 
         {/* Search row */}
         <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexShrink: 0 }}>
-          <StyledTextField
+          <TextField
             variant="outlined" placeholder="Vessel ID" value={vesselInput}
-            onChange={(e: any) => setVesselInput(e.target.value)}
-            onKeyDown={(e: any) => { if (e.key === "Enter") { e.preventDefault(); load(); } }}
+            onChange={(e) => setVesselInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); load(); } }}
             size="small"
             InputProps={{
               startAdornment: (

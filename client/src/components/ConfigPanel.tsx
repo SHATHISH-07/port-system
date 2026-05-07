@@ -34,6 +34,7 @@ export default function ConfigPanel() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   const handleSave = async () => {

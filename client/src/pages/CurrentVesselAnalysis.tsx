@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Box, Typography, Snackbar, Alert } from "@mui/material";
 import { api } from "../api/api";
-import { type VesselAnalysisData } from "../types/vessel";
+import { type VesselAnalysisData, type VesselHeatmapResponse } from "../types/vessel";
 
 import AnalysisHeader from "../components/vessel-analysis/AnalysisHeader";
 import PerformanceStats from "../components/vessel-analysis/PerformanceStats";
@@ -37,9 +37,9 @@ function Section({
       >
         <Typography
           sx={{
-            fontSize: "2.25rem",
+            fontSize: "1.5rem",
             fontWeight: 800,
-            color: "text.disabled",
+            color: "text.secondary",
             lineHeight: 1,
             letterSpacing: "-2px",
             fontFamily: "monospace",
@@ -49,7 +49,7 @@ function Section({
         >
           {n}
         </Typography>
-        <Typography variant="overline" sx={{ color: "text.secondary" }}>
+        <Typography variant="h6" sx={{ color: "text.secondary" }}>
           {label}
         </Typography>
       </Box>
@@ -64,7 +64,7 @@ const CurrentVesselAnalysis = () => {
   const [loaded, setLoaded] = useState("");
   const [discharged, setDischarged] = useState("");
   const [data, setData] = useState<VesselAnalysisData | null>(null);
-  const [heatmapData, setHeatmapData] = useState<any>(null);
+  const [heatmapData, setHeatmapData] = useState<VesselHeatmapResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ open: boolean, message: string, severity: "success" | "error" | "info" | "warning" }>({ open: false, message: "", severity: "info" });
 
@@ -95,12 +95,27 @@ const CurrentVesselAnalysis = () => {
         .then(res => setHeatmapData(res.data));
 
       await Promise.allSettled([analysisPromise, heatmapPromise]);
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail || "";
-      if (detail.includes("No dataset")) {
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: unknown; error?: unknown } } };
+      let detailMsg = "";
+      if (e?.response?.data?.detail) {
+        detailMsg = typeof e.response.data.detail === "string" 
+          ? e.response.data.detail 
+          : JSON.stringify(e.response.data.detail);
+      }
+      
+      if (detailMsg.includes("No dataset")) {
         showToast("No current data found. Use Data Ingestion (/ingest) to upload records.");
       } else {
-        showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
+        let errorMsg = "Error fetching data. Check the vessel ID.";
+        if (e?.response?.data?.error) {
+           errorMsg = typeof e.response.data.error === "string" 
+            ? e.response.data.error 
+            : JSON.stringify(e.response.data.error);
+        } else if (detailMsg) {
+           errorMsg = detailMsg;
+        }
+        showToast(errorMsg);
       }
     } finally {
       // loading is managed inside the analysis promise

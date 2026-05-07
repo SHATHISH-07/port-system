@@ -7,11 +7,12 @@ import {
   MenuRounded,
   AssignmentOutlined,
   LogoutOutlined,
-  SettingsOutlined,
   ExpandLess,
   ExpandMore,
   DarkModeOutlined,
-  LightModeOutlined
+  LightModeOutlined,
+  PrecisionManufacturingOutlined,
+  SettingsOutlined,
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -23,6 +24,7 @@ const CLOSED = 80;
 const USER_ITEMS = [
   { path: "/history-analysis", label: "History Analysis", icon: HistoryOutlined },
   { path: "/current-analysis", label: "Current Analysis", icon: AnalyticsOutlined },
+  { path: "/crane-analytics", label: "Crane Analytics", icon: PrecisionManufacturingOutlined },
   { path: "/heatmap", label: "Terminal Heatmap", icon: GridViewOutlined },
   { path: "/requests", label: "Requests", icon: AssignmentOutlined },
 ];
@@ -30,6 +32,8 @@ const USER_ITEMS = [
 const ADMIN_ITEMS = [
   { path: "/ingest", label: "Data Ingestion" },
   { path: "/train-model", label: "Train Model" },
+  { path: "/schema-mapping", label: "Schema Mapping" },
+  { path: "/source-profiles", label: "Source Profiles" },
   { path: "/user-management", label: "User Management" },
   { path: "/system-logs", label: "System Logs" },
 ];
@@ -53,7 +57,7 @@ export default function Sidebar() {
   const menuIconActive = isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)";
   const menuIconHoverActive = isDark ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.12)";
 
-  const renderNavItems = (items: any[], isSubItem = false) => {
+  const renderNavItems = (items: { path: string; label: string; icon?: React.ElementType; userOnly?: boolean }[], isSubItem = false) => {
     return items.map(({ path, label, icon: Icon }) => {
       const active = loc.pathname === path;
       return (
@@ -196,7 +200,7 @@ export default function Sidebar() {
 
       {/* ─── Navigation Items ─── */}
       <Box sx={{ flex: 1, py: 1, overflowY: "auto", overflowX: "hidden" }}>
-        {renderNavItems(USER_ITEMS)}
+        {renderNavItems(USER_ITEMS.filter((item) => !(user?.role === "admin" && item.userOnly)))}
 
         {user?.role === "admin" && (
           <>

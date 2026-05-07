@@ -4,16 +4,9 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useState } from "react";
+import { type BerthAnalysisEntry } from "../../types/vessel";
 
-interface Row {
-  berth: string;
-  block: string;
-  cargo_concentration: string;
-  total_travel_distance: string;
-  congestion_risk: "Low" | "Medium" | "High";
-}
-
-interface Props { data: Row[]; }
+interface Props { data: BerthAnalysisEntry[]; }
 
 const LIMIT = 5;
 
@@ -72,7 +65,7 @@ export default function BerthImpactTable({ data }: Props) {
           <TableBody>
             {rows.map((row, i) => {
               const concColor = levelColor(row.cargo_concentration);
-              const riskColor = levelColor(row.congestion_risk);
+              const riskColor = levelColor(row.congestion_risk || "Low");
               const isTop = i === 0;
 
               return (

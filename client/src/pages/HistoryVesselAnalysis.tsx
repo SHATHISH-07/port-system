@@ -36,9 +36,9 @@ function Section({
       >
         <Typography
           sx={{
-            fontSize: "2.25rem",
+            fontSize: "1.5rem",
             fontWeight: 800,
-            color: "text.disabled",
+            color: "text.secondary",
             lineHeight: 1,
             letterSpacing: "-2px",
             fontFamily: "monospace",
@@ -48,7 +48,7 @@ function Section({
         >
           {n}
         </Typography>
-        <Typography variant="overline" sx={{ color: "text.secondary" }}>
+        <Typography variant="h6" sx={{ color: "text.secondary" }}>
           {label}
         </Typography>
       </Box>
@@ -61,13 +61,13 @@ const HistoryVesselAnalysis = () => {
   const [vesselId, setVesselId] = useState("");
   const [data, setData] = useState<VesselAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{open: boolean, message: string, severity: "success" | "error" | "info" | "warning"}>({open: false, message: "", severity: "info"});
+  const [toast, setToast] = useState<{ open: boolean, message: string, severity: "success" | "error" | "info" | "warning" }>({ open: false, message: "", severity: "info" });
 
   const showToast = (message: string, severity: "success" | "error" | "info" | "warning" = "error") => {
-    setToast({open: true, message, severity});
+    setToast({ open: true, message, severity });
   };
 
-  const handleCloseToast = () => setToast(prev => ({...prev, open: false}));
+  const handleCloseToast = () => setToast(prev => ({ ...prev, open: false }));
 
   const fetchData = async () => {
     if (!vesselId.trim()) return;
@@ -77,12 +77,27 @@ const HistoryVesselAnalysis = () => {
       form.append("vessel_id", vesselId.trim());
       const res = await api.post<VesselAnalysisData>("/vessel/vessel-history-analysis", form);
       setData(res.data);
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail || "";
-      if (detail.includes("No dataset")) {
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: unknown; error?: unknown } } };
+      let detailMsg = "";
+      if (e?.response?.data?.detail) {
+        detailMsg = typeof e.response.data.detail === "string" 
+          ? e.response.data.detail 
+          : JSON.stringify(e.response.data.detail);
+      }
+      
+      if (detailMsg.includes("No dataset")) {
         showToast("No historical data found. Use Data Ingestion (/ingest) to upload records.");
       } else {
-        showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
+        let errorMsg = "Error fetching data. Check the vessel ID.";
+        if (e?.response?.data?.error) {
+           errorMsg = typeof e.response.data.error === "string" 
+            ? e.response.data.error 
+            : JSON.stringify(e.response.data.error);
+        } else if (detailMsg) {
+           errorMsg = detailMsg;
+        }
+        showToast(errorMsg);
       }
     } finally {
       setLoading(false);

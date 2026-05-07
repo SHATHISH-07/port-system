@@ -17,6 +17,9 @@ const Login                 = lazy(() => import("./pages/Login"));
 const Requests              = lazy(() => import("./pages/Requests"));
 const UserManagement        = lazy(() => import("./pages/UserManagement"));
 const SystemLogs            = lazy(() => import("./pages/SystemLogs"));
+const SchemaMapping         = lazy(() => import("./pages/SchemaMapping"));
+const SourceProfiles        = lazy(() => import("./pages/SourceProfiles"));
+const CraneAnalytics        = lazy(() => import("./pages/CraneAnalytics"));
 
 function PageLoader() {
   return (
@@ -50,10 +53,13 @@ export default function App() {
                   <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
                   
                   {/* Admin Routes */}
-                  <Route path="/train-model" element={<AdminRoute><TrainModel /></AdminRoute>} />
-                  <Route path="/ingest" element={<AdminRoute><DataIngestion /></AdminRoute>} />
-                  <Route path="/user-management" element={<AdminRoute><UserManagement /></AdminRoute>} />
-                  <Route path="/system-logs" element={<AdminRoute><SystemLogs /></AdminRoute>} />
+                  <Route path="/train-model"     element={<AdminRoute><TrainModel /></AdminRoute>} />
+                  <Route path="/ingest"           element={<AdminRoute><DataIngestion /></AdminRoute>} />
+                  <Route path="/user-management"  element={<AdminRoute><UserManagement /></AdminRoute>} />
+                  <Route path="/system-logs"      element={<AdminRoute><SystemLogs /></AdminRoute>} />
+                  <Route path="/schema-mapping"   element={<AdminRoute><SchemaMapping /></AdminRoute>} />
+                  <Route path="/source-profiles"  element={<AdminRoute><SourceProfiles /></AdminRoute>} />
+                  <Route path="/crane-analytics"  element={<AdminRoute><CraneAnalytics /></AdminRoute>} />
                 </Routes>
               </Suspense>
             </Layout>

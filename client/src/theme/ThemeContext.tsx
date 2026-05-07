@@ -12,11 +12,13 @@ interface ColorModeContextType {
   toggleColorMode: () => void;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const ColorModeContext = createContext<ColorModeContextType>({
   mode: "dark",
   toggleColorMode: () => {},
 });
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useColorMode = () => useContext(ColorModeContext);
 
 // ─── Theme Builder ────────────────────────────────────────────────────────────

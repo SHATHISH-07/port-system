@@ -9,11 +9,15 @@ from routes.config_routes import router as config_router
 from routes.auth_routes import router as auth_router
 from routes.user_routes import router as user_router
 from routes.request_routes import router as request_router
+from routes.mapping_routes import router as mapping_router
+from routes.source_profile_routes import router as source_profile_router
+from routes.model_version_routes import router as model_version_router
+from routes.analytics_routes import router as analytics_router
 
 from contextlib import asynccontextmanager
 from services.retraining_service import scheduled_retraining_job
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from db.schema import init_training_metadata_schema, init_auth_schema
+from db.schema import init_training_metadata_schema, init_auth_schema, init_canonical_schema
 from db.connection import get_engine
 from config import settings
 from auth.utils import get_password_hash
@@ -25,10 +29,11 @@ scheduler = AsyncIOScheduler()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = get_engine()
-    # Startup: Ensure DB schema (training_metadata and auth tables)
+    # Startup: Ensure DB schema (training_metadata, auth, and canonical tables)
     try:
         init_training_metadata_schema(engine)
         init_auth_schema(engine)
+        init_canonical_schema(engine)
         
         # Seed default admin if it doesn't exist
         with engine.begin() as conn:
@@ -111,3 +116,7 @@ app.include_router(vessel_router)
 app.include_router(model_router)
 app.include_router(ingest_router)
 app.include_router(config_router)
+app.include_router(mapping_router)
+app.include_router(source_profile_router)
+app.include_router(model_version_router)
+app.include_router(analytics_router)

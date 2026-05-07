@@ -82,7 +82,28 @@ def background_train_and_update(df, config: dict = None):
             pass
 
 
-# Upload-triggered threshold check
+# Celery-based retraining trigger (with APScheduler fallback)
+def trigger_retraining_celery(config_overrides: dict = None) -> dict:
+    """
+    Send retraining job to Celery queue.
+    Falls back silently if Redis / Celery is not available.
+    Returns task info dict.
+    """
+    import os
+    use_celery = os.getenv("USE_CELERY", "false").lower() == "true"
+    if not use_celery:
+        return {"status": "skipped", "reason": "celery_disabled"}
+    try:
+        from worker.tasks import retrain_model_task
+        task = retrain_model_task.delay(config_overrides or {})
+        logger.info(f"[Celery] Retraining task queued: task_id={task.id}")
+        return {"status": "queued", "task_id": task.id}
+    except Exception as e:
+        logger.warning(f"[Celery] Could not queue retraining task (Redis may be down): {e}")
+        return {"status": "celery_unavailable", "error": str(e)}
+
+
+# Upload-triggered threshold check (auto-selects Celery or background task)
 def check_and_trigger_retraining(background_tasks: BackgroundTasks):
     current_count = get_history_count()
     if current_count == 0:
@@ -95,6 +116,13 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
 
     if difference >= threshold or last_size == 0:
         logger.info(f"Retraining triggered: {difference} new records (threshold: {threshold})")
+
+        # Try Celery first
+        celery_result = trigger_retraining_celery()
+        if celery_result.get("status") == "queued":
+            return  # Celery is handling it
+
+        # Fallback: FastAPI background task
         try:
             df = load_from_db("history")
             if not df.empty:
