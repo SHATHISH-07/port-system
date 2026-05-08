@@ -1,96 +1,381 @@
+"""
+utils/position_parser.py
+------------------------
+Parses container position strings into structured dicts.
+
+Supported formats
+-----------------
+Vessel:
+    V-CQN180001-497542
+
+Yard:
+    Y-PEB-G23454C1
+    Y-PEB-G10031C5
+    Y-PEB-RE22369C1
+    Y-CWIT-1A003C.5
+    D08.033.1
+    B08.08.090.3
+    05.088.5
+    A05.05.046.3
+
+All public helpers are NaN-safe.  This prevents pandas NaN values from
+breaking fallback logic or shadowing valid columns.
+"""
+from __future__ import annotations
+
 import re
-from typing import Optional
+from typing import Any
 
-def _normalise(s: str) -> str:
-    """Strip, uppercase, collapse whitespace."""
-    return " ".join(s.strip().upper().split())
+import pandas as pd
 
-def parse_position(pos: str) -> Optional[dict]:
-    """
-    Robustly parse terminal position strings (Yard and Vessel).
-    Returns a dict with: type, is_vessel, is_yard, block, row, bay, tier.
-    Returns None if the position is malformed or unidentifiable.
-    """
-    if not pos:
+
+_BLOCK_RE = re.compile(r"^([A-Z]?\d{2,3})", re.IGNORECASE)
+
+
+# ---------------------------------------------------------------------------
+# NaN-safe helpers
+# ---------------------------------------------------------------------------
+
+def _safe_str(value) -> str | None:
+    """Return a clean string or None for null-like values (including NaN)."""
+    if value is None:
         return None
-    
-    value = str(pos).strip().upper()
-    if not value:
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+
+    s = str(value).strip()
+    if s.lower() in ("", "nan", "none", "null", "nat"):
+        return None
+    return s
+
+
+def _row_get(row: Any, key: str):
+    """Read a value from dict-like or Series-like rows safely."""
+    if row is None:
+        return None
+    if hasattr(row, "get"):
+        try:
+            return row.get(key)
+        except Exception:
+            pass
+    try:
+        return row[key]
+    except Exception:
         return None
 
-    # Helper to return structured result
-    def res(p_type, block, row=None, bay=None, tier=None):
+
+# ---------------------------------------------------------------------------
+# Core parser
+# ---------------------------------------------------------------------------
+
+def parse_position(raw) -> dict | None:
+    """Parse any position string into a normalised dict.
+
+    Returns None for empty or unrecognised values.
+
+    Keys returned
+    -------------
+    raw       : original string
+    is_vessel : bool
+    is_yard   : bool
+    terminal  : str  ("VESSEL" | "PEB" | "CWIT" | "YARD" | terminal name)
+    block     : str
+    row       : str
+    bay       : str
+    tier      : str
+    """
+    s = _safe_str(raw)
+    if s is None:
+        return None
+
+    su = s.upper()
+
+    # --- Vessel: V-<visit>-<slot> ------------------------------------------
+    if su.startswith("V-"):
+        parts = s.split("-")
+        slot = parts[-1] if len(parts) >= 3 else "0"
         return {
-            "type": p_type,
-            "is_vessel": p_type == "VESSEL",
-            "is_yard": p_type == "YARD",
-            "block": str(block) if block else "UNKNOWN",
-            "row": str(row) if row else "0",
-            "bay": str(bay) if bay else "0",
-            "tier": str(tier) if tier else "1"
+            "raw": s,
+            "is_vessel": True,
+            "is_yard": False,
+            "terminal": "VESSEL",
+            "block": "VESSEL",
+            "row": "0",
+            "bay": "0",
+            "tier": slot,
         }
 
-    # 1. Vessel Positions (V-VisitID-Slot or V-Slot)
-    # Match V- followed by something
-    if value.startswith("V-"):
-        # Try to extract slot if it's V-VISIT-SLOT
-        parts = value.split("-")
-        if len(parts) >= 3:
-            return res("VESSEL", "VESSEL", None, None, parts[-1])
-        return res("VESSEL", "VESSEL", None, None, None)
+    # --- Y-PEB-... ---------------------------------------------------------
+    if su.startswith("Y-PEB-"):
+        suffix = s[6:]
 
-    # 2. Yard Positions (Y-...)
-    if value.startswith("Y-"):
-        # Pattern A: Y-SITE-BLOCK-BAYROWTIER (e.g. Y-PEB-3A32285C1)
-        # We look for a pattern like G1-32-28-5
-        # Actually the samples show: Y-PEB-3A32285C1
-        # Let's try to extract block from the 3rd part
-        parts = value.split("-")
-        if len(parts) >= 3:
-            site_block = parts[2]
-            # Try to split site_block into block and the rest
-            # Usually Block is 2 chars like 3A
-            if len(site_block) >= 2:
-                block = site_block[:2]
-                remainder = site_block[2:]
-                # Further parsing of remainder if needed
-                return res("YARD", block, None, None, None)
-        
-        # Pattern B: Y-CGSA-3A 29 A 2
-        if "CGSA" in value:
-            match = re.search(r'Y-CGSA-([A-Z0-9]+)\s+(\d+)\s+([A-Z]+)\s+(\d+)', value)
-            if match:
-                return res("YARD", match.group(1), match.group(3), match.group(2), match.group(4))
+        # Example: G23454C1
+        # block=G, bay=234, row=54, tier=1
+        m = re.match(r"^([A-Z])(\d{3})(\d{2})([A-Z])(\d+)$", suffix, re.IGNORECASE)
+        if m:
+            block, bay, row, _sep, tier = m.groups()
+            return {
+                "raw": s,
+                "is_vessel": False,
+                "is_yard": True,
+                "terminal": "PEB",
+                "block": block.upper(),
+                "row": row,
+                "bay": bay,
+                "tier": tier,
+            }
 
-        # Pattern C: Y-CWIT-1A003C.5
-        if "CWIT" in value:
-            match = re.search(r'Y-CWIT-(\d+[A-Z])(\d{3})([A-Z])\.(\d+)', value)
-            if match:
-                return res("YARD", match.group(1), match.group(3), match.group(2), match.group(4))
+        # Example: 3A03859C1
+        # block=3A, bay=038, row=59, tier=1
+        m = re.match(r"^([0-9]?[A-Z]{1,2})(\d{3})(\d{2})([A-Z])(\d+)$", suffix, re.IGNORECASE)
+        if m:
+            block, bay, row, _sep, tier = m.groups()
+            return {
+                "raw": s,
+                "is_vessel": False,
+                "is_yard": True,
+                "terminal": "PEB",
+                "block": block.upper(),
+                "row": row,
+                "bay": bay,
+                "tier": tier,
+            }
 
-        # Generic YARD fallback
-        return res("YARD", "YARD", None, None, None)
+        # Example: RE22369C1
+        # block=RE, bay=223, row=69, tier=1
+        m = re.match(r"^([A-Z]{1,2})(\d{3})(\d{2})([A-Z])(\d+)$", suffix, re.IGNORECASE)
+        if m:
+            block, bay, row, _sep, tier = m.groups()
+            return {
+                "raw": s,
+                "is_vessel": False,
+                "is_yard": True,
+                "terminal": "PEB",
+                "block": block.upper(),
+                "row": row,
+                "bay": bay,
+                "tier": tier,
+            }
 
-    # 3. Dotted / Numeric Formats (e.g. 02.097.2)
-    # Pattern: BLOCK.BAY.TIER or BLOCK.ROW.BAY.TIER
-    if "." in value:
-        dots = value.split(".")
-        if len(dots) == 3:
-            return res("YARD", dots[0], None, dots[1], dots[2])
-        if len(dots) == 4:
-            return res("YARD", dots[0], dots[1], dots[2], dots[3])
+        # Fallback
+        return {
+            "raw": s,
+            "is_vessel": False,
+            "is_yard": True,
+            "terminal": "PEB",
+            "block": suffix[:4] if len(suffix) >= 4 else suffix,
+            "row": "0",
+            "bay": "0",
+            "tier": "1",
+        }
+
+    # --- Y-CWIT-... --------------------------------------------------------
+    if su.startswith("Y-CWIT-"):
+        suffix = s[7:]
+        # Example: 1A003C.5
+        m = re.match(r"^(\d+)([A-Z])(\d{3})([A-Z])\.(\d+)$", suffix, re.IGNORECASE)
+        if m:
+            section, block, bay, row, tier = m.groups()
+            return {
+                "raw": s,
+                "is_vessel": False,
+                "is_yard": True,
+                "terminal": "CWIT",
+                "block": f"{section}{block.upper()}",
+                "row": row.upper(),
+                "bay": bay,
+                "tier": tier,
+            }
+
+        # Example: 1AW026 / 1AL003 style transfer zone
+        m = re.match(r"^(\d+)([A-Z])[WL](\d{3})$", suffix, re.IGNORECASE)
+        if m:
+            section, block, bay = m.groups()
+            return {
+                "raw": s,
+                "is_vessel": False,
+                "is_yard": True,
+                "terminal": "CWIT",
+                "block": f"{section}{block.upper()}",
+                "row": "0",
+                "bay": bay,
+                "tier": "1",
+            }
+
+        return {
+            "raw": s,
+            "is_vessel": False,
+            "is_yard": True,
+            "terminal": "CWIT",
+            "block": suffix[:4] if len(suffix) >= 4 else suffix,
+            "row": "0",
+            "bay": "0",
+            "tier": "1",
+        }
+
+    # --- Generic Y-<TERMINAL>-<...> ---------------------------------------
+    if su.startswith("Y-"):
+        parts = s.split("-")
+        terminal = parts[1].upper() if len(parts) >= 2 else "YARD"
+        token = parts[2] if len(parts) >= 3 else ""
+
+        m = re.match(r"^([A-Z0-9]+?)(\d{2,4})([A-Z]|\d{2})\.?(\d+)$", token, re.IGNORECASE)
+        if m:
+            block, bay, row, tier = m.groups()
+            return {
+                "raw": s,
+                "is_vessel": False,
+                "is_yard": True,
+                "terminal": terminal,
+                "block": block.upper(),
+                "bay": bay,
+                "row": row.upper() if isinstance(row, str) else str(row),
+                "tier": tier,
+            }
+
+        return {
+            "raw": s,
+            "is_vessel": False,
+            "is_yard": True,
+            "terminal": terminal,
+            "block": token[:6] if token else terminal,
+            "row": "0",
+            "bay": "0",
+            "tier": "1",
+        }
+
+    # --- Bare dot-separated yard positions ---------------------------------
+    if "." in s:
+        parts = s.split(".")
+        m = _BLOCK_RE.match(parts[0])
+        block = m.group(1).upper() if m else parts[0].upper()
+
+        if len(parts) == 3:  # block.bay.tier
+            _, bay, tier = parts
+            return {
+                "raw": s,
+                "is_vessel": False,
+                "is_yard": True,
+                "terminal": "YARD",
+                "block": block,
+                "row": "0",
+                "bay": bay,
+                "tier": tier,
+            }
+
+        if len(parts) == 4:  # block.row.bay.tier
+            _, row, bay, tier = parts
+            return {
+                "raw": s,
+                "is_vessel": False,
+                "is_yard": True,
+                "terminal": "YARD",
+                "block": block,
+                "row": row,
+                "bay": bay,
+                "tier": tier,
+            }
+
+        return {
+            "raw": s,
+            "is_vessel": False,
+            "is_yard": True,
+            "terminal": "YARD",
+            "block": block,
+            "row": "0",
+            "bay": parts[1] if len(parts) > 1 else "0",
+            "tier": parts[-1],
+        }
+
+    # --- Bare alphanumeric fallback ---------------------------------------
+    if re.match(r"^[A-Z0-9]{2,}$", s, re.IGNORECASE):
+        return {
+            "raw": s,
+            "is_vessel": False,
+            "is_yard": True,
+            "terminal": "YARD",
+            "block": s.upper(),
+            "row": "0",
+            "bay": "0",
+            "tier": "1",
+        }
 
     return None
 
-def extract_block(pos: str) -> Optional[str]:
-    """Helper for legacy code that just wants the block name."""
-    p = parse_position(pos)
-    return p["block"] if p else None
 
-def is_vessel_pos(pos: str) -> bool:
-    p = parse_position(pos)
-    return p["is_vessel"] if p else False
+# ---------------------------------------------------------------------------
+# Convenience helpers
+# ---------------------------------------------------------------------------
 
-def is_yard_pos(pos: str) -> bool:
+def is_vessel_pos(pos) -> bool:
     p = parse_position(pos)
-    return p["is_yard"] if p else False
+    return bool(p and p["is_vessel"])
+
+
+def is_yard_pos(pos) -> bool:
+    p = parse_position(pos)
+    return bool(p and p["is_yard"])
+
+
+def classify_move(from_pos, to_pos) -> str:
+    """Classify a move.
+
+    LOAD      : Yard  -> Vessel
+    DISCHARGE : Vessel -> Yard
+    SHIFT     : Yard  -> Yard  |  Vessel -> Vessel
+    UNKNOWN   : missing / unrecognised positions
+    """
+    f_p = parse_position(from_pos)
+    t_p = parse_position(to_pos)
+
+    f_y = bool(f_p and f_p["is_yard"])
+    f_v = bool(f_p and f_p["is_vessel"])
+    t_y = bool(t_p and t_p["is_yard"])
+    t_v = bool(t_p and t_p["is_vessel"])
+
+    if f_y and t_v:
+        return "LOAD"
+    if f_v and t_y:
+        return "DISCHARGE"
+    if (f_y and t_y) or (f_v and t_v):
+        return "SHIFT"
+    return "UNKNOWN"
+
+
+def safe_get_pos(row: dict, *keys) -> str | None:
+    """Return the first non-null value from a row using case-insensitive keys.
+
+    This is safe for pandas NaN and handles title-case / snake_case columns.
+    """
+    if row is None:
+        return None
+
+    for key in keys:
+        candidates = [
+            key,
+            key.lower(),
+            key.upper(),
+            key.title(),
+            key.replace(" ", "_"),
+            key.replace("_", " "),
+        ]
+
+        for cand in dict.fromkeys(candidates):
+            value = _row_get(row, cand)
+            s = _safe_str(value)
+            if s is not None:
+                return s
+
+    return None
+
+
+def block_label(parsed: dict | None) -> str | None:
+    """Return a display-ready block label like 'D08' or 'PEB-3A'."""
+    if not parsed or not parsed.get("is_yard"):
+        return None
+    terminal = parsed.get("terminal") or "YARD"
+    block = parsed.get("block") or "UNKNOWN"
+    return block if terminal in ("YARD", "UNKNOWN") else f"{terminal}-{block}"

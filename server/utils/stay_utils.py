@@ -1,58 +1,80 @@
+"""
+utils/stay_utils.py
+-------------------
+Vessel stay-time computation utilities.
+"""
+from __future__ import annotations
+
 import pandas as pd
-from utils.datetime_utils import parse_datetime
+
 from config import settings
+from utils.datetime_utils import parse_datetime
+
 
 def _safe_parse(df: pd.DataFrame, col: str) -> pd.Series:
-    """Parse a datetime column if it exists, else return a null Series."""
     if col in df.columns:
         return parse_datetime(df[col], col)
-    return pd.Series([pd.NaT] * len(df), index=df.index)
+    return pd.Series([pd.NaT] * len(df), index=df.index, dtype="datetime64[ns]")
+
 
 def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Prepare a container visit DataFrame for stay-time analysis.
-    Works with both history (has time_in / time_out) and current data.
-    Crane timestamps are pre-merged into move_complete_time before this call.
+    """Prepare a single-visit DataFrame for stay-time analysis.
+
+    Supported data sources:
+      • history:         move_complete_time / time_in / time_out
+      • current:         move_complete_time / time_in / updated_at / created_at
+      • crane-enriched:  any of the above + crane_time (added by vessel_service)
+
+    Event-time priority:
+        move_complete_time → crane_time → time_in → time_completed → updated_at → created_at
     """
     df = df.copy()
+    if df.empty:
+        return df
+
     df.columns = df.columns.str.strip()
 
-    # Build event_time: move_complete_time → time_in → fallback
-    move_time = _safe_parse(df, "move_complete_time")
-    time_in   = _safe_parse(df, "time_in")
-    df["event_time"] = move_time.fillna(time_in)
+    event_sources = [
+        "move_complete_time",
+        "crane_time",
+        "time_in",
+        "time_completed",
+        "updated_at",
+        "created_at",
+    ]
 
-    # CRITICAL FIX for 'Current' dataset static snapshot operations: 
-    # Current dataset usually lacks completion dates. Supply current timestamp so data isn't dropped.
-    df["event_time"] = df["event_time"].fillna(pd.Timestamp.utcnow())
+    event_time = pd.Series([pd.NaT] * len(df), index=df.index, dtype="datetime64[ns]")
+    for col in event_sources:
+        parsed = _safe_parse(df, col)
+        event_time = event_time.fillna(parsed)
 
-    # Vessel departure = time_out (if present)
-    time_out = _safe_parse(df, "time_out")
-    df["vessel_departure"] = time_out
-
-    # Apply time window if vessel_departure is available
-    valid_out = df["vessel_departure"].dropna()
-    if not valid_out.empty:
-        vessel_dep   = valid_out.mode().iloc[0]
-        window_start = vessel_dep - pd.Timedelta(hours=settings.VESSEL_WINDOW_HOURS)
-        window_end   = vessel_dep + pd.Timedelta(hours=1)
-        df = df[
-            (df["event_time"] >= window_start) &
-            (df["event_time"] <= window_end)
-        ].copy()
-        df["vessel_departure"] = vessel_dep
-    else:
-        # No departure time — use the full event span (typical for current data)
-        pass
+    df["event_time"] = event_time
+    df["vessel_departure"] = _safe_parse(df, "time_out")
 
     df = df.dropna(subset=["event_time"])
     if df.empty:
         return df
 
+    # Apply time window only when an explicit departure time is available
+    valid_out = df["vessel_departure"].dropna()
+    if not valid_out.empty:
+        vessel_dep = valid_out.mode().iloc[0]
+        window_start = vessel_dep - pd.Timedelta(hours=settings.VESSEL_WINDOW_HOURS)
+        window_end = vessel_dep + pd.Timedelta(hours=1)
+        df = df[
+            (df["event_time"] >= window_start) & (df["event_time"] <= window_end)
+        ].copy()
+        df["vessel_departure"] = vessel_dep
+
+    if df.empty:
+        return df
+
     return df.sort_values("event_time").reset_index(drop=True)
 
-def compute_visit_stay(df: pd.DataFrame):
-    if df is None or df.empty:
+
+def compute_visit_stay(df: pd.DataFrame) -> float | None:
+    """Return stay duration in hours for a prepared single-visit DataFrame."""
+    if df is None or df.empty or "event_time" not in df.columns:
         return None
 
     start = df["event_time"].min()
@@ -64,25 +86,37 @@ def compute_visit_stay(df: pd.DataFrame):
         end = df["event_time"].max()
 
     stay_hours = (end - start).total_seconds() / 3600
-    if stay_hours <= 0:
-        return None
-    return round(stay_hours, 2)
+    return round(stay_hours, 2) if stay_hours > 0 else None
 
-def compute_vessel_stay(prepared_visits: dict):
-    result = {}
+
+def compute_vessel_stay(prepared_visits: dict) -> dict:
+    """Aggregate stay stats across all visits for one vessel service.
+
+    Returns:
+        {
+            'visits': {visit_id: stay_hours, ...},
+            'avg_hours': float,
+            'max_hours': float,
+            'min_hours': float,
+        }
+        or {} if no valid visits.
+    """
+    result: dict[str, float] = {}
+
     for visit_id, visit_df in prepared_visits.items():
         if visit_df is None or visit_df.empty:
             continue
-        stay_hours = compute_visit_stay(visit_df)
-        if stay_hours is not None and stay_hours > 0:
-            result[str(visit_id).strip()] = stay_hours
+        stay = compute_visit_stay(visit_df)
+        if stay is not None and stay > 0:
+            result[str(visit_id).strip()] = stay
 
-    if result:
-        stay_values = list(result.values())
-        return {
-            "visits":    result,
-            "avg_hours": round(sum(stay_values) / len(stay_values), 2),
-            "max_hours": round(max(stay_values), 2),
-            "min_hours": round(min(stay_values), 2),
-        }
-    return {}
+    if not result:
+        return {}
+
+    vals = list(result.values())
+    return {
+        "visits": result,
+        "avg_hours": round(sum(vals) / len(vals), 2),
+        "max_hours": round(max(vals), 2),
+        "min_hours": round(min(vals), 2),
+    }
