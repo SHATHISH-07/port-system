@@ -1,43 +1,12 @@
-"""
-utils/datetime_utils.py
------------------------
-Robust datetime parsing that handles all formats in this codebase.
-
-Supported formats
------------------
-  Container datasets  : "11/14/2025 21:58"    (%m/%d/%Y %H:%M)
-                        "11/14/2025 21:58:00"  (%m/%d/%Y %H:%M:%S)
-                        "11/15/2025 9:01"      (single-digit hour — handled by pandas)
-  Crane dataset       : "25-Nov-14 2158"       (%y-%b-%d %H%M)  ← YY-Mon-DD HHMM
-  ISO / DB round-trip : "2025-11-14T21:58:00"
-                        "2025-11-14 21:58:00"
-
-Format notes
-------------
-• "%m/%d/%Y %H:%M" correctly parses both "21:58" and "9:01" — Python's strptime
-  pads single-digit hours automatically, so no special case is needed.
-
-• Crane format "25-Nov-14 2158" = YY-Mon-DD HHMM (no colon between HH and MM).
-  Correct strptime: "%y-%b-%d %H%M"  → 2025-11-14 21:58 ✓
-  Wrong   strptime: "%d-%b-%y %H%M"  → 2014-11-25 21:58 ✗
-
-• "%H%M" (no separator) only works inside strptime when it is the entire
-  remaining token — pandas handles this correctly with format=.
-"""
 from __future__ import annotations
-
 import logging
 import warnings
 from datetime import datetime
-
 import pandas as pd
 
 logger = logging.getLogger("port_system")
 
-# ── Format list ────────────────────────────────────────────────────────────────
-# Order matters: more specific / more common formats first.
-# Formats that share a common prefix are ordered longest-first so the more
-# specific one (with seconds) is tried before the shorter one.
+# list of datetime formats
 _FORMATS: list[str] = [
     # Container CSVs — most common
     "%m/%d/%Y %H:%M:%S",   # 11/14/2025 21:58:00
@@ -58,62 +27,60 @@ _FORMATS: list[str] = [
     "%m-%d-%Y %H:%M",
 ]
 
-
+# function to parse datetime columns
 def parse_datetime(series: pd.Series | None, col_name: str = "unknown") -> pd.Series:
-    """Parse a datetime-like Series, trying multiple explicit formats.
-
-    Strategy
-    --------
-    1. Return immediately if already datetime64.
-    2. Normalise the string representation (strip, replace sentinel strings).
-    3. Walk through _FORMATS one by one.  For each format, only attempt rows
-       that are still NaT so we never overwrite a successfully parsed value.
-    4. Final fallback: pandas mixed-format inference (handles anything we missed).
-
-    Returns a timezone-naive datetime64[ns] Series.
-    Unparseable values become NaT — this function never raises.
-    """
+    # check if series is empty
     if series is None:
         return pd.Series(dtype="datetime64[ns]")
 
-    # Already parsed
+    # check if series is already datetime
     if pd.api.types.is_datetime64_any_dtype(series):
         return series
 
+    # convert series to object and copy
     s = pd.Series(series, dtype=object).copy()
 
-    # ── Normalise strings ──────────────────────────────────────────────────────
+    # normalize strings
     s = s.astype(str).str.strip()
     _SENTINELS = {"", "nan", "none", "null", "nat", "n/a", "na", "-"}
     s = s.where(~s.str.lower().isin(_SENTINELS), other=pd.NA)
 
+    # create a new series to store parsed datetimes
     parsed = pd.Series([pd.NaT] * len(s), index=s.index, dtype="datetime64[ns]")
 
-    # ── Format-by-format pass ──────────────────────────────────────────────────
+    # format-by-format pass
     for fmt in _FORMATS:
+        # mask for values that are not yet parsed and not null
         mask = parsed.isna() & s.notna()
+        # break if no values need to be parsed
         if not mask.any():
             break
         try:
+            # attempt to parse with current format
             attempt = pd.to_datetime(s[mask], errors="coerce", format=fmt)
+            # update parsed series with successfully parsed values
             parsed.loc[mask] = attempt
         except Exception:
-            pass  # format not applicable, try next
+            pass
 
-    # ── Final fallback: pandas mixed-format inference ──────────────────────────
+    # final fallback: pandas mixed-format inference
     remaining = parsed.isna() & s.notna()
     if remaining.any():
+        # ignore warnings from pandas
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            # try different pandas parsing methods
             for method in (
                 lambda x: pd.to_datetime(x, errors="coerce", format="mixed"),
                 lambda x: pd.to_datetime(x, errors="coerce", infer_datetime_format=True),
                 lambda x: pd.to_datetime(x, errors="coerce"),
             ):
                 still_nat = parsed.isna() & s.notna()
+                # break if no values need to be parsed
                 if not still_nat.any():
                     break
                 try:
+                    # attempt to parse with current method
                     parsed.loc[still_nat] = method(s[still_nat])
                 except Exception:
                     pass
@@ -128,11 +95,13 @@ def parse_datetime(series: pd.Series | None, col_name: str = "unknown") -> pd.Se
 
     return parsed
 
-
+# function to convert datetime to JSON safe string
 def to_json_safe(obj) -> str | None:
-    """Convert a datetime/Timestamp to ISO string, or return None."""
+    # if obj is None, return None
     if obj is None:
         return None
+    # if obj is datetime or timestamp, convert to ISO string
     if isinstance(obj, (datetime, pd.Timestamp)):
         return pd.Timestamp(obj).isoformat()
+    # otherwise, convert to string
     return str(obj)

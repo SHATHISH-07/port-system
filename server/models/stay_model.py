@@ -11,10 +11,9 @@ from sklearn.pipeline import Pipeline
 from utils.stay_utils import prepare_visit_data, compute_visit_stay
 from utils.feature_utils import create_features
 from models.training_status import training_status
+from config import settings
 
 logger = logging.getLogger("port_system")
-
-from config import settings
 
 # Build the ensemble model
 def _build_ensemble():

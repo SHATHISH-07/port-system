@@ -1,40 +1,4 @@
-"""
-services/vessel_service.py
---------------------------
-Vessel dashboard analysis.
-
-Bug fixes in this revision
----------------------------
-1. safe_get_pos() replaces Python `or`-chain in _extract_move_side so
-   pandas NaN crane columns can no longer shadow ctr_from_position values.
-
-2. Crane enrichment strategy by dataset type:
-   • history:  crane joined by unit_id   (exact match guaranteed)
-   • current:  crane joined by carrier_visit only (unit IDs differ between
-               current containers and historical crane records – 0 direct match)
-               We attach crane_time + aggregate position data at visit level.
-
-3. Move counting and berth analysis operate on the ENRICHED group (before
-   prepare_visit_data).  prepare_visit_data strips position columns causing
-   _extract_move_side to return UNKNOWN for every row.
-
-4. _extract_move_side checks plain 'move_kind' column as fallback.
-
-5. BERTH CONFLICT TABLE FIX:
-   conflict_with was always empty because the old code only populated it when
-   the current berth's risk != Low — but in typical port operations most berths
-   are "Low" risk individually.  The new logic computes conflict as proximity:
-   any other berth that shares the same terminal OR has a high combined
-   impact score is flagged as a conflict candidate.  This gives meaningful
-   conflict_with lists even when all individual risk levels are Low.
-
-6. BerthImpactTable UI alignment: the API returns 'cargo_concentration_pct'
-   (a float) not 'cargo_concentration' (a string) and there is no
-   'total_travel_distance' field.  The UI component must use the correct
-   field names — see BerthImpactTable.tsx.
-"""
 from __future__ import annotations
-
 import logging
 from collections import defaultdict
 from typing import Optional, Tuple
@@ -55,30 +19,16 @@ from utils.stay_utils import compute_vessel_stay, prepare_visit_data
 
 logger = logging.getLogger("port_system")
 
-
+# helper function to check if a value is yes
 def _is_yes(val) -> bool:
     return str(val).strip().upper() in ("YES", "Y", "TRUE", "1")
 
-
-# ---------------------------------------------------------------------------
 # Move-side extraction  (NaN-safe)
-# ---------------------------------------------------------------------------
-
 def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
-    """Return (move_type, yard_position_dict_or_None) for a single row.
-
-    Column priority (from-position → to-position):
-      crane_from / crane_to               (crane join columns, history)
-      ctr_from_position / ctr_to_position (canonical DB columns)
-      from_position / to_position         (raw crane table fallback)
-    """
     row = dict(row)
-
     from_pos = safe_get_pos(row, "crane_from", "ctr_from_position", "from_position")
     to_pos   = safe_get_pos(row, "crane_to",   "ctr_to_position",   "to_position")
-
     move_type = classify_move(from_pos, to_pos)
-
     # Honour explicit move_kind when position-based classification yields UNKNOWN
     if move_type == "UNKNOWN":
         mk = str(
@@ -89,7 +39,7 @@ def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
 
     f_p = parse_position(from_pos)
     t_p = parse_position(to_pos)
-
+    # based on move type determine the yard position
     if move_type == "LOAD":
         yard_pos = f_p if (f_p and f_p["is_yard"]) else None
     elif move_type == "DISCHARGE":
@@ -103,24 +53,21 @@ def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
 
     return move_type, yard_pos
 
-
-# ---------------------------------------------------------------------------
 # Crane data fetching
-# ---------------------------------------------------------------------------
-
 def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
-    """Fetch crane_movements rows for one carrier_visit."""
+    # fetch crane data for a visit
     try:
         engine = get_engine()
         with engine.connect() as conn:
+            # Get all the crane movements for the visit
             df = pd.read_sql_query(
                 text("""
                     SELECT
                         unit_id,
                         crane_id,
                         time_completed      AS crane_time,
-                        ctr_from_position   AS crane_from,
-                        ctr_to_position     AS crane_to,
+                        from_position       AS crane_from,
+                        to_position         AS crane_to,
                         move_kind           AS crane_move_kind
                     FROM crane_movements
                     WHERE carrier_visit = :v
@@ -128,6 +75,7 @@ def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
                 conn,
                 params={"v": str(visit_id)},
             )
+        # convert crane_time to datetime
         if not df.empty:
             df["crane_time"] = pd.to_datetime(df["crane_time"], errors="coerce")
         return df
@@ -135,73 +83,68 @@ def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
         logger.warning("crane fetch failed for %s: %s", visit_id, exc)
         return pd.DataFrame()
 
-
-# ---------------------------------------------------------------------------
 # Crane enrichment
-# ---------------------------------------------------------------------------
-
 def _enrich_history_group(group: pd.DataFrame, visit_id: str) -> pd.DataFrame:
-    """History: join crane by unit_id (exact match)."""
+    # enrich history data with crane data
     crane_df = _fetch_crane_for_visit(visit_id)
     if crane_df.empty:
         return group
-
+    # create a crane map to join with the group
     crane_map = (
         crane_df
         .sort_values("crane_time")
         .drop_duplicates(subset=["unit_id"], keep="first")
         [["unit_id", "crane_time", "crane_from", "crane_to", "crane_move_kind"]]
     )
+    # merge the crane map with the group
     group = group.merge(crane_map, on="unit_id", how="left")
-
+    # fill move_complete_time with crane_time if move_complete_time is NaN
     if "move_complete_time" in group.columns:
         group["move_complete_time"] = group["move_complete_time"].fillna(
             group.get("crane_time")
         )
     return group
 
-
+# enrich current data
 def _enrich_current_group(group: pd.DataFrame, visit_id: str) -> pd.DataFrame:
-    """Current inventory: crane unit IDs differ — enrich at visit level."""
+    # enrich current data with crane data
     crane_df = _fetch_crane_for_visit(visit_id)
     if crane_df.empty:
         return group
 
+    # fill move_complete_time with crane_time if move_complete_time is NaN
     earliest = crane_df["crane_time"].dropna().min()
     if pd.notna(earliest) and "move_complete_time" in group.columns:
         group["move_complete_time"] = group["move_complete_time"].fillna(earliest)
-
+    # add crane ids to the group
     crane_ids = crane_df["crane_id"].dropna().unique().tolist()
     group["_crane_ids"] = str(crane_ids[:6])
     return group
 
-
-# ---------------------------------------------------------------------------
 # Visit detail helpers
-# ---------------------------------------------------------------------------
-
 def _visit_details(enriched_visits: dict) -> dict:
-    """Compute per-visit detail stats from the ENRICHED groups."""
+    # compute per-visit detail stats from the enriched groups
     out: dict = {}
     for visit_id, vdf in enriched_visits.items():
         if vdf is None or vdf.empty:
             continue
-
+            
         time_col = None
+        # find the time column
         for tc in ("move_complete_time", "time_in", "crane_time"):
             if tc in vdf.columns and vdf[tc].notna().any():
                 time_col = tc
                 break
         if time_col is None:
             continue
-
+        # convert time column to datetime
         times = pd.to_datetime(vdf[time_col], errors="coerce").dropna()
         if times.empty:
             continue
-
+        # compute start and end times
         start = times.min()
         end   = times.max()
-
+        # count loads and discharges
         loads = discharges = 0
         for _, row in vdf.iterrows():
             mt, _ = _extract_move_side(row)
@@ -209,7 +152,7 @@ def _visit_details(enriched_visits: dict) -> dict:
                 loads += 1
             elif mt == "DISCHARGE":
                 discharges += 1
-
+        # compute stay hours
         out[str(visit_id)] = {
             "start_time":            str(start),
             "end_time":              str(end),
@@ -227,64 +170,49 @@ def _visit_details(enriched_visits: dict) -> dict:
         }
     return out
 
-
-# ---------------------------------------------------------------------------
 # Berth analysis
-# ---------------------------------------------------------------------------
-
 def _build_berth_tables(
     visit_df: pd.DataFrame,
     total_loaded: int,
     total_discharged: int,
     avg_hours: float,
 ) -> tuple[list, dict, list]:
-    """Build berth analysis and conflict tables from the ENRICHED visit df.
-
-    Conflict logic (FIX)
-    --------------------
-    The old logic only added a berth to conflict_with when the current berth
-    had risk != "Low" AND the other berth also had risk != "Low". Because most
-    berths score as "Low" (spread-out traffic), conflict_with was always [].
-
-    New logic: for each berth we look for *operational* conflicts — other
-    berths that share the same terminal (crane overlap risk) or have a high
-    combined impact score relative to the top berth. This produces meaningful
-    conflict_with lists at all risk levels.
-    """
+    # build berth analysis and conflict tables
     berth_counts: dict = defaultdict(lambda: {
         "total_moves": 0, "load_moves": 0, "discharge_moves": 0,
         "units": set(), "hazardous": 0, "reefer": 0, "oog": 0,
     })
-
+    # iterate over the visit_df
     for _, row in visit_df.iterrows():
         move_type, yard_pos = _extract_move_side(row)
         if move_type not in ("LOAD", "DISCHARGE") or yard_pos is None:
             continue
-
+        # get the block label
         bk = block_label(yard_pos) or "UNKNOWN"
         bucket = berth_counts[bk]
         bucket["total_moves"] += 1
         bucket["units"].add(str(row.get("unit_id", "")).strip())
-
+        # update move counts
         if move_type == "LOAD":
             bucket["load_moves"] += 1
         else:
             bucket["discharge_moves"] += 1
-
+        # update special container counts
         if _is_yes(row.get("hazardous_flag")):  bucket["hazardous"] += 1
         if _is_yes(row.get("reefer")):           bucket["reefer"]    += 1
         if _is_yes(row.get("oog_unit")):         bucket["oog"]       += 1
-
+    # if no berth counts, return empty
     if not berth_counts:
         return [], {}, []
-
+    
     total_all = sum(v["total_moves"] for v in berth_counts.values()) or 1
+    # sort berths by total moves
     sorted_berths = sorted(
         berth_counts.items(), key=lambda x: x[1]["total_moves"], reverse=True
     )
     max_count = sorted_berths[0][1]["total_moves"]
 
-    # ── Build berth_analysis list ─────────────────────────────────────────────
+    # build berth_analysis list
     berth_analysis: list[dict] = []
     for idx, (bk, data) in enumerate(sorted_berths[:5], start=1):
         total  = data["total_moves"]
@@ -329,11 +257,7 @@ def _build_berth_tables(
             "impact_score":            impact_score,
         })
 
-    # ── Build conflict table (FIX) ────────────────────────────────────────────
-    # Conflict heuristic (applied at all risk levels):
-    #  A. Same terminal → crane scheduling conflict
-    #  B. impact_score within 50 % of the top berth's score → congestion risk
-    #  C. Hazardous or reefer cargo adjacent to another berth → safety conflict
+    # build conflict table
     top_impact = berth_analysis[0]["impact_score"] if berth_analysis else 1
 
     conflict_table: list[dict] = []
@@ -361,7 +285,7 @@ def _build_berth_tables(
             reason += f" {row['hazardous']} hazmat units require buffer zones."
         if row["reefer"] > 0:
             reason += f" {row['reefer']} reefer units need power allocation."
-
+        # append conflict table
         conflict_table.append({
             "berth":         row["berth"],
             "block":         row["block"],
@@ -374,58 +298,57 @@ def _build_berth_tables(
     primary = berth_analysis[0] if berth_analysis else {}
     return berth_analysis, primary, conflict_table
 
-
-# ---------------------------------------------------------------------------
 # Main dashboard entry point
-# ---------------------------------------------------------------------------
-
 def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
-    """Full vessel analysis for a given outbound_service code."""
+    # check for empty data
     if df is None or df.empty:
         return {"error": "No data available", "vessel": vessel_service}
-
+    
+    # check for required columns
     required = {"outbound_service", "actual_outbound_carrier_visit_id"}
     if not required.issubset(df.columns):
         return {"error": "Missing required columns", "vessel": vessel_service}
-
+    # filter for the vessel
     vessel_df = df[
         df["outbound_service"].astype(str).str.strip() == str(vessel_service).strip()
     ].copy()
+    # check if vessel data is empty
     if vessel_df.empty:
         return {"error": f"No data for '{vessel_service}'", "vessel": vessel_service}
-
+    # check if there is time out data
     has_time_out = (
         "time_out" in vessel_df.columns
         and vessel_df["time_out"].notna().sum() > len(vessel_df) * 0.3
-        # FIX: but NOT if this is current inventory (visit_state present)
         and "visit_state" not in vessel_df.columns
     )
 
-    # ── Enrich visits with crane data ──────────────────────────────────────────
+    # enrich visits with crane data
     enriched_visits: dict = {}
     prepared_visits: dict = {}
-
+    # group by visit id
     for visit_id, group in vessel_df.groupby("actual_outbound_carrier_visit_id"):
         group = group.copy()
         if has_time_out:
             group = _enrich_history_group(group, str(visit_id))
         else:
+            # enrich current data
             group = _enrich_current_group(group, str(visit_id))
 
         enriched_visits[visit_id] = group
         prepared_visits[visit_id] = prepare_visit_data(group)
-
+    # compute actual stay
     actual_raw = compute_vessel_stay(prepared_visits)
     if not actual_raw:
         return {"error": "No valid visit data found", "vessel": vessel_service}
-
+    
+    # predict stay
     try:
         predicted = predict_vessel_stay_duration(prepared_visits)
     except Exception:
         predicted = None
-
+    
     visit_details = _visit_details(enriched_visits)
-
+    
     # Merge stay hours into visit details
     merged_visits: dict = {}
     for vid, stay in actual_raw.get("visits", {}).items():
@@ -447,7 +370,7 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
         "min_hours": actual_raw.get("min_hours"),
     }
 
-    # ── Pick busiest visit ────────────────────────────────────────────────────
+    # pick busiest visit
     visit_scores: list[tuple] = []
     for vid, vdf in enriched_visits.items():
         if vdf is None or vdf.empty:
@@ -458,17 +381,19 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
         )
         visit_scores.append((vid, score))
 
+    # check if visit scores are empty
     if not visit_scores:
         return {"error": "No valid visit data found", "vessel": vessel_service}
-
+    # sort by score
     visit_scores.sort(key=lambda x: x[1], reverse=True)
+    # get top visit
     top_visit_id = visit_scores[0][0]
     visit_df     = enriched_visits[top_visit_id]
 
     if visit_df is None or visit_df.empty:
         return {"error": "Top visit has no usable rows", "vessel": vessel_service}
-
-    # ── Counts for the top visit ──────────────────────────────────────────────
+    
+    # get counts for the top visit
     total_loaded = total_discharged = 0
     for _, row in visit_df.iterrows():
         mt, _ = _extract_move_side(row)
@@ -477,11 +402,13 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
         elif mt == "DISCHARGE":
             total_discharged += 1
 
-    # Fallback: raw crane counts when container rows give 0
+    # fallback: raw crane counts when container rows give 0
     crane_df_top = _fetch_crane_for_visit(str(top_visit_id))
     crane_ids: list[str] = []
+    # check if crane_df_top is not empty
     if not crane_df_top.empty:
         crane_ids = crane_df_top["crane_id"].dropna().unique().tolist()
+        # get loaded counts
         if total_loaded == 0:
             total_loaded = int(crane_df_top[
                 crane_df_top.apply(
@@ -490,15 +417,17 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
                     axis=1,
                 )
             ]["unit_id"].nunique())
+        # get discharged counts
         if total_discharged == 0:
             total_discharged = int(crane_df_top[
                 crane_df_top.apply(
                     lambda r: is_vessel_pos(str(r.get("crane_from", "")))
-                              and (not is_vessel_pos(str(r.get("crane_to", "")))),
+                              and not is_vessel_pos(str(r.get("crane_to", ""))),
                     axis=1,
                 )
             ]["unit_id"].nunique())
 
+    # get special cargo counts
     hazardous   = int(visit_df["hazardous_flag"].apply(_is_yes).sum()) if "hazardous_flag" in visit_df.columns else 0
     reefer      = int(visit_df["reefer"].apply(_is_yes).sum())          if "reefer"         in visit_df.columns else 0
     oog         = int(visit_df["oog_unit"].apply(_is_yes).sum())        if "oog_unit"       in visit_df.columns else 0
@@ -506,6 +435,7 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
 
     avg_hours = actual.get("avg_hours") or 0
 
+    # get berth analysis
     berth_analysis, berth_rec, berth_conflicts = _build_berth_tables(
         visit_df=visit_df,
         total_loaded=total_loaded,
@@ -513,7 +443,7 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
         avg_hours=avg_hours,
     )
 
-    # ── Risk flags ────────────────────────────────────────────────────────────
+    # get risks
     risks: list[str] = []
     if total_loaded > 250:
         risks.append("High loading volume — potential crane congestion.")
@@ -526,7 +456,7 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
     if not risks:
         risks.append("Operations appear stable.")
 
-    # ── Execution plan ────────────────────────────────────────────────────────
+    # get execution plan
     steps: list[str] = []
     if berth_rec:
         steps.append(

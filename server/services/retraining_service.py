@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-from typing import Any, Dict, Optional
 
 from fastapi import BackgroundTasks
 from sqlalchemy import inspect as sa_inspect
@@ -16,18 +15,16 @@ from models.training_status import training_status
 
 logger = logging.getLogger("port_system")
 
-
+# get history count
 def get_history_count() -> int:
-    """
-    Count records in history_containers safely.
-    Never raises.
-    """
+    # check history_containers table exists
     try:
         engine = get_engine()
         inspector = sa_inspect(engine)
+        # if table does not exist, return 0
         if not inspector.has_table("history_containers"):
             return 0
-
+        # get history count from database
         with engine.connect() as conn:
             result = conn.execute(text("SELECT COUNT(*) FROM history_containers"))
             return int(result.scalar() or 0)
@@ -35,16 +32,12 @@ def get_history_count() -> int:
         logger.error("Error getting history count: %s", e)
         return 0
 
-
+# get metadata
 def get_metadata() -> dict:
-    """
-    Return latest training metadata in a backward-compatible shape.
-
-    The DB schema stores `dataset_size`, not `last_trained_dataset_size`.
-    This function maps it safely for older callers.
-    """
+    # get latest training metadata
     try:
         row = get_latest_training_metadata()
+        # if no metadata found, return default values
         if not row:
             return {
                 "last_trained_dataset_size": 0,
@@ -56,11 +49,13 @@ def get_metadata() -> dict:
                 "notes": None,
             }
 
+        # get dataset size and timestamp
         dataset_size = int(row.get("dataset_size") or row.get("last_trained_dataset_size") or 0)
         ts = row.get("last_trained_timestamp")
+        # convert timestamp to isoformat
         if hasattr(ts, "isoformat"):
             ts = ts.isoformat()
-
+        # return metadata
         return {
             "last_trained_dataset_size": dataset_size,
             "dataset_size": dataset_size,
@@ -71,6 +66,7 @@ def get_metadata() -> dict:
             "notes": row.get("notes"),
         }
     except Exception as e:
+        # log error and return default values
         logger.error("Error reading training metadata: %s", e)
         return {
             "last_trained_dataset_size": 0,
@@ -82,11 +78,9 @@ def get_metadata() -> dict:
             "notes": None,
         }
 
-
+# update metadata
 def update_metadata(size: int, data_source: str = "db", training_type: str = "manual"):
-    """
-    Save a completed training run.
-    """
+    # save completed training run
     try:
         save_training_metadata(
             dataset_size=int(size or 0),
@@ -94,6 +88,7 @@ def update_metadata(size: int, data_source: str = "db", training_type: str = "ma
             training_type=training_type,
             status="completed",
         )
+        # log completed training run
         logger.info(
             "Training metadata saved — size=%s, source=%s, type=%s",
             size,
@@ -101,22 +96,24 @@ def update_metadata(size: int, data_source: str = "db", training_type: str = "ma
             training_type,
         )
     except Exception as e:
+        # log error and return
         logger.error("Failed to save training metadata: %s", e)
 
-
+# background training worker used by FastAPI background tasks
 def background_train_and_update(df, config: dict = None):
-    """
-    Background training worker used by FastAPI background tasks.
-    """
+    # get current status
     current_status = training_status.get()
     data_source = current_status.get("data_source", "db")
     training_type = current_status.get("training_type", "manual")
 
     try:
+        # train stay model
         train_stay_model(df, config=config)
+        # update metadata
         if training_status.get().get("status") == "completed":
             update_metadata(len(df), data_source=data_source, training_type=training_type)
     except Exception as e:
+        # set status to failed
         training_status.set("failed", str(e))
         logger.error("Background training failed: %s", e)
         try:
@@ -130,49 +127,49 @@ def background_train_and_update(df, config: dict = None):
         except Exception:
             pass
 
-
+# send retraining job to Celery queue
 def trigger_retraining_celery(config_overrides: dict = None) -> dict:
-    """
-    Send retraining job to Celery queue.
-    Falls back cleanly if Celery is disabled or unavailable.
-    """
     use_celery = os.getenv("USE_CELERY", "false").lower() == "true"
+    # if celery is disabled, return skipped
     if not use_celery:
         return {"status": "skipped", "reason": "celery_disabled"}
 
     try:
+        # import retraining task
         from worker.tasks import retrain_model_task
 
+        # queue retraining task
         task = retrain_model_task.delay(config_overrides or {})
+        # log queued task
         logger.info("[Celery] Retraining task queued: task_id=%s", task.id)
         return {"status": "queued", "task_id": task.id}
     except Exception as e:
         logger.warning("[Celery] Could not queue retraining task: %s", e)
         return {"status": "celery_unavailable", "error": str(e)}
 
-
+# check if retraining should be triggered
 def _should_trigger(current_count: int, last_size: int) -> bool:
+    # get threshold from config
     threshold = int(getattr(retraining_config, "threshold", 1000))
+    # calculate difference
     difference = max(current_count - last_size, 0)
+    # return True if difference is greater than or equal to threshold or last_size is 0
     return difference >= threshold or last_size == 0
 
-
+# check and trigger retraining
 def check_and_trigger_retraining(background_tasks: BackgroundTasks):
-    """
-    Called after ingestion.
-
-    Important:
-    This function must never fail ingestion. Any retraining error is logged
-    and swallowed so the upload endpoint can still return success.
-    """
+    # check if retraining should be triggered
     try:
+        # get current count
         current_count = get_history_count()
         if current_count == 0:
             return
 
+        # get metadata
         metadata = get_metadata()
         last_size = int(metadata.get("last_trained_dataset_size") or 0)
 
+        # check if retraining should be triggered
         if not _should_trigger(current_count, last_size):
             logger.info(
                 "Retraining not triggered: current=%s last=%s threshold=%s",
@@ -182,6 +179,7 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
             )
             return
 
+        # log triggered retraining
         logger.info(
             "Retraining triggered: current=%s last=%s threshold=%s",
             current_count,
@@ -189,6 +187,7 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
             getattr(retraining_config, "threshold", 1000),
         )
 
+        # send retraining job to Celery queue
         celery_result = trigger_retraining_celery()
         if celery_result.get("status") == "queued":
             return
@@ -199,7 +198,9 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
             logger.warning("Retraining skipped — no history data loaded")
             return
 
+        # get config
         config = training_status.get_last_config()
+        # set status to training
         training_status.set(
             status="training",
             message="Automated retraining started",
@@ -212,33 +213,39 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
     except Exception as e:
         logger.error("Failed in check_and_trigger_retraining: %s", e)
 
-
+# scheduled retraining job
 async def scheduled_retraining_job():
-    """
-    Nightly scheduled job (APScheduler cron at 02:00).
-    """
+    # job (APScheduler cron at 02:00)
     try:
+        # check if training is already in progress
         if training_status.get().get("status") == "training":
-            logger.info("Nightly job skipped — training already in progress.")
+            logger.info("Job skipped — training already in progress.")
             return
 
+        # get current count
+        # get current count
         current_count = get_history_count()
         if current_count == 0:
             return
 
+        # get metadata
         metadata = get_metadata()
         last_size = int(metadata.get("last_trained_dataset_size") or 0)
 
+        # check if retraining should be triggered
         if not _should_trigger(current_count, last_size):
             return
 
-        logger.info("Nightly Cron: Retraining triggered for %s new records.", current_count - last_size)
+        # log triggered retraining
+        logger.info("Cron Job: Retraining triggered for %s new records.", current_count - last_size)
 
         df = await asyncio.to_thread(load_from_db, "history")
         if df.empty:
             return
 
+        # get config
         config = training_status.get_last_config()
+        # set status to training
         training_status.set(
             status="training",
             message="Automated nightly retraining started",
@@ -249,4 +256,4 @@ async def scheduled_retraining_job():
         await asyncio.to_thread(background_train_and_update, df, config)
 
     except Exception as e:
-        logger.error("Error in nightly retraining job: %s", e)
+        logger.error("Error in cron job: %s", e)

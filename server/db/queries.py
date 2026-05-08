@@ -1,13 +1,11 @@
 import pandas as pd
 from sqlalchemy import text
-
+from utils.datetime_utils import parse_datetime
 from db.connection import get_engine
 
 
-# ── Schema initialisation ─────────────────────────────────────────────────────
-
+# Schema initialisation
 def init_simplified_schema(engine):
-    """Create / migrate container and ingestion tables."""
     with engine.begin() as conn:
 
         # history_containers
@@ -32,7 +30,7 @@ def init_simplified_schema(engine):
                 created_at                       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """))
-
+        # adding columns if they don't exist
         for col, col_type in [
             ("time_in", "TIMESTAMP"),
             ("time_out", "TIMESTAMP"),
@@ -40,13 +38,14 @@ def init_simplified_schema(engine):
             ("ingestion_id", "INTEGER"),
         ]:
             try:
+                # add column if it doesn't exist
                 conn.execute(
                     text(f"ALTER TABLE history_containers ADD COLUMN IF NOT EXISTS {col} {col_type}")
                 )
             except Exception:
                 pass
 
-        # current_containers — unit_id must have UNIQUE for ON CONFLICT to work
+        # current_containers
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS current_containers (
                 id                               SERIAL PRIMARY KEY,
@@ -90,6 +89,7 @@ def init_simplified_schema(engine):
         except Exception:
             pass
 
+        # add columns if they don't exist
         for col, col_type in [
             ("ingestion_id", "INTEGER"),
             ("is_active", "BOOLEAN"),
@@ -100,6 +100,7 @@ def init_simplified_schema(engine):
             ("verified_gross_mass_kg", "FLOAT"),
         ]:
             try:
+                # add column if it doesn't exist
                 conn.execute(
                     text(f"ALTER TABLE current_containers ADD COLUMN IF NOT EXISTS {col} {col_type}")
                 )
@@ -126,6 +127,7 @@ def init_simplified_schema(engine):
             );
         """))
 
+        # add columns if they don't exist
         for col, col_type in [
             ("event_type", "TEXT"),
             ("unit_category", "TEXT"),
@@ -135,6 +137,7 @@ def init_simplified_schema(engine):
             ("to_position", "TEXT"),
         ]:
             try:
+                # add column if it doesn't exist
                 conn.execute(
                     text(f"ALTER TABLE crane_movements ADD COLUMN IF NOT EXISTS {col} {col_type}")
                 )
@@ -159,6 +162,7 @@ def init_simplified_schema(engine):
             );
         """))
 
+        # add columns if they don't exist
         for col, col_type in [
             ("file_hash", "TEXT"),
             ("records_total", "INTEGER"),
@@ -169,6 +173,7 @@ def init_simplified_schema(engine):
             ("error_summary", "TEXT"),
         ]:
             try:
+                # add column if it doesn't exist
                 conn.execute(
                     text(f"ALTER TABLE ingestion_logs ADD COLUMN IF NOT EXISTS {col} {col_type}")
                 )
@@ -187,9 +192,10 @@ def init_simplified_schema(engine):
         """))
 
 
+# Authentication tables
 def init_auth_schema(engine):
-    """Create authentication and audit tables."""
     with engine.begin() as conn:
+        # users table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS users (
                 id            SERIAL PRIMARY KEY,
@@ -201,6 +207,7 @@ def init_auth_schema(engine):
             );
         """))
 
+        # operational_requests table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS operational_requests (
                 id              SERIAL PRIMARY KEY,
@@ -212,6 +219,7 @@ def init_auth_schema(engine):
             );
         """))
 
+        # audit_logs table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS audit_logs (
                 id        SERIAL PRIMARY KEY,
@@ -224,6 +232,7 @@ def init_auth_schema(engine):
         """))
 
         try:
+            # add column if it doesn't exist
             conn.execute(
                 text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_id INTEGER")
             )
@@ -231,9 +240,10 @@ def init_auth_schema(engine):
             pass
 
 
+# ML training metadata tables
 def init_training_metadata_schema(engine):
-    """Create ML training metadata tables."""
     with engine.begin() as conn:
+        # training_metadata table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS training_metadata (
                 id                      SERIAL PRIMARY KEY,
@@ -248,6 +258,7 @@ def init_training_metadata_schema(engine):
             );
         """))
 
+        # feature_configs table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS feature_configs (
                 id           SERIAL PRIMARY KEY,
@@ -259,6 +270,7 @@ def init_training_metadata_schema(engine):
             );
         """))
 
+        # model_versions table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS model_versions (
                 id                 SERIAL PRIMARY KEY,
@@ -278,54 +290,56 @@ def init_training_metadata_schema(engine):
         """))
 
 
-# ── Date parsing helper ───────────────────────────────────────────────────────
-
+# Date parsing helper
 def _parse_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
-    from utils.datetime_utils import parse_datetime
+    # list of columns to parse datetime
     for col in [
         "move_complete_time", "time_in", "time_out",
         "created_at", "updated_at", "time_completed",
     ]:
+        # check if column exists
         if col in df.columns:
             df[col] = parse_datetime(df[col], col)
     return df
 
 
-# ── Data loading ──────────────────────────────────────────────────────────────
-
+# Data loading
 def load_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
-    """Load data from simplified tables.
-
-    dataset_type: 'history' | 'current' | 'crane'
-    vessel_id:    optional filter on the service / carrier_visit column
-    """
+    # get engine from connection.py
     engine = get_engine()
     dataset_type = (dataset_type or "").strip().lower()
 
+    # if dataset_type is history
     if dataset_type == "history":
         table = "history_containers"
         id_col = "outbound_service"
         order_col = "COALESCE(move_complete_time, time_in, created_at) DESC NULLS LAST"
+    # if dataset_type is current
     elif dataset_type == "current":
         table = "current_containers"
         id_col = "outbound_service"
         order_col = "COALESCE(move_complete_time, time_in, updated_at, created_at) DESC NULLS LAST"
+    # if dataset_type is crane
     elif dataset_type == "crane":
         table = "crane_movements"
         id_col = "carrier_visit"
         order_col = "COALESCE(time_completed, created_at) DESC NULLS LAST"
     else:
         return pd.DataFrame()
-
+    
+    # query to select all data from the table
     query = f"SELECT * FROM {table}"
     params: dict = {}
-
+    
+    # if vessel_id is provided, add it to the query
     if vessel_id:
         query += f" WHERE {id_col} = :vessel_id"
         params["vessel_id"] = vessel_id
-
+    
+    # add order by clause
     query += f" ORDER BY {order_col}"
-
+    
+    # connect to the database and execute the query
     with engine.connect() as conn:
         df = pd.read_sql_query(text(query), conn, params=params)
 

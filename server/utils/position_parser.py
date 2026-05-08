@@ -1,99 +1,55 @@
-"""
-utils/position_parser.py
-------------------------
-Parses container position strings into structured dicts.
-
-Supported formats
------------------
-Vessel:
-    V-CQN180001-497542
-
-Yard:
-    Y-PEB-G23454C1
-    Y-PEB-G10031C5
-    Y-PEB-RE22369C1
-    Y-CWIT-1A003C.5
-    D08.033.1
-    B08.08.090.3
-    05.088.5
-    A05.05.046.3
-
-All public helpers are NaN-safe.  This prevents pandas NaN values from
-breaking fallback logic or shadowing valid columns.
-"""
 from __future__ import annotations
-
 import re
 from typing import Any
-
 import pandas as pd
-
 
 _BLOCK_RE = re.compile(r"^([A-Z]?\d{2,3})", re.IGNORECASE)
 
-
-# ---------------------------------------------------------------------------
 # NaN-safe helpers
-# ---------------------------------------------------------------------------
-
 def _safe_str(value) -> str | None:
-    """Return a clean string or None for null-like values (including NaN)."""
+    # return a clean string or None for null-like values (including NaN).
     if value is None:
         return None
+    # pandas NaN check
     try:
         if pd.isna(value):
             return None
     except (TypeError, ValueError):
         pass
-
+    # empty or "nan" strings
     s = str(value).strip()
     if s.lower() in ("", "nan", "none", "null", "nat"):
         return None
     return s
 
-
+# Safe row value accessor (NaN-proof)
 def _row_get(row: Any, key: str):
-    """Read a value from dict-like or Series-like rows safely."""
+    # Handle None
     if row is None:
         return None
+    # Handle dict-like rows (dict, pandas Series)
     if hasattr(row, "get"):
         try:
             return row.get(key)
         except Exception:
             pass
+    # Handle array-like rows
     try:
         return row[key]
     except Exception:
         return None
 
-
-# ---------------------------------------------------------------------------
 # Core parser
-# ---------------------------------------------------------------------------
-
 def parse_position(raw) -> dict | None:
-    """Parse any position string into a normalised dict.
-
-    Returns None for empty or unrecognised values.
-
-    Keys returned
-    -------------
-    raw       : original string
-    is_vessel : bool
-    is_yard   : bool
-    terminal  : str  ("VESSEL" | "PEB" | "CWIT" | "YARD" | terminal name)
-    block     : str
-    row       : str
-    bay       : str
-    tier      : str
-    """
+    # return a normalized dict for any position string.
+    # return None for empty or unrecognised values.
     s = _safe_str(raw)
     if s is None:
         return None
 
     su = s.upper()
 
-    # --- Vessel: V-<visit>-<slot> ------------------------------------------
+    # Vessel: V-<visit>-<slot>
     if su.startswith("V-"):
         parts = s.split("-")
         slot = parts[-1] if len(parts) >= 3 else "0"
@@ -108,7 +64,7 @@ def parse_position(raw) -> dict | None:
             "tier": slot,
         }
 
-    # --- Y-PEB-... ---------------------------------------------------------
+    # Y-PEB-...
     if su.startswith("Y-PEB-"):
         suffix = s[6:]
 
@@ -172,7 +128,7 @@ def parse_position(raw) -> dict | None:
             "tier": "1",
         }
 
-    # --- Y-CWIT-... --------------------------------------------------------
+    # Y-CWIT-... 
     if su.startswith("Y-CWIT-"):
         suffix = s[7:]
         # Example: 1A003C.5
@@ -216,12 +172,12 @@ def parse_position(raw) -> dict | None:
             "tier": "1",
         }
 
-    # --- Generic Y-<TERMINAL>-<...> ---------------------------------------
+    # Generic Y-<TERMINAL>-<...>
     if su.startswith("Y-"):
         parts = s.split("-")
         terminal = parts[1].upper() if len(parts) >= 2 else "YARD"
         token = parts[2] if len(parts) >= 3 else ""
-
+        # Example: 1A003C.5
         m = re.match(r"^([A-Z0-9]+?)(\d{2,4})([A-Z]|\d{2})\.?(\d+)$", token, re.IGNORECASE)
         if m:
             block, bay, row, tier = m.groups()
@@ -235,7 +191,7 @@ def parse_position(raw) -> dict | None:
                 "row": row.upper() if isinstance(row, str) else str(row),
                 "tier": tier,
             }
-
+        # Fallback
         return {
             "raw": s,
             "is_vessel": False,
@@ -247,13 +203,13 @@ def parse_position(raw) -> dict | None:
             "tier": "1",
         }
 
-    # --- Bare dot-separated yard positions ---------------------------------
+    # Bare dot-separated yard positions
     if "." in s:
         parts = s.split(".")
         m = _BLOCK_RE.match(parts[0])
         block = m.group(1).upper() if m else parts[0].upper()
-
-        if len(parts) == 3:  # block.bay.tier
+        # block.bay.tier
+        if len(parts) == 3:
             _, bay, tier = parts
             return {
                 "raw": s,
@@ -265,8 +221,8 @@ def parse_position(raw) -> dict | None:
                 "bay": bay,
                 "tier": tier,
             }
-
-        if len(parts) == 4:  # block.row.bay.tier
+        # block.row.bay.tier
+        if len(parts) == 4:
             _, row, bay, tier = parts
             return {
                 "raw": s,
@@ -278,7 +234,7 @@ def parse_position(raw) -> dict | None:
                 "bay": bay,
                 "tier": tier,
             }
-
+        # Fallback
         return {
             "raw": s,
             "is_vessel": False,
@@ -290,7 +246,7 @@ def parse_position(raw) -> dict | None:
             "tier": parts[-1],
         }
 
-    # --- Bare alphanumeric fallback ---------------------------------------
+    # Bare alphanumeric fallback
     if re.match(r"^[A-Z0-9]{2,}$", s, re.IGNORECASE):
         return {
             "raw": s,
@@ -305,54 +261,48 @@ def parse_position(raw) -> dict | None:
 
     return None
 
-
-# ---------------------------------------------------------------------------
 # Convenience helpers
-# ---------------------------------------------------------------------------
-
 def is_vessel_pos(pos) -> bool:
     p = parse_position(pos)
     return bool(p and p["is_vessel"])
 
-
+# check if the position is yard
 def is_yard_pos(pos) -> bool:
     p = parse_position(pos)
     return bool(p and p["is_yard"])
 
-
+# classify a move.
 def classify_move(from_pos, to_pos) -> str:
-    """Classify a move.
-
-    LOAD      : Yard  -> Vessel
-    DISCHARGE : Vessel -> Yard
-    SHIFT     : Yard  -> Yard  |  Vessel -> Vessel
-    UNKNOWN   : missing / unrecognised positions
-    """
+    # LOAD      : Yard  -> Vessel
+    # DISCHARGE : Vessel -> Yard
+    # SHIFT     : Yard  -> Yard  |  Vessel -> Vessel
+    # UNKNOWN   : missing / unrecognised positions
     f_p = parse_position(from_pos)
     t_p = parse_position(to_pos)
-
+    # check if the positions are yard or vessel
     f_y = bool(f_p and f_p["is_yard"])
     f_v = bool(f_p and f_p["is_vessel"])
     t_y = bool(t_p and t_p["is_yard"])
     t_v = bool(t_p and t_p["is_vessel"])
-
+    # classify the move
     if f_y and t_v:
         return "LOAD"
+    # DISCHARGE : Vessel -> Yard
     if f_v and t_y:
         return "DISCHARGE"
+    # SHIFT     : Yard  -> Yard  |  Vessel -> Vessel
     if (f_y and t_y) or (f_v and t_v):
         return "SHIFT"
+    # UNKNOWN   : missing / unrecognised positions
     return "UNKNOWN"
 
-
+# safe get position
 def safe_get_pos(row: dict, *keys) -> str | None:
-    """Return the first non-null value from a row using case-insensitive keys.
-
-    This is safe for pandas NaN and handles title-case / snake_case columns.
-    """
+    # Return the first non-null value from a row using case-insensitive keys.
+    # This is safe for pandas NaN and handles title-case / snake_case columns.
     if row is None:
         return None
-
+    # check for the keys
     for key in keys:
         candidates = [
             key,
@@ -362,7 +312,7 @@ def safe_get_pos(row: dict, *keys) -> str | None:
             key.replace(" ", "_"),
             key.replace("_", " "),
         ]
-
+        # check for the candidates
         for cand in dict.fromkeys(candidates):
             value = _row_get(row, cand)
             s = _safe_str(value)
@@ -371,11 +321,13 @@ def safe_get_pos(row: dict, *keys) -> str | None:
 
     return None
 
-
+# block label
 def block_label(parsed: dict | None) -> str | None:
-    """Return a display-ready block label like 'D08' or 'PEB-3A'."""
+    # Return a display-ready block label like 'D08' or 'PEB-3A'.
     if not parsed or not parsed.get("is_yard"):
         return None
+    # get the terminal and block
     terminal = parsed.get("terminal") or "YARD"
     block = parsed.get("block") or "UNKNOWN"
+    # return the block label
     return block if terminal in ("YARD", "UNKNOWN") else f"{terminal}-{block}"

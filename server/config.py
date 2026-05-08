@@ -1,28 +1,24 @@
 from __future__ import annotations
-
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-
 class Settings:
-    # ── Database ──────────────────────────────────────────────────────────────
+    # Database
     DATABASE_URL = os.getenv(
         "DATABASE_URL",
         "postgresql://postgres:postgres@127.0.0.1:5432/portsystem",
     ).replace("@localhost", "@127.0.0.1")
 
-    # ── Authentication ────────────────────────────────────────────────────────
+    # Authentication
     JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-jwt-key-for-portsync")
     JWT_ALGORITHM = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
     DEFAULT_ADMIN_USER = os.getenv("DEFAULT_ADMIN_USER", "admin")
     DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
 
-    # ── Expected schema columns per dataset type ──────────────────────────────
-    #
-    # IMPORTANT:
+    # Expected schema columns per dataset type
     # - history/current use ctr_from_position / ctr_to_position
     # - crane uses from_position / to_position (matching crane_movements schema)
     # - event_type is kept separate from move_kind
@@ -74,7 +70,7 @@ class Settings:
         ],
     }
 
-    # ── Required columns per dataset type ────────────────────────────────────
+    # Required columns per dataset type
     REQUIRED_COLS_BY_TYPE: dict[str, list[str]] = {
         "history": [
             "unit_id",
@@ -104,7 +100,7 @@ class Settings:
         "actual_outbound_carrier_visit_id",
     ]
 
-    # ── Model training ────────────────────────────────────────────────────────
+    # Model training
     MODEL_PATH = os.getenv("MODEL_PATH", "models/stay_model.pkl")
     TRAIN_MIN_HOURS = 2
     TRAIN_MAX_HOURS = 240
@@ -130,7 +126,7 @@ class Settings:
         "block_concentration",
     ]
 
-    # ── Automated retraining ──────────────────────────────────────────────────
+    # Automated retraining
     RETRAIN_THRESHOLD_NEW_RECORDS = int(
         os.getenv("RETRAIN_THRESHOLD_NEW_RECORDS", "1000")
     )
@@ -138,12 +134,13 @@ class Settings:
         os.getenv("RETRAIN_CHECK_INTERVAL_SECONDS", "60")
     )
 
-    # ── Query templates ───────────────────────────────────────────────────────
+    # Query templates
     LOAD_CONTAINERS_QUERY = "SELECT * FROM {dataset_type}_containers WHERE 1=1"
     LOAD_CRANE_MOVES_QUERY = (
         "SELECT * FROM crane_movements ORDER BY time_completed DESC"
     )
 
+    # Training metadata table queries
     INSERT_TRAINING_METADATA_QUERY = """
         INSERT INTO training_metadata
             (dataset_size, last_trained_timestamp, data_source, training_type, status, notes)
@@ -151,17 +148,17 @@ class Settings:
             (:size, :ts, :source, :ttype, :status, :notes)
         RETURNING id
     """
-
+    # Get latest completed training metadata
     GET_LATEST_TRAINING_METADATA_QUERY = """
         SELECT * FROM training_metadata
         WHERE status = 'completed'
         ORDER BY last_trained_timestamp DESC LIMIT 1
     """
 
+    # Get training metadata history
     GET_TRAINING_METADATA_HISTORY_QUERY = """
         SELECT * FROM training_metadata
         ORDER BY last_trained_timestamp DESC LIMIT :lim
     """
-
 
 settings = Settings()

@@ -3,31 +3,32 @@ import pandas as pd
 from io import BytesIO
 from datetime import datetime, timezone
 from sqlalchemy import text
-
-sys.path.insert(0, '.')
+import hashlib
 from db.connection import get_engine
 from db.queries import init_simplified_schema, init_auth_schema, init_training_metadata_schema
 
+sys.path.insert(0, '.')
 engine = get_engine()
 
 init_simplified_schema(engine)
 init_auth_schema(engine)
 init_training_metadata_schema(engine)
 
+# Data files to ingest and their types
 FILES = [
     ("data/synthetic_history_container_inventory.csv", "history"),
     ("data/synthetic_current_container_inventory.csv", "current"),
     ("data/synthetic_crane_moves.csv",                  "crane"),
 ]
 
-import hashlib, json
-
+# Normalize column names
 def col_norm(c):
     c = str(c).lower().strip()
     c = c.replace(" ", "_").replace("-", "_")
     c = c.replace("(", "").replace(")", "")
     return c
 
+# Map normalized columns to database column names
 MAPPING = {
     "unit_id": "unit_id", "unit": "unit_id", "unit_nbr": "unit_id", "container_id": "unit_id",
     "actual_outbound_carrier_visit_id": "actual_outbound_carrier_visit_id",
@@ -51,70 +52,100 @@ MAPPING = {
     "carrier_visit": "carrier_visit", "time_completed": "time_completed", "line_op": "line_op",
 }
 
+# Normalize columns
 def normalize(df):
+    # Normalize column names
     cols = [col_norm(c) for c in df.columns]
     df.columns = cols
     final_cols = []
+    # Map normalized columns to database column names
     for col in cols:
+        # Get the mapped column name, default to original if not found
         mapped = MAPPING.get(col, col)
+        # Avoid duplicate column names
         if mapped in final_cols:
             suffix = 1
             while f"{mapped}_{suffix}" in final_cols:
                 suffix += 1
             final_cols.append(f"{mapped}_{suffix}")
+        # Append the mapped column name
         else:
             final_cols.append(mapped)
     df.columns = final_cols
     return df
 
+# Safely convert values to the correct type
 def safe_val(v):
+    # If value is None, return None
     if v is None: return None
+    # If value is NaN, return None
     try:
         if pd.isna(v): return None
     except: pass
+    # If value is a Timestamp, convert it to a datetime object
     if isinstance(v, pd.Timestamp): return v.to_pydatetime()
+    # Return the value
     return v
-
+    
+# Main ingestion loop
 for fpath, dtype in FILES:
     print(f"\n{'='*60}")
+    # Print the file path and dataset type
     print(f"Ingesting: {fpath}  [{dtype}]")
     try:
+        # Read the CSV file
         df = pd.read_csv(fpath, low_memory=False)
     except FileNotFoundError:
+        # If the file is not found, print an error message and continue to the next file
         print(f"Skipping {fpath} (file not found)")
         continue
+    # Print the number of raw rows
     print(f"  Raw rows: {len(df)}")
-
+    # Normalize columns
     df = normalize(df)
+    # Drop rows with all NaN values
     df = df.dropna(how='all')
-
+    # Define date columns based on dataset type
     date_cols = {
         "history": ["move_complete_time", "time_in", "time_out"],
         "current": ["move_complete_time", "time_in"],
         "crane":   ["time_completed"],
     }[dtype]
-    
+    # Convert date columns to datetime objects
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=False)
 
+    # Filter rows based on dataset type
     if dtype in ("history", "current"):
         before = len(df)
+        # Filter out rows with missing unit_id
         df = df[df["unit_id"].notna() & (df["unit_id"].astype(str).str.strip() != "")]
+        # Filter out rows with missing actual_outbound_carrier_visit_id
         df = df[df["actual_outbound_carrier_visit_id"].notna()]
+        # Filter out rows with missing outbound_service
         df = df[df["outbound_service"].notna()]
+        # Print the number of rows after filtering
         print(f"  After key-field filter: {len(df)} (dropped {before - len(df)})")
+    # Filter rows for crane dataset type
     elif dtype == "crane":
         before = len(df)
+        # Filter out rows with missing crane_id
         df = df[df["crane_id"].notna() & (df["crane_id"].astype(str).str.strip() != "")]
+        # Filter out rows with missing carrier_visit
         df = df[df["carrier_visit"].notna()]
+        # Print the number of rows after filtering
         print(f"  After key-field filter: {len(df)} (dropped {before - len(df)})")
 
+    # Convert DataFrame to list of dictionaries
     records = df.to_dict('records')
-
+    # Start a transaction
     with engine.begin() as conn:
+        # Get current time in UTC
         now = datetime.now(timezone.utc)
+        # Generate a hash for the file
         fhash = hashlib.sha256(fpath.encode()).hexdigest()[:16] + "_bulk"
+        # Insert the ingestion log
         res = conn.execute(text("""
             INSERT INTO ingestion_logs
                 (filename, file_hash, dataset_type, status, records_total,
@@ -123,15 +154,20 @@ for fpath, dtype in FILES:
             RETURNING id
         """), {"fn": fpath, "h": fhash, "dtype": dtype, "total": len(records), "now": now})
         ingestion_id = res.fetchone()[0]
-
+        
+        # Initialize counters
         inserted = 0
         skipped  = 0
 
+        # Process based on dataset type
         if dtype == "history":
+            # Set batch size
             BATCH = 2000
+            # Iterate over records in batches
             for i in range(0, len(records), BATCH):
                 batch = records[i:i+BATCH]
                 params = []
+                # Prepare parameters for bulk insert
                 for r in batch:
                     params.append({
                         "unit_id":                            safe_val(r.get("unit_id")),
@@ -164,10 +200,13 @@ for fpath, dtype in FILES:
                 """), params)
                 inserted += len(params)
                 print(f"    ... inserted {inserted}/{len(records)}", end="\r")
-
+        
+        # Process current dataset
         elif dtype == "current":
+            # Process each record in the current dataset
             for r in records:
                 try:
+                    # Insert the record into the current_containers table
                     conn.execute(text("""
                         INSERT INTO current_containers
                             (unit_id, actual_outbound_carrier_visit_id, outbound_service,
@@ -207,12 +246,16 @@ for fpath, dtype in FILES:
                     inserted += 1
                 except Exception as e:
                     skipped += 1
-
+        
+        # Process crane dataset
         elif dtype == "crane":
+            # Set batch size
             BATCH = 2000
+            # Iterate over records in batches
             for i in range(0, len(records), BATCH):
                 batch = records[i:i+BATCH]
                 params = []
+                # Prepare parameters for bulk insert
                 for r in batch:
                     params.append({
                         "crane_id":       safe_val(r.get("crane_id")),
@@ -225,6 +268,7 @@ for fpath, dtype in FILES:
                         "line_op":        safe_val(r.get("line_op")),
                         "ingestion_id":   ingestion_id,
                     })
+                # Insert the batch into the crane_movements table
                 conn.execute(text("""
                     INSERT INTO crane_movements
                         (crane_id, unit_id, carrier_visit, move_kind,
@@ -235,10 +279,12 @@ for fpath, dtype in FILES:
                 """), params)
                 inserted += len(params)
                 print(f"    ... inserted {inserted}/{len(records)}", end="\r")
-
+    
+    # Print the final count
     print(f"\n  Done: {inserted} inserted, {skipped} skipped")
 
 print("\n\nAll ingestion complete. Verifying counts...")
+# Connect to the database and verify the counts
 with engine.connect() as conn:
     for tbl in ["history_containers", "current_containers", "crane_movements"]:
         c = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()

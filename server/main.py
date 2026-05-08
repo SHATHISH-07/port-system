@@ -8,7 +8,6 @@ from fastapi.responses import JSONResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import text
 
-from auth.dependencies import get_current_user  # noqa: F401
 from auth.utils import get_password_hash
 from config import settings
 from db.connection import get_engine
@@ -30,21 +29,25 @@ logging.basicConfig(
 logger = logging.getLogger("port_system")
 scheduler = AsyncIOScheduler()
 
-
+# Lifespan event handler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialize the database schema and admin user on startup
     engine = get_engine()
+    # Create tables if they don't exist
     try:
+        # Initialize tables for training metadata, authentication, and the main data model
         init_training_metadata_schema(engine)
         init_auth_schema(engine)
         init_simplified_schema(engine)
 
+        # Check if the admin user exists and create it if not
         with engine.begin() as conn:
             admin_check = conn.execute(
                 text("SELECT id FROM users WHERE username = :username"),
                 {"username": settings.DEFAULT_ADMIN_USER},
             ).fetchone()
-
+            # Create the admin user if it doesn't exist
             if not admin_check:
                 conn.execute(
                     text("INSERT INTO users (username, password_hash, role) VALUES (:username, :hash, 'admin')"),
@@ -55,26 +58,33 @@ async def lifespan(app: FastAPI):
                 )
     except Exception as e:
         logger.error("Schema init failed: %s", e)
-
+    
+    # Schedule the retraining job to run daily at 2:00 AM
     scheduler.add_job(scheduled_retraining_job, "cron", hour=2, minute=0)
     scheduler.start()
     yield
     scheduler.shutdown()
 
 
-app = FastAPI(title="PortSync API", version="3.0.0", lifespan=lifespan)
+# FastAPI application instance
+app = FastAPI(title="PortSync API", version="1.0.0", lifespan=lifespan)
 
 
+# Middleware for logging requests
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
+    # Call the next middleware or route handler
     try:
         response = await call_next(request)
+        # Calculate the process time
         process_time = time.time() - start_time
+        # Log the request and response
         logger.info("%s %s - %s - %.4fs", request.method, request.url.path, response.status_code, process_time)
         return response
     except Exception as e:
         process_time = time.time() - start_time
+        # Log the error
         logger.error(
             "Unhandled Exception on %s %s - %.4fs: %s",
             request.method,
@@ -86,6 +96,7 @@ async def log_requests(request: Request, call_next):
         return JSONResponse(status_code=500, content={"error": "Internal server error. Please try again later."})
 
 
+# Middleware to add CORS headers to the response
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -93,7 +104,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+# Include routers
 app.include_router(auth_router)
 app.include_router(ingest_router)
 app.include_router(analytics_router)
