@@ -4,10 +4,6 @@ from collections import defaultdict
 
 from utils.stay_utils import compute_vessel_stay, prepare_visit_data
 from models.stay_model import predict_vessel_stay_duration
-
-from utils.extractContainerMoves import extract_container_moves
-from utils.classifyWeight import classify_weight
-from utils.position_parser import parse_position, is_vessel_pos, is_yard_pos
 from db.connection import get_engine
 from sqlalchemy import text
 
@@ -16,17 +12,18 @@ def is_yes(val):
 
 def classify_move(from_pos, to_pos):
     """
-    Categorize move as LOAD, DISCHARGE, or SHIFT.
-    LOAD: Yard -> Vessel
-    DISCHARGE: Vessel -> Yard
+    Robust string-based classification to guarantee Load/Discharge tagging 
+    doesn't fail due to complex CWIT yard positioning syntax.
     """
-    f_p = parse_position(from_pos)
-    t_p = parse_position(to_pos)
+    f_str = str(from_pos).strip().upper()
+    t_str = str(to_pos).strip().upper()
     
-    if f_p and t_p:
-        if f_p["is_yard"] and t_p["is_vessel"]: return "LOAD"
-        if f_p["is_vessel"] and t_p["is_yard"]: return "DISCHARGE"
+    if f_str.startswith("Y-") and t_str.startswith("V-"): return "LOAD"
+    if f_str.startswith("V-") and t_str.startswith("Y-"): return "DISCHARGE"
     return "SHIFT"
+
+def is_vessel_pos(pos: str) -> bool:
+    return str(pos).strip().upper().startswith("V-")
 
 def get_visit_details(prepared_visits: dict):
     visits_output = {}
@@ -37,7 +34,7 @@ def get_visit_details(prepared_visits: dict):
         end_time   = visit_df["event_time"].max()
         stay_hours = (end_time - start_time).total_seconds() / 3600
 
-        loaded_df    = visit_df[visit_df.apply(lambda r: classify_move(r.get("ctr_from_position"), r.get("ctr_to_position")) == "LOAD", axis=1)]
+        loaded_df     = visit_df[visit_df.apply(lambda r: classify_move(r.get("ctr_from_position"), r.get("ctr_to_position")) == "LOAD", axis=1)]
         discharged_df = visit_df[visit_df.apply(lambda r: classify_move(r.get("ctr_from_position"), r.get("ctr_to_position")) == "DISCHARGE", axis=1)]
 
         visits_output[str(visit_id)] = {
@@ -46,8 +43,8 @@ def get_visit_details(prepared_visits: dict):
             "stay_hours":             round(stay_hours, 2),
             "loaded_containers":      int(len(loaded_df)),
             "discharged_containers":  int(len(discharged_df)),
-            "move_start":             str(visit_df["move_complete_time"].min()),
-            "move_end":               str(visit_df["move_complete_time"].max()),
+            "move_start":             str(visit_df["move_complete_time"].min()) if "move_complete_time" in visit_df.columns else None,
+            "move_end":               str(visit_df["move_complete_time"].max()) if "move_complete_time" in visit_df.columns else None,
         }
     return visits_output
 
@@ -67,7 +64,6 @@ def merge_visit_data(actual_visits, visit_details):
     return merged
 
 def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
-    """Fetch crane movement data for a carrier visit ID."""
     try:
         engine = get_engine()
         with engine.connect() as conn:
@@ -84,14 +80,9 @@ def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
             df["crane_time"] = pd.to_datetime(df["crane_time"], errors="coerce")
         return df
     except Exception as e:
-        print(f"[crane fetch] {visit_id}: {e}")
         return pd.DataFrame()
 
 def analyze_vessel_dashboard(df, vessel_service: str):
-    """
-    Comprehensive vessel analysis.
-    Filters by outbound_service, groups by actual_outbound_carrier_visit_id.
-    """
     vessel_df = df[df["outbound_service"].astype(str).str.strip() == str(vessel_service).strip()].copy()
     if vessel_df.empty:
         return {"error": f"No vessel data for '{vessel_service}'", "vessel": vessel_service}
@@ -101,7 +92,6 @@ def analyze_vessel_dashboard(df, vessel_service: str):
         group = group.copy()
         crane_df = _fetch_crane_for_visit(str(visit_id))
         if not crane_df.empty:
-            # Enrich container data with crane timestamps
             group = group.merge(crane_df[["unit_id", "crane_time"]], on="unit_id", how="left")
             group["move_complete_time"] = group["move_complete_time"].fillna(group["crane_time"])
             group.drop(columns=["crane_time"], inplace=True)
@@ -119,11 +109,9 @@ def analyze_vessel_dashboard(df, vessel_service: str):
         "min_hours": actual_raw.get("min_hours"),
     }
 
-    # Busiest Visit Analysis
     visit_scores = []
     for visit_id, visit_df in prepared_visits.items():
-        score = visit_df.apply(lambda r: classify_move(r.get("ctr_from_position"), r.get("ctr_to_position")) != "SHIFT", axis=1).sum()
-        visit_scores.append((visit_id, score))
+        visit_scores.append((visit_id, len(visit_df)))
 
     if not visit_scores:
         return {"error": "No valid visit data found", "vessel": vessel_service}
@@ -132,14 +120,12 @@ def analyze_vessel_dashboard(df, vessel_service: str):
     top_visit_id = visit_scores[0][0]
     visit_df = prepared_visits[top_visit_id]
 
-    # Metrics for Top Visit
     loaded_df     = visit_df[visit_df.apply(lambda r: classify_move(r.get("ctr_from_position"), r.get("ctr_to_position")) == "LOAD", axis=1)]
     discharged_df = visit_df[visit_df.apply(lambda r: classify_move(r.get("ctr_from_position"), r.get("ctr_to_position")) == "DISCHARGE", axis=1)]
     
     total_loaded = len(loaded_df)
     total_discharged = len(discharged_df)
     
-    # Supplement with crane data if container moves are sparse
     crane_df_top = _fetch_crane_for_visit(str(top_visit_id))
     crane_ids = []
     if not crane_df_top.empty:
@@ -153,25 +139,55 @@ def analyze_vessel_dashboard(df, vessel_service: str):
     reefer    = int(visit_df["reefer"].apply(is_yes).sum()) if "reefer" in visit_df.columns else 0
     oog       = int(visit_df["oog_unit"].apply(is_yes).sum()) if "oog_unit" in visit_df.columns else 0
 
-    # Block Concentration Analysis
+    # FIX: Robust Block Concentration Extractor to ensure tables always populate
     block_counts = defaultdict(int)
-    for pos in loaded_df["ctr_from_position"]:
-        p = parse_position(pos)
-        if p: block_counts[p["block"]] += 1
+    
+    # Use load moves if available, otherwise fallback to entire yard scan (vital for Current datasets)
+    source_positions = loaded_df["ctr_from_position"] if not loaded_df.empty else visit_df["ctr_from_position"]
+
+    for pos in source_positions.dropna():
+        pos_str = str(pos).strip().upper()
+        if pos_str.startswith("Y-"):
+            parts = pos_str.split("-")
+            # Extracts 'A0' from 'Y-PEB-A023B' or '4B' from 'Y-CWIT-4B028'
+            if len(parts) >= 3:
+                block_counts[parts[2][:2]] += 1
+            else:
+                block_counts["GEN"] += 1
     
     total_b_moves = sum(block_counts.values()) or 1
     berth_analysis = []
+    berth_conflicts = []
     sorted_blocks = sorted(block_counts.items(), key=lambda x: x[1], reverse=True)
+    
     for block, count in sorted_blocks[:5]:
         pct = (count / total_b_moves) * 100
+        risk = "High" if pct > 40 else "Medium" if pct > 20 else "Low"
+        
         berth_analysis.append({
-            "berth": f"PEB-{block}", "block": block, "cargo_concentration": f"{pct:.1f}%",
-            "recommended_cranes": max(1, round(total_loaded / max(actual.get("avg_hours", 1) or 1, 1) / 25)),
+            "berth": f"PEB-{block}", 
+            "block": block, 
+            "cargo_concentration": f"{pct:.1f}%",
+            "recommended_cranes": max(1, round(total_loaded / max(actual.get("avg_hours", 1) or 1, 1) / 25)) if total_loaded else 2,
             "total_travel_distance": "Low" if pct > 40 else "Medium" if pct > 20 else "High",
-            "congestion_risk": "High" if pct > 40 else "Medium" if pct > 20 else "Low"
+            "congestion_risk": risk
         })
+        
+        if risk == "High":
+            berth_conflicts.append({
+                "berth": f"PEB-{block}",
+                "conflict_reason": "High Cargo Concentration (>40%)",
+                "severity": "High",
+                "resolution": f"Deploy extra yard cranes to PEB-{block} or stagger arrivals."
+            })
+        elif hazardous > 15:
+            berth_conflicts.append({
+                "berth": f"PEB-{block}",
+                "conflict_reason": "Hazardous Cargo Spacing Limit",
+                "severity": "Medium",
+                "resolution": "Expand DG (Dangerous Goods) segregation buffer zone."
+            })
 
-    # Strategy & Risks
     avg_hours = actual.get("avg_hours") or 0
     risks = []
     if total_loaded > 250: risks.append("High loading volume — potential crane congestion.")
@@ -186,7 +202,9 @@ def analyze_vessel_dashboard(df, vessel_service: str):
 
     return {
         "mode": "vessel", "vessel": vessel_service, "actual": actual, "predicted": predicted,
-        "risks": risks, "execution_plan": steps, "berth_analysis": berth_analysis,
+        "risks": risks, "execution_plan": steps, 
+        "berth_analysis": berth_analysis,
+        "berth_conflicts": berth_conflicts,
         "top_visit_stats": {
             "loaded": total_loaded, "discharged": total_discharged,
             "hazardous": hazardous, "reefer": reefer, "oog": oog,

@@ -1,8 +1,3 @@
-"""
-Direct bulk-ingest script.
-Runs the same normalization + insert logic as the upload endpoint.
-Usage: python bulk_ingest.py
-"""
 import sys
 import pandas as pd
 from io import BytesIO
@@ -15,7 +10,6 @@ from db.queries import init_simplified_schema, init_auth_schema, init_training_m
 
 engine = get_engine()
 
-# Ensure all tables exist
 init_simplified_schema(engine)
 init_auth_schema(engine)
 init_training_metadata_schema(engine)
@@ -84,25 +78,26 @@ def safe_val(v):
 for fpath, dtype in FILES:
     print(f"\n{'='*60}")
     print(f"Ingesting: {fpath}  [{dtype}]")
-    df = pd.read_csv(fpath, low_memory=False)
+    try:
+        df = pd.read_csv(fpath, low_memory=False)
+    except FileNotFoundError:
+        print(f"Skipping {fpath} (file not found)")
+        continue
     print(f"  Raw rows: {len(df)}")
 
     df = normalize(df)
-
-    # Drop completely empty rows
     df = df.dropna(how='all')
 
-    # Parse dates
     date_cols = {
         "history": ["move_complete_time", "time_in", "time_out"],
-        "current": ["move_complete_time"],
+        "current": ["move_complete_time", "time_in"],
         "crane":   ["time_completed"],
     }[dtype]
+    
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=False)
 
-    # Drop rows missing critical key
     if dtype in ("history", "current"):
         before = len(df)
         df = df[df["unit_id"].notna() & (df["unit_id"].astype(str).str.strip() != "")]
@@ -118,7 +113,6 @@ for fpath, dtype in FILES:
     records = df.to_dict('records')
 
     with engine.begin() as conn:
-        # Log ingestion
         now = datetime.now(timezone.utc)
         fhash = hashlib.sha256(fpath.encode()).hexdigest()[:16] + "_bulk"
         res = conn.execute(text("""
@@ -177,12 +171,12 @@ for fpath, dtype in FILES:
                     conn.execute(text("""
                         INSERT INTO current_containers
                             (unit_id, actual_outbound_carrier_visit_id, outbound_service,
-                             ctr_from_position, ctr_to_position, move_complete_time,
+                             ctr_from_position, ctr_to_position, move_complete_time, time_in,
                              reefer, hazardous_flag, port_of_discharge, ingestion_id,
                              is_active, updated_at)
                         VALUES
                             (:unit_id, :actual_outbound_carrier_visit_id, :outbound_service,
-                             :ctr_from_position, :ctr_to_position, :move_complete_time,
+                             :ctr_from_position, :ctr_to_position, :move_complete_time, :time_in,
                              :reefer, :hazardous_flag, :port_of_discharge, :ingestion_id,
                              TRUE, CURRENT_TIMESTAMP)
                         ON CONFLICT (unit_id) DO UPDATE SET
@@ -191,6 +185,7 @@ for fpath, dtype in FILES:
                             ctr_from_position                = EXCLUDED.ctr_from_position,
                             ctr_to_position                  = EXCLUDED.ctr_to_position,
                             move_complete_time               = EXCLUDED.move_complete_time,
+                            time_in                          = EXCLUDED.time_in,
                             reefer                           = EXCLUDED.reefer,
                             hazardous_flag                   = EXCLUDED.hazardous_flag,
                             port_of_discharge                = EXCLUDED.port_of_discharge,
@@ -203,6 +198,7 @@ for fpath, dtype in FILES:
                         "ctr_from_position":                 safe_val(r.get("ctr_from_position")),
                         "ctr_to_position":                   safe_val(r.get("ctr_to_position")),
                         "move_complete_time":                safe_val(r.get("move_complete_time")),
+                        "time_in":                           safe_val(r.get("time_in")),
                         "reefer":                            safe_val(r.get("reefer")),
                         "hazardous_flag":                    safe_val(r.get("hazardous_flag")),
                         "port_of_discharge":                 safe_val(r.get("port_of_discharge")),

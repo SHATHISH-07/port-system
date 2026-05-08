@@ -32,7 +32,7 @@ def init_simplified_schema(engine):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """))
-        # Ensure ingestion_id and other columns exist if table was created previously
+        # Ensure new columns exist
         for col, col_type in [("time_in", "TIMESTAMP"), ("time_out", "TIMESTAMP"), ("unit_weight_in_kg", "FLOAT"), ("ingestion_id", "INTEGER")]:
             try: conn.execute(text(f"ALTER TABLE history_containers ADD COLUMN IF NOT EXISTS {col} {col_type}"))
             except: pass
@@ -47,6 +47,7 @@ def init_simplified_schema(engine):
                 ctr_from_position TEXT,
                 ctr_to_position TEXT,
                 move_complete_time TIMESTAMP,
+                time_in TIMESTAMP,
                 hazardous_flag TEXT,
                 reefer TEXT,
                 oog_unit TEXT,
@@ -58,7 +59,7 @@ def init_simplified_schema(engine):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """))
-        for col, col_type in [("ingestion_id", "INTEGER"), ("is_active", "BOOLEAN DEFAULT TRUE")]:
+        for col, col_type in [("ingestion_id", "INTEGER"), ("is_active", "BOOLEAN DEFAULT TRUE"), ("time_in", "TIMESTAMP")]:
             try: conn.execute(text(f"ALTER TABLE current_containers ADD COLUMN IF NOT EXISTS {col} {col_type}"))
             except: pass
 
@@ -206,22 +207,18 @@ def load_from_db(dataset_type: str, vessel_id: str = None) -> pd.DataFrame:
     """Load data from simplified containers tables."""
     engine = get_engine()
 
-    # Query
     query = settings.LOAD_CONTAINERS_QUERY.format(dataset_type=dataset_type)
 
-    # Query Parameters
     params = {}
     if vessel_id:
         query += '\n          AND outbound_service = :vessel_id'
         params["vessel_id"] = vessel_id
 
-    # Read Data from Database
     with engine.connect() as conn:
         df = pd.read_sql_query(text(query), conn, params=params)
 
-    # Convert Columns to Datetime
     for col in ["move_complete_time", "time_in", "time_out", "created_at", "updated_at"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    return df.copy()
+    return df.copy()

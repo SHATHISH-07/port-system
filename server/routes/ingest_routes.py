@@ -3,7 +3,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from typing import Optional, List
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Query
 import pandas as pd
 from io import BytesIO
 from sqlalchemy import text
@@ -26,8 +26,6 @@ def _get_file_hash(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()[:16]
 
 def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize headers: lowercase, strip, and apply comprehensive alias mapping."""
-    # Step 1: Basic cleanup — lowercase, strip, replace spaces/dashes/parens
     new_cols = []
     for c in df.columns:
         c = str(c).lower().strip()
@@ -36,73 +34,34 @@ def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         new_cols.append(c)
     df.columns = new_cols
 
-    # Step 2: Comprehensive alias mapping covering all known dataset variants
     mapping = {
-        # Unit / container ID
-        "unit_id":                              "unit_id",
-        "unit": "unit_id",
-        "unit_nbr":                             "unit_id",
-        "container_id":                         "unit_id",
-
-        # Carrier visit / vessel visit
-        "actual_outbound_carrier_visit_id":     "actual_outbound_carrier_visit_id",
-        "actual_outbound_carrier_visit":        "actual_outbound_carrier_visit_id",
-        "vessel_visit_id":                      "actual_outbound_carrier_visit_id",
-        "visit_id":                             "actual_outbound_carrier_visit_id",
-        "vessel_visit":                         "actual_outbound_carrier_visit_id",
-
-        # Outbound service / vessel name
-        "outbound_service":                     "outbound_service",
-        "vessel":                               "outbound_service",
-        "service":                              "outbound_service",
-        "vessel_id":                            "outbound_service",
-
-        # Timestamps — history
-        "move_complete_time":                   "move_complete_time",
-        "completed":                            "move_complete_time",
-        "time_in":                              "time_in",
-        "time_out":                             "time_out",
-
-        # Container positions
-        "ctr_from_position":                    "ctr_from_position",
-        "from_position":                        "ctr_from_position",
-        "from":                                 "ctr_from_position",
-        "current_position":                     "ctr_from_position",  # current dataset
-        "ctr_to_position":                      "ctr_to_position",
-        "to_position":                          "ctr_to_position",
-        "to":                                   "ctr_to_position",
-
-        # Weight
-        "verified_gross_mass_kg":               "verified_gross_mass_kg",
-        "verified_gross_mass_kg_":              "verified_gross_mass_kg",  # paren removed variant
-        "vgm":                                  "verified_gross_mass_kg",
-        "gross_mass_kg":                        "verified_gross_mass_kg",
-        "unit_weight_in_kg":                    "unit_weight_in_kg",
-        "weight":                               "unit_weight_in_kg",
-
-        # Flags
-        "reefer":                               "reefer",
-        "oog_unit":                             "oog_unit",
-        "hazardous_flag":                       "hazardous_flag",
-        "hazardous":                            "hazardous_flag",
-        "port_of_discharge":                    "port_of_discharge",
-
-        # Crane dataset specific
-        "crane_id":                             "crane_id",
-        "crane_che":                            "crane_id",
-        "crane":                                "crane_id",
-        "move_kind":                            "move_kind",
-        "kind":                                 "move_kind",
-        "event_type":                           "move_kind",   # crane event type → move_kind
-        "carrier_visit":                        "carrier_visit",
-        "time_completed":                       "time_completed",
-        "line_op":                              "line_op",
-
-        # Alternate crane column names
-        "unit_nbr":                             "unit_id",  # crane dataset uses Unit Nbr
+        "unit_id": "unit_id", "unit": "unit_id", "unit_nbr": "unit_id", "container_id": "unit_id",
+        "actual_outbound_carrier_visit_id": "actual_outbound_carrier_visit_id",
+        "actual_outbound_carrier_visit": "actual_outbound_carrier_visit_id",
+        "vessel_visit_id": "actual_outbound_carrier_visit_id",
+        "visit_id": "actual_outbound_carrier_visit_id",
+        "vessel_visit": "actual_outbound_carrier_visit_id",
+        "outbound_service": "outbound_service", "vessel": "outbound_service",
+        "service": "outbound_service", "vessel_id": "outbound_service",
+        "move_complete_time": "move_complete_time", "completed": "move_complete_time",
+        "time_in": "time_in", "time_out": "time_out",
+        "ctr_from_position": "ctr_from_position", "from_position": "ctr_from_position",
+        "from": "ctr_from_position", "current_position": "ctr_from_position",
+        "ctr_to_position": "ctr_to_position", "to_position": "ctr_to_position", "to": "ctr_to_position",
+        "verified_gross_mass_kg": "verified_gross_mass_kg", "verified_gross_mass_kg_": "verified_gross_mass_kg",
+        "vgm": "verified_gross_mass_kg", "gross_mass_kg": "verified_gross_mass_kg",
+        "unit_weight_in_kg": "unit_weight_in_kg", "weight": "unit_weight_in_kg",
+        "reefer": "reefer", "oog_unit": "oog_unit", "hazardous_flag": "hazardous_flag",
+        "hazardous": "hazardous_flag", "port_of_discharge": "port_of_discharge",
+        "crane_id": "crane_id", "crane_che": "crane_id", "crane": "crane_id",
+        "move_kind": "move_kind", "kind": "move_kind", "event_type": "move_kind",
+        "carrier_visit": "carrier_visit", "time_completed": "time_completed", "line_op": "line_op",
+        
+        # New additions specifically for Current dataset detection
+        "visit_state": "visit_state",
+        "transit_state": "transit_state"
     }
 
-    # Apply mapping while protecting against duplicate column names
     current_cols = list(df.columns)
     final_cols = []
     for col in current_cols:
@@ -121,11 +80,9 @@ def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def parse_dates(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
-    """Explicitly parse date columns to avoid DB format errors."""
     for col in columns:
         if col in df.columns:
             try:
-                # Use errors='coerce' to turn unparseable dates into NaT
                 df[col] = pd.to_datetime(df[col], errors='coerce')
             except Exception as e:
                 logger.warning(f"Failed to parse date column {col}: {e}")
@@ -147,70 +104,41 @@ def _log_ingestion(conn, filename, fhash, dtype, status, total, accepted, reject
     })
     return res.fetchone()[0]
 
-class IngestionEncoder(json.JSONEncoder):
-    """Custom JSON encoder for ingestion logs (handles Timestamps/NaN)."""
-    def default(self, obj):
-        if pd.isna(obj): return None
-        if isinstance(obj, pd.Timestamp): return obj.isoformat()
-        if hasattr(obj, 'tolist'): return obj.tolist()
-        return super().default(obj)
-
 def _log_rejection(conn, ingestion_id, row_data, reason):
-    # Ensure row_data is serializable
-    clean_data = {k: (None if pd.isna(v) else (v.isoformat() if isinstance(v, pd.Timestamp) else v)) 
-                  for k, v in row_data.items()}
     conn.execute(text("""
         INSERT INTO rejection_logs (ingestion_id, row_data, reason)
         VALUES (:id, :data, :reason)
-    """), {"id": ingestion_id, "data": json.dumps(clean_data, cls=IngestionEncoder), "reason": reason})
-
-# ── Validation ──────────────────────────────────────────────────────────────
+    """), {"id": ingestion_id, "data": json.dumps(row_data), "reason": reason})
 
 def validate_row(dtype: str, row: dict) -> Optional[str]:
-    """Basic row-level validation — only reject on truly critical missing fields."""
     if dtype == "history":
         if not row.get("unit_id"): return "Missing unit_id"
         if not row.get("actual_outbound_carrier_visit_id"): return "Missing vessel visit ID"
         if not row.get("outbound_service"): return "Missing outbound_service"
-        # Only reject if the timestamp was provided but is invalid (NaT)
-        for f in ["move_complete_time"]:
-            val = row.get(f)
-            if val is not None and pd.isnull(val):
-                return f"Invalid timestamp in {f}"
-
     elif dtype == "current":
         if not row.get("unit_id"): return "Missing unit_id"
         if not row.get("actual_outbound_carrier_visit_id"): return "Missing vessel visit ID"
         if not row.get("outbound_service"): return "Missing outbound_service"
-
     elif dtype == "crane":
         if not row.get("crane_id"): return "Missing crane_id"
         if not row.get("carrier_visit"): return "Missing carrier_visit"
-        val = row.get("time_completed")
-        if val is None or (hasattr(val, '__class__') and val.__class__.__name__ == 'NaTType'):
-            pass  # Allow null timestamps for crane — use None
-
     return None
-
-# ── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/upload")
 async def upload_data(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    datasetType: Optional[str] = Query(None), # Optional override from frontend
     admin: dict = Depends(require_admin)
 ):
-    """Simplified ingestion endpoint with header normalization."""
     content = await file.read()
     fhash = _get_file_hash(content)
     
     try:
         if file.filename.endswith(".xlsx") or file.filename.endswith(".xls"):
-            # First read with header=None to find the actual header row
             temp_df = pd.read_excel(BytesIO(content), header=None, nrows=10)
             header_row = 0
             for i, row in temp_df.iterrows():
-                # Check if this row looks like a header (contains known keywords)
                 row_vals = [str(v).lower() for v in row.values if pd.notna(v)]
                 if any(k in row_vals for k in ["unit_id", "unit id", "unit nbr", "time completed", "move complete time"]):
                     header_row = i
@@ -219,48 +147,47 @@ async def upload_data(
         else:
             df = pd.read_csv(BytesIO(content), low_memory=False)
     except Exception as e:
-        raise HTTPException(400, f"Invalid file format: {str(e)}")
+        # Gracefully handle file failures to prevent frontend undefined crashes
+        return {"status": "failed", "dataset_type": "unknown", "accepted_count": 0, "rejected_count": 0, "ingestion_id": None, "rejections": [{"row": {}, "reason": f"Invalid file format: {str(e)}"}]}
 
     if df.empty:
-        raise HTTPException(400, "File is empty")
+        return {"status": "failed", "dataset_type": "unknown", "accepted_count": 0, "rejected_count": 0, "ingestion_id": None, "rejections": [{"row": {}, "reason": "File is empty"}]}
 
-    # Normalize Headers
     df = normalize_dataframe(df)
-    
-    # DROP NULL/EMPTY ROWS EARLY
-    # 1. Drop rows that are completely empty
     df = df.dropna(how='all')
-    # 2. Drop rows where unit_id is null/empty (if it exists)
     if 'unit_id' in df.columns:
         df = df[df['unit_id'].notna() & (df['unit_id'].astype(str).str.strip() != "")]
     
     headers = list(df.columns)
     dataset_type = None
 
-    # Identify dataset type based on post-normalization columns.
-    # Priority: crane (has crane_id), history (has time_in/time_out), current (everything else)
-    if "crane_id" in headers and "carrier_visit" in headers:
-        dataset_type = "crane"
-    elif "unit_id" in headers and "actual_outbound_carrier_visit_id" in headers:
-        if "time_in" in headers or "time_out" in headers:
-            dataset_type = "history"
-        else:
-            dataset_type = "current"
+    # Detect dataset type safely
+    if datasetType and datasetType.lower() in ["history", "current", "crane"]:
+        dataset_type = datasetType.lower()
+    else:
+        if "crane_id" in headers and "carrier_visit" in headers:
+            dataset_type = "crane"
+        elif "unit_id" in headers and "actual_outbound_carrier_visit_id" in headers:
+            # Check strictly for current-only fields so it doesn't falsely classify as history
+            if "visit_state" in headers or "transit_state" in headers:
+                dataset_type = "current"
+            elif "time_out" in headers:
+                dataset_type = "history"
+            else:
+                dataset_type = "current"
 
     if not dataset_type:
-        raise HTTPException(400, f"Invalid headers. Could not identify dataset type. Found: {headers}")
+        return {"status": "failed", "dataset_type": "unknown", "accepted_count": 0, "rejected_count": 0, "ingestion_id": None, "rejections": [{"row": {}, "reason": f"Could not identify dataset type from headers: {headers[:5]}..."}]}
 
     engine = get_engine()
     
-    # Idempotency Check
     with engine.connect() as conn:
         existing = conn.execute(text(
             "SELECT id FROM ingestion_logs WHERE file_hash = :h AND status = 'success'"
         ), {"h": fhash}).fetchone()
         if existing:
-            return {"status": "skipped", "message": "File already ingested successfully", "ingestion_id": existing[0]}
+            return {"status": "skipped", "message": "File already ingested successfully", "ingestion_id": existing[0], "rejections": [], "accepted_count": 0, "rejected_count": 0}
 
-    # Ensure all expected headers exist in df (fill with None if missing)
     expected = []
     date_cols = []
     if dataset_type == "history": 
@@ -268,12 +195,11 @@ async def upload_data(
         date_cols = ["move_complete_time", "time_in", "time_out"]
     elif dataset_type == "current": 
         expected = CURRENT_HEADERS
-        date_cols = ["move_complete_time"]
+        date_cols = ["move_complete_time", "time_in"]
     elif dataset_type == "crane": 
         expected = CRANE_HEADERS
         date_cols = ["time_completed"]
     
-    # Pre-parse dates to avoid psycopg2 format issues
     df = parse_dates(df, date_cols)
 
     for col in expected:
@@ -286,12 +212,21 @@ async def upload_data(
     rejected = []
 
     for row in records:
-        error = validate_row(dataset_type, row)
+        # CRITICAL FIX: Strip out pd.NaT and NaN BEFORE validation and JSON serialization.
+        # This completely resolves the 500 error and the frontend `.length` crashes.
+        clean_row = {}
+        for k, v in row.items():
+            if pd.isna(v):
+                clean_row[k] = None
+            elif isinstance(v, pd.Timestamp):
+                clean_row[k] = v.to_pydatetime().isoformat()
+            else:
+                clean_row[k] = v
+
+        error = validate_row(dataset_type, clean_row)
         if error:
-            rejected.append({"row": row, "reason": error})
+            rejected.append({"row": clean_row, "reason": error})
         else:
-            # Clean up NaN for JSON/DB
-            clean_row = {k: (None if pd.isna(v) else v) for k, v in row.items()}
             accepted.append(clean_row)
 
     status = "success" if not rejected else ("partial" if accepted else "failed")
@@ -325,11 +260,11 @@ async def upload_data(
                     conn.execute(text("""
                         INSERT INTO current_containers 
                             (unit_id, actual_outbound_carrier_visit_id, outbound_service, 
-                             ctr_from_position, ctr_to_position, move_complete_time, 
+                             ctr_from_position, ctr_to_position, move_complete_time, time_in,
                              reefer, hazardous_flag, port_of_discharge, ingestion_id, is_active, updated_at)
                         VALUES 
                             (:unit_id, :actual_outbound_carrier_visit_id, :outbound_service, 
-                             :ctr_from_position, :ctr_to_position, :move_complete_time, 
+                             :ctr_from_position, :ctr_to_position, :move_complete_time, :time_in,
                              :reefer, :hazardous_flag, :port_of_discharge, :ingestion_id, TRUE, CURRENT_TIMESTAMP)
                         ON CONFLICT (unit_id) DO UPDATE SET
                             actual_outbound_carrier_visit_id = EXCLUDED.actual_outbound_carrier_visit_id,
@@ -337,6 +272,7 @@ async def upload_data(
                             ctr_from_position = EXCLUDED.ctr_from_position,
                             ctr_to_position = EXCLUDED.ctr_to_position,
                             move_complete_time = EXCLUDED.move_complete_time,
+                            time_in = EXCLUDED.time_in,
                             reefer = EXCLUDED.reefer,
                             hazardous_flag = EXCLUDED.hazardous_flag,
                             port_of_discharge = EXCLUDED.port_of_discharge,
@@ -354,7 +290,6 @@ async def upload_data(
                          :from_position, :to_position, :time_completed, :line_op, :ingestion_id)
                 """), [ {**r, "ingestion_id": ingestion_id} for r in accepted ])
 
-    # Side effects
     if dataset_type == "history" and len(accepted) > 0:
         check_and_trigger_retraining(background_tasks)
 
@@ -366,7 +301,7 @@ async def upload_data(
         "accepted_count": len(accepted),
         "rejected_count": len(rejected),
         "ingestion_id": ingestion_id,
-        "rejections": rejected[:10]  # Return first 10 for immediate feedback
+        "rejections": rejected[:10]
     }
 
 @router.get("/logs")

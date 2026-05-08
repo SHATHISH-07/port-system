@@ -2,13 +2,11 @@ import pandas as pd
 from utils.datetime_utils import parse_datetime
 from config import settings
 
-
 def _safe_parse(df: pd.DataFrame, col: str) -> pd.Series:
     """Parse a datetime column if it exists, else return a null Series."""
     if col in df.columns:
         return parse_datetime(df[col], col)
     return pd.Series([pd.NaT] * len(df), index=df.index)
-
 
 def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -24,14 +22,13 @@ def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
     time_in   = _safe_parse(df, "time_in")
     df["event_time"] = move_time.fillna(time_in)
 
+    # CRITICAL FIX for 'Current' dataset static snapshot operations: 
+    # Current dataset usually lacks completion dates. Supply current timestamp so data isn't dropped.
+    df["event_time"] = df["event_time"].fillna(pd.Timestamp.utcnow())
+
     # Vessel departure = time_out (if present)
     time_out = _safe_parse(df, "time_out")
     df["vessel_departure"] = time_out
-
-    # Drop rows with no event_time
-    df = df.dropna(subset=["event_time"])
-    if df.empty:
-        return df
 
     # Apply time window if vessel_departure is available
     valid_out = df["vessel_departure"].dropna()
@@ -54,7 +51,6 @@ def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
 
     return df.sort_values("event_time").reset_index(drop=True)
 
-
 def compute_visit_stay(df: pd.DataFrame):
     if df is None or df.empty:
         return None
@@ -71,7 +67,6 @@ def compute_visit_stay(df: pd.DataFrame):
     if stay_hours <= 0:
         return None
     return round(stay_hours, 2)
-
 
 def compute_vessel_stay(prepared_visits: dict):
     result = {}

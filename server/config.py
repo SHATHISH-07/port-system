@@ -24,7 +24,7 @@ class Settings:
         ],
         "current": [
             "unit_id", "outbound_service", "actual_outbound_carrier_visit_id",
-            "ctr_from_position", "ctr_to_position", "move_complete_time",
+            "ctr_from_position", "ctr_to_position", "move_complete_time", "time_in",
             "hazardous_flag", "reefer", "oog_unit", "verified_gross_mass_kg",
             "port_of_discharge"
         ],
