@@ -80,22 +80,26 @@ const CurrentVesselAnalysis = () => {
     if (!vesselId.trim()) return;
     setLoading(true);
     try {
-      const form = new FormData();
-      form.append("vessel_id", vesselId.trim());
-      form.append("mode", "current");
-      if (loaded) form.append("loaded", loaded);
-      if (discharged) form.append("discharged", discharged);
+      const analysisPromise = api.get<VesselAnalysisData>("/vessel/analysis", {
+        params: { 
+          vesselId: vesselId.trim(),
+          datasetType: "current"
+        }
+      }).then(res => {
+        setData(res.data);
+      });
 
-      const analysisPromise = api.post<VesselAnalysisData>("/analytics/vessel-analysis", form)
-        .then(res => {
-          setData(res.data);
-          setLoading(false);
-        });
-
-      const heatmapPromise = api.post("/analytics/heatmap", form)
-        .then(res => setHeatmapData(res.data));
+      const heatmapPromise = api.get<VesselHeatmapResponse>("/vessel/heatmap", {
+        params: { 
+          vesselId: vesselId.trim(),
+          datasetType: "current"
+        }
+      }).then(res => {
+        setHeatmapData(res.data);
+      });
 
       await Promise.allSettled([analysisPromise, heatmapPromise]);
+      setLoading(false);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: unknown; error?: unknown } } };
       let detailMsg = "";

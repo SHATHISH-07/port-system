@@ -17,62 +17,7 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 # ── Operational Intelligence ────────────────────────────────────────────────
 
-@router.post("/vessel-analysis")
-async def vessel_analysis(
-    vessel_id: str = Form(...),
-    mode: str = Form("current"), # current or history
-    loaded: Optional[int] = Form(None),
-    discharged: Optional[int] = Form(None),
-    user: dict = Depends(get_current_user)
-):
-    """Analyze vessel stay-time and operational metrics."""
-    logger.info(f"Starting {mode} vessel analysis for {vessel_id}")
-    try:
-        cache_key = f"{mode}_{vessel_id}"
-        if loaded is None and discharged is None:
-            cached = vessel_cache.get(cache_key)
-            if cached: return cached
-
-        df = load_from_db(mode, vessel_id)
-        result = analyze_vessel_dashboard(df, vessel_id)
-        result["mode"] = mode
-
-        # Manual override/prediction
-        if mode == "current" and loaded is not None and discharged is not None:
-            actual_visits = result.get("actual", {}).get("visits", {}) if result.get("actual") else {}
-            prediction = predict_stay_duration_from_metrics(loaded, discharged, actual_visits)
-            result["predicted"] = prediction["predicted"]
-            result["input"] = {"loaded": loaded, "discharged": discharged}
-            result["mode"] = "current-override"
-
-        if "error" not in result and loaded is None:
-            vessel_cache.set(cache_key, result)
-
-        return result
-    except Exception as e:
-        logger.error(f"Error in vessel analysis: {e}", exc_info=True)
-        return {"error": str(e)}
-
-@router.post("/heatmap")
-async def heatmap(
-    vessel_id: str = Form(...),
-    user: dict = Depends(get_current_user)
-):
-    """Generate yard heatmap for a specific vessel."""
-    try:
-        cache_key = f"heatmap_{vessel_id}"
-        cached = vessel_cache.get(cache_key)
-        if cached: return cached
-
-        df = load_from_db("current", vessel_id)
-        result = get_vessel_heatmap(df, vessel_id)
-        
-        if "error" not in result:
-            vessel_cache.set(cache_key, result)
-        return result
-    except Exception as e:
-        logger.error(f"Error in heatmap: {e}")
-        return {"error": str(e)}
+# Vessel endpoints have been moved to vessel_routes.py
 
 # ── Crane Analytics ─────────────────────────────────────────────────────────
 

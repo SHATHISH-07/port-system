@@ -205,9 +205,21 @@ async def upload_data(
     fhash = _get_file_hash(content)
     
     try:
-        df = pd.read_csv(BytesIO(content), low_memory=False)
+        if file.filename.endswith(".xlsx") or file.filename.endswith(".xls"):
+            # First read with header=None to find the actual header row
+            temp_df = pd.read_excel(BytesIO(content), header=None, nrows=10)
+            header_row = 0
+            for i, row in temp_df.iterrows():
+                # Check if this row looks like a header (contains known keywords)
+                row_vals = [str(v).lower() for v in row.values if pd.notna(v)]
+                if any(k in row_vals for k in ["unit_id", "unit id", "unit nbr", "time completed", "move complete time"]):
+                    header_row = i
+                    break
+            df = pd.read_excel(BytesIO(content), header=header_row)
+        else:
+            df = pd.read_csv(BytesIO(content), low_memory=False)
     except Exception as e:
-        raise HTTPException(400, f"Invalid CSV file: {str(e)}")
+        raise HTTPException(400, f"Invalid file format: {str(e)}")
 
     if df.empty:
         raise HTTPException(400, "File is empty")

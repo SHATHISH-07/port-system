@@ -45,7 +45,8 @@ class Settings:
     FEATURE_NAMES = [
         "loaded", "discharged", "total_moves", "imbalance", "load_ratio",
         "discharge_ratio", "container_count", "avg_weight", "heavy_count",
-        "reefer_count", "hazard_count", "oog_count", "service_hash"
+        "reefer_count", "hazard_count", "oog_count", "service_hash",
+        "move_span_hours", "restow_intensity", "block_concentration"
     ]
 
     # Automated Retraining

@@ -7,6 +7,7 @@ from routes.auth_routes import router as auth_router
 from routes.model_routes import router as model_router
 from routes.analytics_routes import router as analytics_router
 from routes.config_routes import router as config_router
+from routes.vessel_routes import router as vessel_router
 
 from contextlib import asynccontextmanager
 from services.retraining_service import scheduled_retraining_job
@@ -104,3 +105,4 @@ app.include_router(ingest_router)
 app.include_router(analytics_router)
 app.include_router(model_router)
 app.include_router(config_router)
+app.include_router(vessel_router)

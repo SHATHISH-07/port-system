@@ -73,10 +73,12 @@ const HistoryVesselAnalysis = () => {
     if (!vesselId.trim()) return;
     setLoading(true);
     try {
-      const form = new FormData();
-      form.append("vessel_id", vesselId.trim());
-      form.append("mode", "history");
-      const res = await api.post<VesselAnalysisData>("/analytics/vessel-analysis", form);
+      const res = await api.get<VesselAnalysisData>("/vessel/analysis", {
+        params: { 
+          vesselId: vesselId.trim(),
+          datasetType: "history" 
+        }
+      });
       setData(res.data);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: unknown; error?: unknown } } };

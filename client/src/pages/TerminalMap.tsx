@@ -1672,9 +1672,12 @@ export default function TerminalMap() {
     if (!vesselInput.trim()) return;
     setLoading(true);
     try {
-      const form = new FormData();
-      form.append("vessel_id", vesselInput.trim());
-      const res = await api.post("/analytics/heatmap", form);
+      const res = await api.get<VesselHeatmapResponse>("/vessel/heatmap", {
+        params: { 
+          vesselId: vesselInput.trim(),
+          datasetType: "current"
+        }
+      });
       setData(res.data);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string; error?: string } } };

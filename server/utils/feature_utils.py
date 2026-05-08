@@ -2,90 +2,85 @@ import pandas as pd
 import numpy as np
 import hashlib
 from utils.datetime_utils import parse_datetime
+from utils.position_parser import parse_position
 from config import settings
 
-# Check if a value is yes
 def is_yes(val):
-    return str(val).strip().upper() == "YES"
+    return str(val).strip().upper() in ("YES", "Y", "TRUE", "1")
 
-
-# Create features for a given vessel
 def create_features(df):
+    """
+    Generate features for stay-time prediction.
+    Expects df to be a single visit's data.
+    """
     df = df.copy()
 
-    # Parse event time
+    # 1. Ensure event_time is present
     if "event_time" not in df.columns:
         move_time = parse_datetime(df["move_complete_time"], "move_complete_time")
         time_in = parse_datetime(df["time_in"], "time_in")
         df["event_time"] = move_time.fillna(time_in)
 
-    # Drop rows with no event time
     df = df.dropna(subset=["event_time"])
-
-    # Check if the dataframe is empty
     if df.empty:
         return None
 
-    # Filter data based on vessel departure
-    if "vessel_departure" in df.columns:
-        valid_dep = df["vessel_departure"].dropna()
-        if not valid_dep.empty:
-            vessel_dep = valid_dep.mode().iloc[0]
-            window_start = vessel_dep - pd.Timedelta(hours=settings.VESSEL_WINDOW_HOURS)
-            window_end = vessel_dep + pd.Timedelta(hours=1)
-
-            df = df[
-                (df["event_time"] >= window_start) &
-                (df["event_time"] <= window_end)
-            ]
-
-    if df.empty:
-        return None
-
-    # Sort by event time
-    df = df.sort_values("event_time")
-
-    # Calculate total duration in hours (for historical info if needed later)
+    # 2. Time span features (Intensity)
     t_start = df["event_time"].min()
     t_end = df["event_time"].max()
-    total_hours = max((t_end - t_start).total_seconds() / 3600, 1)
-    # Calculate loaded and discharged counts
-    loaded = df[
-        df["ctr_from_position"].astype(str).str.startswith("Y-") &
-        df["ctr_to_position"].astype(str).str.startswith("V-")
-    ]["unit_id"].nunique()
+    move_span_hours = max((t_end - t_start).total_seconds() / 3600, 0.1)
 
-    discharged = df[
-        df["ctr_from_position"].astype(str).str.startswith("V-") &
-        df["ctr_to_position"].astype(str).str.startswith("Y-")
-    ]["unit_id"].nunique()
-
-    # Calculate total moves and imbalance
-    total_moves = loaded + discharged
-    imbalance = abs(loaded - discharged)
+    # 3. Robust Move Classification (using position_parser)
+    loaded = 0
+    discharged = 0
+    blocks = {}
     
-    # Get container count
+    for _, row in df.iterrows():
+        f_pos = parse_position(row.get("ctr_from_position"))
+        t_pos = parse_position(row.get("ctr_to_position"))
+        
+        if f_pos and t_pos:
+            # LOAD: Yard -> Vessel
+            if f_pos["is_yard"] and t_pos["is_vessel"]:
+                loaded += 1
+                b = f_pos["block"]
+                blocks[b] = blocks.get(b, 0) + 1
+            # DISCHARGE: Vessel -> Yard
+            elif f_pos["is_vessel"] and t_pos["is_yard"]:
+                discharged += 1
+                b = t_pos["block"]
+                blocks[b] = blocks.get(b, 0) + 1
+
+    total_moves = loaded + discharged
+    if total_moves == 0:
+        # Fallback if positions are missing but we have rows
+        total_moves = len(df)
+        loaded = total_moves // 2
+        discharged = total_moves - loaded
+
+    imbalance = abs(loaded - discharged)
     container_count = df["unit_id"].nunique()
     
-    # Convert unit weight to numeric and calculate average weight
+    # 4. Efficiency metrics
+    restow_intensity = len(df) / max(container_count, 1)
+    
+    # 5. Congestion metrics
+    max_block_count = max(blocks.values()) if blocks else 0
+    block_concentration = max_block_count / max(total_moves, 1)
+
+    # 6. Weight and Special Cargo
     df["unit_weight_in_kg"] = pd.to_numeric(df["unit_weight_in_kg"], errors="coerce")
     avg_weight = df["unit_weight_in_kg"].mean()
-    heavy_count = int((df["unit_weight_in_kg"] > 20000).sum())
+    heavy_count = int((df["unit_weight_in_kg"] > 25000).sum())
 
-    # Count reefer, hazard, and OOG containers
-    reefer_count = int(df["reefer"].astype(str).str.upper().eq("YES").sum())
-    hazard_count = int(df["hazardous_flag"].astype(str).str.upper().eq("YES").sum())
-    oog_count = int(df["oog_unit"].astype(str).str.upper().eq("YES").sum())
+    reefer_count = int(df["reefer"].apply(is_yes).sum()) if "reefer" in df.columns else 0
+    hazard_count = int(df["hazardous_flag"].apply(is_yes).sum()) if "hazardous_flag" in df.columns else 0
+    oog_count    = int(df["oog_unit"].apply(is_yes).sum()) if "oog_unit" in df.columns else 0
 
-    # Get outbound service
-    service_str = (
-        str(df["outbound_service"].iloc[0]).strip()
-        if "outbound_service" in df.columns else "unknown"
-    )
-    # Hash outbound service
+    # 7. Service Identity
+    service_str = str(df["outbound_service"].iloc[0]).strip() if "outbound_service" in df.columns else "unknown"
     service_hash = int(hashlib.md5(service_str.encode()).hexdigest()[:6], 16)
 
-    # Return features as a dictionary
     return {
         "loaded": int(loaded),
         "discharged": int(discharged),
@@ -95,9 +90,12 @@ def create_features(df):
         "discharge_ratio": float(discharged / (total_moves + 1)),
         "container_count": int(container_count),
         "avg_weight": float(avg_weight) if pd.notna(avg_weight) else 0.0,
-        "heavy_count": heavy_count,
-        "reefer_count": reefer_count,
-        "hazard_count": hazard_count,
-        "oog_count": oog_count,
-        "service_hash": service_hash,
-    }
+        "heavy_count": int(heavy_count),
+        "reefer_count": int(reefer_count),
+        "hazard_count": int(hazard_count),
+        "oog_count": int(oog_count),
+        "service_hash": int(service_hash),
+        "move_span_hours": float(move_span_hours),
+        "restow_intensity": float(restow_intensity),
+        "block_concentration": float(block_concentration)
+    }
