@@ -38,6 +38,19 @@ class Settings:
             "verified_gross_mass_kg",
             "unit_weight_in_kg",
             "port_of_discharge",
+            "unit_visit_gkey",
+            "category_id",
+            "equipment_class",
+            "container_length",
+            "equipment_type",
+            "freight_kind",
+            "inbound_service",
+            "arrival_mode",
+            "stow_code_1",
+            "stow_code_2",
+            "stow_code_3",
+            "imdg_code",
+            "hazard_un_numbers",
         ],
         "current": [
             "unit_id",
@@ -54,6 +67,19 @@ class Settings:
             "oog_unit",
             "verified_gross_mass_kg",
             "port_of_discharge",
+            "unit_visit_gkey",
+            "category_id",
+            "equipment_class",
+            "container_length",
+            "equipment_type",
+            "freight_kind",
+            "inbound_service",
+            "arrival_mode",
+            "stow_code_1",
+            "stow_code_2",
+            "stow_code_3",
+            "imdg_code",
+            "hazard_un_numbers",
         ],
         "crane": [
             "crane_id",
@@ -124,6 +150,16 @@ class Settings:
         "move_span_hours",
         "restow_intensity",
         "block_concentration",
+        "crane_count",
+        "crane_mphc",
+        "crane_intensity",
+        "crane_duration_hours",
+        "crane_restow_ratio",
+        "crane_exclude_ratio",
+        "reefer_equipment_ratio",
+        "pct_40ft",
+        "avg_weight_kg",
+        "heavy_ratio",
     ]
 
     # Automated retraining
@@ -160,5 +196,47 @@ class Settings:
         SELECT * FROM training_metadata
         ORDER BY last_trained_timestamp DESC LIMIT :lim
     """
+
+    # --- Berth analysis thresholds ---
+    BERTH_HIGH_RISK_SHARE_PCT: float = 40.0
+    BERTH_HIGH_RISK_MOVES: int = 60
+    BERTH_MEDIUM_RISK_SHARE_PCT: float = 20.0
+    BERTH_MEDIUM_RISK_MOVES: int = 30
+    BERTH_TOP_N: int = 5
+    BERTH_CRANE_MOVES_PER_HOUR: int = 20
+
+    # --- Risk flags ---
+    RISK_HIGH_LOAD_THRESHOLD: int = 250
+    RISK_HAZARDOUS_THRESHOLD: int = 10
+    RISK_REEFER_THRESHOLD: int = 20
+    RISK_EXTENDED_STAY_HOURS: float = 40.0
+
+    # --- Crane analytics ---
+    CRANE_MOVES_PER_HOUR_TARGET: int = 25
+    CRANE_MAX_CRANES_DISPLAY: int = 6
+    CRANE_IDLE_THRESHOLD_MINUTES: int = 30
+    CRANE_EFFICIENCY_ROLLING_WINDOW: int = 10
+    CRANE_PERFORMANCE_LIMIT: int = 1000
+    CRANE_ANALYTICS_WINDOW_DAYS: int = 90
+    CRANE_HASH_PARTITIONS: int = 8
+
+    # --- Database Config ---
+    HISTORY_PARTITION_MONTHS_AHEAD: int = 3
+    HISTORY_PARTITION_KEY: str = "time_in"
+    HISTORY_LOAD_WINDOW_DAYS: int = 180
+
+    # --- Stay prediction ---
+    MOVES_PER_HOUR_PER_CRANE: float = 25.0
+    DEFAULT_AVG_WEIGHT_KG: float = 15000.0
+    DEFAULT_REEFER_RATIO: float = 0.1
+    DEFAULT_HAZARD_RATIO: float = 0.05
+    DEFAULT_OOG_RATIO: float = 0.02
+
+    # --- Berth labels (for manual prediction fallback) ---
+    BERTH_HIGH_VOLUME_THRESHOLD: int = 1000
+    BERTH_MED_VOLUME_THRESHOLD: int = 500
+    BERTH_HIGH_LABEL: str = "PEB-1"
+    BERTH_MED_LABEL: str = "PEB-2"
+    BERTH_LOW_LABEL: str = "PEB-3"
 
 settings = Settings()

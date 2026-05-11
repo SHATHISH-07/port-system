@@ -38,7 +38,7 @@ def get_training_progress(admin: dict = Depends(require_admin)):
 # manual retraining
 @router.post("/retrain")
 def trigger_manual_retraining(background_tasks: BackgroundTasks, admin: dict = Depends(require_admin)):
-    df = load_from_db("history")
+    df = load_from_db("history", full_load=True)
     if df.empty:
         raise HTTPException(400, "No historical data available for training.")
     # Get the last training config

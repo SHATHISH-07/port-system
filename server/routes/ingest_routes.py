@@ -90,6 +90,20 @@ _MAPPING: dict[str, str] = {
     "line_op": "line_op",
     "exclude": "exclude",
     "unit_category": "unit_category",
+
+    "unit_visit_gkey": "unit_visit_gkey",
+    "category_id": "category_id",
+    "equipment_class": "equipment_class",
+    "container_length": "container_length",
+    "equipment_type": "equipment_type",
+    "freight_kind": "freight_kind",
+    "inbound_service": "inbound_service",
+    "arrival_mode": "arrival_mode",
+    "stow_code_1": "stow_code_1",
+    "stow_code_2": "stow_code_2",
+    "stow_code_3": "stow_code_3",
+    "imdg_code": "imdg_code",
+    "hazard_un_numbers": "hazard_un_numbers",
 }
 
 # normalize column names
@@ -343,6 +357,19 @@ async def upload_data(
                         "hazardous_flag": _first_value(row, "hazardous_flag", "hazardous"),
                         "oog_unit": _first_value(row, "oog_unit"),
                         "port_of_discharge": _first_value(row, "port_of_discharge"),
+                        "unit_visit_gkey": _first_value(row, "unit_visit_gkey"),
+                        "category_id": _first_value(row, "category_id"),
+                        "equipment_class": _first_value(row, "equipment_class"),
+                        "container_length": _first_value(row, "container_length"),
+                        "equipment_type": _first_value(row, "equipment_type"),
+                        "freight_kind": _first_value(row, "freight_kind"),
+                        "inbound_service": _first_value(row, "inbound_service"),
+                        "arrival_mode": _first_value(row, "arrival_mode"),
+                        "stow_code_1": _first_value(row, "stow_code_1"),
+                        "stow_code_2": _first_value(row, "stow_code_2"),
+                        "stow_code_3": _first_value(row, "stow_code_3"),
+                        "imdg_code": _first_value(row, "imdg_code"),
+                        "hazard_un_numbers": _first_value(row, "hazard_un_numbers"),
                         "ingestion_id": ingestion_id,
                     }
                     
@@ -360,12 +387,18 @@ async def upload_data(
                                     (unit_id, actual_outbound_carrier_visit_id, outbound_service,
                                      move_complete_time, time_in, time_out, ctr_from_position,
                                      ctr_to_position, verified_gross_mass_kg, unit_weight_in_kg,
-                                     reefer, hazardous_flag, oog_unit, port_of_discharge, ingestion_id)
+                                     reefer, hazardous_flag, oog_unit, port_of_discharge, ingestion_id,
+                                     unit_visit_gkey, category_id, equipment_class, container_length,
+                                     equipment_type, freight_kind, inbound_service, arrival_mode,
+                                     stow_code_1, stow_code_2, stow_code_3, imdg_code, hazard_un_numbers)
                                 VALUES
                                     (:unit_id, :actual_outbound_carrier_visit_id, :outbound_service,
                                      :move_complete_time, :time_in, :time_out, :ctr_from_position,
                                      :ctr_to_position, :verified_gross_mass_kg, :unit_weight_in_kg,
-                                     :reefer, :hazardous_flag, :oog_unit, :port_of_discharge, :ingestion_id)
+                                     :reefer, :hazardous_flag, :oog_unit, :port_of_discharge, :ingestion_id,
+                                     :unit_visit_gkey, :category_id, :equipment_class, :container_length,
+                                     :equipment_type, :freight_kind, :inbound_service, :arrival_mode,
+                                     :stow_code_1, :stow_code_2, :stow_code_3, :imdg_code, :hazard_un_numbers)
                             """),
                             history_payload,
                         )

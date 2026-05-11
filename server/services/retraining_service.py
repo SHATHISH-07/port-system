@@ -193,7 +193,7 @@ def check_and_trigger_retraining(background_tasks: BackgroundTasks):
             return
 
         # Fallback: FastAPI background task
-        df = load_from_db("history")
+        df = load_from_db("history", full_load=True)
         if df.empty:
             logger.warning("Retraining skipped — no history data loaded")
             return
@@ -239,7 +239,7 @@ async def scheduled_retraining_job():
         # log triggered retraining
         logger.info("Cron Job: Retraining triggered for %s new records.", current_count - last_size)
 
-        df = await asyncio.to_thread(load_from_db, "history")
+        df = await asyncio.to_thread(load_from_db, "history", None, True)
         if df.empty:
             return
 

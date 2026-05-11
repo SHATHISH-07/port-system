@@ -1,12 +1,16 @@
 from __future__ import annotations
 import hashlib
 import pandas as pd
+from config import settings
 from utils.datetime_utils import parse_datetime
 from utils.position_parser import classify_move, parse_position, safe_get_pos
 
 # check if value is yes
 def _is_yes(val) -> bool:
     return str(val).strip().upper() in ("YES", "Y", "TRUE", "1")
+
+def _safe_col(df: pd.DataFrame, col: str, default: float) -> float:
+    return float(df[col].iloc[0]) if col in df.columns and not df[col].isna().all() else float(default)
 
 # function to create features
 def create_features(df: pd.DataFrame) -> dict | None:
@@ -126,23 +130,55 @@ def create_features(df: pd.DataFrame) -> dict | None:
     # create hash
     service_hash = int(hashlib.md5(svc.encode()).hexdigest()[:6], 16)
 
+    # --- Container Mix Features ---
+    reefer_equipment_ratio = float(
+        df["equipment_type"].astype(str).str.contains("R", case=False).mean()
+    ) if "equipment_type" in df.columns and not df["equipment_type"].isna().all() else 0.0
+
+    pct_40ft = float(
+        (pd.to_numeric(df.get("container_length", pd.Series()), errors="coerce") >= 40).mean()
+    ) if "container_length" in df.columns and not df["container_length"].isna().all() else 0.0
+
+    heavy_ratio = heavy_count / max(total_moves, 1)
+
+    # --- Crane Features ---
+    crane_count = _safe_col(df, "_crane_count", 1.0)
+    crane_mphc = _safe_col(df, "_crane_mphc", settings.MOVES_PER_HOUR_PER_CRANE)
+    crane_intensity = _safe_col(df, "_crane_intensity", 1.0)
+    crane_duration_hours = _safe_col(df, "_crane_duration_hours", move_span_hours)
+    crane_restow_ratio = _safe_col(df, "_crane_restow_ratio", 0.0)
+    crane_exclude_ratio = _safe_col(df, "_crane_exclude_ratio", 0.0)
+
+    # average weight kg alias
+    avg_weight_kg = float(avg_weight)
+
     return {
-        "loaded":              int(loaded),
-        "discharged":          int(discharged),
-        "total_moves":         int(total_moves),
-        "imbalance":           int(imbalance),
-        "load_ratio":          float(loaded / (total_moves + 1)),
-        "discharge_ratio":     float(discharged / (total_moves + 1)),
-        "container_count":     int(container_count),
-        "avg_weight":          avg_weight,
-        "heavy_count":         int(heavy_count),
-        "reefer_count":        int(reefer_count),
-        "hazard_count":        int(hazard_count),
-        "oog_count":           int(oog_count),
-        "service_hash":        int(service_hash),
-        "move_span_hours":     float(move_span_hours),
-        "restow_intensity":    float(restow_intensity),
-        "block_concentration": float(block_concentration),
+        "loaded":                 int(loaded),
+        "discharged":             int(discharged),
+        "total_moves":            int(total_moves),
+        "imbalance":              int(imbalance),
+        "load_ratio":             float(loaded / (total_moves + 1)),
+        "discharge_ratio":        float(discharged / (total_moves + 1)),
+        "container_count":        int(container_count),
+        "avg_weight":             avg_weight,
+        "heavy_count":            int(heavy_count),
+        "reefer_count":           int(reefer_count),
+        "hazard_count":           int(hazard_count),
+        "oog_count":              int(oog_count),
+        "service_hash":           int(service_hash),
+        "move_span_hours":        float(move_span_hours),
+        "restow_intensity":       float(restow_intensity),
+        "block_concentration":    float(block_concentration),
+        "crane_count":            float(crane_count),
+        "crane_mphc":             float(crane_mphc),
+        "crane_intensity":        float(crane_intensity),
+        "crane_duration_hours":   float(crane_duration_hours),
+        "crane_restow_ratio":     float(crane_restow_ratio),
+        "crane_exclude_ratio":    float(crane_exclude_ratio),
+        "reefer_equipment_ratio": float(reefer_equipment_ratio),
+        "pct_40ft":               float(pct_40ft),
+        "avg_weight_kg":          avg_weight_kg,
+        "heavy_ratio":            float(heavy_ratio),
         # Diagnostics (not in FEATURE_NAMES, ignored by model)
-        "restow_count":        int(restows),
+        "restow_count":           int(restows),
     }

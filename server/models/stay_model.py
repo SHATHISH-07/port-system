@@ -220,7 +220,15 @@ def load_stay_model():
     if not os.path.exists(settings.MODEL_PATH):
         return None
     
-    _cached_model_bundle = joblib.load(settings.MODEL_PATH)
+    bundle = joblib.load(settings.MODEL_PATH)
+    if bundle["features"] != settings.FEATURE_NAMES:
+        logger.error(
+            "Model feature mismatch. Bundle has %s, settings expects %s",
+            bundle["features"], settings.FEATURE_NAMES
+        )
+        return {"error": "Model features outdated — retrain required"}
+        
+    _cached_model_bundle = bundle
     return _cached_model_bundle
 
 
@@ -304,12 +312,22 @@ def predict_stay_duration_from_metrics(loaded: int, discharged: int, actual_visi
         "discharge_ratio": discharged / (total_moves + 1),
 
         "container_count": total_moves,
-        "avg_weight": 15000,
+        "avg_weight": settings.DEFAULT_AVG_WEIGHT_KG,
+        "avg_weight_kg": settings.DEFAULT_AVG_WEIGHT_KG,
         "heavy_count": int(total_moves * 0.3),
-        "reefer_count": int(total_moves * 0.1),
-        "hazard_count": int(total_moves * 0.05),
-        "oog_count": int(total_moves * 0.02),
+        "reefer_count": int(total_moves * settings.DEFAULT_REEFER_RATIO),
+        "hazard_count": int(total_moves * settings.DEFAULT_HAZARD_RATIO),
+        "oog_count": int(total_moves * settings.DEFAULT_OOG_RATIO),
         "service_hash": 123456,
+        "crane_count": 1.0,
+        "crane_mphc": settings.MOVES_PER_HOUR_PER_CRANE,
+        "crane_intensity": 1.0,
+        "crane_duration_hours": 24.0,
+        "crane_restow_ratio": 0.0,
+        "crane_exclude_ratio": 0.0,
+        "reefer_equipment_ratio": settings.DEFAULT_REEFER_RATIO,
+        "pct_40ft": 0.5,
+        "heavy_ratio": 0.3,
     }
 
     # Prepare input features in the same order as training
@@ -324,16 +342,16 @@ def predict_stay_duration_from_metrics(loaded: int, discharged: int, actual_visi
     pred = model.predict(X)[0]
     avg_hours = round(float(pred), 2)
     
-    # Predict cranes required (assuming ~25 moves per hour per crane)
+    # Predict cranes required
     if avg_hours > 0:
         crane_moves_per_hour = total_moves / avg_hours
-        predicted_cranes = max(1, round(crane_moves_per_hour / 25))
+        predicted_cranes = max(1, round(crane_moves_per_hour / settings.MOVES_PER_HOUR_PER_CRANE))
     else:
         predicted_cranes = 1
         
     # Predict suitable berth
-    suitable_berth = "PEB-1" if total_moves > 1000 else "PEB-2" if total_moves > 500 else "PEB-3"
-    cargo_concentration = "100.0%" if total_moves > 1000 else "50.0%"
+    suitable_berth = settings.BERTH_HIGH_LABEL if total_moves > settings.BERTH_HIGH_VOLUME_THRESHOLD else settings.BERTH_MED_LABEL if total_moves > settings.BERTH_MED_VOLUME_THRESHOLD else settings.BERTH_LOW_LABEL
+    cargo_concentration = "100.0%" if total_moves > settings.BERTH_HIGH_VOLUME_THRESHOLD else "50.0%"
 
     # Return predicted stay time
     return {

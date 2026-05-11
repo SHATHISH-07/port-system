@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Form
 from auth.dependencies import get_current_user
 import pandas as pd
 from db.connection import get_engine
@@ -47,10 +47,10 @@ async def get_vessel_analysis(
         raise HTTPException(status_code=500, detail=str(e))
 
 # get vessel heatmap
-@router.get("/heatmap")
+@router.post("/heatmap")
 async def get_vessel_heatmap_route(
-    vessel_id: str = Query(..., alias="vesselId"),
-    dataset_type: str = Query("history", alias="datasetType"),
+    vessel_id: str = Form(..., alias="vessel_id"),
+    dataset_type: str = Query("current", alias="datasetType"),
     current_user: dict = Depends(get_current_user),
 ):
     try:

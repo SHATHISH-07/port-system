@@ -29,9 +29,16 @@ def _all_blocks(df: pd.DataFrame) -> list[str]:
 # build layout from blocks
 def _build_layout(blocks: list[str]) -> dict:
     if not blocks:
-        return {}   
-    cols = max(1, int(len(blocks) ** 0.5) + 1)
-    return {b: {"x": i % cols, "y": i // cols} for i, b in enumerate(blocks)}
+        return {}
+    layout = {}
+    for b in blocks:
+        parts = b.split("-")
+        block_part = parts[-1] if parts else b
+        prefix = block_part[0] if block_part else "A"
+        y = max(0, ord(prefix.upper()) - 65)
+        x = abs(hash(b)) % 10
+        layout[b] = {"x": x, "y": y}
+    return layout
 
 # get vessel heatmap
 def get_vessel_heatmap(df: pd.DataFrame, vessel_service: str) -> dict:
@@ -68,7 +75,7 @@ def get_vessel_heatmap(df: pd.DataFrame, vessel_service: str) -> dict:
     ].copy()
     # aggregate by block
     blocks_data: dict = defaultdict(lambda: {
-        "count": 0, "hazardous": 0, "reefer": 0, "oog": 0, "cells": {},
+        "count": 0, "hazardous": 0, "reefer": 0, "oog": 0, "load_moves": 0, "discharge_moves": 0, "cells": {},
     })
     summary = {"hazardous": 0, "reefer": 0, "oog": 0}
     # iterate over each row in the visit data
@@ -93,6 +100,12 @@ def get_vessel_heatmap(df: pd.DataFrame, vessel_service: str) -> dict:
             }
         b_data["cells"][cell_key]["containers"].add(unit)
         b_data["cells"][cell_key]["tiers"][yard_pos.get("tier", "1")] += 1
+        
+        if move_type == "LOAD":
+            b_data["load_moves"] += 1
+        elif move_type == "DISCHARGE":
+            b_data["discharge_moves"] += 1
+            
         # update hazardous, reefer, and oog counts
         if _is_yes(row.get("hazardous_flag")):
             b_data["hazardous"] += 1; summary["hazardous"] += 1
@@ -142,8 +155,10 @@ def get_vessel_heatmap(df: pd.DataFrame, vessel_service: str) -> dict:
         "vessel":             str(vessel_service),
         "visit_id":           str(top_visit_id),
         "recommended_berth":  max_block,
+        "berth_recommendation_reason": f"Highest container volume ({final_blocks[max_block]['count']} units).",
         "max_block":          max_block,
         "summary":            summary,
+        "cargo_summary":      summary,
         "layout":             layout,
         "blocks":             final_blocks,
     }

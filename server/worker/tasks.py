@@ -39,7 +39,7 @@ def retrain_model_task(self, config_overrides: dict = None):
         from models.stay_model import train_stay_model
         from db.training_metadata import record_training_metadata
 
-        df = load_from_db("history")
+        df = load_from_db("history", full_load=True)
         if df.empty:
             logger.warning("[Celery] No history data found — retraining aborted")
             return {"status": "skipped", "reason": "no_history_data"}
