@@ -22,26 +22,26 @@ def _build_ensemble():
         ("scaler", StandardScaler()),
         ("ridge", Ridge(alpha=10.0)),
     ])
-    # XGBoost regressor
+    # XGBoost regressor - higher complexity for better fit
     xgb = XGBRegressor(
-        n_estimators=80,
-        max_depth=3,
-        learning_rate=0.08,
+        n_estimators=150,
+        max_depth=4,
+        learning_rate=0.06,
         subsample=0.8,
         colsample_bytree=0.8,
-        min_child_weight=5,
-        reg_alpha=1.0,
-        reg_lambda=5.0,
+        min_child_weight=3,
+        reg_alpha=0.5,
+        reg_lambda=2.0,
         random_state=42,
         verbosity=0,
     )
     # Gradient boosting regressor
     gbr = GradientBoostingRegressor(
-        n_estimators=60,
-        max_depth=2,
-        learning_rate=0.10,
-        subsample=0.75,
-        min_samples_leaf=8,
+        n_estimators=120,
+        max_depth=3,
+        learning_rate=0.08,
+        subsample=0.8,
+        min_samples_leaf=5,
         random_state=42,
     )
     # Voting regressor
@@ -63,6 +63,16 @@ def train_stay_model(df, config: dict = None):
         # Group the dataset by visit ID (using the DB column name)
         grouped = df.groupby("actual_outbound_carrier_visit_id")
 
+        # Bulk fetch all crane data for these visits to avoid N+1 queries
+        all_visit_ids = list(grouped.groups.keys())
+        # We fetch all crane movements for these visits in one or a few goes
+        # but load_from_db handles filtering. If we pass no vessel_id, it loads all.
+        # For training, we load all crane movements once.
+        from db.queries import load_from_db
+        logger.info("Loading all crane movements for enrichment...")
+        # Load all records to ensure every visit in history is correctly enriched
+        all_crane_df = load_from_db("crane")
+        
         # Lists to store training data and target values
         X, y = [], []
 
@@ -71,13 +81,45 @@ def train_stay_model(df, config: dict = None):
         skipped_error = 0
         skipped_rows  = 0
 
+        # Create a dictionary for fast crane lookup
+        crane_grouped = all_crane_df.groupby("carrier_visit") if not all_crane_df.empty else {}
+
         # Iterate through each visit ID and group
         for visit_id, group in grouped:
-
             if len(group) < min_visit_rows:
                 skipped_rows += 1
                 continue
-            visit_df = prepare_visit_data(group)
+            
+            # Enrich group with its crane data if available
+            visit_id_str = str(visit_id)
+            visit_group = group.copy()
+            
+            if visit_id_str in crane_grouped.groups:
+                visit_crane_df = crane_grouped.get_group(visit_id_str).copy()
+                # Simple enrichment logic similar to vessel_service.py
+                v_crane_df = visit_crane_df.rename(columns={
+                    "time_completed": "crane_time",
+                    "from_position": "crane_from",
+                    "to_position": "crane_to",
+                    "move_kind": "crane_move_kind"
+                })
+                v_crane_df["crane_time"] = pd.to_datetime(v_crane_df["crane_time"], errors="coerce")
+                
+                valid_cranes = v_crane_df[v_crane_df["exclude"] != "Yes"] if "exclude" in v_crane_df.columns else v_crane_df
+                if not valid_cranes.empty:
+                    c_count = valid_cranes["crane_id"].nunique()
+                    min_t = valid_cranes["crane_time"].min()
+                    max_t = valid_cranes["crane_time"].max()
+                    dur = max((max_t - min_t).total_seconds() / 3600, 0.1) if pd.notna(min_t) and pd.notna(max_t) else 0.1
+                    eff_moves = len(valid_cranes)
+                    mphc = (eff_moves / dur) / c_count if c_count > 0 else 0
+                    
+                    visit_group["_crane_count"] = float(c_count)
+                    visit_group["_crane_mphc"] = float(min(mphc, 999.0))
+                    visit_group["_crane_duration_hours"] = float(dur)
+                    visit_group["_crane_intensity"] = float(eff_moves / max(len(group), 1))
+            
+            visit_df = prepare_visit_data(visit_group)
             stay = compute_visit_stay(visit_df)
 
             if stay is None:
@@ -90,6 +132,7 @@ def train_stay_model(df, config: dict = None):
             if stay > max_hours:
                 skipped_error += 1
                 continue
+            
             features = create_features(visit_df)
 
             if features is None:
@@ -180,7 +223,7 @@ def train_stay_model(df, config: dict = None):
                          :size, CAST(:metrics AS JSONB), 'active',
                          'Auto-trained via pipeline',
                          :now, :now, :now, :now)
-                    ON CONFLICT (model_name, version) DO UPDATE SET
+                    ON CONFLICT (version) DO UPDATE SET
                         status       = 'active',
                         promoted_at  = EXCLUDED.promoted_at,
                         updated_at   = EXCLUDED.updated_at
@@ -233,7 +276,7 @@ def load_stay_model():
 
 
 # PREDICT VISIT  (single visit DataFrame → predicted hours)
-def predict_visit_stay_duration(df):
+def predict_visit_stay_duration(df, target_mph=None, crane_count_override=None, mph_override=None):
     bundle = load_stay_model()
 
     if bundle is None:
@@ -243,6 +286,20 @@ def predict_visit_stay_duration(df):
     feature_names  = bundle["features"]
 
     features = create_features(df)
+    
+    # Apply crane count override if provided (from historical average)
+    if crane_count_override and features is not None:
+        features["crane_count"] = float(crane_count_override)
+    
+    # Apply MPH override if provided (from history or user)
+    final_mph = float(target_mph) if target_mph and float(target_mph) > 0 else (float(mph_override) if mph_override and float(mph_override) > 0 else None)
+    
+    if final_mph and features is not None:
+        features["crane_mphc"] = final_mph
+        # Recalculate duration based on new MPH
+        t_moves = features.get("total_moves", 100)
+        c_count = features.get("crane_count", 2.0)
+        features["crane_duration_hours"] = t_moves / (max(c_count, 1.0) * final_mph)
 
     if features is None:
         return None
@@ -255,9 +312,8 @@ def predict_visit_stay_duration(df):
 
     return round(float(pred), 2)
 
-
 # PREDICT VESSEL  (all visits for one Outbound Service)
-def predict_vessel_stay_duration(prepared_visits: dict):
+def predict_vessel_stay_duration(prepared_visits: dict, target_mph=None, crane_count_override=None, mph_override=None):
     if not prepared_visits:
         return {"error": "No data found for vessel"}
 
@@ -268,7 +324,7 @@ def predict_vessel_stay_duration(prepared_visits: dict):
             continue
 
         # Predict the stay time
-        pred = predict_visit_stay_duration(visit_df)
+        pred = predict_visit_stay_duration(visit_df, target_mph, crane_count_override=crane_count_override, mph_override=mph_override)
 
         # Error dict → propagate
         if isinstance(pred, dict):
@@ -288,7 +344,7 @@ def predict_vessel_stay_duration(prepared_visits: dict):
 
 
 # Predict the stay time from input
-def predict_stay_duration_from_metrics(loaded: int, discharged: int, actual_visits=None):
+def predict_stay_duration_from_metrics(loaded: int, discharged: int, target_mph=None, historical_crane_avg=None, historical_mph_avg=None):
     bundle = load_stay_model()
 
     if bundle is None:
@@ -319,10 +375,10 @@ def predict_stay_duration_from_metrics(loaded: int, discharged: int, actual_visi
         "hazard_count": int(total_moves * settings.DEFAULT_HAZARD_RATIO),
         "oog_count": int(total_moves * settings.DEFAULT_OOG_RATIO),
         "service_hash": 123456,
-        "crane_count": 1.0,
-        "crane_mphc": settings.MOVES_PER_HOUR_PER_CRANE,
+        "crane_count": float(historical_crane_avg) if historical_crane_avg and float(historical_crane_avg) > 0 else (3.0 if total_moves > 300 else 2.0 if total_moves > 100 else 1.0),
+        "crane_mphc": float(target_mph) if target_mph and float(target_mph) > 0 else (float(historical_mph_avg) if historical_mph_avg and float(historical_mph_avg) > 0 else settings.MOVES_PER_HOUR_PER_CRANE),
         "crane_intensity": 1.0,
-        "crane_duration_hours": 24.0,
+        "crane_duration_hours": max(6.0, total_moves / (max(float(historical_crane_avg or 3.0), 1.0) * (float(target_mph) if target_mph and float(target_mph) > 0 else (float(historical_mph_avg) if historical_mph_avg and float(historical_mph_avg) > 0 else settings.MOVES_PER_HOUR_PER_CRANE)))),
         "crane_restow_ratio": 0.0,
         "crane_exclude_ratio": 0.0,
         "reefer_equipment_ratio": settings.DEFAULT_REEFER_RATIO,

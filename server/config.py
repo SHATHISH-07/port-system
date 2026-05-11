@@ -223,7 +223,7 @@ class Settings:
     # --- Database Config ---
     HISTORY_PARTITION_MONTHS_AHEAD: int = 3
     HISTORY_PARTITION_KEY: str = "time_in"
-    HISTORY_LOAD_WINDOW_DAYS: int = 180
+    HISTORY_LOAD_WINDOW_DAYS: int = 0  # 0 = no window filter; load all historical data
 
     # --- Stay prediction ---
     MOVES_PER_HOUR_PER_CRANE: float = 25.0

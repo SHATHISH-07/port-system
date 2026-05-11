@@ -22,6 +22,22 @@ def _safe_str(value) -> str | None:
         return None
     return s
 
+def get_yard_id(row: Any) -> str | None:
+    """Extract yard ID dynamically from position fields — no hardcoded yard names."""
+    for field in ["yard_id", "ctr_from_position", "ctr_to_position", "from_position", "to_position", "current_position"]:
+        val = _safe_str(_row_get(row, field))
+        if val:
+            vu = val.upper()
+            # Yard position: Y-<TERMINAL>-<slot> — extract terminal dynamically
+            if vu.startswith("Y-") and "-" in vu[2:]:
+                parts = val.split("-")
+                if len(parts) >= 3:
+                    return parts[1].upper()
+            # Plain named yard (already a terminal ID)
+            if re.match(r'^[A-Z]{2,6}$', vu):
+                return vu
+    return None
+
 # Safe row value accessor (NaN-proof)
 def _row_get(row: Any, key: str):
     # Handle None

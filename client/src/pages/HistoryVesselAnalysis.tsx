@@ -11,6 +11,7 @@ import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
 import VisitTable from "../components/vessel-analysis/VisitTable";
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
+import CraneAssignment from "../components/vessel-analysis/CraneAssignment";
 
 function Section({
   n,
@@ -73,13 +74,22 @@ const HistoryVesselAnalysis = () => {
     if (!vesselId.trim()) return;
     setLoading(true);
     try {
-      const res = await api.get<VesselAnalysisData>("/vessel/analysis", {
+      const res = await api.get<VesselAnalysisData & { error?: string; suggestions?: string[] }>("/vessel/analysis", {
         params: { 
           vesselId: vesselId.trim(),
           datasetType: "history" 
         }
       });
-      setData(res.data);
+
+      // Backend returns 200 with {error:...} when vessel not found
+      if (res.data?.error) {
+        const suggs = res.data.suggestions ?? [];
+        const suggHint = suggs.length > 0 ? ` Did you mean: ${suggs.join(', ')}?` : '';
+        showToast(`${res.data.error}${suggHint}`, 'warning');
+        setData(null);
+      } else {
+        setData(res.data);
+      }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: unknown; error?: unknown } } };
       let detailMsg = "";
@@ -141,43 +151,20 @@ const HistoryVesselAnalysis = () => {
             </Section>
           )}
 
-          {/* ── 03 · Operational Intelligence (asymmetric grid) ── */}
+          {/* ── 03 · Crane Assignment ── */}
           {!isManual && (
-            <Section n={isManual ? "02" : "03"} label="Operational Intelligence">
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: { xs: "1fr", md: "280px 1fr" },
-                  gridTemplateRows: { md: "1fr 1fr" },
-                  gap: 2,
-                }}
-              >
-                {/* Berth — spans 2 rows left */}
-                <Box sx={{ gridRow: { md: "1 / 3" } }}>
-                  <BerthRecommendation
-                    berth={data.berth_analysis?.[0]?.berth}
-                    concentration={String(data.berth_analysis?.[0]?.cargo_concentration_pct ?? "")}
-                  />
-                </Box>
-                {/* Execution — top right */}
-                <ExecutionPlan steps={data.execution_plan} />
-                {/* Risks — bottom right */}
-                <RiskAndStrategy risks={data.risks} />
-              </Box>
+            <Section n="03" label="Crane Assignment by Visit">
+              <CraneAssignment
+                data={data.crane_assignment}
+                mode="history"
+              />
             </Section>
           )}
 
-          {/* ── 04 · Yard Strategy ── */}
-          {!isManual && data.yard_strategy && (
-            <Section n="04" label="Yard Preparation Strategy">
-              <YardStrategy data={data.yard_strategy} />
-            </Section>
-          )}
-
-          {/* ── 05 · Berth Impact ── */}
+          {/* ── 04 · Berth History ── */}
           {!isManual && (
-            <Section n="05" label="Berth Impact Analysis">
-              <BerthImpactTable data={data.berth_analysis} />
+            <Section n="04" label="Historical Berth Analysis">
+              <BerthImpactTable data={data.berth_analysis} mode="history" />
             </Section>
           )}
 

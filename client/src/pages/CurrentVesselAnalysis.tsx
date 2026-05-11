@@ -10,6 +10,7 @@ import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
 import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
+import CraneAssignment from "../components/vessel-analysis/CraneAssignment";
 import HeatmapPage from "./HeatmapPage";
 
 
@@ -80,23 +81,20 @@ const CurrentVesselAnalysis = () => {
     if (!vesselId.trim()) return;
     setLoading(true);
     try {
-      const analysisPromise = api.get<VesselAnalysisData>("/vessel/analysis", {
-        params: { 
-          vesselId: vesselId.trim(),
-          datasetType: "current"
-        }
-      }).then(res => {
-        setData(res.data);
-      });
+      const params: Record<string, string> = {
+        vesselId: vesselId.trim(),
+        datasetType: "current",
+      };
+      // Pass user-entered load/discharge so backend strategy updates
+      if (loaded && Number(loaded) > 0) params.loaded = loaded;
+      if (discharged && Number(discharged) > 0) params.discharged = discharged;
+
+      const analysisPromise = api.get<VesselAnalysisData>("/vessel/analysis", { params })
+        .then(res => { setData(res.data); });
 
       const heatmapPromise = api.get<VesselHeatmapResponse>("/vessel/heatmap", {
-        params: { 
-          vesselId: vesselId.trim(),
-          datasetType: "current"
-        }
-      }).then(res => {
-        setHeatmapData(res.data);
-      });
+        params: { vesselId: vesselId.trim(), datasetType: "current" }
+      }).then(res => { setHeatmapData(res.data); });
 
       await Promise.allSettled([analysisPromise, heatmapPromise]);
       setLoading(false);
@@ -156,16 +154,24 @@ const CurrentVesselAnalysis = () => {
             />
           </Section>
 
-          {/* ── 02 · Yard Heatmap ── */}
+          {/* ── 02 · Crane Assignment ── */}
+          <Section n="02" label="Crane Assignment">
+            <CraneAssignment
+              data={data.crane_assignment}
+              mode="current"
+              recommendedCranes={data.operational_predictions?.recommended_crane_count}
+            />
+          </Section>
+
+          {/* ── 03 · Yard Heatmap ── */}
           {heatmapData && !heatmapData.error && (
-            <Section n="02" label="Live Yard Heatmap">
+            <Section n="03" label="Live Yard Heatmap">
               <HeatmapPage data={heatmapData} />
             </Section>
           )}
 
-          {/* ── 03 · Operational Intelligence ── */}
-          {/* Asymmetric 1:2 grid — berth on left, execution+risks share right */}
-          <Section n={heatmapData && !heatmapData.error ? "03" : "02"} label="Operational Intelligence">
+          {/* ── 04 · Operational Intelligence ── */}
+          <Section n={heatmapData && !heatmapData.error ? "04" : "03"} label="Operational Intelligence">
             <Box
               sx={{
                 display: "grid",

@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
 import {
-  Box, Typography, TextField, Button, LinearProgress,
-  Skeleton, useTheme, Tooltip,
+  Box,
+  Typography,
+  TextField,
+  Button,
+  LinearProgress,
+  Skeleton,
+  useTheme,
+  Tooltip,
 } from "@mui/material";
 import { InfoOutlined } from "@mui/icons-material";
 import { api } from "../api/api";
@@ -24,28 +30,40 @@ export default function ConfigPanel() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const formatNum = (value?: number | null) =>
+    typeof value === "number" ? value.toLocaleString() : "—";
+
   const load = async () => {
     try {
       const res = await api.get<RetrainingConfig>("/config/retraining");
       setCfg(res.data);
-      setThreshold(String(res.data.retrain_threshold));
+      setThreshold(String(res.data.retrain_threshold ?? ""));
     } catch {
       // silently ignore — server may not yet have responded
     }
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const handleSave = async () => {
     const val = parseInt(threshold, 10);
     if (isNaN(val) || val < 1) return;
+
     setSaving(true);
     try {
       const res = await api.patch<{ config: RetrainingConfig }>("/config/retraining", {
         retrain_threshold: val,
       });
-      setCfg((prev) => prev ? { ...prev, retrain_threshold: res.data.config.retrain_threshold } : prev);
+
+      setCfg((prev) =>
+        prev
+          ? { ...prev, retrain_threshold: res.data.config.retrain_threshold }
+          : prev
+      );
+
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch {
@@ -58,20 +76,33 @@ export default function ConfigPanel() {
   const isDirty = cfg ? parseInt(threshold, 10) !== cfg.retrain_threshold : false;
 
   const scheduledLabel = cfg
-    ? `${String(cfg.scheduled_hour).padStart(2, "0")}:${String(cfg.scheduled_minute).padStart(2, "0")} (server time)`
+    ? `${String(cfg.scheduled_hour ?? 0).padStart(2, "0")}:${String(
+      cfg.scheduled_minute ?? 0
+    ).padStart(2, "0")} (server time)`
     : "—";
 
-  const progress = cfg && cfg.retrain_threshold > 0
-    ? Math.min(100, Math.round((cfg.new_records_since_training / cfg.retrain_threshold) * 100))
-    : 0;
+  const progress =
+    cfg && typeof cfg.retrain_threshold === "number" && cfg.retrain_threshold > 0
+      ? Math.min(
+        100,
+        Math.round(
+          ((cfg.new_records_since_training ?? 0) / cfg.retrain_threshold) * 100
+        )
+      )
+      : 0;
+
+  const lastTrainedDate = cfg?.last_trained_timestamp
+    ? new Date(cfg.last_trained_timestamp)
+    : null;
 
   return (
     <Box
       sx={{
         p: 3,
-        bgcolor: theme.palette.mode === "dark"
-          ? "rgba(96,165,250,0.05)"
-          : "rgba(29,78,216,0.04)",
+        bgcolor:
+          theme.palette.mode === "dark"
+            ? "rgba(96,165,250,0.05)"
+            : "rgba(29,78,216,0.04)",
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: 2,
       }}
@@ -81,7 +112,6 @@ export default function ConfigPanel() {
       </Typography>
 
       <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-
         {/* ── Threshold ───────────────────────────────────────── */}
         <Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1 }}>
@@ -130,12 +160,15 @@ export default function ConfigPanel() {
               New Records Since Last Training
             </Typography>
             {cfg ? (
-              <Typography variant="body2" sx={{
-                fontFamily: "monospace",
-                color: theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8",
-                fontWeight: 600,
-              }}>
-                {cfg.new_records_since_training.toLocaleString()} / {cfg.retrain_threshold.toLocaleString()}
+              <Typography
+                variant="body2"
+                sx={{
+                  fontFamily: "monospace",
+                  color: theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8",
+                  fontWeight: 600,
+                }}
+              >
+                {formatNum(cfg.new_records_since_training)} / {formatNum(cfg.retrain_threshold)}
               </Typography>
             ) : (
               <Skeleton width={80} height={20} />
@@ -148,12 +181,18 @@ export default function ConfigPanel() {
             sx={{
               height: 6,
               borderRadius: 3,
-              bgcolor: theme.palette.mode === "dark" ? "rgba(96,165,250,0.12)" : "rgba(29,78,216,0.10)",
+              bgcolor:
+                theme.palette.mode === "dark"
+                  ? "rgba(96,165,250,0.12)"
+                  : "rgba(29,78,216,0.10)",
               "& .MuiLinearProgress-bar": {
                 borderRadius: 3,
-                bgcolor: progress >= 100
-                  ? "success.main"
-                  : theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
+                bgcolor:
+                  progress >= 100
+                    ? "success.main"
+                    : theme.palette.mode === "dark"
+                      ? "#60a5fa"
+                      : "#1a73e8",
               },
             }}
           />
@@ -168,16 +207,17 @@ export default function ConfigPanel() {
           {[
             {
               label: "Total History Records",
-              value: cfg ? cfg.history_record_count.toLocaleString() : null,
+              value: formatNum(cfg?.history_record_count),
             },
             {
               label: "Records at Last Training",
-              value: cfg ? cfg.last_trained_record_count.toLocaleString() : null,
+              value: formatNum(cfg?.last_trained_record_count),
             },
             {
               label: "Nightly Schedule",
               value: scheduledLabel,
-              tooltip: "The nightly scheduled retraining runs at this time every day (server local time). Changing the hour requires a server restart.",
+              tooltip:
+                "The nightly scheduled retraining runs at this time every day (server local time). Changing the hour requires a server restart.",
             },
           ].map(({ label, value, tooltip }) => (
             <Box key={label}>
@@ -192,7 +232,10 @@ export default function ConfigPanel() {
                 )}
               </Box>
               {value !== null ? (
-                <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary", fontFamily: "monospace" }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 600, color: "text.primary", fontFamily: "monospace" }}
+                >
                   {value}
                 </Typography>
               ) : (
@@ -203,15 +246,12 @@ export default function ConfigPanel() {
         </Box>
 
         {/* ── Last trained ─────────────────────────────────────── */}
-        {cfg?.last_trained_timestamp && (
+        {lastTrainedDate && !Number.isNaN(lastTrainedDate.getTime()) && (
           <Typography variant="caption" sx={{ color: "text.disabled" }}>
             Last training completed:{" "}
-            <strong>
-              {new Date(cfg.last_trained_timestamp).toLocaleString()}
-            </strong>
+            <strong>{lastTrainedDate.toLocaleString()}</strong>
           </Typography>
         )}
-
       </Box>
     </Box>
   );

@@ -49,20 +49,24 @@ def ensure_history_partitions(months_ahead: int = None):
     except Exception as e:
         logger.warning(f"Failed to ensure history partitions: {e}")
 
-# Schema initialisation
-def init_simplified_schema(engine):
+def ensure_yard_tables(engine, yard_id: str):
+    yard_id = yard_id.lower().strip()
+    if not yard_id:
+        return
+        
     with engine.begin() as conn:
-
-        # history_containers
-        res_hc = conn.execute(text("SELECT relkind FROM pg_class WHERE relname = 'history_containers'")).fetchone()
+        # History table for the yard
+        hist_table = f"{yard_id}_history_containers"
+        res_hc = conn.execute(text(f"SELECT relkind FROM pg_class WHERE relname = '{hist_table}'")).fetchone()
         if not res_hc:
-            conn.execute(text("""
-                CREATE TABLE history_containers (
+            conn.execute(text(f"""
+                CREATE TABLE {hist_table} (
                     id                               SERIAL,
                     unit_id                          TEXT,
                     outbound_service                 TEXT,
                     actual_outbound_carrier_visit_id TEXT,
                     facility_id                      TEXT,
+                    yard_id                          TEXT,
                     category_id                      TEXT,
                     ctr_from_position                TEXT,
                     ctr_to_position                  TEXT,
@@ -91,37 +95,12 @@ def init_simplified_schema(engine):
                     created_at                       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 ) PARTITION BY RANGE (time_in);
             """))
-        # adding columns if they don't exist
-        for col, col_type in [
-            ("time_in", "TIMESTAMP"),
-            ("time_out", "TIMESTAMP"),
-            ("unit_weight_in_kg", "FLOAT"),
-            ("ingestion_id", "INTEGER"),
-            ("unit_visit_gkey", "TEXT"),
-            ("category_id", "TEXT"),
-            ("equipment_class", "TEXT"),
-            ("container_length", "TEXT"),
-            ("equipment_type", "TEXT"),
-            ("freight_kind", "TEXT"),
-            ("inbound_service", "TEXT"),
-            ("arrival_mode", "TEXT"),
-            ("stow_code_1", "TEXT"),
-            ("stow_code_2", "TEXT"),
-            ("stow_code_3", "TEXT"),
-            ("imdg_code", "TEXT"),
-            ("hazard_un_numbers", "TEXT"),
-        ]:
-            try:
-                # add column if it doesn't exist
-                conn.execute(
-                    text(f"ALTER TABLE history_containers ADD COLUMN IF NOT EXISTS {col} {col_type}")
-                )
-            except Exception:
-                pass
-
-        # current_containers
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS current_containers (
+            conn.execute(text(f"CREATE TABLE IF NOT EXISTS {hist_table}_default PARTITION OF {hist_table} DEFAULT;"))
+            
+        # Current table for the yard
+        curr_table = f"{yard_id}_current_containers"
+        conn.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS {curr_table} (
                 id                               SERIAL PRIMARY KEY,
                 unit_id                          TEXT UNIQUE NOT NULL,
                 outbound_service                 TEXT,
@@ -140,65 +119,30 @@ def init_simplified_schema(engine):
                 ingestion_id                     INTEGER,
                 is_active                        BOOLEAN DEFAULT TRUE,
                 created_at                       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at                       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at                       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                yard_id                          TEXT,
+                category_id                      TEXT,
+                equipment_class                  TEXT,
+                container_length                 TEXT,
+                equipment_type                   TEXT,
+                freight_kind                     TEXT,
+                inbound_service                  TEXT,
+                arrival_mode                     TEXT,
+                stow_code_1                      TEXT,
+                stow_code_2                      TEXT,
+                stow_code_3                      TEXT,
+                imdg_code                        TEXT,
+                hazard_un_numbers                TEXT,
+                unit_visit_gkey                  TEXT
             );
         """))
 
-        # Ensure UNIQUE constraint exists even on pre-existing tables
-        try:
-            conn.execute(text("""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM pg_constraint
-                        WHERE conrelid = 'current_containers'::regclass
-                          AND contype = 'u'
-                          AND conname LIKE '%unit_id%'
-                    ) THEN
-                        ALTER TABLE current_containers
-                            ADD CONSTRAINT current_containers_unit_id_unique UNIQUE (unit_id);
-                    END IF;
-                END$$;
-            """))
-        except Exception:
-            pass
-
-        # add columns if they don't exist
-        for col, col_type in [
-            ("ingestion_id", "INTEGER"),
-            ("is_active", "BOOLEAN"),
-            ("time_in", "TIMESTAMP"),
-            ("visit_state", "TEXT"),
-            ("transit_state", "TEXT"),
-            ("oog_unit", "TEXT"),
-            ("verified_gross_mass_kg", "FLOAT"),
-            ("unit_visit_gkey", "TEXT"),
-            ("category_id", "TEXT"),
-            ("equipment_class", "TEXT"),
-            ("container_length", "TEXT"),
-            ("equipment_type", "TEXT"),
-            ("freight_kind", "TEXT"),
-            ("inbound_service", "TEXT"),
-            ("arrival_mode", "TEXT"),
-            ("stow_code_1", "TEXT"),
-            ("stow_code_2", "TEXT"),
-            ("stow_code_3", "TEXT"),
-            ("imdg_code", "TEXT"),
-            ("hazard_un_numbers", "TEXT"),
-        ]:
-            try:
-                # add column if it doesn't exist
-                conn.execute(
-                    text(f"ALTER TABLE current_containers ADD COLUMN IF NOT EXISTS {col} {col_type}")
-                )
-            except Exception:
-                pass
-
-        # crane_movements
-        res_cm = conn.execute(text("SELECT relkind FROM pg_class WHERE relname = 'crane_movements'")).fetchone()
+        # Crane table for the yard
+        crane_table = f"{yard_id}_crane_movements"
+        res_cm = conn.execute(text(f"SELECT relkind FROM pg_class WHERE relname = '{crane_table}'")).fetchone()
         if not res_cm:
-            conn.execute(text("""
-                CREATE TABLE crane_movements (
+            conn.execute(text(f"""
+                CREATE TABLE {crane_table} (
                     id             SERIAL,
                     crane_id       TEXT,
                     unit_id        TEXT,
@@ -211,34 +155,33 @@ def init_simplified_schema(engine):
                     line_op        TEXT,
                     unit_category  TEXT,
                     exclude        TEXT,
+                    yard_id        TEXT,
                     ingestion_id   INTEGER,
                     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 ) PARTITION BY HASH (carrier_visit);
             """))
-            try:
-                from config import settings
-                for i in range(settings.CRANE_HASH_PARTITIONS):
-                    conn.execute(text(f"CREATE TABLE IF NOT EXISTS crane_movements_p{i} PARTITION OF crane_movements FOR VALUES WITH (MODULUS {settings.CRANE_HASH_PARTITIONS}, REMAINDER {i});"))
-            except Exception:
-                pass
+            from config import settings
+            for i in range(settings.CRANE_HASH_PARTITIONS):
+                conn.execute(text(f"CREATE TABLE IF NOT EXISTS {crane_table}_p{i} PARTITION OF {crane_table} FOR VALUES WITH (MODULUS {settings.CRANE_HASH_PARTITIONS}, REMAINDER {i});"))
 
-        # add columns if they don't exist
-        for col, col_type in [
-            ("event_type", "TEXT"),
-            ("unit_category", "TEXT"),
-            ("exclude", "TEXT"),
-            ("ingestion_id", "INTEGER"),
-            ("from_position", "TEXT"),
-            ("to_position", "TEXT"),
-        ]:
-            try:
-                # add column if it doesn't exist
-                conn.execute(
-                    text(f"ALTER TABLE crane_movements ADD COLUMN IF NOT EXISTS {col} {col_type}")
-                )
-            except Exception:
-                pass
+        # Indexes
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_hc_visit ON {hist_table} (actual_outbound_carrier_visit_id);"))
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_hc_service ON {hist_table} (outbound_service);"))
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_hc_unit ON {hist_table} (unit_id);"))
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_hc_time ON {hist_table} (time_in DESC);"))
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_hc_haz ON {hist_table} (hazardous_flag) WHERE hazardous_flag = 'Yes';"))
+        
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_cc_unit ON {curr_table} (unit_id);"))
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_cc_visit ON {curr_table} (actual_outbound_carrier_visit_id);"))
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_cc_active ON {curr_table} (is_active) WHERE is_active = TRUE;"))
+        
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_cm_visit ON {crane_table} (carrier_visit);"))
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_cm_crane ON {crane_table} (crane_id, time_completed DESC);"))
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{yard_id}_cm_unit ON {crane_table} (unit_id);"))
 
+# Schema initialisation — creates support tables (NOT yard data tables)
+def init_simplified_schema(engine):
+    with engine.begin() as conn:
         # ingestion_logs
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS ingestion_logs (
@@ -257,44 +200,6 @@ def init_simplified_schema(engine):
             );
         """))
 
-        # add columns if they don't exist
-        for col, col_type in [
-            ("file_hash", "TEXT"),
-            ("records_total", "INTEGER"),
-            ("records_accepted", "INTEGER"),
-            ("records_rejected", "INTEGER"),
-            ("uploaded_by", "INTEGER"),
-            ("completed_at", "TIMESTAMP"),
-            ("error_summary", "TEXT"),
-        ]:
-            try:
-                # add column if it doesn't exist
-                conn.execute(
-                    text(f"ALTER TABLE ingestion_logs ADD COLUMN IF NOT EXISTS {col} {col_type}")
-                )
-            except Exception:
-                pass
-
-
-        # Create all indexes
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_hc_service_visit ON history_containers (outbound_service, actual_outbound_carrier_visit_id);"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_hc_time_in ON history_containers (time_in DESC NULLS LAST);"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_hc_facility ON history_containers (facility_id);"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_hc_category ON history_containers (category_id);"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_hc_hazardous ON history_containers (hazardous_flag) WHERE hazardous_flag = 'Yes';"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_hc_reefer ON history_containers (reefer) WHERE reefer = 'Yes';"))
-        
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cm_carrier_visit ON crane_movements (carrier_visit);"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cm_crane_time ON crane_movements (crane_id, time_completed DESC NULLS LAST);"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cm_exclude ON crane_movements (exclude) WHERE exclude = 'No';"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cm_move_kind ON crane_movements (move_kind);"))
-
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cc_service_visit ON current_containers (outbound_service, actual_outbound_carrier_visit_id);"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cc_active ON current_containers (is_active) WHERE is_active = TRUE;"))
-        pass
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cc_hazardous ON current_containers (hazardous_flag) WHERE hazardous_flag = 'Yes';"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cc_reefer ON current_containers (reefer) WHERE reefer = 'Yes';"))
-        
         # rejection_logs
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS rejection_logs (
@@ -305,9 +210,38 @@ def init_simplified_schema(engine):
                 created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """))
-    
-    # Ensure partitions exist after schema is initialized
-    ensure_history_partitions()
+
+        # add extra columns if they don't exist (safe migration)
+        for col, col_type in [
+            ("file_hash", "TEXT"),
+            ("records_total", "INTEGER"),
+            ("records_accepted", "INTEGER"),
+            ("records_rejected", "INTEGER"),
+            ("uploaded_by", "INTEGER"),
+            ("completed_at", "TIMESTAMP"),
+            ("error_summary", "TEXT"),
+        ]:
+            try:
+                conn.execute(
+                    text(f"ALTER TABLE ingestion_logs ADD COLUMN IF NOT EXISTS {col} {col_type}")
+                )
+            except Exception:
+                pass
+
+    # Ensure yard tables exist for any yards already in the DB
+    try:
+        engine2 = get_engine()
+        with engine2.connect() as conn2:
+            res_all = conn2.execute(text(
+                "SELECT relname FROM pg_class WHERE relkind IN ('r','p') AND relname LIKE '%_current_containers' AND oid NOT IN (SELECT inhrelid FROM pg_inherits)"
+            )).fetchall()
+        for r in res_all:
+            yid = r[0].replace("_current_containers", "")
+            if yid:
+                ensure_yard_tables(engine, yid)
+    except Exception:
+        pass
+
 
 
 # Authentication tables
@@ -422,51 +356,94 @@ def _parse_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # Data loading
-def load_from_db(dataset_type: str, vessel_id: str = None, full_load: bool = False) -> pd.DataFrame:
+def load_from_db(dataset_type: str, vessel_id: str = None, full_load: bool = False, yard_id: str = None) -> pd.DataFrame:
     # get engine from connection.py
     from config import settings
     engine = get_engine()
     dataset_type = (dataset_type or "").strip().lower()
 
-    # if dataset_type is history
-    if dataset_type == "history":
-        table = "history_containers"
-        id_col = "outbound_service"
-        order_col = "COALESCE(move_complete_time, time_in, created_at) DESC NULLS LAST"
-    # if dataset_type is current
-    elif dataset_type == "current":
-        table = "current_containers"
-        id_col = "outbound_service"
-        order_col = "COALESCE(move_complete_time, time_in, updated_at, created_at) DESC NULLS LAST"
-    # if dataset_type is crane
-    elif dataset_type == "crane":
-        table = "crane_movements"
-        id_col = "carrier_visit"
-        order_col = "COALESCE(time_completed, created_at) DESC NULLS LAST"
+    table_list = []
+    
+    if yard_id:
+        y_pref = f"{yard_id.lower().strip()}_"
+        if dataset_type == "history": table_list.append(f"{y_pref}history_containers")
+        elif dataset_type == "current": table_list.append(f"{y_pref}current_containers")
+        elif dataset_type == "crane": table_list.append(f"{y_pref}crane_movements")
     else:
+        # Global Load: Discover all yard-specific tables
+        with engine.connect() as conn:
+            suffix = "history_containers" if dataset_type == "history" else "current_containers" if dataset_type == "current" else "crane_movements"
+            # Discover top-level tables only (not partitions)
+            # We exclude any table that is a child in pg_inherits
+            res = conn.execute(text(f"""
+                SELECT relname FROM pg_class 
+                WHERE relkind IN ('p','r') 
+                  AND relname LIKE '%_{suffix}'
+                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+            """)).fetchall()
+            for r in res:
+                table_list.append(r[0])
+            
+            # Add monolithic as fallback/legacy if not already added
+            legacy = "history_containers" if dataset_type == "history" else "current_containers" if dataset_type == "current" else "crane_movements"
+            if legacy not in table_list:
+                check_legacy = conn.execute(text(f"SELECT relname FROM pg_class WHERE relname = '{legacy}'")).fetchone()
+                if check_legacy:
+                    table_list.append(legacy)
+
+    # Build and execute individual queries to handle schema variations gracefully
+    dfs = []
+    
+    # Get common columns for the dataset type
+    expected_cols = settings.EXPECTED_HEADERS.get(dataset_type, [])
+
+    id_col = "carrier_visit" if dataset_type == "crane" else "actual_outbound_carrier_visit_id"
+
+    for tbl in table_list:
+        try:
+            q = f"SELECT * FROM {tbl}"
+            filters = []
+            params = {}
+            if vessel_id:
+                filters.append(f"{id_col} = :v_id")
+                params["v_id"] = vessel_id
+            
+            if dataset_type == "history" and not full_load and settings.HISTORY_LOAD_WINDOW_DAYS > 0:
+                # Skip the date window when filtering by a specific vessel ID
+                # so old CWIT/PEB records are always reachable
+                if not vessel_id:
+                    filters.append(f"time_in >= NOW() - INTERVAL '{settings.HISTORY_LOAD_WINDOW_DAYS} days'")
+                
+            if filters:
+                q += " WHERE " + " AND ".join(filters)
+            
+            with engine.connect() as conn:
+                df_tbl = pd.read_sql_query(text(q), conn, params=params)
+                if not df_tbl.empty:
+                    dfs.append(df_tbl)
+        except Exception as e:
+            import logging
+            logging.getLogger("port_system").warning(f"Failed to load from table {tbl}: {e}")
+
+    if not dfs:
         return pd.DataFrame()
-    
-    # query to select all data from the table
-    query = f"SELECT * FROM {table}"
-    params: dict = {}
-    
-    filters = []
-    # if vessel_id is provided, add it to the query
-    if vessel_id:
-        filters.append(f"{id_col} = :vessel_id")
-        params["vessel_id"] = vessel_id
 
-    if dataset_type == "history" and not full_load and settings.HISTORY_LOAD_WINDOW_DAYS > 0:
-        filters.append(f"time_in >= NOW() - INTERVAL '{settings.HISTORY_LOAD_WINDOW_DAYS} days'")
-
-    if filters:
-        query += " WHERE " + " AND ".join(filters)
-
-    # add order by clause
-    query += f" ORDER BY {order_col}"
+    # Combine all dataframes
+    df = pd.concat(dfs, ignore_index=True)
     
-    # connect to the database and execute the query
-    with engine.connect() as conn:
-        df = pd.read_sql_query(text(query), conn, params=params)
+    # Ensure all expected columns exist
+    for col in expected_cols:
+        if col not in df.columns:
+            df[col] = None
+            
+    # Sort the final result
+    if dataset_type == "crane":
+        if "time_completed" in df.columns:
+            df = df.sort_values("time_completed", ascending=False)
+    else:
+        if "move_complete_time" in df.columns:
+            df = df.sort_values("move_complete_time", ascending=False)
+        elif "time_in" in df.columns:
+            df = df.sort_values("time_in", ascending=False)
 
     return _parse_datetime_columns(df).copy()

@@ -1,6 +1,11 @@
 import { Box, Typography, useTheme } from "@mui/material";
+import type { OperationalPredictions, VesselAnalysisData } from "../../types/vessel";
 
-interface Props { risks: string[]; }
+interface Props { 
+  risks?: string[]; 
+  predictions?: OperationalPredictions;
+  delays?: VesselAnalysisData["delay_analysis"];
+}
 
 const SEVERITY = [
   { label: "HIGH", colorKey: "error"   as const },
@@ -8,10 +13,19 @@ const SEVERITY = [
   { label: "LOW",  colorKey: "info"    as const },
 ];
 
-export default function RiskAndStrategy({ risks }: Props) {
+export default function RiskAndStrategy({ risks, predictions, delays }: Props) {
   const theme = useTheme();
   const safeRisks = risks || [];
-  const hasRisks = safeRisks.length > 0;
+  const items = [...safeRisks];
+  if (predictions) {
+    items.push(`Conflict Risk: ${predictions.conflict_risk}`);
+    items.push(`ITV Impact: ${predictions.itv_impact.itv_cycle_impact}`);
+  }
+  if (delays) {
+    delays.forEach(d => items.push(`${d.factor}: ${d.reason}`));
+  }
+
+  const hasRisks = items.length > 0;
 
   return (
     <Box
@@ -42,12 +56,11 @@ export default function RiskAndStrategy({ risks }: Props) {
           <Typography
             variant="caption"
             sx={{
-              color: theme.palette.error.main,
-              fontFamily: "monospace",
+              color: "text.secondary",
               fontWeight: 700,
             }}
           >
-            {safeRisks.length} flagged
+            {items.length} factors
           </Typography>
         )}
       </Box>
@@ -55,7 +68,7 @@ export default function RiskAndStrategy({ risks }: Props) {
       {/* Body */}
       <Box sx={{ flex: 1 }}>
         {hasRisks ? (
-          safeRisks.map((risk, i) => {
+          items.map((item, i) => {
             const sev = SEVERITY[Math.min(i, SEVERITY.length - 1)];
             const color = theme.palette[sev.colorKey].main;
             return (
@@ -63,7 +76,7 @@ export default function RiskAndStrategy({ risks }: Props) {
                 key={i}
                 sx={{
                   display: "flex",
-                  borderBottom: i < safeRisks.length - 1
+                  borderBottom: i < items.length - 1
                     ? `1px solid ${theme.palette.divider}`
                     : "none",
                 }}
@@ -97,7 +110,7 @@ export default function RiskAndStrategy({ risks }: Props) {
                 {/* Risk text */}
                 <Box sx={{ px: 2, py: 2, flex: 1 }}>
                   <Typography variant="body2" sx={{ color: "text.secondary", lineHeight: 1.6 }}>
-                    {risk}
+                    {item}
                   </Typography>
                 </Box>
               </Box>

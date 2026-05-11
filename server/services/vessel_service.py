@@ -55,29 +55,19 @@ def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
 
 # Crane data fetching
 def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
-    # fetch crane data for a visit
+    from db.queries import load_from_db
     try:
-        engine = get_engine()
-        with engine.connect() as conn:
-            # Get all the crane movements for the visit
-            df = pd.read_sql_query(
-                text("""
-                    SELECT
-                        unit_id,
-                        crane_id,
-                        time_completed      AS crane_time,
-                        from_position       AS crane_from,
-                        to_position         AS crane_to,
-                        move_kind           AS crane_move_kind
-                    FROM crane_movements
-                    WHERE carrier_visit = :v
-                """),
-                conn,
-                params={"v": str(visit_id)},
-            )
-        # convert crane_time to datetime
-        if not df.empty:
-            df["crane_time"] = pd.to_datetime(df["crane_time"], errors="coerce")
+        df = load_from_db("crane", vessel_id=str(visit_id))
+        if df.empty:
+            return pd.DataFrame()
+            
+        df = df.rename(columns={
+            "time_completed": "crane_time",
+            "from_position": "crane_from",
+            "to_position": "crane_to",
+            "move_kind": "crane_move_kind"
+        })
+        df["crane_time"] = pd.to_datetime(df["crane_time"], errors="coerce")
         return df
     except Exception as exc:
         logger.warning("crane fetch failed for %s: %s", visit_id, exc)
@@ -130,7 +120,9 @@ def _enrich_history_group(group: pd.DataFrame, visit_id: str) -> pd.DataFrame:
     mphc = min(float(mphc), 999.0) # cap at 999
     
     intensity = effective_moves / max(len(group), 1)
-    
+    crane_id_list = valid_cranes["crane_id"].dropna().unique().tolist()
+
+    group["_crane_ids"] = str(crane_id_list[:8])
     group["_crane_move_count"] = crane_moves
     group["_crane_effective_moves"] = effective_moves
     group["_crane_count"] = float(crane_count)
@@ -237,6 +229,10 @@ def _visit_details(enriched_visits: dict) -> dict:
             if mt in ("SHIFT", "RESTOW"):
                 restow_count += 1
                 
+        crane_count_val = float(vdf["_crane_count"].iloc[0]) if "_crane_count" in vdf.columns and not vdf["_crane_count"].isna().all() else 0.0
+        crane_ids_raw = vdf["_crane_ids"].iloc[0] if "_crane_ids" in vdf.columns and not vdf["_crane_ids"].isna().all() else "[]"
+        crane_duration_h = float(vdf["_crane_duration_hours"].iloc[0]) if "_crane_duration_hours" in vdf.columns and not vdf["_crane_duration_hours"].isna().all() else 0.0
+        crane_exclude_ratio = float(vdf["_crane_exclude_ratio"].iloc[0]) if "_crane_exclude_ratio" in vdf.columns and not vdf["_crane_exclude_ratio"].isna().all() else 0.0
         out[str(visit_id)] = {
             "start_time":            str(start),
             "end_time":              str(end),
@@ -254,6 +250,10 @@ def _visit_details(enriched_visits: dict) -> dict:
             "total_units": total_units,
             "restow_count": restow_count,
             "crane_mphc": crane_mphc,
+            "crane_count": int(crane_count_val),
+            "crane_ids": crane_ids_raw,
+            "crane_duration_hours": round(crane_duration_h, 2),
+            "crane_exclude_ratio": crane_exclude_ratio,
             "avg_weight_kg": avg_weight_kg,
             "freight_kind_breakdown": freight_kind_breakdown,
             "port_of_discharge_top5": pod_top5,
@@ -261,13 +261,128 @@ def _visit_details(enriched_visits: dict) -> dict:
     return out
 
 # Berth analysis
+
+def _predict_operational_metrics(visit_df, crane_df, ml_stay_hours, loaded=0, discharged=0, target_mph_override=None, historical_crane_avg=None):
+    import math
+    if visit_df.empty:
+        return None
+
+    # Use actual loaded+discharged counts if provided; else fall back to row count
+    total_ops = (loaded or 0) + (discharged or 0)
+    if total_ops == 0:
+        total_ops = len(visit_df)
+    
+    # Handle ml_stay_hours if it's a dict or float
+    if isinstance(ml_stay_hours, dict):
+        effective_stay_hours = ml_stay_hours.get("avg_hours", 24.0)
+    else:
+        effective_stay_hours = ml_stay_hours if (isinstance(ml_stay_hours, (int, float)) and ml_stay_hours > 0) else 24.0
+
+    # Target moves per hour per crane (use override if provided, else default 25.0)
+    target_mph = float(target_mph_override) if target_mph_override and float(target_mph_override) > 0 else 25.0
+    
+    required_mph = total_ops / max(effective_stay_hours, 1.0)
+    recommended_crane_count = max(math.ceil(required_mph / target_mph), 1)
+    
+    # Use historical average as a dynamic baseline if available
+    if historical_crane_avg and float(historical_crane_avg) > 0:
+        # If the volume is significant (> 100), respect the historical floor.
+        # For small volume 'what-if' scenarios, allow the math to recommend fewer cranes.
+        if total_ops > 100:
+            recommended_crane_count = max(recommended_crane_count, round(float(historical_crane_avg)))
+    else:
+        # Static proactive floor for larger vessels if no history
+        if total_ops > 300:
+            recommended_crane_count = max(recommended_crane_count, 3)
+        elif total_ops > 100:
+            recommended_crane_count = max(recommended_crane_count, 2)
+    
+    recommended_crane_count = min(recommended_crane_count, 6)
+
+    intensity = total_ops / max(effective_stay_hours, 1)
+    load_ratio = (loaded or 0) / max(total_ops, 1)
+
+    # Strategy selection based on intensity and cargo imbalance
+    if intensity > 80:
+        strategy_label = 'HIGH_DENSITY_FIRST'
+        strategy_desc = 'Prioritize dense blocks with dual cycling to meet aggressive schedule.'
+    elif load_ratio > 0.7:
+        strategy_label = 'LOAD_DOMINANT'
+        strategy_desc = 'Heavy load operation — prioritize yard pre-staging and crane allocation.'
+    elif load_ratio < 0.3 and (discharged or 0) > 100:
+        strategy_label = 'DISCHARGE_DOMINANT'
+        strategy_desc = 'Heavy discharge — clear berth blocks sequentially, ITV on high alert.'
+    elif recommended_crane_count >= 3:
+        strategy_label = 'BLOCK_SEQUENTIAL'
+        strategy_desc = 'Assign cranes sequentially along the berth to avoid overlap.'
+    else:
+        strategy_label = 'BALANCED_DUAL_CRANE'
+        strategy_desc = 'Balanced load/discharge spread to minimize ITV waiting.'
+
+    crane_overlap_risk = 'High' if recommended_crane_count > 4 and intensity > 60 else 'Medium' if recommended_crane_count > 2 else 'Low'
+    avg_travel_score = 35 + (intensity * 0.2)
+    itv_needs = math.ceil(recommended_crane_count * 4.5)
+    op_impact = min(100, int((intensity * 0.4) + (recommended_crane_count * 5) + (avg_travel_score * 0.3)))
+
+    return {
+        'recommended_crane_count': recommended_crane_count,
+        'strategy_label': strategy_label,
+        'strategy_description': strategy_desc,
+        'conflict_risk': crane_overlap_risk,
+        'load_discharge_ratio': round(load_ratio, 3),
+        'total_operations': total_ops,
+        'itv_impact': {
+            'avg_travel_score': round(avg_travel_score, 1),
+            'itv_cycle_impact': 'High traffic on main corridors' if avg_travel_score > 50 else 'Normal flow',
+            'estimated_itv_needs': itv_needs,
+        },
+        'operational_impact_score': op_impact,
+        'operational_rules_applied': [
+            f'Target {target_mph:.0f} MPH per crane',
+            f'Required MPH: {required_mph:.1f} → {recommended_crane_count} crane(s)',
+            f'ITV ratio ~4.5:1 for {strategy_label}',
+            'Conflict mitigation spacing',
+        ]
+    }
+
+def _calculate_delay_analysis(visit_df, crane_df):
+    import pandas as pd
+    causes = []
+    if visit_df.empty: return causes
+    
+    if not crane_df.empty and 'time_completed' in crane_df.columns:
+        crane_df = crane_df.sort_values('time_completed')
+        crane_df['gap'] = crane_df['time_completed'].diff().dt.total_seconds() / 60
+        long_gaps = crane_df[crane_df['gap'] > 30]
+        if not long_gaps.empty:
+            causes.append({
+                'factor': 'Crane Idle Time',
+                'impact': 'High',
+                'reason': f'Detected {len(long_gaps)} idle periods exceeding 30 mins.'
+            })
+            
+    restow = len(crane_df[crane_df.get('move_kind', '').isin(['RESTOW', 'SHIFT'])]) if 'move_kind' in crane_df.columns else 0
+    if restow > 20:
+        causes.append({
+            'factor': 'High Restow Rate',
+            'impact': 'Medium',
+            'reason': f'{restow} restows detected, delaying primary load/discharge.'
+        })
+        
+    return causes
+
 def _build_berth_tables(
     visit_df: pd.DataFrame,
     total_loaded: int,
     total_discharged: int,
     avg_hours: float,
 ) -> tuple[list, dict, list]:
+    # Pre-compute effective operation hours for crane recommendation
+    eff_hours = max(avg_hours, 1.0) if avg_hours and avg_hours > 0 else max(
+        (total_loaded + total_discharged) / 25.0, 1.0
+    )
     # build berth analysis and conflict tables
+
     berth_counts: dict = defaultdict(lambda: {
         "total_moves": 0, "load_moves": 0, "discharge_moves": 0,
         "units": set(), "hazardous": 0, "reefer": 0, "oog": 0,
@@ -317,9 +432,28 @@ def _build_berth_tables(
         else:
             risk = "Low"
 
-        rec_cranes = max(1, round(
-            max(total_loaded, total_discharged, total) / max(avg_hours or 1, 1) / 20
-        ))
+        # Recommended cranes: scale by block's share of total vessel operations
+        # total_ops = all load+discharge across the vessel visit
+        total_ops_all = max(total_loaded + total_discharged, total_all, 1)
+        block_share = total / max(total_all, 1)
+
+        # Proactive crane recommendation: 
+        # 1. Based on volume (enforce parallelism for larger vessels)
+        # 2. Based on target stay (at least 20-25 moves/hour total)
+        if total_ops_all > 300:
+            vol_min_cranes = 3
+        elif total_ops_all > 100:
+            vol_min_cranes = 2
+        else:
+            vol_min_cranes = 1
+            
+        target_vessel_cranes = max(vol_min_cranes, round(total_ops_all / 120))
+        stay_based_cranes = max(1, round(total_ops_all / (max(eff_hours, 1.0) * 20))) 
+        vessel_total_cranes = max(target_vessel_cranes, stay_based_cranes)
+        
+        # This block gets cranes proportional to its share (min 1)
+        rec_cranes = max(1, round(vessel_total_cranes * block_share * 1.5))
+        rec_cranes = min(rec_cranes, vessel_total_cranes)
 
         # Derive terminal / block from berth key  (e.g. "PEB-2B" → terminal=PEB, block=2B)
         parts = bk.split("-", 1)
@@ -395,22 +529,58 @@ def _build_berth_tables(
     return berth_analysis, primary, conflict_table
 
 # Main dashboard entry point
-def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
-    # check for empty data
+def analyze_vessel_dashboard(
+    df: pd.DataFrame,
+    vessel_service: str,
+    loaded_override: int = None,
+    discharged_override: int = None,
+    target_mph_override: float = None,
+    history_df: pd.DataFrame = None,
+) -> dict:
+    """Analyze a vessel from either outbound_service OR actual_outbound_carrier_visit_id."""
     if df is None or df.empty:
         return {"error": "No data available", "vessel": vessel_service}
-    
-    # check for required columns
-    required = {"outbound_service", "actual_outbound_carrier_visit_id"}
-    if not required.issubset(df.columns):
+
+    # Require at least one searchable column
+    if "outbound_service" not in df.columns and "actual_outbound_carrier_visit_id" not in df.columns:
         return {"error": "Missing required columns", "vessel": vessel_service}
-    # filter for the vessel
-    vessel_df = df[
-        df["outbound_service"].astype(str).str.strip() == str(vessel_service).strip()
-    ].copy()
-    # check if vessel data is empty
+
+    search_key = str(vessel_service).strip().upper()
+
+    # Try outbound_service first (service code like FF116)
+    vessel_df = pd.DataFrame()
+    if "outbound_service" in df.columns:
+        vessel_df = df[
+            df["outbound_service"].astype(str).str.strip().str.upper() == search_key
+        ].copy()
+
+    # Fallback: search by actual_outbound_carrier_visit_id (visit ID like CQN180001)
+    if vessel_df.empty and "actual_outbound_carrier_visit_id" in df.columns:
+        vessel_df = df[
+            df["actual_outbound_carrier_visit_id"].astype(str).str.strip().str.upper() == search_key
+        ].copy()
+
     if vessel_df.empty:
-        return {"error": f"No data for '{vessel_service}'", "vessel": vessel_service}
+        # Build a helpful suggestion list from available services
+        suggestions: list[str] = []
+        if "outbound_service" in df.columns:
+            all_svcs = df["outbound_service"].dropna().unique().tolist()
+            # Prefix match first (e.g. user typed "FF161" → suggest "FF116", "FF119")
+            prefix = search_key[:2]
+            prefix_matches = sorted([s for s in all_svcs if str(s).upper().startswith(prefix)])[:5]
+            suggestions = prefix_matches or sorted([str(s) for s in all_svcs])[:5]
+        hint = f" Available similar services: {', '.join(suggestions)}." if suggestions else ""
+        return {
+            "error": f"No data found for vessel '{vessel_service}'.{hint} Make sure the vessel has been ingested.",
+            "vessel": vessel_service,
+            "suggestions": suggestions,
+        }
+
+
+    # Ensure actual_outbound_carrier_visit_id column exists for grouping
+    if "actual_outbound_carrier_visit_id" not in vessel_df.columns:
+        vessel_df["actual_outbound_carrier_visit_id"] = vessel_service
+
     # check if there is time out data
     has_time_out = (
         "time_out" in vessel_df.columns
@@ -434,14 +604,153 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
         prepared_visits[visit_id] = prepare_visit_data(group)
     # compute actual stay
     actual_raw = compute_vessel_stay(prepared_visits)
-    if not actual_raw:
-        return {"error": "No valid visit data found", "vessel": vessel_service}
     
-    # predict stay
+    # Calculate historical averages for dynamic recommendations
+    # If in Current mode, we should use history_df for baseline stats
+    baseline_df = history_df if (history_df is not None and not history_df.empty) else vessel_df
+    
+    # Isolate the specific vessel/service in baseline
+    search_key = str(vessel_service).strip().upper()
+    if "outbound_service" in baseline_df.columns:
+        baseline_vessel = baseline_df[baseline_df["outbound_service"].astype(str).str.strip().str.upper() == search_key].copy()
+    else:
+        baseline_vessel = baseline_df[baseline_df["actual_outbound_carrier_visit_id"].astype(str).str.strip().str.upper() == search_key].copy()
+    
+    # If baseline is still empty (e.g. current visit but no history), fallback to vessel_df
+    if baseline_vessel.empty:
+        baseline_vessel = vessel_df
+        
+    baseline_prepared = {}
+    baseline_enriched = {}
+    for vid, group in baseline_vessel.groupby("actual_outbound_carrier_visit_id"):
+        # We don't need full enrichment for baseline, just counts
+        baseline_prepared[vid] = prepare_visit_data(group)
+        baseline_enriched[vid] = group
+
+    visit_counts = len(baseline_prepared)
+    historical_crane_avg = 0.0
+    avg_loaded_per_visit = 0.0
+    avg_discharged_per_visit = 0.0
+    
+    if visit_counts > 0:
+        total_cranes = 0
+        total_mph = 0.0
+        total_load = 0
+        total_disc = 0
+        for vid, vdf in baseline_enriched.items():
+            total_cranes += int(float(vdf["_crane_count"].iloc[0])) if "_crane_count" in vdf.columns and not vdf["_crane_count"].isna().all() else 0
+            total_mph += float(vdf["_crane_mphc"].iloc[0]) if "_crane_mphc" in vdf.columns and not vdf["_crane_mphc"].isna().all() else 0.0
+            for _, row in vdf.iterrows():
+                mt, _ = _extract_move_side(row)
+                if mt == "LOAD": total_load += 1
+                elif mt == "DISCHARGE": total_disc += 1
+        historical_crane_avg = total_cranes / visit_counts
+        historical_mph_avg = total_mph / visit_counts
+        avg_loaded_per_visit = total_load / visit_counts
+        avg_discharged_per_visit = total_disc / visit_counts
+        
+        # Also update actual_raw in Current Mode to use historical average as baseline
+        if history_df is not None and not history_df.empty:
+            baseline_raw = compute_vessel_stay(baseline_prepared)
+            if baseline_raw and baseline_raw.get("avg_hours"):
+                actual_raw["avg_hours"] = baseline_raw["avg_hours"]
+
+    # For current vessels (no time_out), compute_vessel_stay may return empty.
+    # Build synthetic stay from ML predictions or unit count heuristic.
+    is_current_mode = not has_time_out
+
+    # Always build synthetic_visits so the override block below can use it
+    synthetic_visits: dict = {}
+    for vid, vdf in enriched_visits.items():
+        if vdf is not None and not vdf.empty:
+            synthetic_visits[str(vid)] = float(len(vdf))
+
+    if not actual_raw:
+        if is_current_mode:
+            # Build synthetic stays for current vessels using ML model
+            try:
+                predicted_init = predict_vessel_stay_duration(prepared_visits)
+                pred_avg = predicted_init.get("avg_hours") if isinstance(predicted_init, dict) else None
+            except Exception:
+                pred_avg = None
+
+            # Synthesize stay from ML or total container count heuristic
+            synthetic_visits = {}
+            for vid, vdf in enriched_visits.items():
+                if vdf is None or vdf.empty:
+                    continue
+                n_units = len(vdf)
+                synthetic_stay = pred_avg if pred_avg else max(8.0, n_units / 25.0)
+                synthetic_visits[str(vid)] = synthetic_stay
+
+            if not synthetic_visits:
+                return {"error": "No valid visit data found", "vessel": vessel_service}
+
+            vals = list(synthetic_visits.values())
+            actual_raw = {
+                "visits": synthetic_visits,
+                "avg_hours": round(sum(vals) / len(vals), 2),
+                "max_hours": round(max(vals), 2),
+                "min_hours": round(min(vals), 2),
+            }
+        else:
+            return {"error": "No valid visit data found", "vessel": vessel_service}
+
+    # For current mode: if user provided overrides, re-derive the synthetic stay
+    # from those counts so actual_raw AND predicted both reflect the user's input.
+    if is_current_mode and (loaded_override is not None or discharged_override is not None):
+        _ld = loaded_override or 0
+        _dc = discharged_override or 0
+        if _ld + _dc > 0:
+            try:
+                from models.stay_model import predict_stay_duration_from_metrics
+                _mp = predict_stay_duration_from_metrics(_ld, _dc)
+                _override_stay = (
+                    _mp.get("predicted", {}).get("avg_hours")
+                    if isinstance(_mp, dict) else None
+                )
+                if _override_stay and _override_stay > 0:
+                    # In current mode, we do NOT overwrite actual_raw with the override.
+                    # actual_raw should represent the 'Historical Baseline' (avg_hours) 
+                    # while 'predicted' will reflect the override scenario.
+                    pass
+            except Exception:
+                pass
+    
+    # predict stay duration
     try:
-        predicted = predict_vessel_stay_duration(prepared_visits)
+        if loaded_override is not None or discharged_override is not None or target_mph_override is not None:
+            # If at berth, use live inventory counts as defaults. If upcoming, default to 0 as requested.
+            live_load = int(vessel_df["is_load"].sum()) if not vessel_df.empty and "is_load" in vessel_df.columns else 0
+            live_disc = int(vessel_df["is_discharge"].sum()) if not vessel_df.empty and "is_discharge" in vessel_df.columns else 0
+            
+            total_loaded = loaded_override if loaded_override is not None else live_load
+            total_discharged = discharged_override if discharged_override is not None else live_disc
+            
+            # Use metric-based prediction for overrides
+            p_res = predict_stay_duration_from_metrics(
+                total_loaded, total_discharged, 
+                target_mph=target_mph_override, 
+                historical_crane_avg=historical_crane_avg,
+                historical_mph_avg=historical_mph_avg
+            )
+            p_stay = p_res.get("predicted", {}).get("avg_hours") if isinstance(p_res, dict) else p_res
+            predicted = {
+                "avg_hours": p_stay,
+                "visits": 1,
+                "source": "metric_override",
+            }
+        else:
+            from models.stay_model import predict_vessel_stay_duration
+            predicted = predict_vessel_stay_duration(
+                prepared_visits, 
+                target_mph=target_mph_override, 
+                crane_count_override=historical_crane_avg,
+                mph_override=historical_mph_avg
+            )
     except Exception:
         predicted = None
+
     
     visit_details = _visit_details(enriched_visits)
     
@@ -457,6 +766,13 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
             "discharged_containers": details.get("discharged_containers", 0),
             "move_start":            details.get("move_start"),
             "move_end":              details.get("move_end"),
+            "total_units":           details.get("total_units", 0),
+            "restow_count":          details.get("restow_count", 0),
+            "crane_mphc":            details.get("crane_mphc", 0.0),
+            "avg_weight_kg":         details.get("avg_weight_kg", 0.0),
+            "freight_kind_breakdown": details.get("freight_kind_breakdown", {}),
+            "port_of_discharge_top5": details.get("port_of_discharge_top5", {}),
+            "crane_exclude_ratio":   details.get("crane_exclude_ratio", 0.0),
         }
 
     actual = {
@@ -466,15 +782,18 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
         "min_hours": actual_raw.get("min_hours"),
     }
 
-    # pick busiest visit
+    # pick busiest visit (by raw unit count for current, by load/discharge for history)
     visit_scores: list[tuple] = []
     for vid, vdf in enriched_visits.items():
         if vdf is None or vdf.empty:
             continue
-        score = sum(
-            1 for _, row in vdf.iterrows()
-            if _extract_move_side(row)[0] in ("LOAD", "DISCHARGE")
-        )
+        if is_current_mode:
+            score = len(vdf)  # current: score by container count
+        else:
+            score = sum(
+                1 for _, row in vdf.iterrows()
+                if _extract_move_side(row)[0] in ("LOAD", "DISCHARGE")
+            )
         visit_scores.append((vid, score))
 
     # check if visit scores are empty
@@ -572,8 +891,64 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
         steps.append(f"Assign {len(crane_ids)} cranes: {', '.join(crane_ids[:4])} confirmed operational.")
     steps.append("Separate hazardous and reefer flows.")
 
+    
+    predicted_avg_hours = (
+        predicted.get("avg_hours")
+        if isinstance(predicted, dict)
+        else actual.get("avg_hours", 0)
+    )
+
+    # Apply user-supplied load/discharge overrides for current-mode analysis
+    if loaded_override is not None:
+        total_loaded = loaded_override
+    if discharged_override is not None:
+        total_discharged = discharged_override
+
+    op_preds = _predict_operational_metrics(
+        visit_df, crane_df_top, predicted_avg_hours,
+        loaded=total_loaded, discharged=total_discharged,
+        target_mph_override=target_mph_override,
+        historical_crane_avg=historical_crane_avg,
+    )
+    delay_analysis = _calculate_delay_analysis(visit_df, crane_df_top) if actual else None
+    
+    # Build per-visit crane assignment summary
+    crane_assignment: list[dict] = []
+    for vid, vdf in enriched_visits.items():
+        if vdf is None or vdf.empty:
+            continue
+        visit_crane_count = int(float(vdf["_crane_count"].iloc[0])) if "_crane_count" in vdf.columns and not vdf["_crane_count"].isna().all() else 0
+        visit_crane_ids_raw = vdf["_crane_ids"].iloc[0] if "_crane_ids" in vdf.columns and not vdf["_crane_ids"].isna().all() else "[]"
+        visit_crane_mphc = float(vdf["_crane_mphc"].iloc[0]) if "_crane_mphc" in vdf.columns and not vdf["_crane_mphc"].isna().all() else 0.0
+        visit_crane_dur = float(vdf["_crane_duration_hours"].iloc[0]) if "_crane_duration_hours" in vdf.columns and not vdf["_crane_duration_hours"].isna().all() else 0.0
+        v_details = visit_details.get(str(vid), {})
+
+        # For current mode with user overrides, show the user's scenario counts
+        entry_loaded = v_details.get("loaded_containers", 0)
+        entry_discharged = v_details.get("discharged_containers", 0)
+        if is_current_mode:
+            if loaded_override is not None:
+                entry_loaded = loaded_override
+            if discharged_override is not None:
+                entry_discharged = discharged_override
+
+        crane_assignment.append({
+            "visit_id":       str(vid),
+            "vessel_service": vessel_service,   # service code the user searched for
+            "crane_count":    visit_crane_count,
+            "crane_ids":      visit_crane_ids_raw,
+            "crane_mphc":     round(visit_crane_mphc, 2),
+            "duration_hours": round(visit_crane_dur, 2),
+            "loaded":         entry_loaded,
+            "discharged":     entry_discharged,
+            "total_units":    v_details.get("total_units", 0),
+        })
+    crane_assignment.sort(key=lambda x: x["total_units"], reverse=True)
+
     return {
         "mode":               "vessel",
+        "operational_predictions": op_preds,
+        "delay_analysis": delay_analysis,
         "vessel":             vessel_service,
         "actual":             actual,
         "predicted":          predicted,
@@ -584,6 +959,7 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
         "berth_recommendation": berth_rec,
         "berth_conflict_table": berth_conflicts,
         "berth_conflicts":      berth_conflicts,
+        "crane_assignment":   crane_assignment,
         "top_visit_stats": {
             "loaded":      total_loaded,
             "discharged":  total_discharged,
@@ -591,6 +967,8 @@ def analyze_vessel_dashboard(df: pd.DataFrame, vessel_service: str) -> dict:
             "reefer":      reefer,
             "oog":         oog,
             "total_units": total_units,
+            "crane_count": len(crane_ids),
+            "crane_ids":   crane_ids,
             "crane_mphc": top_visit_stats_merged.get("crane_mphc", 0.0),
             "avg_weight_kg": top_visit_stats_merged.get("avg_weight_kg", 0.0),
             "freight_kind_breakdown": top_visit_stats_merged.get("freight_kind_breakdown", {}),

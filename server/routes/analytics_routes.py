@@ -12,10 +12,10 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 # get crane performance
 @router.get("/crane-performance")
-# 2. Changed dependency to get_current_user to allow standard users access
 def get_crane_performance(
     limit: int = 1000, 
     days: int = None,
+    crane_id: str = None,
     user: dict = Depends(get_current_user)
 ):
     from config import settings
@@ -25,35 +25,47 @@ def get_crane_performance(
         days = settings.CRANE_ANALYTICS_WINDOW_DAYS
 
     try:
-        with engine.connect() as conn:
-            query = """
-                SELECT crane_id, unit_id, carrier_visit,
-                       move_kind, time_completed, exclude
-                FROM crane_movements
-                WHERE time_completed >= NOW() - INTERVAL ':days days'
-            """
-            df = pd.read_sql_query(text(query), conn, params={"days": days})
-            
-            moves_query = """
-                SELECT id, crane_id, unit_id, carrier_visit,
-                       move_kind, from_position, to_position, time_completed,
-                       line_op
-                FROM crane_movements
-                ORDER BY time_completed DESC NULLS LAST
-                LIMIT :lim
-            """
-            rows = conn.execute(text(moves_query), {"lim": limit}).fetchall()
-            raw_moves = [dict(r._mapping) for r in rows]
-
+        df = load_from_db("crane")
+        
         if df.empty:
             return {
                 "summary": {}, "crane_stats": [], 
                 "visit_crane_allocation": [], "hourly_productivity": [], 
-                "moves": raw_moves
+                "moves": [], "available_cranes": [],
             }
 
         df["time_completed"] = pd.to_datetime(df["time_completed"], errors="coerce")
         df = df.dropna(subset=["time_completed"])
+        
+        if days and days > 0:
+            cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
+            filtered = df[df["time_completed"] >= cutoff]
+            # Fall back to full dataset if window filter returns nothing
+            if not filtered.empty:
+                df = filtered
+        
+        if df.empty:
+            return {
+                "summary": {}, "crane_stats": [], 
+                "visit_crane_allocation": [], "hourly_productivity": [], 
+                "moves": [], "available_cranes": [],
+            }
+
+        # All available crane IDs (for frontend dropdown)
+        available_cranes = sorted(df["crane_id"].dropna().unique().tolist())
+
+        # Filter to specific crane if requested
+        if crane_id:
+            df = df[df["crane_id"].astype(str).str.strip() == crane_id.strip()]
+            if df.empty:
+                return {
+                    "summary": {}, "crane_stats": [],
+                    "visit_crane_allocation": [], "hourly_productivity": [],
+                    "moves": [], "available_cranes": available_cranes,
+                }
+
+        sorted_df = df.sort_values("time_completed", ascending=False).head(limit)
+        raw_moves = sorted_df.to_dict(orient="records")
         
         valid_df = df[df["exclude"] != "Yes"] if "exclude" in df.columns else df
         total_valid = len(valid_df)
@@ -77,7 +89,7 @@ def get_crane_performance(
             dur = max((max_t - min_t).total_seconds() / 3600, 0.1) if pd.notna(min_t) and pd.notna(max_t) else 0.1
             mphc = min(moves / dur, 999.0)
             
-            restows = len(grp[grp["move_kind"].isin(["RESTOW", "SHIFT"])])
+            restows = len(grp[grp["move_kind"].isin(["RESTOW", "SHIFT"])]) if "move_kind" in grp.columns else 0
             
             rating = "Optimal" if mphc >= settings.CRANE_MOVES_PER_HOUR_TARGET else "Suboptimal" if mphc < settings.CRANE_MOVES_PER_HOUR_TARGET * 0.7 else "Acceptable"
             
@@ -90,7 +102,7 @@ def get_crane_performance(
                 "restow_ratio": round(restows / moves, 3),
             })
 
-        # Visit Allocation
+        # Visit Allocation  
         visit_alloc = []
         for visit, grp in valid_df.groupby("carrier_visit"):
             visit_alloc.append({
@@ -99,22 +111,20 @@ def get_crane_performance(
                 "total_moves": len(grp),
                 "cranes_used": grp["crane_id"].unique().tolist()[:6],
             })
-
-        # Hourly Productivity
-        hourly_df = valid_df.set_index("time_completed").resample("h").size().reset_index(name="moves")
-        hourly_df["hour"] = hourly_df["time_completed"].dt.strftime("%Y-%m-%d %H:00")
-        hourly_productivity = hourly_df[["hour", "moves"]].tail(24).to_dict("records")
+        # Sort by most moves
+        visit_alloc.sort(key=lambda x: x["total_moves"], reverse=True)
 
         return {
             "summary": summary,
             "crane_stats": crane_stats,
             "visit_crane_allocation": visit_alloc,
-            "hourly_productivity": hourly_productivity,
             "moves": raw_moves,
+            "available_cranes": available_cranes,
+            "selected_crane": crane_id,
         }
     except Exception as e:
         logger.error("Error fetching crane performance: %s", e)
-        return {"summary": {}, "crane_stats": [], "visit_crane_allocation": [], "hourly_productivity": [], "moves": [], "error": str(e)}
+        return {"summary": {}, "crane_stats": [], "visit_crane_allocation": [], "hourly_productivity": [], "moves": [], "available_cranes": [], "error": str(e)}
 
 
 # get system summary
@@ -123,15 +133,19 @@ def get_crane_performance(
 def get_system_summary(admin: dict = Depends(require_admin)):
     engine = get_engine()
     counts = {}
-    # tables to get counts from
-    tables = [
-        "history_containers", "current_containers", "crane_movements",
-        "ingestion_logs", "rejection_logs", "users", "training_metadata"
-    ]
-
     with engine.connect() as conn:
-        # get counts from tables
-        for table in tables:
+        for suffix in ["history_containers", "current_containers", "crane_movements"]:
+            try:
+                res = conn.execute(text(f"SELECT relname FROM pg_class WHERE relkind IN ('p','r') AND relname LIKE '%_{suffix}' AND oid NOT IN (SELECT inhrelid FROM pg_inherits)")).fetchall()
+                total = 0
+                for r in res:
+                    total += conn.execute(text(f"SELECT COUNT(*) FROM {r[0]}")).scalar()
+                counts[suffix] = total
+            except Exception:
+                counts[suffix] = 0
+
+        # get counts from other tables
+        for table in ["ingestion_logs", "rejection_logs", "users", "training_metadata"]:
             try:
                 counts[table] = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
             except Exception:

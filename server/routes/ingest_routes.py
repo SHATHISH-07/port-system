@@ -315,276 +315,178 @@ async def upload_data(
         )
         ingestion_id = res.fetchone()[0]
     
-    accepted: list = []
-    rejected: list = []
-    
-    # process records based on dataset type
+    # Trigger background processing
+    background_tasks.add_task(
+        _process_ingestion,
+        ingestion_id,
+        df,
+        dataset_type,
+        file.filename,
+        admin["id"],
+        background_tasks
+    )
+
+    return {
+        "status": "processing",
+        "dataset_type": dataset_type,
+        "accepted_count": 0,
+        "rejected_count": 0,
+        "ingestion_id": ingestion_id,
+        "message": "File upload successful. Processing started in background.",
+    }
+
+def _process_ingestion(
+    ingestion_id: int,
+    df: pd.DataFrame,
+    dataset_type: str,
+    filename: str,
+    admin_id: int,
+    background_tasks: BackgroundTasks
+):
+    engine = get_engine()
+    from db.queries import ensure_yard_tables
+    from utils.position_parser import get_yard_id
+
     try:
-        if dataset_type == "history":
-            for row in records:
-                try:
-                    # create history payload with fallback fields
-                    history_payload = {
-                        "unit_id": _first_value(row, "unit_id"),
-                        "actual_outbound_carrier_visit_id": _first_value(
-                            row,
-                            "actual_outbound_carrier_visit_id",
-                            "carrier_visit",
-                            "vessel_visit_id",
-                            "actual_outbound_carrier_visit",
-                        ),
-                        "outbound_service": _first_value(
-                            row,
-                            "outbound_service",
-                            "vessel",
-                            "service",
-                        ),
-                        "move_complete_time": _safe_datetime(
-                            _first_value(row, "move_complete_time", "time_completed", "time_out", "time_in")
-                        ),
-                        "time_in": _safe_datetime(_first_value(row, "time_in")),
-                        "time_out": _safe_datetime(_first_value(row, "time_out")),
-                        "ctr_from_position": _first_value(
-                            row,
-                            "ctr_from_position",
-                            "from_position",
-                            "current_position",
-                        ),
-                        "ctr_to_position": _first_value(row, "ctr_to_position", "to_position"),
-                        "verified_gross_mass_kg": _first_value(row, "verified_gross_mass_kg", "vgm", "gross_mass_kg"),
-                        "unit_weight_in_kg": _first_value(row, "unit_weight_in_kg", "weight"),
-                        "reefer": _first_value(row, "reefer"),
-                        "hazardous_flag": _first_value(row, "hazardous_flag", "hazardous"),
-                        "oog_unit": _first_value(row, "oog_unit"),
-                        "port_of_discharge": _first_value(row, "port_of_discharge"),
-                        "unit_visit_gkey": _first_value(row, "unit_visit_gkey"),
-                        "category_id": _first_value(row, "category_id"),
-                        "equipment_class": _first_value(row, "equipment_class"),
-                        "container_length": _first_value(row, "container_length"),
-                        "equipment_type": _first_value(row, "equipment_type"),
-                        "freight_kind": _first_value(row, "freight_kind"),
-                        "inbound_service": _first_value(row, "inbound_service"),
-                        "arrival_mode": _first_value(row, "arrival_mode"),
-                        "stow_code_1": _first_value(row, "stow_code_1"),
-                        "stow_code_2": _first_value(row, "stow_code_2"),
-                        "stow_code_3": _first_value(row, "stow_code_3"),
-                        "imdg_code": _first_value(row, "imdg_code"),
-                        "hazard_un_numbers": _first_value(row, "hazard_un_numbers"),
-                        "ingestion_id": ingestion_id,
-                    }
-                    
-                    # validate required fields
-                    if not history_payload["unit_id"]:
-                        raise ValueError("Missing unit_id")
-                    if not history_payload["outbound_service"]:
-                        raise ValueError("Missing outbound_service")
-                    
-                    # insert into history_containers table
-                    with engine.begin() as conn:
-                        conn.execute(
-                            text("""
-                                INSERT INTO history_containers
-                                    (unit_id, actual_outbound_carrier_visit_id, outbound_service,
-                                     move_complete_time, time_in, time_out, ctr_from_position,
-                                     ctr_to_position, verified_gross_mass_kg, unit_weight_in_kg,
-                                     reefer, hazardous_flag, oog_unit, port_of_discharge, ingestion_id,
-                                     unit_visit_gkey, category_id, equipment_class, container_length,
-                                     equipment_type, freight_kind, inbound_service, arrival_mode,
-                                     stow_code_1, stow_code_2, stow_code_3, imdg_code, hazard_un_numbers)
-                                VALUES
-                                    (:unit_id, :actual_outbound_carrier_visit_id, :outbound_service,
-                                     :move_complete_time, :time_in, :time_out, :ctr_from_position,
-                                     :ctr_to_position, :verified_gross_mass_kg, :unit_weight_in_kg,
-                                     :reefer, :hazardous_flag, :oog_unit, :port_of_discharge, :ingestion_id,
-                                     :unit_visit_gkey, :category_id, :equipment_class, :container_length,
-                                     :equipment_type, :freight_kind, :inbound_service, :arrival_mode,
-                                     :stow_code_1, :stow_code_2, :stow_code_3, :imdg_code, :hazard_un_numbers)
-                            """),
-                            history_payload,
-                        )
-
-                    accepted.append(row)
-                # handle rejected records
-                except Exception as exc:
-                    rejected.append({"row": row, "reason": str(exc)})
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(
-                                text("""
-                                    INSERT INTO rejection_logs
-                                      (ingestion_id, row_data, reason)
-                                    VALUES (:id, :data, :reason)
-                                """),
-                                {
-                                    "id": ingestion_id,
-                                    "data": json.dumps(row, cls=_Encoder),
-                                    "reason": str(exc),
-                                },
-                            )
-                    except Exception:
-                        pass
-
-        # process current dataset
-        elif dataset_type == "current":
-            for row in records:
-                try:
-                    # validate required fields
-                    for key in ("unit_id", "actual_outbound_carrier_visit_id", "outbound_service"):
-                        if not row.get(key):
-                            raise ValueError(f"Missing {key}")
-
-                    insert_data = {col: row.get(col) for col in expected_cols}
-                    insert_data["ingestion_id"] = ingestion_id
-
-                    cols_str = ", ".join(insert_data.keys())
-                    vals_str = ", ".join(f":{k}" for k in insert_data.keys())
-                    
-                    # insert into current_containers table
-                    with engine.begin() as conn:
-                        update_cols = [k for k in insert_data if k not in ("unit_id", "id")]
-                        updates = ", ".join(f"{k} = EXCLUDED.{k}" for k in update_cols)
-                        conn.execute(
-                            text(f"""
-                                INSERT INTO current_containers
-                                    ({cols_str}, is_active, updated_at)
-                                VALUES
-                                    ({vals_str}, TRUE, CURRENT_TIMESTAMP)
-                                ON CONFLICT (unit_id) DO UPDATE SET
-                                    {updates},
-                                    is_active  = TRUE,
-                                    updated_at = CURRENT_TIMESTAMP
-                            """),
-                            insert_data,
-                        )
-
-                    accepted.append(row)
-                # handle rejected records
-                except Exception as exc:
-                    rejected.append({"row": row, "reason": str(exc)})
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(
-                                text("""
-                                    INSERT INTO rejection_logs
-                                      (ingestion_id, row_data, reason)
-                                    VALUES (:id, :data, :reason)
-                                """),
-                                {
-                                    "id": ingestion_id,
-                                    "data": json.dumps(row, cls=_Encoder),
-                                    "reason": str(exc),
-                                },
-                            )
-                    except Exception:
-                        pass
-        # process crane dataset
+        # Build yard_id column
+        if dataset_type == "crane":
+            def _crane_yard(row):
+                for field in ["from_position", "to_position"]:
+                    val = row.get(field)
+                    if val and isinstance(val, str) and val.upper().startswith("Y-") and "-" in val[2:]:
+                        return val.split("-")[1].upper()
+                return None
+            df["yard_id"] = df.apply(_crane_yard, axis=1)
         else:
-            for row in records:
-                try:
-                    # create crane payload with fallback fields
-                    crane_payload = {
-                        "crane_id": _first_value(row, "crane_id"),
-                        "unit_id": _first_value(row, "unit_id"),
-                        "carrier_visit": _first_value(row, "carrier_visit"),
-                        "event_type": _first_value(row, "event_type"),
-                        "move_kind": _first_value(row, "move_kind"),
-                        "from_position": _first_value(row, "from_position"),
-                        "to_position": _first_value(row, "to_position"),
-                        "time_completed": _first_value(row, "time_completed"),
-                        "line_op": _first_value(row, "line_op"),
-                        "unit_category": _first_value(row, "unit_category"),
-                        "exclude": _first_value(row, "exclude"),
-                        "ingestion_id": ingestion_id,
-                    }
+            if "yard_id" not in df.columns or df["yard_id"].isna().all():
+                df["yard_id"] = df.apply(get_yard_id, axis=1)
 
-                    # validate required fields
-                    if not crane_payload["crane_id"]:
-                        raise ValueError("Missing crane_id")
-                    if not crane_payload["unit_id"]:
-                        raise ValueError("Missing unit_id")
-                    if not crane_payload["carrier_visit"]:
-                        raise ValueError("Missing carrier_visit")
-                    if not crane_payload["move_kind"]:
-                        raise ValueError("Missing move_kind")
-                    if not crane_payload["from_position"]:
-                        raise ValueError("Missing from_position")
-                    if not crane_payload["to_position"]:
-                        raise ValueError("Missing to_position")
-                    if not crane_payload["time_completed"]:
-                        raise ValueError("Missing time_completed")
-                    
-                    # format data for insertion
-                    insert_data = {col: crane_payload.get(col) for col in expected_cols}
-                    insert_data["ingestion_id"] = ingestion_id
+        # Drop rows with no yard
+        no_yard_mask = df["yard_id"].isna() | (df["yard_id"].astype(str).str.strip().isin(["", "nan", "None"]))
+        rejected_no_yard = df[no_yard_mask]
+        df = df[~no_yard_mask].copy()
 
-                    cols_str = ", ".join(insert_data.keys())
-                    vals_str = ", ".join(f":{k}" for k in insert_data.keys())
+        # Reject rows missing required fields
+        required_map = {
+            "history": ["unit_id", "outbound_service"],
+            "current": ["unit_id", "outbound_service"],
+            "crane": ["crane_id", "carrier_visit", "move_kind"],
+        }
+        req_cols = required_map.get(dataset_type, [])
+        for col in req_cols:
+            if col in df.columns:
+                bad_mask = df[col].isna() | (df[col].astype(str).str.strip() == "")
+                rejected_no_yard = pd.concat([rejected_no_yard, df[bad_mask]], ignore_index=True)
+                df = df[~bad_mask].copy()
 
-                    # insert into crane_movements table
-                    with engine.begin() as conn:
+        accepted_count = len(df)
+        rejected_count = len(rejected_no_yard)
+
+        # Ensure time_in for history (partition key)
+        if dataset_type == "history":
+            if "time_in" in df.columns:
+                fallback = df.get("move_complete_time", pd.NaT)
+                df["time_in"] = df["time_in"].fillna(fallback).fillna(pd.Timestamp("2020-01-01"))
+            else:
+                df["time_in"] = pd.Timestamp("2020-01-01")
+
+        # Bulk insert per yard
+        if dataset_type == "crane":
+            target_cols = ["crane_id", "unit_id", "carrier_visit", "event_type", "move_kind",
+                           "from_position", "to_position", "time_completed", "line_op",
+                           "unit_category", "exclude", "yard_id"]
+        elif dataset_type == "current":
+            target_cols = list(dict.fromkeys(
+                settings.EXPECTED_HEADERS.get("current", []) + ["yard_id", "visit_state", "transit_state", "is_active"]
+            ))
+        else:
+            target_cols = list(dict.fromkeys(
+                settings.EXPECTED_HEADERS.get("history", []) + ["yard_id", "facility_id", "outbound_service", "time_in"]
+            ))
+
+        insert_errors: list[str] = []
+        for yard, group in df.groupby("yard_id"):
+            yard_lower = str(yard).lower().strip()
+            ensure_yard_tables(engine, yard_lower)
+            if dataset_type == "crane":
+                table_name = f"{yard_lower}_crane_movements"
+            elif dataset_type == "current":
+                table_name = f"{yard_lower}_current_containers"
+            else:
+                table_name = f"{yard_lower}_history_containers"
+
+            valid_cols = [c for c in target_cols if c in group.columns]
+            insert_df = group[valid_cols].copy().loc[:, ~group[valid_cols].columns.duplicated()]
+            insert_df["ingestion_id"] = ingestion_id
+
+            try:
+                insert_df.to_sql(
+                    table_name, engine, if_exists="append",
+                    index=False, chunksize=5000, method="multi"
+                )
+            except Exception as bulk_err:
+                insert_errors.append(f"{table_name}: {bulk_err}")
+                accepted_count -= len(insert_df)
+                rejected_count += len(insert_df)
+
+        # Log any rejections (sample up to 10)
+        if not rejected_no_yard.empty:
+            sample = rejected_no_yard.head(10)
+            rej_rows = sample.to_dict("records")
+            try:
+                with engine.begin() as conn:
+                    for rej_row in rej_rows:
                         conn.execute(
-                            text(f"INSERT INTO crane_movements ({cols_str}) VALUES ({vals_str})"),
-                            insert_data,
+                            text("INSERT INTO rejection_logs (ingestion_id, row_data, reason) VALUES (:id, :data, :reason)"),
+                            {"id": ingestion_id, "data": json.dumps(rej_row, cls=_Encoder), "reason": "No yard detected or missing required field"},
                         )
-                    
-                    accepted.append(row)
-                # handle rejected records
-                except Exception as exc:
-                    rejected.append({"row": row, "reason": str(exc)})
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(
-                                text("""
-                                    INSERT INTO rejection_logs
-                                      (ingestion_id, row_data, reason)
-                                    VALUES (:id, :data, :reason)
-                                """),
-                                {
-                                    "id": ingestion_id,
-                                    "data": json.dumps(row, cls=_Encoder),
-                                    "reason": str(exc),
-                                },
-                            )
-                    except Exception:
-                        pass
+            except Exception:
+                pass
 
-    # handle unexpected ingestion failures
+        status = "success" if not insert_errors and rejected_count == 0 else ("partial" if accepted_count > 0 else "failed")
+        if insert_errors:
+            status = "partial"
+
     except Exception as exc:
-        # Any unexpected DB/transaction issue should not report a false success.
-        rejected.append({"row": {}, "reason": f"Unexpected ingestion failure: {exc}"})
+        import traceback
+        accepted_count = 0
+        rejected_count = len(df)
+        status = "failed"
+        insert_errors = [str(exc)]
+        traceback.print_exc()
 
-    # determine ingestion status
-    status = "success" if not rejected and accepted else ("partial" if accepted else "failed")
-
+    # ── Update ingestion log ──────────────────────────────────────────────────
     with engine.begin() as conn:
         conn.execute(
             text("""
                 UPDATE ingestion_logs
                 SET status           = :s,
                     records_accepted = :acc,
-                    records_rejected = :rej
+                    records_rejected = :rej,
+                    completed_at     = :now,
+                    error_summary    = :err
                 WHERE id = :id
             """),
-            {"s": status, "acc": len(accepted), "rej": len(rejected), "id": ingestion_id},
+            {
+                "s": status,
+                "acc": accepted_count,
+                "rej": rejected_count,
+                "id": ingestion_id,
+                "now": datetime.now(timezone.utc),
+                "err": "\n".join(insert_errors) if insert_errors else None
+            },
         )
 
-    if dataset_type == "history" and accepted:
+    if dataset_type == "history" and accepted_count > 0:
         check_and_trigger_retraining(background_tasks)
 
     log_audit(
         "Ingestion",
-        f"Ingested {dataset_type} {file.filename}: {len(accepted)} accepted, {len(rejected)} rejected",
-        admin["id"],
+        f"Ingested {dataset_type} {filename}: {accepted_count} accepted, {rejected_count} rejected",
+        admin_id,
     )
 
-    return {
-        "status": status,
-        "dataset_type": dataset_type,
-        "accepted_count": len(accepted),
-        "rejected_count": len(rejected),
-        "ingestion_id": ingestion_id,
-        "rejections": rejected[:10],
-    }
+
 
 # helper function to create a failed ingestion response
 def _fail(reason: str) -> dict:

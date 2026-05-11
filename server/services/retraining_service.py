@@ -16,18 +16,25 @@ from models.training_status import training_status
 logger = logging.getLogger("port_system")
 
 # get history count
+# get total history count across all yards
 def get_history_count() -> int:
-    # check history_containers table exists
     try:
         engine = get_engine()
-        inspector = sa_inspect(engine)
-        # if table does not exist, return 0
-        if not inspector.has_table("history_containers"):
-            return 0
-        # get history count from database
         with engine.connect() as conn:
-            result = conn.execute(text("SELECT COUNT(*) FROM history_containers"))
-            return int(result.scalar() or 0)
+            # Discover all yard-specific history tables
+            res = conn.execute(text("""
+                SELECT relname FROM pg_class 
+                WHERE relkind IN ('p','r') 
+                  AND relname LIKE '%_history_containers'
+                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+            """)).fetchall()
+            
+            total = 0
+            for r in res:
+                tbl = r[0]
+                count = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                total += int(count or 0)
+            return total
     except Exception as e:
         logger.error("Error getting history count: %s", e)
         return 0

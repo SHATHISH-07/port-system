@@ -49,11 +49,12 @@ export interface BerthConflictEntry {
 interface Props {
   data: BerthAnalysisEntry[];
   conflicts?: BerthConflictEntry[];  // optional conflict table for tooltip
+  mode?: "history" | "current";
 }
 
 const LIMIT = 5;
 
-export default function BerthImpactTable({ data, conflicts = [] }: Props) {
+export default function BerthImpactTable({ data, conflicts = [], mode = "current" }: Props) {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
 
@@ -99,7 +100,7 @@ export default function BerthImpactTable({ data, conflicts = [] }: Props) {
         }}
       >
         <Typography variant="overline" sx={{ color: "text.secondary" }}>
-          Berth Impact Analysis
+          {mode === "history" ? "Historical Berth Ranking" : "Berth Impact Analysis"}
         </Typography>
         <Typography
           variant="caption"
@@ -120,7 +121,7 @@ export default function BerthImpactTable({ data, conflicts = [] }: Props) {
               <TableCell>Concentration</TableCell>
               <TableCell>Congestion</TableCell>
               <TableCell>Conflicts</TableCell>
-              <TableCell align="center">Cranes</TableCell>
+              <TableCell align="center">{mode === "history" ? "Avg Cranes" : "Cranes"}</TableCell>
             </TableRow>
           </TableHead>
 
@@ -205,7 +206,7 @@ export default function BerthImpactTable({ data, conflicts = [] }: Props) {
                               whiteSpace: "nowrap",
                             }}
                           >
-                            Recommended
+                            {mode === "history" ? "Primary Berth" : "Recommended"}
                           </Typography>
                         </Box>
                       )}

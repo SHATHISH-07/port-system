@@ -10,41 +10,45 @@ interface Props {
 
 export default function PerformanceStats({ actual, predicted, mode, loaded, discharged }: Props) {
   const theme = useTheme();
-  const isOverride = mode === "override" || mode === "current-override";
+  const isOverride = mode === "override" || mode === "current-override" || mode === "manual";
+  const isUpcoming = mode === "upcoming_prediction";
+  const isCurrent = mode === "current" || isUpcoming || isOverride;
   const diff = predicted - actual;
   const pct = actual !== 0 ? Math.abs((diff / actual) * 100).toFixed(1) : "—";
   const isBetter = diff <= 0;
 
   const stats = [
     {
-      label: "Historical Average",
+      label: isUpcoming ? "Historical Baseline" : "Historical Average",
       value: actual.toFixed(1),
       unit: "hrs",
-      sub: "Avg vessel stay time",
+      sub: isUpcoming ? "Based on past service patterns" : "Avg vessel stay time",
     },
     {
-      label: isOverride
-        ? `Predicted · ${loaded ?? 0} loaded / ${discharged ?? 0} discharged`
-        : "ML Prediction",
+      label: isUpcoming 
+        ? "Scheduled Prediction"
+        : isOverride
+          ? `Predicted · ${loaded ?? 0}L / ${discharged ?? 0}D`
+          : "ML Prediction",
       value: predicted.toFixed(1),
       unit: "hrs",
-      sub: "Predicted stay time",
+      sub: isUpcoming ? "Estimate for next arrival" : "Predicted stay time",
       valueColor: theme.palette.primary.main,
     },
-    {
+    ...(!isCurrent ? [{
       label: "Variance",
       value: `${isBetter ? "−" : "+"}${Math.abs(diff).toFixed(2)}`,
       unit: "hrs",
       sub: `${pct}% ${isBetter ? "under" : "over"} actual`,
       valueColor: isBetter ? theme.palette.success.main : theme.palette.error.main,
-    },
+    }] : []),
   ];
 
   return (
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
+        gridTemplateColumns: `repeat(${stats.length}, 1fr)`,
         bgcolor: "background.paper",
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: 2,
@@ -57,7 +61,7 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
           sx={{
             px: 3.5,
             py: 3,
-            borderRight: i < 2 ? `1px solid ${theme.palette.divider}` : "none",
+            borderRight: i < stats.length - 1 ? `1px solid ${theme.palette.divider}` : "none",
           }}
         >
           <Typography variant="overline" sx={{ color: "text.secondary", display: "block", mb: 1.5 }}>
@@ -68,7 +72,7 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
               sx={{
                 fontSize: "2.75rem",
                 fontWeight: 300,
-                color: "text.secondary",
+                color: s.valueColor || "text.secondary",
                 lineHeight: 1,
                 letterSpacing: "-2px",
                 fontFamily: "'Inter', sans-serif",
@@ -88,4 +92,4 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
       ))}
     </Box>
   );
-}
+}

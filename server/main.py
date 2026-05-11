@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
         # Check if the admin user exists and create it if not
         with engine.begin() as conn:
             admin_check = conn.execute(
-                text("SELECT id FROM users WHERE username = :username"),
+                text("SELECT id, role FROM users WHERE username = :username"),
                 {"username": settings.DEFAULT_ADMIN_USER},
             ).fetchone()
             # Create the admin user if it doesn't exist
@@ -55,6 +55,12 @@ async def lifespan(app: FastAPI):
                         "username": settings.DEFAULT_ADMIN_USER,
                         "hash": get_password_hash(settings.DEFAULT_ADMIN_PASSWORD),
                     },
+                )
+            elif admin_check._mapping["role"] != "admin":
+                # Ensure the user has the admin role
+                conn.execute(
+                    text("UPDATE users SET role = 'admin' WHERE username = :username"),
+                    {"username": settings.DEFAULT_ADMIN_USER},
                 )
     except Exception as e:
         logger.error("Schema init failed: %s", e)
