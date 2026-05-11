@@ -156,7 +156,7 @@ const HistoryVesselAnalysis = () => {
                 <Box sx={{ gridRow: { md: "1 / 3" } }}>
                   <BerthRecommendation
                     berth={data.berth_analysis?.[0]?.berth}
-                    concentration={data.berth_analysis?.[0]?.cargo_concentration}
+                    concentration={String(data.berth_analysis?.[0]?.cargo_concentration_pct ?? "")}
                   />
                 </Box>
                 {/* Execution — top right */}

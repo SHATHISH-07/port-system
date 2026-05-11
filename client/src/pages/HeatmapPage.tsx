@@ -6,7 +6,7 @@ import {
   StarRounded
 } from "@mui/icons-material";
 
-import { type VesselHeatmapResponse, type BlockData } from "../types/vessel";
+import { type VesselHeatmapResponse, type HeatmapBlock } from "../types/vessel";
 
 //concentration color
 const CONC_COLOR = {
@@ -34,7 +34,7 @@ function BlockTile({
   blockId, block, isMax,
 }: {
   blockId: string;
-  block?: BlockData;
+  block?: HeatmapBlock;
   isMax: boolean;
 }) {
   if (!block || block.count === 0) return null;

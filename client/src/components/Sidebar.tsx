@@ -21,7 +21,7 @@ import { useColorMode } from "../theme/ThemeContext";
 const OPEN = 280;
 const CLOSED = 80;
 
-const USER_ITEMS = [
+const USER_ITEMS: { path: string; label: string; icon?: React.ElementType; userOnly?: boolean }[] = [
   { path: "/history-analysis", label: "History Analysis", icon: HistoryOutlined },
   { path: "/current-analysis", label: "Current Analysis", icon: AnalyticsOutlined },
   { path: "/crane-analytics", label: "Crane Analytics", icon: PrecisionManufacturingOutlined },

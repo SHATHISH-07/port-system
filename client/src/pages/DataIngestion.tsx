@@ -9,9 +9,7 @@ import {
   HistoryOutlined,
   SettingsInputComponentOutlined,
   PrecisionManufacturingOutlined,
-  UploadFileOutlined,
-  CheckCircleOutlined,
-  ErrorOutlined
+  UploadFileOutlined
 } from "@mui/icons-material";
 import { api } from "../api/api";
 
@@ -98,10 +96,10 @@ export default function DataIngestion() {
   return (
     <Box sx={{ maxWidth: 1000, mx: "auto", p: 2 }}>
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" fontWeight={700} color="text.primary">
+        <Typography variant="h4" sx={{ fontWeight: 700, color: "text.primary" }}>
           Data Ingestion
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" sx={{ color: "text.secondary" }}>
           Upload raw CSV data using fixed schemas for History, Current, and Crane movements.
         </Typography>
       </Box>
@@ -134,8 +132,8 @@ export default function DataIngestion() {
                     {t.icon}
                   </Box>
                   <Box>
-                    <Typography variant="subtitle1" fontWeight={700}>{t.label}</Typography>
-                    <Typography variant="caption" color="text.secondary">{t.desc}</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t.label}</Typography>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>{t.desc}</Typography>
                   </Box>
                 </CardContent>
               </Card>
@@ -162,20 +160,20 @@ export default function DataIngestion() {
               <UploadFileOutlined sx={{ fontSize: 48, color: file ? "primary.main" : "text.disabled", mb: 2 }} />
               {file ? (
                 <>
-                  <Typography variant="h6" fontWeight={700}>{file.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">{(file.size / 1024).toFixed(1)} KB</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{file.name}</Typography>
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>{(file.size / 1024).toFixed(1)} KB</Typography>
                 </>
               ) : (
                 <>
-                  <Typography variant="h6" fontWeight={600}>Click to upload {activeType} CSV</Typography>
-                  <Typography variant="body2" color="text.secondary">File must exactly match the required headers.</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>Click to upload {activeType} CSV</Typography>
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>File must exactly match the required headers.</Typography>
                 </>
               )}
             </Box>
 
             <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Box sx={{ textAlign: "left" }}>
-                <Typography variant="caption" fontWeight={700} color="text.secondary" display="block">REQUIRED HEADERS:</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", display: "block" }}>REQUIRED HEADERS:</Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
                   {SCHEMAS[activeType].map(h => <Chip key={h} label={h} size="small" variant="outlined" sx={{ fontSize: "10px", height: "20px" }} />)}
                 </Box>
@@ -200,25 +198,25 @@ export default function DataIngestion() {
               <CardContent>
                 <Box sx={{ display: "flex", gap: 4, mb: 3 }}>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">STATUS</Typography>
-                    <Typography variant="h6" fontWeight={800} color={result.status === "success" ? "success.main" : "warning.main"}>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>STATUS</Typography>
+                    <Typography variant="h6" color={result.status === "success" ? "success.main" : "warning.main"} sx={{ fontWeight: 800, color: result.status }}>
                       {result.status.toUpperCase()}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">ACCEPTED</Typography>
-                    <Typography variant="h6" fontWeight={800}>{result.accepted_count}</Typography>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>ACCEPTED</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800 }}>{result.accepted_count}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">REJECTED</Typography>
-                    <Typography variant="h6" fontWeight={800} color="error.main">{result.rejected_count}</Typography>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>REJECTED</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: "error.main" }}>{result.rejected_count}</Typography>
                   </Box>
                 </Box>
 
                 {result.rejections.length > 0 && (
                   <>
                     <Divider sx={{ mb: 2 }} />
-                    <Typography variant="subtitle2" color="error" fontWeight={700} mb={1}>Rejection Samples (First 10)</Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "error.main", mb: 1 }}>Rejection Samples (First 10)</Typography>
                     <TableContainer component={Paper} variant="outlined">
                       <Table size="small">
                         <TableHead>
