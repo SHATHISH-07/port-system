@@ -153,16 +153,14 @@ export default function Sidebar() {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, mt: 0.5 }}>
             <Typography
               sx={{
-                fontSize: "0.75rem",
+                fontSize: "1rem",
                 fontWeight: 800,
                 color: textActiveColor,
                 lineHeight: 1.3,
                 letterSpacing: "0.03em",
               }}
             >
-              BERTH OPTIMIZATION &
-              <br />
-              YARD PREPARATION
+              Deck Optimiser
             </Typography>
             <Typography
               sx={{
