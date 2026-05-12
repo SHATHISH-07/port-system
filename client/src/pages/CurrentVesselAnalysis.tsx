@@ -12,6 +12,7 @@ import BerthRecommendation from "../components/vessel-analysis/BerthRecommendati
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
 import CraneAssignment from "../components/vessel-analysis/CraneAssignment";
 import HeatmapPage from "./HeatmapPage";
+import OperationalPlaceholder from "../components/vessel-analysis/OperationalPlaceholder";
 
 
 function Section({
@@ -138,10 +139,11 @@ const CurrentVesselAnalysis = () => {
         setDischarged={setDischarged}
         onAnalyze={fetchData}
         loading={loading}
-        data={data}
       />
 
-      {data && (
+      {!data && !loading ? (
+        <OperationalPlaceholder mode="current" />
+      ) : data && (
         <>
           {/* ── 01 · Performance & Recommendation ── */}
           <Section n="01" label="Performance & Recommendation">
@@ -180,7 +182,7 @@ const CurrentVesselAnalysis = () => {
 
           {/* ── 04 · Strategy & Risk Analysis ── */}
           <Section n={heatmapData && !heatmapData.error ? "04" : "03"} label="Strategy & Risk Analysis">
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 3 }}>
               <RiskEvaluation 
                 risks={data.risks || []} 
                 predictions={data.operational_predictions} 

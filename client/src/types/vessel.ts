@@ -217,6 +217,8 @@ export interface CraneStats {
   productivity_rating: string;
   avg_cycle_minutes: number;
   restow_ratio: number;
+  yard_id?: string;
+  primary_visit?: string;
 }
 
 export interface VisitCraneAllocation {
@@ -224,6 +226,7 @@ export interface VisitCraneAllocation {
   crane_count: number;
   total_moves: number;
   cranes_used: string[];
+  yard_id?: string;
 }
 
 export interface HourlyProductivity {
@@ -253,7 +256,16 @@ export interface CranePerformanceResponse {
   };
   crane_stats: CraneStats[];
   visit_crane_allocation: VisitCraneAllocation[];
-  hourly_productivity: HourlyProductivity[];
+  hourly_trend?: Array<{ timestamp: string; count: number }>;
+  yard_stats?: Array<{
+    terminal_name: string;
+    total_system_moves: number;
+    active_cranes_count: number;
+    unique_vessel_visits: number;
+    gross_terminal_mph: number;
+    avg_crane_productivity: number;
+  }>;
+  move_kind_distribution?: Record<string, number>;
   moves: CraneMove[];
   error?: string;
 }

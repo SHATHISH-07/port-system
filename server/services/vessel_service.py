@@ -111,14 +111,17 @@ def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
         return {**empty_stats, "_crane_move_count": total_moves}
 
     crane_count = int(valid["crane_id"].nunique())
-    min_t       = valid["crane_time"].dropna().min()
-    max_t       = valid["crane_time"].dropna().max()
-    dur         = (
-        max((max_t - min_t).total_seconds() / 3600, 0.1)
-        if pd.notna(min_t) and pd.notna(max_t) else 0.1
-    )
-    eff       = len(valid)
-    mphc      = min((eff / dur) / crane_count, 999.0) if crane_count > 0 else 0.0
+    # High-precision crane-hour calculation (Sum of individual active windows)
+    total_crane_hours = 0.0
+    for _, cgrp in valid.groupby("crane_id"):
+        cmin = cgrp["crane_time"].min()
+        cmax = cgrp["crane_time"].max()
+        if pd.notna(cmin) and pd.notna(cmax):
+            total_crane_hours += max((cmax - cmin).total_seconds() / 3600, 0.1)
+
+    eff = len(valid)
+    mphc = min(eff / max(total_crane_hours, 0.1), 999.0) if total_crane_hours > 0 else 0.0
+    
     restows   = (
         len(valid[valid["crane_move_kind"].isin(["RESTOW", "SHIFT"])])
         if "crane_move_kind" in valid.columns else 0
@@ -129,7 +132,7 @@ def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
         "_crane_move_count":      total_moves,
         "_crane_effective_moves": eff,
         "_crane_count":           float(crane_count),
-        "_crane_duration_hours":  float(dur),
+        "_crane_duration_hours":  float(total_crane_hours),
         "_crane_mphc":            float(mphc),
         "_crane_intensity":       float(eff / max(container_count, 1)),
         "_crane_restow_ratio":    float(restows / eff) if eff > 0 else 0.0,

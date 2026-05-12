@@ -37,47 +37,21 @@ def _deterministic_layout(blocks: list[str]) -> dict:
     position metadata rather than Python's hash().
 
     Layout rules (same across all process restarts):
-      PEB  terminal  → blocks A-H map to columns 0-7; y = 0
-      CWIT terminal  → section number (1-5) maps to row y; block letter (A-D) maps to column x
-      Other          → alphabetic sort order used for x; y = 0
-
-    Coordinates are normalised to [0, 9] for frontend consumption.
+    Returns a strict 3-column wrapping grid for blocks to ensure 
+    organized visualization without horizontal overflow.
     """
+    layout: dict = {}
     if not blocks:
-        return {}
+        return layout
 
-    layout: dict[str, dict] = {}
-
-    # Separate by terminal
-    peb_blocks   = [b for b in blocks if b.startswith("PEB-")]
-    cwit_blocks  = [b for b in blocks if b.startswith("CWIT-")]
-    other_blocks = [b for b in blocks if not b.startswith(("PEB-", "CWIT-"))]
-
-    # ── PEB: single row, blocks A–H → x = ord(letter) - 65 ──────────────────
-    for b in peb_blocks:
-        letter = b.split("-")[-1][:1].upper()
-        x = max(0, ord(letter) - 65)          # A=0, B=1, … H=7
-        layout[b] = {"x": x, "y": 0}
-
-    # ── CWIT: section (1-5) → y,  block letter (A-D) → x ────────────────────
-    # Label format: CWIT-<SECTION><LETTER>  e.g. CWIT-2D
-    for b in cwit_blocks:
-        inner = b[len("CWIT-"):]               # e.g. "2D"
-        m = re.match(r"^(\d+)([A-Z])", inner)
-        if m:
-            section = int(m.group(1))
-            letter  = m.group(2).upper()
-            x = max(0, ord(letter) - 65)       # A=0, B=1, C=2, D=3
-            y = section - 1                    # 1→0, 2→1, …, 5→4
-        else:
-            # Fallback: sort position
-            idx = sorted(cwit_blocks).index(b)
-            x, y = idx % 5, idx // 5
+    # Sort alphabetically to ensure stable positions
+    sorted_blocks = sorted(blocks)
+    
+    COLS = 3
+    for idx, b in enumerate(sorted_blocks):
+        x = idx % COLS
+        y = idx // COLS
         layout[b] = {"x": x, "y": y}
-
-    # ── Other: sort alphabetically, fill left-to-right ───────────────────────
-    for idx, b in enumerate(sorted(other_blocks)):
-        layout[b] = {"x": idx % 10, "y": idx // 10}
 
     return layout
 
@@ -86,20 +60,28 @@ def _deterministic_layout(blocks: list[str]) -> dict:
 # Main entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_vessel_heatmap(df: pd.DataFrame, vessel_service: str) -> dict:
+def get_vessel_heatmap(df: pd.DataFrame, vessel_id: str) -> dict:
     if df is None or df.empty:
-        return {"error": f"No data for vessel {vessel_service}", "vessel": vessel_service}
+        return {"error": f"No data for vessel {vessel_id}", "vessel": vessel_id}
 
     required = {"outbound_service", "actual_outbound_carrier_visit_id"}
     if not required.issubset(df.columns):
-        return {"error": "Missing required columns", "vessel": vessel_service}
+        return {"error": "Missing required columns", "vessel": vessel_id}
 
-    vessel_df = df[
-        df["outbound_service"].astype(str).str.strip() == str(vessel_service).strip()
-    ].copy()
+    # Normalize searching
+    vessel_id_str = str(vessel_id).strip().upper()
+    
+    # Try multiple common columns for vessel/service identification
+    vessel_df = pd.DataFrame()
+    for col in ["outbound_service", "inbound_service", "vessel_id"]:
+        if col in df.columns:
+            matches = df[df[col].astype(str).str.strip().str.upper() == vessel_id_str]
+            if not matches.empty:
+                vessel_df = matches
+                break
 
     if vessel_df.empty:
-        return {"error": f"No data for vessel {vessel_service}", "vessel": vessel_service}
+        return {"error": f"No data for vessel {vessel_id}", "vessel": vessel_id}
 
     # Pick busiest visit by LOAD count
     visit_scores: dict = {}
@@ -168,7 +150,7 @@ def get_vessel_heatmap(df: pd.DataFrame, vessel_service: str) -> dict:
             summary["oog"] += 1
 
     if not blocks_data:
-        return {"error": "No yard positions found for this visit", "vessel": vessel_service}
+        return {"error": "No yard positions found for this visit", "vessel": vessel_id}
 
     max_count    = 1
     final_blocks: dict = {}
@@ -198,14 +180,14 @@ def get_vessel_heatmap(df: pd.DataFrame, vessel_service: str) -> dict:
             else "Low"
         )
 
-    # Use deterministic layout (no hash())
-    all_blocks = _all_blocks(df)
-    layout     = _deterministic_layout(all_blocks)
+    # Only include blocks that actually contain containers for this vessel/visit
+    relevant_blocks = list(final_blocks.keys())
+    layout          = _deterministic_layout(relevant_blocks)
 
     max_block = max(final_blocks, key=lambda k: final_blocks[k]["count"])
 
     return {
-        "vessel":             str(vessel_service),
+        "vessel":             vessel_id_str,
         "visit_id":           str(top_visit_id),
         "recommended_berth":  max_block,
         "berth_recommendation_reason": (

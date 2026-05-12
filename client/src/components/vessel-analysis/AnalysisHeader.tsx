@@ -3,7 +3,6 @@ import {
   InputAdornment, TextField, useTheme,
 } from "@mui/material";
 import { SearchOutlined } from "@mui/icons-material";
-import { type VesselAnalysisData } from "../../types/vessel";
 
 interface Props {
   mode?: "history" | "current";
@@ -15,7 +14,6 @@ interface Props {
   setDischarged?: (v: string) => void;
   onAnalyze: () => void;
   loading: boolean;
-  data: VesselAnalysisData | null;
 }
 
 export default function AnalysisHeader({
@@ -24,7 +22,7 @@ export default function AnalysisHeader({
   loaded, setLoaded,
   discharged, setDischarged,
   onAnalyze,
-  loading, data,
+  loading,
 }: Props) {
   const theme = useTheme();
   const isCurrent = mode === "current";
@@ -36,135 +34,112 @@ export default function AnalysisHeader({
   return (
     <Box
       sx={{
-        mb: 4,
+        mb: 6,
         pb: 3,
         borderBottom: `1px solid ${theme.palette.divider}`,
       }}
     >
+      {/* ── Title Section ── */}
+      <Box sx={{ mb: 4 }}>
+        <Typography
+          sx={{
+            fontWeight: 900,
+            letterSpacing: "-2px",
+            color: "text.primary",
+            mb: 1,
+            fontSize: "40px"
+          }}
+        >
+          {isCurrent ? "Current Vessel Analysis" : "Historical Berth Analytics"}
+        </Typography>
+        <Typography variant="h6" sx={{ color: "text.secondary", fontWeight: 400, maxWidth: 800 }}>
+          {isCurrent
+            ? "Live operational intelligence — berth assignment, yard heatmap, and execution planning."
+            : "Retrospective performance review — visit records, stay times, and berth rankings."
+          }
+        </Typography>
+      </Box>
+
+      {/* ── Minimal Search Controls ── */}
       <Box
         sx={{
           display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 3,
           flexWrap: "wrap",
+          gap: 4,
+          alignItems: "center",
+          mt: 2,
         }}
       >
-        {/* LEFT: Title */}
-        <Box>
-          <Typography variant="h5" sx={{ mb: 0.5, color: "text.primary" }}>
-            {isCurrent ? "Current Vessel Analysis" : "Vessel History Analysis"}
-          </Typography>
-          <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 380 }}>
-            {isCurrent
-              ? "Live operational analysis — berth assignment, yard heatmap, and execution plan."
-              : "Historical performance review — visit records, stay times, and berth rankings."
-            }
-          </Typography>
-
+        {/* Vessel Search Group */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <TextField
+            size="small"
+            variant="standard"
+            placeholder="Search Vessel ID..."
+            value={vesselId}
+            onChange={(e) => setVesselId(e.target.value)}
+            onKeyDown={handleEnter}
+            sx={{ width: 300, "& .MuiInput-root": { fontSize: "1.1rem", fontWeight: 600 } }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchOutlined sx={{ color: "primary.main" }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
         </Box>
 
-        {/* RIGHT: Controls */}
-        <Box
+        {isCurrent && setLoaded && setDischarged && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 3, pl: 3, borderLeft: "1px solid", borderColor: "divider" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: "text.disabled", textTransform: "uppercase" }}>Load</Typography>
+              <TextField
+                size="small"
+                variant="standard"
+                type="number"
+                placeholder="Auto"
+                value={loaded}
+                onChange={(e) => setLoaded(e.target.value)}
+                sx={{ width: 80, "& .MuiInput-root": { fontWeight: 700 } }}
+              />
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: "text.disabled", textTransform: "uppercase" }}>Disc</Typography>
+              <TextField
+                size="small"
+                variant="standard"
+                type="number"
+                placeholder="Auto"
+                value={discharged}
+                onChange={(e) => setDischarged(e.target.value)}
+                sx={{ width: 80, "& .MuiInput-root": { fontWeight: 700 } }}
+              />
+            </Box>
+          </Box>
+        )}
+
+        <Button
+          variant="text"
+          onClick={onAnalyze}
+          disabled={loading || !vesselId}
+          startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
           sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 1.5,
-            alignItems: "flex-end",
-            flex: "1 1 auto",
-            justifyContent: "flex-end",
+            fontWeight: 800,
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            fontSize: "0.875rem",
+            color: "primary.main",
+            ml: "auto",
+            "&:hover": { bgcolor: "action.hover" }
           }}
         >
-          {/* Vessel ID */}
-          <Box>
-            <Typography variant="caption" sx={{ display: "block", mb: 0.5, fontWeight: 600, color: "text.secondary" }}>
-              Vessel ID
-            </Typography>
-            <TextField
-              size="small"
-              variant="outlined"
-              placeholder="e.g. VESSEL_001"
-              value={vesselId}
-              onChange={(e) => setVesselId(e.target.value)}
-              onKeyDown={handleEnter}
-              sx={{ width: 220 }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchOutlined sx={{ fontSize: 16, color: "text.disabled" }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-          </Box>
-
-          {isCurrent && setLoaded && setDischarged && (
-            <>
-              <Box>
-                <Typography variant="caption" sx={{ display: "block", mb: 0.5, fontWeight: 600, color: "text.secondary" }}>
-                  Loaded
-                </Typography>
-                <TextField
-                  size="small"
-                  variant="outlined"
-                  placeholder="0"
-                  value={loaded || ""}
-                  onChange={(e) => setLoaded(e.target.value)}
-                  type="number"
-                  sx={{ width: 100 }}
-                />
-              </Box>
-              <Box>
-                <Typography variant="caption" sx={{ display: "block", mb: 0.5, fontWeight: 600, color: "text.secondary" }}>
-                  Discharged
-                </Typography>
-                <TextField
-                  size="small"
-                  variant="outlined"
-                  placeholder="0"
-                  value={discharged || ""}
-                  onChange={(e) => setDischarged(e.target.value)}
-                  type="number"
-                  sx={{ width: 100 }}
-                />
-              </Box>
-            </>
-          )}
-
-          <Button
-            variant="contained"
-            onClick={onAnalyze}
-            disabled={loading || !vesselId.trim()}
-            sx={{ height: 40, px: 3, minWidth: 130 }}
-          >
-            {loading ? <CircularProgress size={14} color="inherit" /> : "Run Analysis"}
-          </Button>
-        </Box>
+          {loading ? "Processing..." : "Run Analysis"}
+        </Button>
       </Box>
 
-      {/* Empty state */}
-      {!data && !loading && (
-        <Box
-          sx={{
-            mt: 2.5,
-            py: 2,
-            px: 3,
-            bgcolor: theme.palette.mode === "dark"
-              ? "rgba(255,255,255,0.03)"
-              : "rgba(0,0,0,0.02)",
-            borderRadius: 2,
-            border: `1px solid ${theme.palette.divider}`,
-          }}
-        >
-          <Typography variant="body2" sx={{ color: "text.secondary" }}>
-            Enter a vessel ID and click{" "}
-            <Box component="span" sx={{ color: "primary.main", fontWeight: 600 }}>Run Analysis</Box>{" "}
-            to begin.
-          </Typography>
-        </Box>
-      )}
     </Box>
   );
 }
