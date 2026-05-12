@@ -133,15 +133,21 @@ const HistoryVesselAnalysis = () => {
 
       {data && (
         <>
-          {/* ── 01 · Performance ── */}
-          <Section n="01" label="Performance Metrics">
-            <PerformanceStats
-              actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
-              predicted={data.predicted?.avg_hours ?? 0}
-              mode={data.mode || "history"}
-              loaded={data.input?.loaded ?? data.top_visit_stats?.loaded}
-              discharged={data.input?.discharged ?? data.top_visit_stats?.discharged}
-            />
+          {/* ── 01 · Performance & Recommendation ── */}
+          <Section n="01" label="Performance & Recommendation">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "2fr 1fr" }, gap: 3 }}>
+              <PerformanceStats
+                actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
+                predicted={data.predicted?.avg_hours ?? 0}
+                mode={data.mode || "history"}
+                loaded={data.input?.loaded ?? data.top_visit_stats?.loaded}
+                discharged={data.input?.discharged ?? data.top_visit_stats?.discharged}
+              />
+              <BerthRecommendation 
+                berth={data.berth_recommendation?.berth} 
+                concentration={data.berth_recommendation?.congestion_risk} 
+              />
+            </Box>
           </Section>
 
           {/* ── 02 · Visit History ── */}
@@ -164,7 +170,32 @@ const HistoryVesselAnalysis = () => {
           {/* ── 04 · Berth History ── */}
           {!isManual && (
             <Section n="04" label="Historical Berth Analysis">
-              <BerthImpactTable data={data.berth_analysis} mode="history" />
+              <BerthImpactTable 
+                data={data.berth_analysis} 
+                conflicts={data.berth_conflicts}
+                mode="history" 
+              />
+            </Section>
+          )}
+
+          {/* ── 05 · Strategy & Risks ── */}
+          {!isManual && (
+            <Section n="05" label="Historical Strategy & Risk Analysis">
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3 }}>
+                <RiskAndStrategy 
+                  risks={data.risks || []} 
+                  predictions={data.operational_predictions} 
+                  delays={data.delay_analysis || []}
+                />
+                <ExecutionPlan steps={data.execution_plan || []} />
+              </Box>
+            </Section>
+          )}
+
+          {/* ── 06 · Yard Strategy ── */}
+          {!isManual && data.yard_strategy && (
+            <Section n="06" label="Yard Storage Strategy">
+              <YardStrategy data={data.yard_strategy} />
             </Section>
           )}
 

@@ -54,14 +54,15 @@ export default function CraneAssignment({
         loaded: loadedOverride || 0,
         discharged: dischargedOverride || 0,
         duration_hours: 0,
+        total_units: (loadedOverride || 0) + (dischargedOverride || 0),
       }];
       return (
-        <CraneAssignment 
-          data={syntheticData} 
-          mode={mode} 
-          recommendedCranes={recommendedCranes} 
-          loadedOverride={loadedOverride} 
-          dischargedOverride={dischargedOverride} 
+        <CraneAssignment
+          data={syntheticData}
+          mode={mode}
+          recommendedCranes={recommendedCranes}
+          loadedOverride={loadedOverride}
+          dischargedOverride={dischargedOverride}
         />
       );
     }
@@ -113,19 +114,34 @@ export default function CraneAssignment({
           <Box
             key={label}
             sx={{
-              px: 2.5, py: 1.5, borderRadius: 2,
-              border: "1px solid", borderColor: "divider",
+              px: 2.5,
+              py: 1.5,
+              borderRadius: 2,
+              bgcolor: "background.paper",
+              border: (theme) => `1px solid ${theme.palette.divider}`,
               minWidth: 130,
+              boxShadow: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "0 1px 3px rgba(0,0,0,0.2)"
+                  : "0 1px 3px rgba(15,23,42,0.04)",
             }}
           >
             <Typography
               variant="caption"
-              color="text.disabled"
-              sx={{ fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}
+              sx={{
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "text.secondary",
+                display: "block",
+              }}
             >
               {label}
             </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.2, mt: 0.5 }}>
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 800, lineHeight: 1.2, mt: 0.5, color: "text.primary" }}
+            >
               {value}
             </Typography>
           </Box>
@@ -133,102 +149,136 @@ export default function CraneAssignment({
       </Box>
 
       {/* Per-visit table */}
-      <TableContainer>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 700 }}>
-                {mode === "current" ? "Vessel Service" : "Visit ID"}
-              </TableCell>
-              <TableCell align="center" sx={{ fontWeight: 700 }}>Cranes</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Crane IDs</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>MPHC</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Loaded</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Discharged</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Duration (h)</TableCell>
-              <TableCell align="center" sx={{ fontWeight: 700 }}>Rating</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {data.map((row) => {
-              const craneList = parseCraneIds(row.crane_ids);
-              // In current mode show the vessel service code (e.g. "FF116") the user typed,
-              // rather than the opaque internal visit ID (e.g. "MSC180100")
-              const displayId =
-                mode === "current" && row.vessel_service
-                  ? row.vessel_service
-                  : row.visit_id;
-              return (
-                <TableRow key={row.visit_id} hover>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontFamily: "monospace", fontWeight: 600 }}
-                    >
-                      {displayId}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      label={row.crane_count || "—"}
-                      size="small"
-                      color={
-                        row.crane_count >= 3
-                          ? "primary"
-                          : row.crane_count >= 2
-                          ? "info"
-                          : "default"
-                      }
-                      sx={{ fontWeight: 700, minWidth: 32 }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                      {craneList.length > 0 ? (
-                        craneList.map((cid) => (
-                          <Tooltip key={cid} title={`Crane ${cid}`}>
-                            <Chip
-                              label={cid}
-                              size="small"
-                              variant="outlined"
-                              sx={{ fontSize: "0.7rem", fontFamily: "monospace" }}
-                            />
-                          </Tooltip>
-                        ))
-                      ) : (
-                        <Typography variant="caption" color="text.disabled">
-                          No crane data
-                        </Typography>
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Typography
-                      variant="body2"
-                      color={row.crane_mphc > 0 ? "text.primary" : "text.disabled"}
-                    >
-                      {row.crane_mphc > 0 ? row.crane_mphc.toFixed(1) : "—"}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">{row.loaded}</TableCell>
-                  <TableCell align="right">{row.discharged}</TableCell>
-                  <TableCell align="right">
-                    {row.duration_hours > 0 ? row.duration_hours.toFixed(1) : "—"}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      label={ratingLabel(row.crane_mphc)}
-                      size="small"
-                      color={ratingColor(row.crane_mphc)}
-                      sx={{ fontWeight: 600 }}
-                    />
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Box
+        sx={{
+          bgcolor: "background.paper",
+          border: (theme) => `1px solid ${theme.palette.divider}`,
+          borderRadius: 2,
+          overflow: "hidden",
+        }}
+      >
+        <Box
+          sx={{
+            px: 3,
+            py: 2,
+            borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Typography variant="overline" sx={{ color: "text.secondary" }}>
+            Crane Utilization by Visit
+          </Typography>
+        </Box>
+
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700, pl: 3 }}>
+                  {mode === "current" ? "Vessel Service" : "Visit ID"}
+                </TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700 }}>
+                  Cranes
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Crane IDs</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  MPHC
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  Loaded
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  Discharged
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  Duration (h)
+                </TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700 }}>
+                  Rating
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {data.map((row) => {
+                const craneList = parseCraneIds(row.crane_ids);
+                const displayId =
+                  mode === "current" && row.vessel_service
+                    ? row.vessel_service
+                    : row.visit_id;
+                return (
+                  <TableRow key={row.visit_id} hover>
+                    <TableCell sx={{ pl: 3 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontFamily: "monospace", fontWeight: 600 }}
+                      >
+                        {displayId}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip
+                        label={row.crane_count || "—"}
+                        size="small"
+                        color={
+                          row.crane_count >= 3
+                            ? "primary"
+                            : row.crane_count >= 2
+                              ? "info"
+                              : "default"
+                        }
+                        sx={{ fontWeight: 700, minWidth: 32 }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                        {craneList.length > 0 ? (
+                          craneList.map((cid) => (
+                            <Tooltip key={cid} title={`Crane ${cid}`}>
+                              <Chip
+                                label={cid}
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontSize: "0.7rem", fontFamily: "monospace" }}
+                              />
+                            </Tooltip>
+                          ))
+                        ) : (
+                          <Typography variant="caption" color="text.disabled">
+                            No crane data
+                          </Typography>
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography
+                        variant="body2"
+                        color={row.crane_mphc > 0 ? "text.primary" : "text.disabled"}
+                      >
+                        {row.crane_mphc > 0 ? row.crane_mphc.toFixed(1) : "—"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">{row.loaded}</TableCell>
+                    <TableCell align="right">{row.discharged}</TableCell>
+                    <TableCell align="right">
+                      {row.duration_hours > 0 ? row.duration_hours.toFixed(1) : "—"}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip
+                        label={ratingLabel(row.crane_mphc)}
+                        size="small"
+                        color={ratingColor(row.crane_mphc)}
+                        sx={{ fontWeight: 600 }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
     </Box>
   );
 }

@@ -72,7 +72,7 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
               sx={{
                 fontSize: "2.75rem",
                 fontWeight: 300,
-                color: s.valueColor || "text.secondary",
+                color: s.valueColor || (theme.palette.mode === "dark" ? "text.secondary" : "text.primary"),
                 lineHeight: 1,
                 letterSpacing: "-2px",
                 fontFamily: "'Inter', sans-serif",

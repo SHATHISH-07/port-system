@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef } from "react";
 import {
   Box, Typography, Button, LinearProgress,
-  Alert, Snackbar, Chip, Divider, useTheme, Card, CardContent,
-  Grid, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, Paper, CircularProgress,
+  Alert, Snackbar, Chip, useTheme, Card, CardContent,
+  Grid, Paper, CircularProgress,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import {
@@ -20,52 +19,31 @@ import { api } from "../api/api";
 type IngestType = "history" | "current" | "crane";
 
 interface UploadResponse {
-  status: string;           // "processing" | "success" | "partial" | "failed"
+  status: string;           // "success" | "partial" | "failed"
   dataset_type: string;
   accepted_count: number;
   rejected_count: number;
-  ingestion_id: string;     // UUID string — NOT a number
+  ingestion_id: string;
   message?: string;
-  rejections?: Array<{ row: any; reason: string }>;
+  errors?: string[] | null;
 }
-
-interface StatusResponse {
-  id: string;
-  filename: string;
-  dataset_type: string;
-  status: string;           // "processing" | "success" | "partial" | "failed"
-  records_total: number;
-  records_accepted: number;
-  records_rejected: number;
-  completed_at: string | null;
-  error_summary: string | null;
-}
-
-interface RejectionRow {
-  row_data: any;
-  reason: string;
-  created_at: string;
-}
-
-const POLL_INTERVAL_MS = 2500;
-const MAX_POLLS = 60;   // 60 × 2.5s = 2.5 min timeout
 
 const SCHEMAS: Record<IngestType, string[]> = {
   history: [
-    "Unit ID", "Actual Outbound Carrier visit ID", "Outbound Service",
-    "Move Complete Time", "Time In", "Time Out",
-    "Ctr From Position", "Ctr To Position",
-    "Unit Weight in kg", "Verified Gross Mass (Kg)",
-    "Reefer", "Hazardous Flag", "OOG Unit", "Port of Discharge",
+    "unit_id", "actual_outbound_carrier_visit_id", "outbound_service",
+    "move_complete_time", "time_in", "time_out",
+    "ctr_from_position", "ctr_to_position",
+    "unit_weight_in_kg", "verified_gross_mass_kg",
+    "reefer", "hazardous_flag", "oog_unit", "port_of_discharge",
   ],
   current: [
-    "Unit ID", "Actual Outbound Carrier visit ID", "Outbound Service",
-    "Current Position", "Ctr From Position", "Ctr To Position",
-    "Move Complete Time", "Reefer", "Hazardous Flag", "Port of Discharge",
+    "unit_id", "actual_outbound_carrier_visit_id", "outbound_service",
+    "current_position", "ctr_from_position", "ctr_to_position",
+    "reefer", "hazardous_flag", "port_of_discharge",
   ],
   crane: [
-    "Crane CHE", "Unit Nbr", "Carrier Visit", "Move Kind",
-    "From Position", "To Position", "Time Completed", "Line Op",
+    "crane_id", "unit_id", "carrier_visit", "move_kind",
+    "from_position", "to_position", "time_completed", "line_op",
   ],
 };
 
@@ -116,10 +94,7 @@ export default function DataIngestion() {
   const [activeType, setActiveType] = useState<IngestType>("history");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [polling, setPolling] = useState(false);
-  const [ingestionId, setIngestionId] = useState<string | null>(null);
-  const [statusData, setStatusData] = useState<StatusResponse | null>(null);
-  const [rejections, setRejections] = useState<RejectionRow[]>([]);
+  const [statusData, setStatusData] = useState<UploadResponse | null>(null);
   const [toast, setToast] = useState<{
     open: boolean; message: string; severity: "success" | "error" | "warning" | "info";
   }>({ open: false, message: "", severity: "success" });
@@ -127,69 +102,15 @@ export default function DataIngestion() {
   const showToast = (message: string, severity: typeof toast.severity) =>
     setToast({ open: true, message, severity });
 
-  // ── Polling logic ──────────────────────────────────────────────────────────
-  const fetchStatus = useCallback(async (id: string) => {
-    const res = await api.get<StatusResponse>(`/ingest/status/${id}`);
-    return res.data;
-  }, []);
-
-  const fetchRejections = useCallback(async (id: string) => {
-    try {
-      const res = await api.get<{ rejections: RejectionRow[] }>(`/ingest/rejections/${id}`);
-      setRejections(res.data.rejections ?? []);
-    } catch {
-      // non-critical
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!ingestionId || !polling) return;
-
-    let polls = 0;
-    const interval = setInterval(async () => {
-      polls += 1;
-      try {
-        const data = await fetchStatus(ingestionId);
-        setStatusData(data);
-
-        const done = data.status !== "processing";
-        if (done || polls >= MAX_POLLS) {
-          clearInterval(interval);
-          setPolling(false);
-          if (done) {
-            await fetchRejections(ingestionId);
-            if (data.status === "success") {
-              showToast(`Ingestion complete — ${data.records_accepted.toLocaleString()} rows accepted.`, "success");
-              setFile(null);
-            } else if (data.status === "partial") {
-              showToast(`Partially ingested — ${data.records_accepted.toLocaleString()} accepted, ${data.records_rejected.toLocaleString()} rejected.`, "warning");
-            } else {
-              showToast(data.error_summary ?? "Ingestion failed.", "error");
-            }
-          } else {
-            showToast("Ingestion timed out waiting for completion.", "warning");
-          }
-        }
-      } catch {
-        clearInterval(interval);
-        setPolling(false);
-        showToast("Lost connection while polling ingestion status.", "error");
-      }
-    }, POLL_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [ingestionId, polling, fetchStatus, fetchRejections]);
-
   // ── File handling ──────────────────────────────────────────────────────────
   const handleFile = (f: File) => {
-    if (!f.name.endsWith(".csv")) {
-      showToast("Only CSV files are accepted.", "error");
+    const valid = [".csv", ".xlsx", ".xls"].some(ext => f.name.toLowerCase().endsWith(ext));
+    if (!valid) {
+      showToast("Only CSV or Excel files are accepted.", "error");
       return;
     }
     setFile(f);
     setStatusData(null);
-    setRejections([]);
-    setIngestionId(null);
   };
 
   // ── Upload ─────────────────────────────────────────────────────────────────
@@ -197,8 +118,6 @@ export default function DataIngestion() {
     if (!file) return;
     setUploading(true);
     setStatusData(null);
-    setRejections([]);
-    setIngestionId(null);
 
     try {
       const form = new FormData();
@@ -212,31 +131,16 @@ export default function DataIngestion() {
       );
 
       const data = res.data;
+      setStatusData(data);
 
       if (data.status === "failed") {
-        showToast(data.rejections?.[0]?.reason ?? "Upload rejected.", "error");
-        setUploading(false);
-        return;
+        showToast(data.message ?? "Ingestion failed.", "error");
+      } else if (data.status === "partial") {
+        showToast(`Partial success — ${data.accepted_count} accepted, ${data.rejected_count} rejected.`, "warning");
+      } else {
+        showToast(`Ingestion complete — ${data.accepted_count} rows processed.`, "success");
+        setFile(null);
       }
-
-      // Backend accepted the file and is processing in the background
-      setIngestionId(data.ingestion_id);
-
-      // Seed status display immediately with what we know
-      setStatusData({
-        id: data.ingestion_id,
-        filename: file.name,
-        dataset_type: data.dataset_type,
-        status: "processing",
-        records_total: 0,
-        records_accepted: 0,
-        records_rejected: 0,
-        completed_at: null,
-        error_summary: null,
-      });
-
-      setPolling(true);
-      showToast("File uploaded. Processing in background…", "info");
     } catch (err: any) {
       showToast(err.response?.data?.detail ?? "Upload failed.", "error");
     } finally {
@@ -244,7 +148,7 @@ export default function DataIngestion() {
     }
   };
 
-  const isLoading = uploading || polling;
+  const isLoading = uploading;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -261,7 +165,7 @@ export default function DataIngestion() {
 
       <Grid container spacing={3}>
         {/* ── Sidebar ── */}
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {TYPE_META.map((t) => (
               <Card
@@ -271,8 +175,6 @@ export default function DataIngestion() {
                   setActiveType(t.id);
                   setFile(null);
                   setStatusData(null);
-                  setRejections([]);
-                  setIngestionId(null);
                 }}
                 sx={{
                   cursor: isLoading ? "not-allowed" : "pointer",
@@ -314,7 +216,7 @@ export default function DataIngestion() {
         </Grid>
 
         {/* ── Upload area ── */}
-        <Grid item xs={12} md={8}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Paper variant="outlined" sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
             {/* Drop zone */}
             <Box
@@ -342,7 +244,7 @@ export default function DataIngestion() {
               <input
                 ref={fileRef}
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 hidden
                 onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               />
@@ -361,10 +263,10 @@ export default function DataIngestion() {
               ) : (
                 <>
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Click or drag to upload {activeType} CSV
+                    Click or drag to upload {activeType} data
                   </Typography>
                   <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                    File headers are auto-mapped — exact match not required.
+                    CSV and Excel formats supported — headers are auto-mapped.
                   </Typography>
                 </>
               )}
@@ -411,13 +313,13 @@ export default function DataIngestion() {
                 }
                 sx={{ px: 4, borderRadius: 2, alignSelf: "flex-end", whiteSpace: "nowrap" }}
               >
-                {uploading ? "Uploading…" : polling ? "Processing…" : "Start Ingestion"}
+                {uploading ? "Uploading & Processing…" : "Start Ingestion"}
               </Button>
             </Box>
           </Paper>
 
-          {/* Progress bar shown while polling */}
-          {(uploading || polling) && (
+          {/* Progress bar shown while uploading */}
+          {uploading && (
             <LinearProgress sx={{ mt: 1, borderRadius: 1 }} />
           )}
 
@@ -452,7 +354,7 @@ export default function DataIngestion() {
                       TOTAL
                     </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                      {statusData.records_total.toLocaleString()}
+                      {(statusData.accepted_count + statusData.rejected_count).toLocaleString()}
                     </Typography>
                   </Box>
 
@@ -461,7 +363,7 @@ export default function DataIngestion() {
                       ACCEPTED
                     </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 800, color: "success.main" }}>
-                      {statusData.records_accepted.toLocaleString()}
+                      {statusData.accepted_count.toLocaleString()}
                     </Typography>
                   </Box>
 
@@ -473,70 +375,22 @@ export default function DataIngestion() {
                       variant="h6"
                       sx={{
                         fontWeight: 800,
-                        color: statusData.records_rejected > 0 ? "error.main" : "text.secondary",
+                        color: statusData.rejected_count > 0 ? "error.main" : "text.secondary",
                       }}
                     >
-                      {statusData.records_rejected.toLocaleString()}
+                      {statusData.rejected_count.toLocaleString()}
                     </Typography>
                   </Box>
-
-                  {polling && (
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <CircularProgress size={16} />
-                      <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                        Waiting for background task…
-                      </Typography>
-                    </Box>
-                  )}
                 </Box>
 
-                {/* Error summary */}
-                {statusData.error_summary && (
+                {/* Errors */}
+                {statusData.errors && statusData.errors.length > 0 && (
                   <Alert severity="error" sx={{ mb: 2 }}>
-                    {statusData.error_summary}
+                    {statusData.errors.join("; ")}
                   </Alert>
                 )}
 
-                {/* Rejection samples */}
-                {rejections.length > 0 && (
-                  <>
-                    <Divider sx={{ mb: 2 }} />
-                    <Typography
-                      variant="subtitle2"
-                      sx={{ fontWeight: 700, color: "error.main", mb: 1 }}
-                    >
-                      Rejection Samples (first {rejections.length})
-                    </Typography>
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow sx={{ bgcolor: "action.hover" }}>
-                            <TableCell sx={{ fontWeight: 700 }}>Row Data</TableCell>
-                            <TableCell sx={{ fontWeight: 700 }}>Reason</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {rejections.map((rej, idx) => (
-                            <TableRow key={idx}>
-                              <TableCell
-                                sx={{ fontSize: "11px", fontFamily: "monospace", maxWidth: 300, wordBreak: "break-all" }}
-                              >
-                                {typeof rej.row_data === "string"
-                                  ? rej.row_data
-                                  : JSON.stringify(rej.row_data)}
-                              </TableCell>
-                              <TableCell
-                                sx={{ fontSize: "11px", color: "error.main", fontWeight: 600 }}
-                              >
-                                {rej.reason}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </>
-                )}
+                {/* Rejection info is returned in error_summary in this mode */}
               </CardContent>
             </Card>
           )}

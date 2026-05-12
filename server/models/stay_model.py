@@ -299,6 +299,7 @@ def predict_visit_stay_duration(
     target_mph: float = None,
     crane_count_override: float = None,
     mph_override: float = None,
+    feature_template: dict = None,
 ) -> float | dict | None:
     bundle = load_stay_model()
     if bundle is None:
@@ -312,6 +313,12 @@ def predict_visit_stay_duration(
     features = create_features(df)
     if features is None:
         return None
+
+    # Merge with feature template if provided
+    if feature_template:
+        for k, v in feature_template.items():
+            if k not in features or features[k] == 0:
+                features[k] = v
 
     # Apply crane count override (from historical average)
     if crane_count_override and float(crane_count_override) > 0:
@@ -347,6 +354,7 @@ def predict_vessel_stay_duration(
     target_mph: float = None,
     crane_count_override: float = None,
     mph_override: float = None,
+    feature_template: dict = None,
 ) -> dict:
     if not prepared_visits:
         return {"error": "No data found for vessel"}
@@ -360,6 +368,7 @@ def predict_vessel_stay_duration(
             target_mph,
             crane_count_override=crane_count_override,
             mph_override=mph_override,
+            feature_template=feature_template,
         )
         if isinstance(pred, dict):
             return pred
@@ -385,6 +394,7 @@ def predict_stay_duration_from_metrics(
     target_mph: float = None,
     historical_crane_avg: float = None,
     historical_mph_avg: float = None,
+    feature_template: dict = None,
 ) -> dict:
     bundle = load_stay_model()
     if bundle is None:
@@ -447,6 +457,12 @@ def predict_stay_duration_from_metrics(
         "pct_40ft":               0.5,
         "heavy_ratio":            0.3,
     }
+
+    # Merge with feature template if provided
+    if feature_template:
+        for k, v in feature_template.items():
+            if k not in features or features[k] == 0:
+                features[k] = v
 
     # Fill any remaining feature names with 0
     for f in feature_names:

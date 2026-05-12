@@ -143,15 +143,21 @@ const CurrentVesselAnalysis = () => {
 
       {data && (
         <>
-          {/* ── 01 · Performance ── */}
-          <Section n="01" label="Performance Metrics">
-            <PerformanceStats
-              actual={data?.actual?.avg_hours ?? data?.predicted?.avg_hours ?? 0}
-              predicted={data?.predicted?.avg_hours ?? 0}
-              mode={data.mode || "current"}
-              loaded={data.input?.loaded ?? data.top_visit_stats?.loaded}
-              discharged={data.input?.discharged ?? data.top_visit_stats?.discharged}
-            />
+          {/* ── 01 · Performance & Recommendation ── */}
+          <Section n="01" label="Performance & Recommendation">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "2fr 1fr" }, gap: 3 }}>
+              <PerformanceStats
+                actual={data?.actual?.avg_hours ?? data?.predicted?.avg_hours ?? 0}
+                predicted={data?.predicted?.avg_hours ?? 0}
+                mode={data.mode || "current"}
+                loaded={data.input?.loaded ?? data.top_visit_stats?.loaded}
+                discharged={data.input?.discharged ?? data.top_visit_stats?.discharged}
+              />
+              <BerthRecommendation
+                berth={data.berth_recommendation?.berth}
+                concentration={data.berth_recommendation?.congestion_risk}
+              />
+            </Box>
           </Section>
 
           {/* ── 02 · Crane Assignment ── */}
@@ -160,6 +166,8 @@ const CurrentVesselAnalysis = () => {
               data={data.crane_assignment}
               mode="current"
               recommendedCranes={data.operational_predictions?.recommended_crane_count}
+              loadedOverride={loaded ? Number(loaded) : undefined}
+              dischargedOverride={discharged ? Number(discharged) : undefined}
             />
           </Section>
 
@@ -170,49 +178,36 @@ const CurrentVesselAnalysis = () => {
             </Section>
           )}
 
-          {/* ── 04 · Operational Intelligence ── */}
-          <Section n={heatmapData && !heatmapData.error ? "04" : "03"} label="Operational Intelligence">
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "280px 1fr" },
-                gridTemplateRows: { md: "1fr 1fr" },
-                gap: 2,
-              }}
-            >
-              {/* Berth — spans 2 rows on the left */}
-              <Box sx={{ gridRow: { md: "1 / 3" } }}>
-                <BerthRecommendation
-                  berth={data.berth_analysis?.[0]?.berth}
-                  concentration={String(data.berth_analysis?.[0]?.cargo_concentration_pct ?? "")}
-                />
-              </Box>
-              {/* Execution plan — top right */}
-              <ExecutionPlan steps={data.execution_plan} />
-              {/* Risks — bottom right */}
-              <RiskEvaluation risks={data.risks} />
+          {/* ── 04 · Strategy & Risk Analysis ── */}
+          <Section n={heatmapData && !heatmapData.error ? "04" : "03"} label="Strategy & Risk Analysis">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3 }}>
+              <RiskEvaluation 
+                risks={data.risks || []} 
+                predictions={data.operational_predictions} 
+              />
+              <ExecutionPlan steps={data.execution_plan || []} />
             </Box>
           </Section>
 
-          {/* ── 04 · Yard Strategy ── */}
+          {/* ── 05 · Yard Strategy ── */}
           {data.yard_strategy && (
-            <Section n={heatmapData && !heatmapData.error ? "04" : "03"} label="Yard Preparation Strategy">
+            <Section n={heatmapData && !heatmapData.error ? "05" : "04"} label="Yard Preparation Strategy">
               <YardStrategy data={data.yard_strategy} />
             </Section>
           )}
 
-          {/* ── 05 · Berth Table ── */}
+          {/* ── 06 · Berth Impact Analysis ── */}
           <Section
             n={
               [heatmapData && !heatmapData.error, data.yard_strategy].filter(Boolean).length === 2
-                ? "05"
+                ? "06"
                 : [heatmapData && !heatmapData.error, data.yard_strategy].filter(Boolean).length === 1
-                  ? "04"
-                  : "03"
+                  ? "05"
+                  : "04"
             }
             label="Berth Impact Analysis"
           >
-            <BerthImpactTable data={data.berth_analysis} />
+            <BerthImpactTable data={data.berth_analysis} mode="current" />
           </Section>
 
           {/* Bottom spacer */}

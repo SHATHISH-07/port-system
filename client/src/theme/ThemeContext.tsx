@@ -36,14 +36,14 @@ function buildTheme(mode: PaletteMode) {
     palette: {
       mode,
       background: {
-        default: isDark ? "#202020" : "#ffffff",
-        paper:   isDark ? "#252525" : "#e9eef6",
+        default: isDark ? "#202020" : "#f8fafc",
+        paper:   isDark ? "#252525" : "#ffffff",
       },
       primary: {
-        main:         isDark ? "#60a5fa" : "#ffffff",
-        light:        isDark ? "#93c5fd" : "rgba(255,255,255,0.85)",
-        dark:         isDark ? "#3b82f6" : "rgba(255,255,255,0.65)",
-        contrastText: isDark ? "#0a0a0b"  : "#1a73e8",
+        main:         isDark ? "#60a5fa" : "#1a73e8",
+        light:        isDark ? "#93c5fd" : "#4285f4",
+        dark:         isDark ? "#3b82f6" : "#1557b0",
+        contrastText: "#ffffff",
       },
       secondary: { main: isDark ? "#a78bfa" : "#e8f0fe" },
       success:   { main: isDark ? "#34d399" : "#059669" },
@@ -116,7 +116,7 @@ function buildTheme(mode: PaletteMode) {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             backgroundImage: "none",
             // Cards use a dedicated surface — NOT background.paper (that's sidebar)
-            backgroundColor: theme.palette.mode === "dark" ? "#2a2a2a" : "#e9eef6",
+            backgroundColor: theme.palette.background.paper,
             border: `1px solid ${theme.palette.divider}`,
             borderRadius: 14,
             boxShadow: theme.palette.mode === "dark"
@@ -146,7 +146,7 @@ function buildTheme(mode: PaletteMode) {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             backgroundImage: "none",
             // Popups/menus
-            backgroundColor: theme.palette.mode === "dark" ? "#2a2a2a" : "#e9eef6",
+            backgroundColor: theme.palette.background.paper,
             transition: "background-color 250ms ease",
           }),
           elevation1: ({ theme }: { theme: typeof baseTheme }) => ({
@@ -167,7 +167,7 @@ function buildTheme(mode: PaletteMode) {
         styleOverrides: {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             backgroundImage: "none",
-            backgroundColor: theme.palette.mode === "dark" ? "#2a2a2a" : "#e9eef6",
+            backgroundColor: theme.palette.background.paper,
             border: `1px solid ${theme.palette.divider}`,
             borderRadius: "12px !important",
             boxShadow: "none",

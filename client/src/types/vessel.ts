@@ -155,7 +155,7 @@ export interface VesselAnalysisData {
   berth_conflicts?: Array<{
     berth: string;
     block: string;
-    conflict_risk: string;
+    conflict_risk: "Low" | "Medium" | "High";
     conflict_with: string[];
     impact_score: number;
     reason: string;
@@ -189,12 +189,18 @@ export interface VesselAnalysisData {
   execution_plan?: string[];
   top_visit_stats?: TopVisitStats;
   crane_assignment?: CraneAssignmentEntry[];
-  yard_strategy?: Record<string, unknown>;
+  yard_strategy?: {
+    weight_distribution: Record<string, number>;
+    top_discharge_ports: Record<string, number>;
+    avg_moves_per_container: number;
+    reshuffle_risk: string;
+  };
   input?: { loaded?: number; discharged?: number; [key: string]: unknown };
 }
 
 export interface CraneAssignmentEntry {
   visit_id: string;
+  vessel_service?: string;
   crane_count: number;
   crane_ids: string;
   crane_mphc: number;

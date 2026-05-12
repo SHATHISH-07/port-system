@@ -318,8 +318,14 @@ def safe_get_pos(row: dict, *keys) -> str | None:
     # This is safe for pandas NaN and handles title-case / snake_case columns.
     if row is None:
         return None
-    # check for the keys
-    for key in keys:
+
+    # Search for common position column names if none of the provided keys match
+    search_keys = list(keys) + [
+        "position", "pos_slot", "last_pos", "curr_pos", "current_pos",
+        "ctr_from_position", "ctr_to_position", "current_position"
+    ]
+
+    for key in search_keys:
         candidates = [
             key,
             key.lower(),
