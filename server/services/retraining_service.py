@@ -1,266 +1,213 @@
-import asyncio
+from __future__ import annotations
+
 import logging
-import os
+from datetime import datetime, timezone
 
-from fastapi import BackgroundTasks
-from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import text
-
-from db.connection import get_engine
-from db.training_metadata import get_latest_training_metadata, save_training_metadata
-from db.queries import load_from_db
-from models.retraining_config import retraining_config
-from models.stay_model import train_stay_model
+from config import settings
+from db.training_metadata import (
+    get_latest_training_metadata,
+    save_training_metadata,
+)
 from models.training_status import training_status
 
 logger = logging.getLogger("port_system")
 
-# get history count
-# get total history count across all yards
-def get_history_count() -> int:
-    try:
-        engine = get_engine()
-        with engine.connect() as conn:
-            # Discover all yard-specific history tables
-            res = conn.execute(text("""
-                SELECT relname FROM pg_class 
-                WHERE relkind IN ('p','r') 
-                  AND relname LIKE '%_history_containers'
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-            """)).fetchall()
-            
-            total = 0
-            for r in res:
-                tbl = r[0]
-                count = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
-                total += int(count or 0)
-            return total
-    except Exception as e:
-        logger.error("Error getting history count: %s", e)
-        return 0
 
-# get metadata
-def get_metadata() -> dict:
-    # get latest training metadata
-    try:
-        row = get_latest_training_metadata()
-        # if no metadata found, return default values
-        if not row:
-            return {
-                "last_trained_dataset_size": 0,
-                "dataset_size": 0,
-                "last_trained_timestamp": None,
-                "data_source": None,
-                "training_type": None,
-                "status": None,
-                "notes": None,
-            }
+# ─────────────────────────────────────────────────────────────────────────────
+# Core background training task
+# ─────────────────────────────────────────────────────────────────────────────
 
-        # get dataset size and timestamp
-        dataset_size = int(row.get("dataset_size") or row.get("last_trained_dataset_size") or 0)
-        ts = row.get("last_trained_timestamp")
-        # convert timestamp to isoformat
-        if hasattr(ts, "isoformat"):
-            ts = ts.isoformat()
-        # return metadata
-        return {
-            "last_trained_dataset_size": dataset_size,
-            "dataset_size": dataset_size,
-            "last_trained_timestamp": ts,
-            "data_source": row.get("data_source"),
-            "training_type": row.get("training_type"),
-            "status": row.get("status"),
-            "notes": row.get("notes"),
-        }
-    except Exception as e:
-        # log error and return default values
-        logger.error("Error reading training metadata: %s", e)
-        return {
-            "last_trained_dataset_size": 0,
-            "dataset_size": 0,
-            "last_trained_timestamp": None,
-            "data_source": None,
-            "training_type": None,
-            "status": None,
-            "notes": None,
-        }
+def background_train_and_update(df, config: dict = None) -> None:
+    """
+    Run model training synchronously (called from a background task).
+    Saves training metadata on completion or failure.
+    """
+    import pandas as pd
+    from models.stay_model import train_stay_model
 
-# update metadata
-def update_metadata(size: int, data_source: str = "db", training_type: str = "manual"):
-    # save completed training run
-    try:
-        save_training_metadata(
-            dataset_size=int(size or 0),
-            data_source=data_source,
-            training_type=training_type,
-            status="completed",
+    if df is None or (hasattr(df, "empty") and df.empty):
+        training_status.set("failed", "No data provided for training")
+        logger.error("[Retraining] background_train_and_update called with empty DataFrame")
+        return
+
+    # Only keep rows that have the essential training column
+    if "actual_outbound_carrier_visit_id" not in df.columns:
+        training_status.set(
+            "failed",
+            "Missing column: actual_outbound_carrier_visit_id",
         )
-        # log completed training run
-        logger.info(
-            "Training metadata saved — size=%s, source=%s, type=%s",
-            size,
-            data_source,
-            training_type,
-        )
-    except Exception as e:
-        # log error and return
-        logger.error("Failed to save training metadata: %s", e)
+        logger.error("[Retraining] DataFrame missing actual_outbound_carrier_visit_id")
+        return
 
-# background training worker used by FastAPI background tasks
-def background_train_and_update(df, config: dict = None):
-    # get current status
-    current_status = training_status.get()
-    data_source = current_status.get("data_source", "db")
-    training_type = current_status.get("training_type", "manual")
+    # Drop rows missing the visit ID (can't group without it)
+    df = df.dropna(subset=["actual_outbound_carrier_visit_id"]).copy()
+    n_rows = len(df)
+
+    if n_rows == 0:
+        training_status.set("failed", "All rows missing actual_outbound_carrier_visit_id")
+        return
+
+    logger.info("[Retraining] Starting training on %d rows", n_rows)
 
     try:
-        # train stay model
         train_stay_model(df, config=config)
-        # update metadata
+
+        # Persist metadata only when training succeeded
         if training_status.get().get("status") == "completed":
-            update_metadata(len(df), data_source=data_source, training_type=training_type)
-    except Exception as e:
-        # set status to failed
-        training_status.set("failed", str(e))
-        logger.error("Background training failed: %s", e)
+            save_training_metadata(
+                dataset_size=n_rows,
+                data_source=training_status.get().get("data_source", "db"),
+                training_type=training_status.get().get("training_type", "auto"),
+                status="completed",
+                notes=f"Trained at {datetime.now(timezone.utc).isoformat()}",
+            )
+            logger.info("[Retraining] Training metadata saved. samples=%d", n_rows)
+        else:
+            # training_status already set to "failed" inside train_stay_model
+            save_training_metadata(
+                dataset_size=n_rows,
+                data_source="db",
+                training_type="auto",
+                status="failed",
+                notes=training_status.get().get("message", "unknown error"),
+            )
+
+    except Exception as exc:
+        msg = str(exc)
+        training_status.set("failed", msg)
+        logger.error("[Retraining] Unexpected error during training: %s", msg)
         try:
             save_training_metadata(
-                dataset_size=len(df),
-                data_source=data_source,
-                training_type=training_type,
-                status="error",
-                notes=str(e),
+                dataset_size=n_rows,
+                data_source="db",
+                training_type="auto",
+                status="failed",
+                notes=msg,
             )
-        except Exception:
-            pass
+        except Exception as meta_exc:
+            logger.warning("[Retraining] Could not save failure metadata: %s", meta_exc)
 
-# send retraining job to Celery queue
-def trigger_retraining_celery(config_overrides: dict = None) -> dict:
-    use_celery = os.getenv("USE_CELERY", "false").lower() == "true"
-    # if celery is disabled, return skipped
-    if not use_celery:
-        return {"status": "skipped", "reason": "celery_disabled"}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Auto-retrain trigger  (called after each successful ingestion)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def check_and_trigger_retraining(background_tasks) -> None:
+    """
+    Compare the number of history rows ingested since the last training run
+    against the configured threshold.  If exceeded, queue a background retrain.
+    """
     try:
-        # import retraining task
-        from worker.tasks import retrain_model_task
+        from db.connection import get_engine
+        from sqlalchemy import text
 
-        # queue retraining task
-        task = retrain_model_task.delay(config_overrides or {})
-        # log queued task
-        logger.info("[Celery] Retraining task queued: task_id=%s", task.id)
-        return {"status": "queued", "task_id": task.id}
-    except Exception as e:
-        logger.warning("[Celery] Could not queue retraining task: %s", e)
-        return {"status": "celery_unavailable", "error": str(e)}
+        engine = get_engine()
 
-# check if retraining should be triggered
-def _should_trigger(current_count: int, last_size: int) -> bool:
-    # get threshold from config
-    threshold = int(getattr(retraining_config, "threshold", 1000))
-    # calculate difference
-    difference = max(current_count - last_size, 0)
-    # return True if difference is greater than or equal to threshold or last_size is 0
-    return difference >= threshold or last_size == 0
+        # Count total history rows across all yard tables
+        total_history_rows = 0
+        with engine.connect() as conn:
+            # Discover all *_history_containers_core tables
+            tbls = conn.execute(text("""
+                SELECT relname FROM pg_class
+                WHERE relkind IN ('r', 'p')
+                  AND relname LIKE '%_history_containers_core'
+                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+                ORDER BY relname
+            """)).fetchall()
 
-# check and trigger retraining
-def check_and_trigger_retraining(background_tasks: BackgroundTasks):
-    # check if retraining should be triggered
-    try:
-        # get current count
-        current_count = get_history_count()
-        if current_count == 0:
-            return
+            for (tbl,) in tbls:
+                try:
+                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                    total_history_rows += (n or 0)
+                except Exception:
+                    pass
 
-        # get metadata
-        metadata = get_metadata()
-        last_size = int(metadata.get("last_trained_dataset_size") or 0)
+        # Compare against last training run size
+        latest = get_latest_training_metadata()
+        last_trained_size = latest.get("dataset_size", 0) if latest else 0
+        new_records = max(total_history_rows - last_trained_size, 0)
 
-        # check if retraining should be triggered
-        if not _should_trigger(current_count, last_size):
-            logger.info(
-                "Retraining not triggered: current=%s last=%s threshold=%s",
-                current_count,
-                last_size,
-                getattr(retraining_config, "threshold", 1000),
-            )
-            return
-
-        # log triggered retraining
+        threshold = settings.RETRAIN_THRESHOLD_NEW_RECORDS
         logger.info(
-            "Retraining triggered: current=%s last=%s threshold=%s",
-            current_count,
-            last_size,
-            getattr(retraining_config, "threshold", 1000),
+            "[Retraining] history_rows=%d  last_trained=%d  new=%d  threshold=%d",
+            total_history_rows, last_trained_size, new_records, threshold,
         )
 
-        # send retraining job to Celery queue
-        celery_result = trigger_retraining_celery()
-        if celery_result.get("status") == "queued":
-            return
+        if new_records >= threshold:
+            current_status = training_status.get().get("status")
+            if current_status == "training":
+                logger.info("[Retraining] Skipping — training already in progress")
+                return
 
-        # Fallback: FastAPI background task
-        df = load_from_db("history", full_load=True)
-        if df.empty:
-            logger.warning("Retraining skipped — no history data loaded")
-            return
+            logger.info(
+                "[Retraining] Threshold met (%d >= %d). Queuing retrain …",
+                new_records, threshold,
+            )
+            training_status.set(
+                status="training",
+                message="Auto-retraining triggered by ingestion threshold",
+                records_count=total_history_rows,
+                data_source="db",
+                training_type="auto",
+            )
+            from db.queries import load_from_db
+            df = load_from_db("history", full_load=True)
 
-        # get config
-        config = training_status.get_last_config()
-        # set status to training
-        training_status.set(
-            status="training",
-            message="Automated retraining started",
-            records_count=len(df),
-            data_source="db",
-            training_type="automated",
-        )
-        background_tasks.add_task(background_train_and_update, df, config)
+            if df.empty:
+                training_status.set("failed", "No history data found for auto-retrain")
+                return
 
-    except Exception as e:
-        logger.error("Failed in check_and_trigger_retraining: %s", e)
+            config = training_status.get_last_config()
+            background_tasks.add_task(background_train_and_update, df, config)
 
-# scheduled retraining job
-async def scheduled_retraining_job():
-    # job (APScheduler cron at 02:00)
+    except Exception as exc:
+        logger.error("[Retraining] check_and_trigger_retraining error: %s", exc)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Scheduled nightly retrain  (called by APScheduler at 02:00)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def scheduled_retraining_job() -> None:
+    """
+    Nightly cron-style retrain.  Loads all history data and retrains if there
+    are enough rows, without requiring the ingestion threshold to be met.
+    """
+    logger.info("[Scheduler] Nightly retraining job started")
+
+    current_status = training_status.get().get("status")
+    if current_status == "training":
+        logger.info("[Scheduler] Skipping — training already in progress")
+        return
+
     try:
-        # check if training is already in progress
-        if training_status.get().get("status") == "training":
-            logger.info("Job skipped — training already in progress.")
-            return
+        from db.queries import load_from_db
+        df = load_from_db("history", full_load=True)
 
-        # get current count
-        # get current count
-        current_count = get_history_count()
-        if current_count == 0:
-            return
-
-        # get metadata
-        metadata = get_metadata()
-        last_size = int(metadata.get("last_trained_dataset_size") or 0)
-
-        # check if retraining should be triggered
-        if not _should_trigger(current_count, last_size):
-            return
-
-        # log triggered retraining
-        logger.info("Cron Job: Retraining triggered for %s new records.", current_count - last_size)
-
-        df = await asyncio.to_thread(load_from_db, "history", None, True)
         if df.empty:
+            logger.warning("[Scheduler] No history data found — skipping retrain")
             return
 
-        # get config
-        config = training_status.get_last_config()
-        # set status to training
+        n_rows = len(df)
+        logger.info("[Scheduler] Loaded %d history rows for scheduled retrain", n_rows)
+
+        if n_rows < settings.MIN_VISIT_ROWS * 10:
+            logger.warning(
+                "[Scheduler] Too few rows (%d) — skipping retrain", n_rows
+            )
+            return
+
         training_status.set(
             status="training",
-            message="Automated nightly retraining started",
-            records_count=len(df),
+            message="Scheduled nightly retraining started",
+            records_count=n_rows,
             data_source="db",
             training_type="scheduled",
         )
-        await asyncio.to_thread(background_train_and_update, df, config)
 
-    except Exception as e:
-        logger.error("Error in cron job: %s", e)
+        config = training_status.get_last_config()
+        background_train_and_update(df, config)
+
+    except Exception as exc:
+        logger.error("[Scheduler] scheduled_retraining_job error: %s", exc)
+        training_status.set("failed", f"Scheduled retrain error: {exc}")
