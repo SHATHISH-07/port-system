@@ -31,8 +31,8 @@ def _is_yes(val) -> bool:
 
 def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
     row = dict(row)
-    from_pos = safe_get_pos(row, "crane_from", "ctr_from_position", "from_position")
-    to_pos = safe_get_pos(row, "crane_to", "ctr_to_position", "to_position")
+    from_pos    = safe_get_pos(row, "crane_from", "ctr_from_position", "from_position")
+    to_pos      = safe_get_pos(row, "crane_to",   "ctr_to_position",   "to_position")
     current_pos = safe_get_pos(row, "current_position", "current_pos")
 
     move_type = classify_move(from_pos, to_pos)
@@ -64,6 +64,27 @@ def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Vessel summary fetch  (fast-path from vessel_visits table)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _fetch_vessel_summary(vessel_id: str) -> Optional[dict]:
+    from db.queries import load_from_db
+    try:
+        df = load_from_db("vessel_visits", vessel_id=vessel_id)
+        if df.empty:
+            return None
+        # Sort by most recent activity and return the latest row
+        if "last_move_time" in df.columns:
+            df = df.sort_values("last_move_time", ascending=False)
+        elif "updated_at" in df.columns:
+            df = df.sort_values("updated_at", ascending=False)
+        return df.iloc[0].to_dict()
+    except Exception as exc:
+        logger.warning("vessel summary fetch failed for %s: %s", vessel_id, exc)
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Crane data fetching
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -89,15 +110,15 @@ def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
 
 def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
     empty_stats = {
-        "_crane_move_count":        0,
-        "_crane_effective_moves":   0,
-        "_crane_count":             0.0,
-        "_crane_duration_hours":    0.1,
-        "_crane_mphc":              0.0,
-        "_crane_intensity":         0.0,
-        "_crane_restow_ratio":      0.0,
-        "_crane_exclude_ratio":     0.0,
-        "_crane_ids":               "[]",
+        "_crane_move_count":      0,
+        "_crane_effective_moves": 0,
+        "_crane_count":           0.0,
+        "_crane_duration_hours":  0.1,
+        "_crane_mphc":            0.0,
+        "_crane_intensity":       0.0,
+        "_crane_restow_ratio":    0.0,
+        "_crane_exclude_ratio":   0.0,
+        "_crane_ids":             "[]",
     }
     if crane_df.empty:
         return empty_stats
@@ -111,7 +132,8 @@ def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
         return {**empty_stats, "_crane_move_count": total_moves}
 
     crane_count = int(valid["crane_id"].nunique())
-    # High-precision crane-hour calculation (Sum of individual active windows)
+
+    # Sum individual crane active windows (avoids inflating idle gaps between visits)
     total_crane_hours = 0.0
     for _, cgrp in valid.groupby("crane_id"):
         cmin = cgrp["crane_time"].min()
@@ -119,10 +141,13 @@ def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
         if pd.notna(cmin) and pd.notna(cmax):
             total_crane_hours += max((cmax - cmin).total_seconds() / 3600, 0.1)
 
-    eff = len(valid)
-    mphc = min(eff / max(total_crane_hours, 0.1), 999.0) if total_crane_hours > 0 else 0.0
-    
-    restows   = (
+    eff  = len(valid)
+    mphc = (
+        min((eff / total_crane_hours) / max(crane_count, 1), 999.0)
+        if total_crane_hours > 0 else 0.0
+    )
+
+    restows = (
         len(valid[valid["crane_move_kind"].isin(["RESTOW", "SHIFT"])])
         if "crane_move_kind" in valid.columns else 0
     )
@@ -214,7 +239,7 @@ def _visit_details(enriched_visits: dict) -> dict:
             else 0.0
         )
         w_col = (
-            "unit_weight_in_kg" if "unit_weight_in_kg" in vdf.columns
+            "unit_weight_in_kg"    if "unit_weight_in_kg"    in vdf.columns
             else "verified_gross_mass_kg" if "verified_gross_mass_kg" in vdf.columns
             else None
         )
@@ -250,24 +275,22 @@ def _visit_details(enriched_visits: dict) -> dict:
                 str(vdf["move_complete_time"].dropna().max())
                 if "move_complete_time" in vdf.columns else None
             ),
-            "total_units":              total_units,
-            "restow_count":             restow_count,
-            "crane_mphc":               crane_mphc,
-            "crane_count":              int(_col_val("_crane_count")),
-            "crane_ids":                vdf["_crane_ids"].iloc[0] if "_crane_ids" in vdf.columns else "[]",
-            "crane_duration_hours":     round(_col_val("_crane_duration_hours"), 2),
-            "crane_exclude_ratio":      _col_val("_crane_exclude_ratio"),
-            "avg_weight_kg":            avg_weight_kg,
-            "freight_kind_breakdown":   freight_breakdown,
-            "port_of_discharge_top5":   pod_top5,
+            "total_units":            total_units,
+            "restow_count":           restow_count,
+            "crane_mphc":             crane_mphc,
+            "crane_count":            int(_col_val("_crane_count")),
+            "crane_ids":              vdf["_crane_ids"].iloc[0] if "_crane_ids" in vdf.columns else "[]",
+            "crane_duration_hours":   round(_col_val("_crane_duration_hours"), 2),
+            "crane_exclude_ratio":    _col_val("_crane_exclude_ratio"),
+            "avg_weight_kg":          avg_weight_kg,
+            "freight_kind_breakdown": freight_breakdown,
+            "port_of_discharge_top5": pod_top5,
         }
     return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Operational metrics prediction
-# FIX: historical_mph_avg is now properly used as the fallback before the
-#      hardcoded constant, so empirical crane productivity drives predictions.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _predict_operational_metrics(
@@ -276,9 +299,9 @@ def _predict_operational_metrics(
     ml_stay_hours,
     loaded: int = 0,
     discharged: int = 0,
-    target_mph_override: float = None,
+    crane_count_override: float = None,
     historical_crane_avg: float = None,
-    historical_mph_avg: float = None,       # ← was silently ignored before
+    historical_mph_avg: float = None,
 ):
     if visit_df.empty:
         return None
@@ -297,32 +320,30 @@ def _predict_operational_metrics(
         )
     )
 
-    # Resolution order:
-    #   1. explicit override from the API caller
-    #   2. historical average from this vessel's past visits
-    #   3. system default (25 MPH)
     from config import settings as _s
-    if target_mph_override and float(target_mph_override) > 0:
-        target_mph = float(target_mph_override)
-    elif historical_mph_avg and float(historical_mph_avg) > 0:
-        # Floor the historical average to prevent junk data from skewing stay prediction
+    if historical_mph_avg and float(historical_mph_avg) > 0:
         target_mph = max(float(historical_mph_avg), 15.0)
     else:
-        target_mph = float(_s.CRANE_MOVES_PER_HOUR_TARGET)   # 25
+        target_mph = float(_s.CRANE_MOVES_PER_HOUR_TARGET)
 
-    required_mph              = total_ops / max(effective_stay_hours, 1.0)
-    recommended_crane_count   = max(math.ceil(required_mph / target_mph), 1)
+    required_mph = total_ops / max(effective_stay_hours, 1.0)
 
-    if historical_crane_avg and float(historical_crane_avg) > 0:
-        if total_ops > 100:
-            recommended_crane_count = max(
-                recommended_crane_count, round(float(historical_crane_avg))
-            )
+    if crane_count_override and int(crane_count_override) > 0:
+        recommended_crane_count = int(crane_count_override)
     else:
-        if total_ops > 300:
-            recommended_crane_count = max(recommended_crane_count, 3)
-        elif total_ops > 100:
-            recommended_crane_count = max(recommended_crane_count, 2)
+        recommended_crane_count = max(math.ceil(required_mph / target_mph), 1)
+
+    if not crane_count_override:
+        if historical_crane_avg and float(historical_crane_avg) > 0:
+            if total_ops > 100:
+                recommended_crane_count = max(
+                    recommended_crane_count, round(float(historical_crane_avg))
+                )
+        else:
+            if total_ops > 300:
+                recommended_crane_count = max(recommended_crane_count, 3)
+            elif total_ops > 100:
+                recommended_crane_count = max(recommended_crane_count, 2)
 
     recommended_crane_count = min(recommended_crane_count, 6)
 
@@ -371,7 +392,7 @@ def _predict_operational_metrics(
         "effective_mph_used":      round(target_mph, 2),
         "itv_impact": {
             "avg_travel_score":    round(avg_travel_score, 1),
-            "itv_cycle_impact":    (
+            "itv_cycle_impact": (
                 "High traffic on main corridors"
                 if avg_travel_score > 50 else "Normal flow"
             ),
@@ -380,7 +401,7 @@ def _predict_operational_metrics(
         "operational_impact_score": op_impact,
         "operational_rules_applied": [
             f"Target {target_mph:.1f} MPH per crane"
-            + (" (historical average)" if historical_mph_avg and float(historical_mph_avg) > 0 and not target_mph_override else ""),
+            + (" (historical average)" if historical_mph_avg and float(historical_mph_avg) > 0 and not crane_count_override else ""),
             f"Required MPH: {required_mph:.1f} → {recommended_crane_count} crane(s)",
             f"ITV ratio ~4.5:1 for {strategy_label}",
             "Conflict mitigation spacing applied",
@@ -393,9 +414,9 @@ def _calculate_delay_analysis(visit_df, crane_df):
     if visit_df.empty:
         return causes
     if not crane_df.empty and "crane_time" in crane_df.columns:
-        cdfc      = crane_df.sort_values("crane_time").copy()
+        cdfc       = crane_df.sort_values("crane_time").copy()
         cdfc["gap"] = cdfc["crane_time"].diff().dt.total_seconds() / 60
-        long_gaps = cdfc[cdfc["gap"] > 30]
+        long_gaps   = cdfc[cdfc["gap"] > 30]
         if not long_gaps.empty:
             causes.append({
                 "factor": "Crane Idle Time",
@@ -437,15 +458,12 @@ def _build_berth_tables(
 
     for _, row in visit_df.iterrows():
         move_type, yard_pos = _extract_move_side(row)
-
-        # For current snapshots, allow berth counting from current_position / ctr_to_position
         if yard_pos is None:
             continue
-
         if move_type not in ("LOAD", "DISCHARGE", "SHIFT", "RESTOW", "SNAPSHOT"):
             continue
 
-        bk = block_label(yard_pos) or "UNKNOWN"
+        bk     = block_label(yard_pos) or "UNKNOWN"
         bucket = berth_counts[bk]
 
         bucket["total_moves"] += 1
@@ -466,71 +484,67 @@ def _build_berth_tables(
     if not berth_counts:
         return [], {}, []
 
-    total_all = sum(v["total_moves"] for v in berth_counts.values()) or 1
-    sorted_berths = sorted(berth_counts.items(), key=lambda x: x[1]["total_moves"], reverse=True)
-    max_count = sorted_berths[0][1]["total_moves"]
+    total_all      = sum(v["total_moves"] for v in berth_counts.values()) or 1
+    sorted_berths  = sorted(berth_counts.items(), key=lambda x: x[1]["total_moves"], reverse=True)
+    max_count      = sorted_berths[0][1]["total_moves"]
 
     berth_analysis: list[dict] = []
     for idx, (bk, data) in enumerate(sorted_berths[:5], start=1):
-        total = data["total_moves"]
-        share = round((total / total_all) * 100, 2)
-        intensity = round(total / max(max_count, 1), 4)
+        total      = data["total_moves"]
+        share      = round((total / total_all) * 100, 2)
+        intensity  = round(total / max(max_count, 1), 4)
 
         risk = (
-            "High" if share >= 40 or total >= 60
+            "High"   if share >= 40 or total >= 60
             else "Medium" if share >= 20 or total >= 30
             else "Low"
         )
 
-        total_ops_all = max(total_loaded + total_discharged, total_all, 1)
-        block_share = total / max(total_all, 1)
-
+        total_ops_all  = max(total_loaded + total_discharged, total_all, 1)
+        block_share    = total / max(total_all, 1)
         vol_min_cranes = 3 if total_ops_all > 300 else 2 if total_ops_all > 100 else 1
         target_v_cranes = max(vol_min_cranes, round(total_ops_all / 120))
         stay_based_cranes = max(1, round(total_ops_all / (max(eff_hours, 1.0) * 20)))
-
         vessel_total_cranes = max(target_v_cranes, stay_based_cranes)
+
         if historical_crane_avg and float(historical_crane_avg) > 0:
             vessel_total_cranes = max(vessel_total_cranes, round(float(historical_crane_avg)))
 
-        # Use a more aggressive distribution for berth analysis to avoid everything being 1
-        # Multiplier 2.0 reflects that peak operations in a block often require 
-        # a dedicated crane even if the average share is lower.
         rec_cranes = max(1, math.ceil(vessel_total_cranes * block_share * 2.0))
         rec_cranes = min(rec_cranes, vessel_total_cranes)
 
-        parts = bk.split("-", 1)
+        parts    = bk.split("-", 1)
         terminal = parts[0] if len(parts) == 2 else "YARD"
-        block = parts[1] if len(parts) == 2 else bk
+        block    = parts[1] if len(parts) == 2 else bk
 
-        impact_score = round(share + data["hazardous"] * 2 + data["reefer"] + data["oog"], 2)
-        travel_score = int((hash(bk) % 90) + 10)
+        impact_score  = round(share + data["hazardous"] * 2 + data["reefer"] + data["oog"], 2)
+        travel_score  = int((hash(bk) % 90) + 10)
 
         berth_analysis.append({
-            "rank": idx,
-            "berth": bk,
-            "terminal": terminal,
-            "block": block,
-            "total_moves": total,
-            "load_moves": data["load_moves"],
-            "discharge_moves": data["discharge_moves"],
+            "rank":                    idx,
+            "berth":                   bk,
+            "terminal":                terminal,
+            "block":                   block,
+            "total_moves":             total,
+            "load_moves":              data["load_moves"],
+            "discharge_moves":         data["discharge_moves"],
             "cargo_concentration_pct": share,
-            "intensity": intensity,
-            "recommended_cranes": rec_cranes,
-            "congestion_risk": risk,
-            "hazardous": data["hazardous"],
-            "reefer": data["reefer"],
-            "oog": data["oog"],
-            "unique_containers": len(data["units"]),
-            "impact_score": impact_score,
-            "travel_distance_score": travel_score,
+            "intensity":               intensity,
+            "recommended_cranes":      rec_cranes,
+            "congestion_risk":         risk,
+            "hazardous":               data["hazardous"],
+            "reefer":                  data["reefer"],
+            "oog":                     data["oog"],
+            "unique_containers":       len(data["units"]),
+            "impact_score":            impact_score,
+            "travel_distance_score":   travel_score,
             "travel_distance_label": (
-                "Short" if travel_score < 30
+                "Short"    if travel_score < 30
                 else "Moderate" if travel_score < 70
                 else "Long"
             ),
             "corridor_congestion": (
-                "High" if intensity > 0.8
+                "High"     if intensity > 0.8
                 else "Moderate" if intensity > 0.4
                 else "Low"
             ),
@@ -540,7 +554,7 @@ def _build_berth_tables(
             ),
         })
 
-    top_impact = berth_analysis[0]["impact_score"] if berth_analysis else 1
+    top_impact     = berth_analysis[0]["impact_score"] if berth_analysis else 1
     conflict_table: list[dict] = []
 
     for row in berth_analysis:
@@ -548,10 +562,10 @@ def _build_berth_tables(
         for other in berth_analysis:
             if other["berth"] == row["berth"]:
                 continue
-            same_terminal = (row["terminal"] == other["terminal"])
-            high_combined = (row["impact_score"] + other["impact_score"]) > top_impact * 1.2
-            haz_adjacent = (row["hazardous"] > 0 or other["hazardous"] > 0) and same_terminal
-            reef_adjacent = (row["reefer"] > 0 or other["reefer"] > 0) and same_terminal
+            same_terminal  = (row["terminal"] == other["terminal"])
+            high_combined  = (row["impact_score"] + other["impact_score"]) > top_impact * 1.2
+            haz_adjacent   = (row["hazardous"] > 0 or other["hazardous"] > 0) and same_terminal
+            reef_adjacent  = (row["reefer"]    > 0 or other["reefer"]    > 0) and same_terminal
             if same_terminal or high_combined or haz_adjacent or reef_adjacent:
                 conflicts.append(other["berth"])
 
@@ -562,29 +576,76 @@ def _build_berth_tables(
             if row["congestion_risk"] == "Medium"
             else f"{row['cargo_concentration_pct']}% of moves concentrated here."
         )
-
         if row["hazardous"] > 0:
             reason += f" {row['hazardous']} hazmat units require buffer zones."
         if row["reefer"] > 0:
             reason += f" {row['reefer']} reefer units need power allocation."
 
         conflict_table.append({
-            "berth": row["berth"],
-            "block": row["block"],
+            "berth":         row["berth"],
+            "block":         row["block"],
             "conflict_risk": row["congestion_risk"],
             "conflict_with": conflicts[:4],
-            "impact_score": row["impact_score"],
-            "reason": reason,
+            "impact_score":  row["impact_score"],
+            "reason":        reason,
         })
 
-    primary = berth_analysis[0] if berth_analysis else {}
-    if primary:
+    # Attach recommendation reason to primary berth dict copy
+    primary: dict = {}
+    if berth_analysis:
+        primary = dict(berth_analysis[0])
         primary["recommendation_reason"] = (
             f"{primary['cargo_concentration_pct']}% of cargo concentrated in this berth. "
             f"{primary['congestion_risk']} congestion expected."
         )
 
     return berth_analysis, primary, conflict_table
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public unified stay analysis entry point
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_unified_stay_analysis(
+    vessel_id: str,
+    loaded: int = None,
+    discharged: int = None,
+    crane_count: int = None,
+) -> dict:
+    """
+    Single entry point for all three stay-time analysis modes:
+      1. Vessel-only       — pass only vessel_id
+      2. Workload-adjusted — pass loaded and/or discharged
+      3. Crane-adjusted    — pass crane_count (can combine with mode 2)
+
+    Tries current yard data first, falls back to history automatically.
+    Returns the same structure as analyze_vessel_dashboard.
+    """
+    from db.queries import load_from_db
+
+    df_curr = load_from_db("current")
+    df_hist = load_from_db("history")
+
+    result = analyze_vessel_dashboard(
+        df_curr,
+        vessel_id,
+        loaded_override=loaded,
+        discharged_override=discharged,
+        crane_count_override=crane_count,
+        history_df=df_hist,
+    )
+
+    if "error" in result:
+        hist_result = analyze_vessel_dashboard(
+            df_hist,
+            vessel_id,
+            loaded_override=loaded,
+            discharged_override=discharged,
+            crane_count_override=crane_count,
+        )
+        if "error" not in hist_result:
+            return hist_result
+
+    return result
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main dashboard entry point
@@ -595,7 +656,7 @@ def analyze_vessel_dashboard(
     vessel_service: str,
     loaded_override: int = None,
     discharged_override: int = None,
-    target_mph_override: float = None,
+    crane_count_override: int = None,
     history_df: pd.DataFrame = None,
 ) -> dict:
     if df is None or df.empty:
@@ -643,9 +704,6 @@ def analyze_vessel_dashboard(
     if "actual_outbound_carrier_visit_id" not in vessel_df.columns:
         vessel_df["actual_outbound_carrier_visit_id"] = vessel_service
 
-    from utils.stay_utils import _is_history_df
-    has_history_data = _is_history_df(vessel_df)
-
     # ── Enrich and prepare visits ────────────────────────────────────────────
     enriched_visits: dict = {}
     prepared_visits: dict = {}
@@ -659,19 +717,26 @@ def analyze_vessel_dashboard(
     # ── Compute actual stay ──────────────────────────────────────────────────
     actual_raw = compute_vessel_stay(prepared_visits)
 
-    # ── Identify historical baseline ─────────────────────────────────────────
-    # If history_df is provided, use it. 
-    # Otherwise, if we are in history mode (the primary df is history), use df.
-    baseline_source = history_df if (history_df is not None and not history_df.empty) else df
-    
-    baseline_vessel = baseline_source[
-        baseline_source["outbound_service"].astype(str).str.strip().str.upper() == search_key
-    ] if not baseline_source.empty else pd.DataFrame()
+    # ── Determine whether this is a current-mode (live yard) call ────────────
+    # A visit has "history" data when time-based stay can be computed directly.
+    is_current_mode = not bool(actual_raw.get("visits"))
 
-    has_history_data = bool(actual_raw.get("visits"))
+    # ── Historical baseline: prefer passed history_df, fall back to df ───────
+    # Normalise whichever source we have so the column is guaranteed present.
+    def _filter_baseline(source_df: pd.DataFrame) -> pd.DataFrame:
+        if source_df is None or source_df.empty:
+            return pd.DataFrame()
+        if "outbound_service" not in source_df.columns:
+            return pd.DataFrame()
+        return source_df[
+            source_df["outbound_service"].astype(str).str.strip().str.upper() == search_key
+        ].copy()
 
+    baseline_vessel = _filter_baseline(history_df)
     if baseline_vessel.empty:
-        baseline_vessel = vessel_df
+        baseline_vessel = _filter_baseline(df)
+    if baseline_vessel.empty:
+        baseline_vessel = vessel_df.copy()
 
     baseline_enriched: dict = {}
     baseline_prepared: dict = {}
@@ -680,15 +745,41 @@ def analyze_vessel_dashboard(
         baseline_enriched[vid] = be
         baseline_prepared[vid] = prepare_visit_data(be)
 
-    visit_counts         = len(baseline_prepared)
+    # ── Fast-path: pull averages from vessel_visits summary ──────────────────
     historical_crane_avg = 0.0
     historical_mph_avg   = 0.0
 
-    if visit_counts > 0:
-        total_cranes = 0.0
-        total_mph    = 0.0
+    summary = _fetch_vessel_summary(search_key)
+    if summary:
+        historical_crane_avg = float(summary.get("avg_crane_count", 0.0) or 0.0)
+        historical_mph_avg   = float(summary.get("avg_mphc",        0.0) or 0.0)
+
+    # ── Fallback: compute averages from baseline enriched data ───────────────
+    # Always build feature_template from baseline regardless of summary path,
+    # so current-mode predictions can be patched with realistic feature values.
+    feature_template: dict = {}
+
+    if baseline_prepared:
+        historical_features_list = []
+        for vid, vdf in baseline_prepared.items():
+            f = create_features(vdf)
+            if f:
+                historical_features_list.append(f)
+
+        if historical_features_list:
+            from config import settings as _settings
+            for k in _settings.FEATURE_NAMES:
+                vals = [f[k] for f in historical_features_list if k in f]
+                if vals:
+                    feature_template[k] = sum(vals) / len(vals)
+
+    # Only recompute crane/mph averages from data when summary was missing
+    if (historical_crane_avg == 0.0 or historical_mph_avg == 0.0) and baseline_enriched:
+        total_cranes  = 0.0
+        total_mph     = 0.0
         crane_v_count = 0
         mph_v_count   = 0
+
         for vid, vdf in baseline_enriched.items():
             cc = (
                 float(vdf["_crane_count"].iloc[0])
@@ -708,37 +799,10 @@ def analyze_vessel_dashboard(
                 total_mph += mph
                 mph_v_count += 1
 
-        historical_crane_avg = total_cranes / crane_v_count if crane_v_count > 0 else 0.0
-        historical_mph_avg   = total_mph    / mph_v_count   if mph_v_count   > 0 else 0.0
-
-        # ── Historical Feature Template ──
-        # Build an average feature set from historical visits to "patch" 
-        # missing data in current snapshots.
-        historical_features_list = []
-        for vid, vdf in baseline_prepared.items():
-            f = create_features(vdf)
-            if f:
-                historical_features_list.append(f)
-        
-        feature_template = {}
-        if historical_features_list:
-            from config import settings as _settings
-            for k in _settings.FEATURE_NAMES:
-                vals = [f[k] for f in historical_features_list if k in f]
-                if vals:
-                    feature_template[k] = sum(vals) / len(vals)
-
-        if not has_history_data and history_df is not None and not history_df.empty:
-            baseline_raw = compute_vessel_stay(baseline_prepared)
-            if baseline_raw and baseline_raw.get("avg_hours"):
-                if not actual_raw:
-                    actual_raw = baseline_raw
-                else:
-                    actual_raw["avg_hours"] = baseline_raw["avg_hours"]
-    else:
-        feature_template = {}
-
-    is_current_mode = not has_history_data
+        if historical_crane_avg == 0.0 and crane_v_count > 0:
+            historical_crane_avg = total_cranes / crane_v_count
+        if historical_mph_avg == 0.0 and mph_v_count > 0:
+            historical_mph_avg = total_mph / mph_v_count
 
     # ── Synthesise stay for current mode ─────────────────────────────────────
     if not actual_raw:
@@ -746,8 +810,8 @@ def analyze_vessel_dashboard(
             try:
                 predicted_init = predict_vessel_stay_duration(
                     prepared_visits,
-                    crane_count_override=historical_crane_avg,
-                    mph_override=historical_mph_avg,
+                    crane_count_override=historical_crane_avg or None,
+                    mph_override=historical_mph_avg or None,
                     feature_template=feature_template,
                 )
                 pred_avg = (
@@ -761,7 +825,7 @@ def analyze_vessel_dashboard(
             for vid, vdf in enriched_visits.items():
                 if vdf is None or vdf.empty:
                     continue
-                n_units = len(vdf)
+                n_units       = len(vdf)
                 synthetic_stay = pred_avg if pred_avg else max(8.0, n_units / 25.0)
                 synthetic_visits[str(vid)] = synthetic_stay
 
@@ -783,7 +847,7 @@ def analyze_vessel_dashboard(
         if (
             loaded_override is not None
             or discharged_override is not None
-            or target_mph_override is not None
+            or crane_count_override is not None
         ):
             total_loaded     = loaded_override     if loaded_override     is not None else 0
             total_discharged = discharged_override if discharged_override is not None else 0
@@ -791,7 +855,7 @@ def analyze_vessel_dashboard(
             from models.stay_model import predict_stay_duration_from_metrics
             p_res  = predict_stay_duration_from_metrics(
                 total_loaded, total_discharged,
-                target_mph=target_mph_override,
+                crane_count_override=crane_count_override,
                 historical_crane_avg=historical_crane_avg,
                 historical_mph_avg=historical_mph_avg,
             )
@@ -803,9 +867,8 @@ def analyze_vessel_dashboard(
         else:
             predicted = predict_vessel_stay_duration(
                 prepared_visits,
-                target_mph=target_mph_override,
-                crane_count_override=historical_crane_avg,
-                mph_override=historical_mph_avg,
+                crane_count_override=historical_crane_avg or None,
+                mph_override=historical_mph_avg or None,
                 feature_template=feature_template,
             )
     except Exception:
@@ -817,20 +880,20 @@ def analyze_vessel_dashboard(
     for vid, stay in actual_raw.get("visits", {}).items():
         details = visit_details.get(str(vid), {})
         merged_visits[str(vid)] = {
-            "stay_hours":              round(stay, 2),
-            "start_time":              details.get("start_time"),
-            "end_time":                details.get("end_time"),
-            "loaded_containers":       details.get("loaded_containers", 0),
-            "discharged_containers":   details.get("discharged_containers", 0),
-            "move_start":              details.get("move_start"),
-            "move_end":                details.get("move_end"),
-            "total_units":             details.get("total_units", 0),
-            "restow_count":            details.get("restow_count", 0),
-            "crane_mphc":              details.get("crane_mphc", 0.0),
-            "avg_weight_kg":           details.get("avg_weight_kg", 0.0),
-            "freight_kind_breakdown":  details.get("freight_kind_breakdown", {}),
-            "port_of_discharge_top5":  details.get("port_of_discharge_top5", {}),
-            "crane_exclude_ratio":     details.get("crane_exclude_ratio", 0.0),
+            "stay_hours":             round(stay, 2),
+            "start_time":             details.get("start_time"),
+            "end_time":               details.get("end_time"),
+            "loaded_containers":      details.get("loaded_containers", 0),
+            "discharged_containers":  details.get("discharged_containers", 0),
+            "move_start":             details.get("move_start"),
+            "move_end":               details.get("move_end"),
+            "total_units":            details.get("total_units", 0),
+            "restow_count":           details.get("restow_count", 0),
+            "crane_mphc":             details.get("crane_mphc", 0.0),
+            "avg_weight_kg":          details.get("avg_weight_kg", 0.0),
+            "freight_kind_breakdown": details.get("freight_kind_breakdown", {}),
+            "port_of_discharge_top5": details.get("port_of_discharge_top5", {}),
+            "crane_exclude_ratio":    details.get("crane_exclude_ratio", 0.0),
         }
 
     actual = {
@@ -963,16 +1026,15 @@ def analyze_vessel_dashboard(
     if discharged_override is not None:
         total_discharged = discharged_override
 
-    # Pass historical_mph_avg so the fallback chain is complete
     op_preds = _predict_operational_metrics(
         visit_df,
         crane_df_top,
         predicted_avg_hours,
         loaded=total_loaded,
         discharged=total_discharged,
-        target_mph_override=target_mph_override,
+        crane_count_override=crane_count_override,
         historical_crane_avg=historical_crane_avg,
-        historical_mph_avg=historical_mph_avg,   # ← now forwarded
+        historical_mph_avg=historical_mph_avg,
     )
     delay_analysis = _calculate_delay_analysis(visit_df, crane_df_top) if actual else None
 
@@ -1009,7 +1071,6 @@ def analyze_vessel_dashboard(
         })
     crane_assignment.sort(key=lambda x: x["total_units"], reverse=True)
 
-    # ── Final result assembly ────────────────────────────────────────────────
     final_berth_analysis = berth_analysis
     final_berth_rec      = berth_rec
     final_berth_conflict = berth_conflicts
@@ -1017,7 +1078,7 @@ def analyze_vessel_dashboard(
     if not final_berth_analysis and op_preds and "berth_analysis" in op_preds:
         final_berth_analysis = op_preds["berth_analysis"]
         if final_berth_analysis:
-            final_berth_rec = final_berth_analysis[0]
+            final_berth_rec = dict(final_berth_analysis[0])
 
     return {
         "mode":                    "vessel",
@@ -1035,17 +1096,17 @@ def analyze_vessel_dashboard(
         "berth_conflicts":         final_berth_conflict,
         "crane_assignment":        crane_assignment,
         "top_visit_stats": {
-            "loaded":                  total_loaded,
-            "discharged":              total_discharged,
-            "hazardous":               hazardous,
-            "reefer":                  reefer,
-            "oog":                     oog,
-            "total_units":             total_units,
-            "crane_count":             len(crane_ids),
-            "crane_ids":               crane_ids,
-            "crane_mphc":              top_visit_stats_merged.get("crane_mphc", 0.0),
-            "avg_weight_kg":           top_visit_stats_merged.get("avg_weight_kg", 0.0),
-            "freight_kind_breakdown":  top_visit_stats_merged.get("freight_kind_breakdown", {}),
-            "port_of_discharge_top5":  top_visit_stats_merged.get("port_of_discharge_top5", {}),
+            "loaded":                 total_loaded,
+            "discharged":             total_discharged,
+            "hazardous":              hazardous,
+            "reefer":                 reefer,
+            "oog":                    oog,
+            "total_units":            total_units,
+            "crane_count":            len(crane_ids),
+            "crane_ids":              crane_ids,
+            "crane_mphc":             top_visit_stats_merged.get("crane_mphc", 0.0),
+            "avg_weight_kg":          top_visit_stats_merged.get("avg_weight_kg", 0.0),
+            "freight_kind_breakdown": top_visit_stats_merged.get("freight_kind_breakdown", {}),
+            "port_of_discharge_top5": top_visit_stats_merged.get("port_of_discharge_top5", {}),
         },
     }

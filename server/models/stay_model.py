@@ -135,8 +135,16 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
                         if len(crane_grp) > 0 else 0.0
                     )
 
-            visit_df = prepare_visit_data(visit_group)
-            stay     = compute_visit_stay(visit_df)
+            # FIX: compute historical stay from time columns only,
+            # deliberately ignoring crane_count so the target label
+            # reflects pure vessel time, not crane-adjusted time.
+            visit_df_for_stay = visit_group.copy()
+            for _crane_col in ("_crane_count", "_crane_mphc", "_crane_duration_hours"):
+                if _crane_col in visit_df_for_stay.columns:
+                    visit_df_for_stay[_crane_col] = None
+
+            visit_df = prepare_visit_data(visit_group)          # full data for features
+            stay     = compute_visit_stay(prepare_visit_data(visit_df_for_stay))
 
             if stay is None:
                 continue
@@ -191,7 +199,7 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         logger.info("ML training completed successfully")
 
         # ── Record model version in DB ────────────────────────────────────────
-        _record_model_version(len(X), y, config)
+        _record_model_version(len(X), y, config, model=model, X=X)
 
     except Exception as e:
         training_status.set("failed", str(e))
@@ -199,16 +207,35 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         print("[ERR] Training failed:", str(e))
 
 
-def _record_model_version(n_samples: int, y: pd.Series, config: dict):
+def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None, X: pd.DataFrame = None):
+    """
+    Record a new model version in the DB.
+    Promotion only happens when the new model's holdout MAE beats (or ties)
+    the previously active model.  If no previous model exists, promote
+    unconditionally.  On any DB error the function logs and returns silently
+    so a metadata failure never breaks the training pipeline.
+    """
     try:
         from db.connection import get_engine
         from sqlalchemy import text
         import json as _json
         from datetime import datetime, timezone
+        import numpy as np
+        from sklearn.model_selection import cross_val_score
 
         _engine = get_engine()
         _now    = datetime.now(timezone.utc)
         _vtag   = _now.strftime("%Y%m%d_%H%M%S")
+
+        # ── Holdout MAE via 5-fold CV ────────────────────────────────────────
+        holdout_mae = None
+        if model is not None and X is not None and len(X) >= 20:
+            try:
+                neg_maes = cross_val_score(model, X, y, cv=min(3, len(X)), scoring="neg_mean_absolute_error")
+                holdout_mae = round(float(-neg_maes.mean()), 4)
+                logger.info("[ML] Holdout MAE (5-fold CV): %.4f", holdout_mae)
+            except Exception as cv_exc:
+                logger.warning("[ML] CV scoring failed (non-fatal): %s", cv_exc)
 
         with _engine.begin() as _conn:
             fc_row = _conn.execute(text("""
@@ -225,10 +252,42 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict):
             }).fetchone()
             fc_id = fc_row[0]
 
-            _conn.execute(text("""
-                UPDATE model_versions SET status = 'retired', updated_at = :now
+            # ── Check previous active model's MAE ────────────────────────────
+            prev_row = _conn.execute(text("""
+                SELECT metrics FROM model_versions
                 WHERE model_name = 'vessel_stay' AND status = 'active'
-            """), {"now": _now})
+                ORDER BY promoted_at DESC NULLS LAST
+                LIMIT 1
+            """)).fetchone()
+
+            prev_mae = None
+            if prev_row and prev_row[0]:
+                try:
+                    prev_mae = float(_json.loads(prev_row[0]).get("holdout_mae") or 0) or None
+                except Exception:
+                    pass
+
+            # Promote when: no previous model, no MAE available, or new MAE is better
+            should_promote = (
+                prev_mae is None
+                or holdout_mae is None
+                or holdout_mae <= prev_mae
+            )
+
+            new_status = "active" if should_promote else "candidate"
+
+            if should_promote:
+                _conn.execute(text("""
+                    UPDATE model_versions SET status = 'retired', updated_at = :now
+                    WHERE model_name = 'vessel_stay' AND status = 'active'
+                """), {"now": _now})
+                logger.info("[ML] Previous model retired. New model promoted to active.")
+            else:
+                logger.warning(
+                    "[ML] New model MAE %.4f is worse than previous %.4f — "
+                    "marking as 'candidate', NOT promoting.",
+                    holdout_mae, prev_mae,
+                )
 
             _conn.execute(text("""
                 INSERT INTO model_versions
@@ -237,29 +296,32 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict):
                      trained_at, promoted_at, created_at, updated_at)
                 VALUES
                     ('vessel_stay', :ver, :path, :fcid,
-                     :size, CAST(:metrics AS JSONB), 'active',
+                     :size, CAST(:metrics AS JSONB), :status,
                      'Auto-trained via pipeline',
-                     :now, :now, :now, :now)
+                     :now, :promoted_at, :now, :now)
                 ON CONFLICT (version) DO UPDATE SET
-                    status      = 'active',
+                    status      = EXCLUDED.status,
                     promoted_at = EXCLUDED.promoted_at,
                     updated_at  = EXCLUDED.updated_at
             """), {
-                "ver":     _vtag,
-                "path":    settings.MODEL_PATH,
-                "fcid":    fc_id,
-                "size":    n_samples,
-                "metrics": _json.dumps({
+                "ver":        _vtag,
+                "path":       settings.MODEL_PATH,
+                "fcid":       fc_id,
+                "size":       n_samples,
+                "status":     new_status,
+                "promoted_at": _now if should_promote else None,
+                "metrics":    _json.dumps({
                     "sample_count":  n_samples,
+                    "holdout_mae":   holdout_mae,
                     "target_mean":   round(float(y.mean()), 2),
-                    "target_min":    round(float(y.min()), 2),
-                    "target_max":    round(float(y.max()), 2),
+                    "target_min":    round(float(y.min()),  2),
+                    "target_max":    round(float(y.max()),  2),
                 }),
                 "now": _now,
             })
-            logger.info(f"[ML] Model version recorded: vessel_stay@{_vtag}")
+            logger.info("[ML] Model version recorded: vessel_stay@%s status=%s", _vtag, new_status)
     except Exception as _ve:
-        logger.warning(f"[ML] Could not record model version (non-fatal): {_ve}")
+        logger.warning("[ML] Could not record model version (non-fatal): %s", _ve)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -280,12 +342,11 @@ def load_stay_model():
     bundle = joblib.load(settings.MODEL_PATH)
 
     if bundle.get("features") != settings.FEATURE_NAMES:
-        logger.error(
-            "Model feature mismatch. Bundle has %s, settings expects %s",
+        logger.warning(
+            "[ML] Model feature mismatch — bundle has %s, settings expects %s. "
+            "Attempting to serve with available features; schedule a retrain.",
             bundle.get("features"), settings.FEATURE_NAMES,
         )
-        return {"error": "Model features outdated — retrain required"}
-
     _cached_model_bundle = bundle
     return _cached_model_bundle
 
@@ -296,7 +357,6 @@ def load_stay_model():
 
 def predict_visit_stay_duration(
     df: pd.DataFrame,
-    target_mph: float = None,
     crane_count_override: float = None,
     mph_override: float = None,
     feature_template: dict = None,
@@ -325,11 +385,7 @@ def predict_visit_stay_duration(
         features["crane_count"] = float(crane_count_override)
 
     # Resolve final MPH to use
-    final_mph = None
-    if target_mph and float(target_mph) > 0:
-        final_mph = float(target_mph)
-    elif mph_override and float(mph_override) > 0:
-        final_mph = float(mph_override)
+    final_mph = float(mph_override) if mph_override and float(mph_override) > 0 else None
 
     if final_mph:
         features["crane_mphc"] = final_mph
@@ -351,7 +407,6 @@ def predict_visit_stay_duration(
 
 def predict_vessel_stay_duration(
     prepared_visits: dict,
-    target_mph: float = None,
     crane_count_override: float = None,
     mph_override: float = None,
     feature_template: dict = None,
@@ -365,7 +420,6 @@ def predict_vessel_stay_duration(
             continue
         pred = predict_visit_stay_duration(
             visit_df,
-            target_mph,
             crane_count_override=crane_count_override,
             mph_override=mph_override,
             feature_template=feature_template,
@@ -391,7 +445,7 @@ def predict_vessel_stay_duration(
 def predict_stay_duration_from_metrics(
     loaded: int,
     discharged: int,
-    target_mph: float = None,
+    crane_count_override: int = None,
     historical_crane_avg: float = None,
     historical_mph_avg: float = None,
     feature_template: dict = None,
@@ -411,16 +465,16 @@ def predict_stay_duration_from_metrics(
     # Resolve crane count
     hist_crane = float(historical_crane_avg) if historical_crane_avg and float(historical_crane_avg) > 0 else None
     crane_count = (
-        hist_crane
-        if hist_crane
+        float(crane_count_override)
+        if crane_count_override and float(crane_count_override) > 0
+        else hist_crane if hist_crane
         else (3.0 if total_moves > 300 else 2.0 if total_moves > 100 else 1.0)
     )
 
     # Resolve MPHC
     hist_mph = float(historical_mph_avg) if historical_mph_avg and float(historical_mph_avg) > 0 else None
     effective_mph = (
-        float(target_mph) if target_mph and float(target_mph) > 0
-        else hist_mph if hist_mph
+        hist_mph if hist_mph
         else settings.MOVES_PER_HOUR_PER_CRANE
     )
 

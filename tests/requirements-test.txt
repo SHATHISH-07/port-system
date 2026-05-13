@@ -1,8 +1,0 @@
-pytest
-pytest-asyncio
-pytest-playwright
-httpx
-faker
-pandas
-openpyxl
-python-docx

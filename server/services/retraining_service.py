@@ -22,7 +22,6 @@ def background_train_and_update(df, config: dict = None) -> None:
     Run model training synchronously (called from a background task).
     Saves training metadata on completion or failure.
     """
-    import pandas as pd
     from models.stay_model import train_stay_model
 
     if df is None or (hasattr(df, "empty") and df.empty):
@@ -30,7 +29,6 @@ def background_train_and_update(df, config: dict = None) -> None:
         logger.error("[Retraining] background_train_and_update called with empty DataFrame")
         return
 
-    # Only keep rows that have the essential training column
     if "actual_outbound_carrier_visit_id" not in df.columns:
         training_status.set(
             "failed",
@@ -39,7 +37,6 @@ def background_train_and_update(df, config: dict = None) -> None:
         logger.error("[Retraining] DataFrame missing actual_outbound_carrier_visit_id")
         return
 
-    # Drop rows missing the visit ID (can't group without it)
     df = df.dropna(subset=["actual_outbound_carrier_visit_id"]).copy()
     n_rows = len(df)
 
@@ -52,7 +49,6 @@ def background_train_and_update(df, config: dict = None) -> None:
     try:
         train_stay_model(df, config=config)
 
-        # Persist metadata only when training succeeded
         if training_status.get().get("status") == "completed":
             save_training_metadata(
                 dataset_size=n_rows,
@@ -63,7 +59,6 @@ def background_train_and_update(df, config: dict = None) -> None:
             )
             logger.info("[Retraining] Training metadata saved. samples=%d", n_rows)
         else:
-            # training_status already set to "failed" inside train_stay_model
             save_training_metadata(
                 dataset_size=n_rows,
                 data_source="db",
@@ -92,10 +87,14 @@ def background_train_and_update(df, config: dict = None) -> None:
 # Auto-retrain trigger  (called after each successful ingestion)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def check_and_trigger_retraining(background_tasks) -> None:
+def check_and_trigger_retraining(background_tasks=None) -> None:
     """
     Compare the number of history rows ingested since the last training run
     against the configured threshold.  If exceeded, queue a background retrain.
+
+    `background_tasks` is optional: when provided (FastAPI BackgroundTasks),
+    the retrain runs asynchronously.  When omitted (e.g. called from a sync
+    ingestion context), the retrain runs inline in a thread-safe manner.
     """
     try:
         from db.connection import get_engine
@@ -103,26 +102,25 @@ def check_and_trigger_retraining(background_tasks) -> None:
 
         engine = get_engine()
 
-        # Count total history rows across all yard tables
         total_history_rows = 0
         with engine.connect() as conn:
-            # Discover all *_history_containers_core tables
             tbls = conn.execute(text("""
                 SELECT relname FROM pg_class
                 WHERE relkind IN ('r', 'p')
-                  AND relname LIKE '%_history_containers_core'
+                  AND relname LIKE '%_container_operations'
                   AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
                 ORDER BY relname
             """)).fetchall()
 
             for (tbl,) in tbls:
                 try:
-                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                    n = conn.execute(
+                        text(f"SELECT COUNT(*) FROM {tbl} WHERE record_type = 'history'")
+                    ).scalar()
                     total_history_rows += (n or 0)
                 except Exception:
                     pass
 
-        # Compare against last training run size
         latest = get_latest_training_metadata()
         last_trained_size = latest.get("dataset_size", 0) if latest else 0
         new_records = max(total_history_rows - last_trained_size, 0)
@@ -133,32 +131,50 @@ def check_and_trigger_retraining(background_tasks) -> None:
             total_history_rows, last_trained_size, new_records, threshold,
         )
 
-        if new_records >= threshold:
-            current_status = training_status.get().get("status")
-            if current_status == "training":
-                logger.info("[Retraining] Skipping — training already in progress")
-                return
+        if new_records < threshold:
+            return
 
-            logger.info(
-                "[Retraining] Threshold met (%d >= %d). Queuing retrain …",
-                new_records, threshold,
-            )
-            training_status.set(
-                status="training",
-                message="Auto-retraining triggered by ingestion threshold",
-                records_count=total_history_rows,
-                data_source="db",
-                training_type="auto",
-            )
-            from db.queries import load_from_db
-            df = load_from_db("history", full_load=True)
+        current_status = training_status.get().get("status")
+        if current_status == "training":
+            logger.info("[Retraining] Skipping — training already in progress")
+            return
 
-            if df.empty:
-                training_status.set("failed", "No history data found for auto-retrain")
-                return
+        logger.info(
+            "[Retraining] Threshold met (%d >= %d). Queuing retrain …",
+            new_records, threshold,
+        )
+        training_status.set(
+            status="training",
+            message="Auto-retraining triggered by ingestion threshold",
+            records_count=total_history_rows,
+            data_source="db",
+            training_type="auto",
+        )
 
-            config = training_status.get_last_config()
+        from db.queries import load_from_db
+        df = load_from_db("history", full_load=True)
+
+        if df.empty:
+            training_status.set("failed", "No history data found for auto-retrain")
+            return
+
+        config = training_status.get_last_config()
+
+        if background_tasks is not None:
+            # Async path: FastAPI BackgroundTasks available
             background_tasks.add_task(background_train_and_update, df, config)
+        else:
+            # Sync path: run in a daemon thread so the ingestion response
+            # is not blocked, but retrain still happens in the background.
+            import threading
+            t = threading.Thread(
+                target=background_train_and_update,
+                args=(df, config),
+                daemon=True,
+                name="retraining-worker",
+            )
+            t.start()
+            logger.info("[Retraining] Retrain thread started (sync fallback)")
 
     except Exception as exc:
         logger.error("[Retraining] check_and_trigger_retraining error: %s", exc)

@@ -76,10 +76,13 @@ def _add_index(conn, table: str, index_name: str, columns: str) -> None:
 
 def ensure_yard_tables(engine, yard_id: str) -> None:
     """
-    Per-yard layout:
-      history -> core / cargo / position
-      crane   -> core / position / meta
-      current -> one position-only table
+    Per-yard unified 3-table layout:
+      vessel_visits       -> per-visit summaries and move completion metrics
+      container_operations -> unified movement history and cargo metadata
+      crane_operations     -> crane events, assignments, and positions
+
+    Legacy tables (history_core/cargo/position, current_containers,
+    crane_core/position/meta) are also maintained for backward compatibility.
     """
     yard_id = _safe_lower(yard_id)
     if not yard_id or not _VALID_YARD.match(yard_id):
@@ -92,10 +95,38 @@ def ensure_yard_tables(engine, yard_id: str) -> None:
         except Exception as exc:
             logger.debug("[DB] pgcrypto extension ensure skipped: %s", exc)
 
-        # ── history core ────────────────────────────────────────────────────
-        core_tbl = f"{yard_id}_history_containers_core"
+        # ══════════════════════════════════════════════════════════════════════
+        # NEW 3-TABLE SCHEMA
+        # ══════════════════════════════════════════════════════════════════════
+
+        # ── vessel_visits ────────────────────────────────────────────────────
+        vv_tbl = f"{yard_id}_vessel_visits"
         conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {core_tbl} (
+            CREATE TABLE IF NOT EXISTS {vv_tbl} (
+                id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+                vessel_visit_id                  TEXT        UNIQUE NOT NULL,
+                outbound_service                 TEXT,
+                total_containers                 INTEGER     DEFAULT 0,
+                total_loaded                     INTEGER     DEFAULT 0,
+                total_discharged                 INTEGER     DEFAULT 0,
+                avg_crane_count                  FLOAT       DEFAULT 0,
+                avg_mphc                         FLOAT       DEFAULT 0,
+                stay_hours                       FLOAT,
+                first_move_time                  TIMESTAMP,
+                last_move_time                   TIMESTAMP,
+                vessel_arrival                   TIMESTAMP,
+                vessel_departure                 TIMESTAMP,
+                yard_id                          TEXT,
+                ingestion_id                     TEXT,
+                created_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
+                updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
+            );
+        """))
+
+        # ── container_operations ─────────────────────────────────────────────
+        co_tbl = f"{yard_id}_container_operations"
+        conn.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS {co_tbl} (
                 id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
                 unit_id                          TEXT        NOT NULL,
                 unit_visit_gkey                  TEXT,
@@ -111,23 +142,9 @@ def ensure_yard_tables(engine, yard_id: str) -> None:
                 arrival_mode                     TEXT,
                 visit_state                      TEXT,
                 transit_state                    TEXT,
-                time_in                          TIMESTAMP   NOT NULL DEFAULT '2020-01-01',
+                time_in                          TIMESTAMP   DEFAULT '2020-01-01',
                 time_out                         TIMESTAMP,
                 move_complete_time               TIMESTAMP,
-                ingestion_id                     TEXT,
-                created_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
-                updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
-            );
-        """))
-
-        # ── history cargo ───────────────────────────────────────────────────
-        cargo_tbl = f"{yard_id}_history_containers_cargo"
-        conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {cargo_tbl} (
-                id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-                unit_id                          TEXT        NOT NULL,
-                actual_outbound_carrier_visit_id TEXT        NOT NULL,
-                yard_id                          TEXT,
                 equipment_class                  TEXT,
                 container_length                 TEXT,
                 equipment_type                   TEXT,
@@ -140,85 +157,52 @@ def ensure_yard_tables(engine, yard_id: str) -> None:
                 imdg_code                        TEXT,
                 port_of_discharge                TEXT,
                 destination                      TEXT,
-                ingestion_id                     TEXT,
-                created_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
-            );
-        """))
-
-        # ── history position ────────────────────────────────────────────────
-        pos_tbl = f"{yard_id}_history_containers_position"
-        conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {pos_tbl} (
-                id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-                unit_id                          TEXT        NOT NULL,
-                actual_outbound_carrier_visit_id TEXT        NOT NULL,
-                yard_id                          TEXT,
                 ctr_from_position                TEXT,
                 ctr_to_position                  TEXT,
                 current_position                 TEXT,
                 stow_code_1                      TEXT,
                 stow_code_2                      TEXT,
                 stow_code_3                      TEXT,
-                ingestion_id                     TEXT,
-                created_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
-            );
-        """))
-
-        # ── current containers (position-only snapshot) ─────────────────────
-        curr_tbl = f"{yard_id}_current_containers"
-        conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {curr_tbl} (
-                id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-                unit_id                          TEXT        UNIQUE NOT NULL,
-                outbound_service                 TEXT,
-                actual_outbound_carrier_visit_id TEXT,
-                unit_visit_gkey                  TEXT,
-                category_id                      TEXT,
-                equipment_class                  TEXT,
-                container_length                 TEXT,
-                equipment_type                   TEXT,
-                freight_kind                     TEXT,
-                unit_weight_in_kg                FLOAT,
-                verified_gross_mass_kg           FLOAT,
-                reefer                           TEXT,
-                oog_unit                         TEXT,
-                hazardous_flag                   TEXT,
-                hazard_un_numbers                TEXT,
-                imdg_code                        TEXT,
-                port_of_discharge                TEXT,
-                destination                      TEXT,
-                inbound_service                  TEXT,
-                actual_inbound_carrier_visit_id  TEXT,
-                arrival_mode                     TEXT,
-                ctr_from_position                TEXT,
-                ctr_to_position                  TEXT,
-                current_position                 TEXT,
-                stow_code_1                      TEXT,
-                stow_code_2                      TEXT,
-                stow_code_3                      TEXT,
-                visit_state                      TEXT,
-                transit_state                    TEXT,
-                yard_id                          TEXT,
-                complex_id                       TEXT,
-                facility_id                      TEXT,
-                is_active                        BOOLEAN     DEFAULT TRUE,
+                record_type                      TEXT        DEFAULT 'history',
                 ingestion_id                     TEXT,
                 created_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
                 updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
             );
         """))
+        # Migration: ensure record_type exists and backfill NULL rows
+        try:
+            conn.execute(text(f"ALTER TABLE {co_tbl} ADD COLUMN IF NOT EXISTS record_type TEXT DEFAULT 'history'"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text(f"UPDATE {co_tbl} SET record_type = 'history' WHERE record_type IS NULL"))
+        except Exception:
+            pass
 
-        # Drop old time columns if the table already existed from the previous design
-        for old_col in ("time_in", "time_out", "move_complete_time", "time_completed"):
-            try:
-                conn.execute(text(f"ALTER TABLE {curr_tbl} DROP COLUMN IF EXISTS {old_col};"))
-            except Exception as exc:
-                logger.debug("[DB] Could not drop old current column %s: %s", old_col, exc)
-
-        # ── crane core ──────────────────────────────────────────────────────
-        crane_core_tbl = f"{yard_id}_crane_movements_core"
+       # FIX 5: guarantee constraint exists before any current-record upsert.
+        # The EXCEPTION handler lives inside PL/pgSQL so the connection stays
+        # healthy even if the constraint already exists under a concurrent txn.
         conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {crane_core_tbl} (
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'uq_{yard_id}_co_unit_yard'
+                ) THEN
+                    ALTER TABLE {co_tbl}
+                    ADD CONSTRAINT uq_{yard_id}_co_unit_yard
+                    UNIQUE (unit_id, yard_id)
+                    DEFERRABLE INITIALLY DEFERRED;
+                END IF;
+            EXCEPTION WHEN others THEN
+                NULL;
+            END $$;
+        """))
+
+        # ── crane_operations ─────────────────────────────────────────────────
+        cro_tbl = f"{yard_id}_crane_operations"
+        conn.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS {cro_tbl} (
                 id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
                 crane_id       TEXT,
                 unit_id        TEXT,
@@ -229,63 +213,225 @@ def ensure_yard_tables(engine, yard_id: str) -> None:
                 unit_category  TEXT,
                 exclude        TEXT,
                 time_completed TIMESTAMP,
+                from_position  TEXT,
+                to_position    TEXT,
                 yard_id        TEXT,
                 ingestion_id   TEXT,
                 created_at     TIMESTAMP   NOT NULL DEFAULT NOW()
             );
         """))
 
-        # ── crane position ─────────────────────────────────────────────────
-        crane_pos_tbl = f"{yard_id}_crane_movements_position"
-        conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {crane_pos_tbl} (
-                id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-                unit_id       TEXT,
-                carrier_visit TEXT        NOT NULL,
-                from_position TEXT,
-                to_position   TEXT,
-                yard_id       TEXT,
-                ingestion_id  TEXT,
-                created_at    TIMESTAMP   NOT NULL DEFAULT NOW()
-            );
-        """))
-
-        # ── crane meta ──────────────────────────────────────────────────────
-        crane_meta_tbl = f"{yard_id}_crane_movements_meta"
-        conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {crane_meta_tbl} (
-                id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-                unit_id       TEXT,
-                carrier_visit TEXT        NOT NULL,
-                yard_id       TEXT,
-                ingestion_id  TEXT,
-                created_at    TIMESTAMP   NOT NULL DEFAULT NOW()
-            );
-        """))
-
-        # ── Indexes ──────────────────────────────────────────────────────────
-        idx_defs = [
-            (core_tbl,  f"idx_{yard_id}_hcore_visit",   "actual_outbound_carrier_visit_id"),
-            (core_tbl,  f"idx_{yard_id}_hcore_unit",    "unit_id"),
-            (core_tbl,  f"idx_{yard_id}_hcore_service", "outbound_service"),
-            (core_tbl,  f"idx_{yard_id}_hcore_time",    "time_in DESC"),
-            (cargo_tbl, f"idx_{yard_id}_hcargo_unit",   "unit_id"),
-            (cargo_tbl, f"idx_{yard_id}_hcargo_visit",  "actual_outbound_carrier_visit_id"),
-            (pos_tbl,   f"idx_{yard_id}_hpos_unit",     "unit_id"),
-            (pos_tbl,   f"idx_{yard_id}_hpos_visit",    "actual_outbound_carrier_visit_id"),
-            (curr_tbl,  f"idx_{yard_id}_cc_unit",       "unit_id"),
-            (curr_tbl,  f"idx_{yard_id}_cc_visit",      "actual_outbound_carrier_visit_id"),
-            (curr_tbl,  f"idx_{yard_id}_cc_updated",    "updated_at DESC"),
-            (crane_core_tbl, f"idx_{yard_id}_cmcore_visit", "carrier_visit"),
-            (crane_core_tbl, f"idx_{yard_id}_cmcore_crane", "crane_id, time_completed DESC"),
-            (crane_core_tbl, f"idx_{yard_id}_cmcore_unit",  "unit_id"),
-            (crane_pos_tbl,  f"idx_{yard_id}_cmpos_visit",   "carrier_visit"),
-            (crane_pos_tbl,  f"idx_{yard_id}_cmpos_unit",    "unit_id"),
-            (crane_meta_tbl, f"idx_{yard_id}_cmeta_visit",   "carrier_visit"),
-            (crane_meta_tbl, f"idx_{yard_id}_cmeta_unit",    "unit_id"),
+        # ── New-schema indexes ───────────────────────────────────────────────
+        new_idx_defs = [
+            (vv_tbl,  f"idx_{yard_id}_vv_visit",    "vessel_visit_id"),
+            (vv_tbl,  f"idx_{yard_id}_vv_service",  "outbound_service"),
+            (co_tbl,  f"idx_{yard_id}_co_visit",    "actual_outbound_carrier_visit_id"),
+            (co_tbl,  f"idx_{yard_id}_co_unit",     "unit_id"),
+            (co_tbl,  f"idx_{yard_id}_co_service",  "outbound_service"),
+            (co_tbl,  f"idx_{yard_id}_co_time",     "time_in DESC"),
+            (co_tbl,  f"idx_{yard_id}_co_rectype",  "record_type"),
+            (cro_tbl, f"idx_{yard_id}_cro_visit",   "carrier_visit"),
+            (cro_tbl, f"idx_{yard_id}_cro_crane",   "crane_id, time_completed DESC"),
+            (cro_tbl, f"idx_{yard_id}_cro_unit",    "unit_id"),
         ]
-        for tbl, idx_name, cols in idx_defs:
+        for tbl, idx_name, cols in new_idx_defs:
             _add_index(conn, tbl, idx_name, cols)
+
+        # ══════════════════════════════════════════════════════════════════════
+        # LEGACY TABLES (kept for backward-compatible reads)
+        # ══════════════════════════════════════════════════════════════════════
+        _ensure_legacy_yard_tables(conn, yard_id)
+
+
+def _ensure_legacy_yard_tables(conn, yard_id: str) -> None:
+    """Create legacy split tables so old data remains readable."""
+
+    core_tbl = f"{yard_id}_history_containers_core"
+    conn.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS {core_tbl} (
+            id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            unit_id                          TEXT        NOT NULL,
+            unit_visit_gkey                  TEXT,
+            outbound_service                 TEXT,
+            actual_outbound_carrier_visit_id TEXT        NOT NULL,
+            inbound_service                  TEXT,
+            actual_inbound_carrier_visit_id  TEXT,
+            facility_id                      TEXT,
+            yard_id                          TEXT,
+            complex_id                       TEXT,
+            category_id                      TEXT,
+            freight_kind                     TEXT,
+            arrival_mode                     TEXT,
+            visit_state                      TEXT,
+            transit_state                    TEXT,
+            time_in                          TIMESTAMP   NOT NULL DEFAULT '2020-01-01',
+            time_out                         TIMESTAMP,
+            move_complete_time               TIMESTAMP,
+            ingestion_id                     TEXT,
+            created_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
+            updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
+        );
+    """))
+
+    cargo_tbl = f"{yard_id}_history_containers_cargo"
+    conn.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS {cargo_tbl} (
+            id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            unit_id                          TEXT        NOT NULL,
+            actual_outbound_carrier_visit_id TEXT        NOT NULL,
+            yard_id                          TEXT,
+            equipment_class                  TEXT,
+            container_length                 TEXT,
+            equipment_type                   TEXT,
+            unit_weight_in_kg                FLOAT,
+            verified_gross_mass_kg           FLOAT,
+            reefer                           TEXT,
+            oog_unit                         TEXT,
+            hazardous_flag                   TEXT,
+            hazard_un_numbers                TEXT,
+            imdg_code                        TEXT,
+            port_of_discharge                TEXT,
+            destination                      TEXT,
+            ingestion_id                     TEXT,
+            created_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
+        );
+    """))
+
+    pos_tbl = f"{yard_id}_history_containers_position"
+    conn.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS {pos_tbl} (
+            id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            unit_id                          TEXT        NOT NULL,
+            actual_outbound_carrier_visit_id TEXT        NOT NULL,
+            yard_id                          TEXT,
+            ctr_from_position                TEXT,
+            ctr_to_position                  TEXT,
+            current_position                 TEXT,
+            stow_code_1                      TEXT,
+            stow_code_2                      TEXT,
+            stow_code_3                      TEXT,
+            ingestion_id                     TEXT,
+            created_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
+        );
+    """))
+
+    curr_tbl = f"{yard_id}_current_containers"
+    conn.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS {curr_tbl} (
+            id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            unit_id                          TEXT        UNIQUE NOT NULL,
+            outbound_service                 TEXT,
+            actual_outbound_carrier_visit_id TEXT,
+            unit_visit_gkey                  TEXT,
+            category_id                      TEXT,
+            equipment_class                  TEXT,
+            container_length                 TEXT,
+            equipment_type                   TEXT,
+            freight_kind                     TEXT,
+            unit_weight_in_kg                FLOAT,
+            verified_gross_mass_kg           FLOAT,
+            reefer                           TEXT,
+            oog_unit                         TEXT,
+            hazardous_flag                   TEXT,
+            hazard_un_numbers                TEXT,
+            imdg_code                        TEXT,
+            port_of_discharge                TEXT,
+            destination                      TEXT,
+            inbound_service                  TEXT,
+            actual_inbound_carrier_visit_id  TEXT,
+            arrival_mode                     TEXT,
+            ctr_from_position                TEXT,
+            ctr_to_position                  TEXT,
+            current_position                 TEXT,
+            stow_code_1                      TEXT,
+            stow_code_2                      TEXT,
+            stow_code_3                      TEXT,
+            visit_state                      TEXT,
+            transit_state                    TEXT,
+            yard_id                          TEXT,
+            complex_id                       TEXT,
+            facility_id                      TEXT,
+            is_active                        BOOLEAN     DEFAULT TRUE,
+            ingestion_id                     TEXT,
+            created_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
+            updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
+        );
+    """))
+
+    for old_col in ("time_in", "time_out", "move_complete_time", "time_completed"):
+        try:
+            conn.execute(text(f"ALTER TABLE {curr_tbl} DROP COLUMN IF EXISTS {old_col};"))
+        except Exception:
+            pass
+
+    crane_core_tbl = f"{yard_id}_crane_movements_core"
+    conn.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS {crane_core_tbl} (
+            id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            crane_id       TEXT,
+            unit_id        TEXT,
+            carrier_visit  TEXT        NOT NULL,
+            event_type     TEXT,
+            move_kind      TEXT,
+            line_op        TEXT,
+            unit_category  TEXT,
+            exclude        TEXT,
+            time_completed TIMESTAMP,
+            yard_id        TEXT,
+            ingestion_id   TEXT,
+            created_at     TIMESTAMP   NOT NULL DEFAULT NOW()
+        );
+    """))
+
+    crane_pos_tbl = f"{yard_id}_crane_movements_position"
+    conn.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS {crane_pos_tbl} (
+            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            unit_id       TEXT,
+            carrier_visit TEXT        NOT NULL,
+            from_position TEXT,
+            to_position   TEXT,
+            yard_id       TEXT,
+            ingestion_id  TEXT,
+            created_at    TIMESTAMP   NOT NULL DEFAULT NOW()
+        );
+    """))
+
+    crane_meta_tbl = f"{yard_id}_crane_movements_meta"
+    conn.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS {crane_meta_tbl} (
+            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            unit_id       TEXT,
+            carrier_visit TEXT        NOT NULL,
+            yard_id       TEXT,
+            ingestion_id  TEXT,
+            created_at    TIMESTAMP   NOT NULL DEFAULT NOW()
+        );
+    """))
+
+    # Legacy indexes
+    legacy_idx = [
+        (core_tbl,       f"idx_{yard_id}_hcore_visit",   "actual_outbound_carrier_visit_id"),
+        (core_tbl,       f"idx_{yard_id}_hcore_unit",    "unit_id"),
+        (core_tbl,       f"idx_{yard_id}_hcore_service", "outbound_service"),
+        (core_tbl,       f"idx_{yard_id}_hcore_time",    "time_in DESC"),
+        (cargo_tbl,      f"idx_{yard_id}_hcargo_unit",   "unit_id"),
+        (cargo_tbl,      f"idx_{yard_id}_hcargo_visit",  "actual_outbound_carrier_visit_id"),
+        (pos_tbl,        f"idx_{yard_id}_hpos_unit",     "unit_id"),
+        (pos_tbl,        f"idx_{yard_id}_hpos_visit",    "actual_outbound_carrier_visit_id"),
+        (curr_tbl,       f"idx_{yard_id}_cc_unit",       "unit_id"),
+        (curr_tbl,       f"idx_{yard_id}_cc_visit",      "actual_outbound_carrier_visit_id"),
+        (curr_tbl,       f"idx_{yard_id}_cc_updated",    "updated_at DESC"),
+        (crane_core_tbl, f"idx_{yard_id}_cmcore_visit",  "carrier_visit"),
+        (crane_core_tbl, f"idx_{yard_id}_cmcore_crane",  "crane_id, time_completed DESC"),
+        (crane_core_tbl, f"idx_{yard_id}_cmcore_unit",   "unit_id"),
+        (crane_pos_tbl,  f"idx_{yard_id}_cmpos_visit",   "carrier_visit"),
+        (crane_pos_tbl,  f"idx_{yard_id}_cmpos_unit",    "unit_id"),
+        (crane_meta_tbl, f"idx_{yard_id}_cmeta_visit",   "carrier_visit"),
+        (crane_meta_tbl, f"idx_{yard_id}_cmeta_unit",    "unit_id"),
+    ]
+    for tbl, idx_name, cols in legacy_idx:
+        _add_index(conn, tbl, idx_name, cols)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -344,16 +490,26 @@ def init_simplified_schema(engine) -> None:
 
     try:
         with engine.connect() as conn2:
+            # Discover yards from both legacy and new tables
             res = conn2.execute(text("""
-                SELECT relname
-                FROM pg_class
-                WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_current_containers'
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+                SELECT DISTINCT yard_prefix FROM (
+                    SELECT replace(relname, '_current_containers', '') AS yard_prefix
+                    FROM pg_class
+                    WHERE relkind IN ('r','p')
+                      AND relname LIKE '%_current_containers'
+                      AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+                    UNION
+                    SELECT replace(relname, '_container_operations', '') AS yard_prefix
+                    FROM pg_class
+                    WHERE relkind IN ('r','p')
+                      AND relname LIKE '%_container_operations'
+                      AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+                ) sub
+                WHERE yard_prefix IS NOT NULL AND yard_prefix != ''
             """)).fetchall()
 
         for r in res:
-            yid = r[0].replace("_current_containers", "")
+            yid = r[0]
             if yid:
                 ensure_yard_tables(engine, yid)
     except Exception:
@@ -457,45 +613,47 @@ def load_from_db(
     engine = get_engine()
     dataset_type = (dataset_type or "").strip().lower()
 
-    with engine.connect() as probe:
-        if yard_id:
-            y_pref = f"{yard_id.lower().strip()}_"
-            if dataset_type == "history":
-                table_list = [f"{y_pref}history_containers_core"]
-            elif dataset_type == "current":
-                table_list = [f"{y_pref}current_containers"]
-            elif dataset_type == "crane":
-                table_list = [f"{y_pref}crane_movements_core"]
-            else:
-                table_list = []
-        else:
-            suffix_map = {
-                "history": "history_containers_core",
-                "current": "current_containers",
-                "crane": "crane_movements_core",
-            }
-            suffix = suffix_map.get(dataset_type, "history_containers_core")
-            rows = probe.execute(text(f"""
-                SELECT relname
-                FROM pg_class
-                WHERE relkind IN ('r', 'p')
-                  AND relname LIKE '%_{suffix}'
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-                ORDER BY relname
-            """)).fetchall()
-            table_list = [r[0] for r in rows]
+    # ── Try new unified tables first ─────────────────────────────────────────
+    new_suffix_map = {
+        "history":       "container_operations",
+        "current":       "container_operations",
+        "crane":         "crane_operations",
+        "vessel_visits": "vessel_visits",
+    }
+    new_suffix = new_suffix_map.get(dataset_type)
 
-    if not table_list:
+    if new_suffix:
+        new_tables = _discover_tables(engine, new_suffix, yard_id)
+        if new_tables:
+            if dataset_type == "history":
+                return _load_container_ops(engine, new_tables, vessel_id, full_load, settings, record_type="history")
+            if dataset_type == "current":
+                return _load_current_from_ops(engine, new_tables, vessel_id, settings)
+            if dataset_type == "crane":
+                return _load_crane_ops(engine, new_tables, vessel_id, full_load, settings)
+            if dataset_type == "vessel_visits":
+                return _load_vessel_visits(engine, new_tables, vessel_id, settings)
+
+    # ── Fallback to legacy tables ────────────────────────────────────────────
+    legacy_suffix_map = {
+        "history": "history_containers_core",
+        "current": "current_containers",
+        "crane":   "crane_movements_core",
+    }
+    legacy_suffix = legacy_suffix_map.get(dataset_type, "history_containers_core")
+    legacy_tables = _discover_tables(engine, legacy_suffix, yard_id)
+
+    if not legacy_tables:
         return pd.DataFrame()
 
     if dataset_type == "history":
-        return _load_history_joined(engine, table_list, vessel_id, full_load, settings)
+        return _load_history_joined(engine, legacy_tables, vessel_id, full_load, settings)
     if dataset_type == "crane":
-        return _load_crane_joined(engine, table_list, vessel_id, full_load, settings)
+        return _load_crane_joined(engine, legacy_tables, vessel_id, full_load, settings)
 
-    # current
+    # current (legacy)
     dfs: list[pd.DataFrame] = []
-    for tbl in table_list:
+    for tbl in legacy_tables:
         try:
             filters: list[str] = []
             params: dict = {}
@@ -532,7 +690,189 @@ def load_from_db(
     return df.copy()
 
 
+def _discover_tables(engine, suffix: str, yard_id: str | None = None) -> list[str]:
+    """Find per-yard tables matching a suffix pattern."""
+    with engine.connect() as probe:
+        if yard_id:
+            tbl_name = f"{yard_id.lower().strip()}_{suffix}"
+            if _table_exists(probe, tbl_name):
+                return [tbl_name]
+            return []
+        rows = probe.execute(text(f"""
+            SELECT relname
+            FROM pg_class
+            WHERE relkind IN ('r', 'p')
+              AND relname LIKE '%_{suffix}'
+              AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+            ORDER BY relname
+        """)).fetchall()
+        return [r[0] for r in rows]
+
+
+def _load_container_ops(
+    engine, tables: list[str], vessel_id: str | None,
+    full_load: bool, settings, record_type: str = None,
+) -> pd.DataFrame:
+    """Load from new unified container_operations tables."""
+    dfs: list[pd.DataFrame] = []
+    for tbl in tables:
+        try:
+            filters: list[str] = []
+            params: dict = {}
+
+            if vessel_id:
+                filters.append(
+                    "(actual_outbound_carrier_visit_id = :v_id OR outbound_service = :v_id)"
+                )
+                params["v_id"] = vessel_id
+            elif not full_load and settings.HISTORY_LOAD_WINDOW_DAYS > 0:
+                filters.append(
+                    f"time_in >= NOW() - INTERVAL '{settings.HISTORY_LOAD_WINDOW_DAYS} days'"
+                )
+
+            if record_type:
+                filters.append("record_type = :rt")
+                params["rt"] = record_type
+
+            q = f"SELECT * FROM {tbl}"
+            if filters:
+                q += " WHERE " + " AND ".join(filters)
+            q += " ORDER BY time_in DESC NULLS LAST"
+
+            with engine.connect() as conn:
+                df_tbl = pd.read_sql_query(text(q), conn, params=params)
+                if not df_tbl.empty:
+                    dfs.append(df_tbl)
+        except Exception as e:
+            logger.warning("Failed to load from %s: %s", tbl, e)
+
+    if not dfs:
+        return pd.DataFrame()
+
+    df = pd.concat(dfs, ignore_index=True)
+    for col in settings.EXPECTED_HEADERS.get("history", []):
+        if col not in df.columns:
+            df[col] = None
+    return _parse_datetime_columns(df).copy()
+
+
+def _load_current_from_ops(
+    engine, tables: list[str], vessel_id: str | None, settings,
+) -> pd.DataFrame:
+    """
+    Runtime current-yard extraction: latest yard-side record per unit
+    where time_out IS NULL (container has not departed).
+    """
+    dfs: list[pd.DataFrame] = []
+    for tbl in tables:
+        try:
+            filters: list[str] = ["time_out IS NULL"]  # FIX: primary yard-presence signal
+            params: dict = {}
+
+            if vessel_id:
+                filters.append(
+                    "(actual_outbound_carrier_visit_id = :v_id OR outbound_service = :v_id)"
+                )
+                params["v_id"] = vessel_id
+
+            where_sql = "WHERE " + " AND ".join(filters)
+
+            # FIX: push record_type filter to DB; DISTINCT ON deduplicates per unit
+            q = f"""
+                SELECT DISTINCT ON (unit_id) *
+                FROM {tbl}
+                {where_sql}
+                ORDER BY unit_id, updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+            """
+
+            with engine.connect() as conn:
+                df_tbl = pd.read_sql_query(text(q), conn, params=params)
+                if not df_tbl.empty:
+                    dfs.append(df_tbl)
+        except Exception as e:
+            logger.warning("Failed to load current from %s: %s", tbl, e)
+
+    if not dfs:
+        return pd.DataFrame()
+
+    df = pd.concat(dfs, ignore_index=True)
+    for col in settings.EXPECTED_HEADERS.get("current", []):
+        if col not in df.columns:
+            df[col] = None
+    return df.copy()
+
+def _load_crane_ops(
+    engine, tables: list[str], vessel_id: str | None,
+    full_load: bool, settings,
+) -> pd.DataFrame:
+    """Load from new unified crane_operations tables."""
+    dfs: list[pd.DataFrame] = []
+    for tbl in tables:
+        try:
+            filters: list[str] = []
+            params: dict = {}
+
+            if vessel_id:
+                filters.append("carrier_visit = :v_id")
+                params["v_id"] = vessel_id
+
+            q = f"SELECT * FROM {tbl}"
+            if filters:
+                q += " WHERE " + " AND ".join(filters)
+            q += " ORDER BY time_completed DESC NULLS LAST"
+
+            with engine.connect() as conn:
+                df_tbl = pd.read_sql_query(text(q), conn, params=params)
+                if not df_tbl.empty:
+                    dfs.append(df_tbl)
+        except Exception as e:
+            logger.warning("Failed to load from %s: %s", tbl, e)
+
+    if not dfs:
+        return pd.DataFrame()
+
+    df = pd.concat(dfs, ignore_index=True)
+    for col in settings.EXPECTED_HEADERS.get("crane", []):
+        if col not in df.columns:
+            df[col] = None
+    return _parse_datetime_columns(df).copy()
+
+
+def _load_vessel_visits(
+    engine, tables: list[str], vessel_id: str | None, settings,
+) -> pd.DataFrame:
+    """Load from vessel_visits summary tables."""
+    dfs: list[pd.DataFrame] = []
+    for tbl in tables:
+        try:
+            filters: list[str] = []
+            params: dict = {}
+
+            if vessel_id:
+                filters.append(
+                    "(vessel_visit_id = :v_id OR outbound_service = :v_id)"
+                )
+                params["v_id"] = vessel_id
+
+            q = f"SELECT * FROM {tbl}"
+            if filters:
+                q += " WHERE " + " AND ".join(filters)
+            q += " ORDER BY updated_at DESC NULLS LAST"
+
+            with engine.connect() as conn:
+                df_tbl = pd.read_sql_query(text(q), conn, params=params)
+                if not df_tbl.empty:
+                    dfs.append(df_tbl)
+        except Exception as e:
+            logger.warning("Failed to load vessel visits from %s: %s", tbl, e)
+
+    if not dfs:
+        return pd.DataFrame()
+    return pd.concat(dfs, ignore_index=True)
+
+
 def _load_history_joined(engine, core_tables: list[str], vessel_id: str | None, full_load: bool, settings) -> pd.DataFrame:
+    """Legacy loader: JOIN history_core + history_cargo + history_position."""
     dfs: list[pd.DataFrame] = []
 
     for core_tbl in core_tables:

@@ -214,18 +214,18 @@ def get_system_summary(admin: dict = Depends(require_admin)):
 
     with engine.connect() as conn:
 
-        # ── History containers (count from core tables) ───────────────────────
+        # ── History/Operational containers ────────────────────────────────────
         try:
-            core_tbls = conn.execute(text("""
+            ops_tbls = conn.execute(text("""
                 SELECT relname FROM pg_class
                 WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_history_containers_core'
+                  AND relname LIKE '%_container_operations'
                   AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
             """)).fetchall()
             total_history = 0
-            for (tbl,) in core_tbls:
+            for (tbl,) in ops_tbls:
                 try:
-                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE record_type = 'history'")).scalar()
                     total_history += (n or 0)
                 except Exception:
                     pass
@@ -233,18 +233,12 @@ def get_system_summary(admin: dict = Depends(require_admin)):
         except Exception:
             counts["history_containers"] = 0
 
-        # ── Current containers ────────────────────────────────────────────────
+        # ── Current containers (Dynamic Extraction count) ─────────────────────
         try:
-            curr_tbls = conn.execute(text("""
-                SELECT relname FROM pg_class
-                WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_current_containers'
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-            """)).fetchall()
             total_current = 0
-            for (tbl,) in curr_tbls:
+            for (tbl,) in ops_tbls:
                 try:
-                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE time_out IS NULL")).scalar()
                     total_current += (n or 0)
                 except Exception:
                     pass
@@ -252,12 +246,13 @@ def get_system_summary(admin: dict = Depends(require_admin)):
         except Exception:
             counts["current_containers"] = 0
 
+
         # ── Crane movements ───────────────────────────────────────────────────
         try:
             crane_tbls = conn.execute(text("""
                 SELECT relname FROM pg_class
                 WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_crane_movements'
+                  AND relname LIKE '%_crane_operations'
                   AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
             """)).fetchall()
             total_crane = 0
@@ -271,25 +266,24 @@ def get_system_summary(admin: dict = Depends(require_admin)):
         except Exception:
             counts["crane_movements"] = 0
 
-        # ── Broken-out history sub-tables ─────────────────────────────────────
-        for suffix in ["history_containers_cargo", "history_containers_position"]:
-            try:
-                sub_tbls = conn.execute(text(f"""
-                    SELECT relname FROM pg_class
-                    WHERE relkind IN ('r','p')
-                      AND relname LIKE '%_{suffix}'
-                      AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-                """)).fetchall()
-                total_sub = 0
-                for (tbl,) in sub_tbls:
-                    try:
-                        n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
-                        total_sub += (n or 0)
-                    except Exception:
-                        pass
-                counts[suffix] = total_sub
-            except Exception:
-                counts[suffix] = 0
+        # ── Vessel visits ─────────────────────────────────────────────────────
+        try:
+            vv_tbls = conn.execute(text("""
+                SELECT relname FROM pg_class
+                WHERE relkind IN ('r','p')
+                  AND relname LIKE '%_vessel_visits'
+                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+            """)).fetchall()
+            total_vv = 0
+            for (tbl,) in vv_tbls:
+                try:
+                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                    total_vv += (n or 0)
+                except Exception:
+                    pass
+            counts["vessel_visits"] = total_vv
+        except Exception:
+            counts["vessel_visits"] = 0
 
         # ── Support tables ────────────────────────────────────────────────────
         for table in ["ingestion_logs", "rejection_logs", "users", "training_metadata"]:
@@ -304,10 +298,10 @@ def get_system_summary(admin: dict = Depends(require_admin)):
         try:
             yard_rows = conn.execute(text("""
                 SELECT DISTINCT
-                    replace(relname, '_current_containers', '') AS yard_id
+                    replace(relname, '_container_operations', '') AS yard_id
                 FROM pg_class
                 WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_current_containers'
+                  AND relname LIKE '%_container_operations'
                   AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
                 ORDER BY 1
             """)).fetchall()
@@ -347,10 +341,10 @@ def list_yards(user: dict = Depends(get_current_user)):
         try:
             rows = conn.execute(text("""
                 SELECT
-                    replace(relname, '_current_containers', '') AS yard_id
+                    replace(relname, '_container_operations', '') AS yard_id
                 FROM pg_class
                 WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_current_containers'
+                  AND relname LIKE '%_container_operations'
                   AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
                 ORDER BY 1
             """)).fetchall()
@@ -360,13 +354,16 @@ def list_yards(user: dict = Depends(get_current_user)):
         for (yid,) in rows:
             info: dict = {"yard_id": yid}
             for suffix, label in [
-                ("history_containers_core",     "history_rows"),
-                ("current_containers",           "current_rows"),
-                ("crane_movements",              "crane_rows"),
+                ("container_operations", "history_rows"),
+                ("vessel_visits",       "visit_summaries"),
+                ("crane_operations",    "crane_rows"),
             ]:
                 tbl = f"{yid}_{suffix}"
                 try:
-                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                    if suffix == "container_operations":
+                        n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE record_type = 'history'")).scalar()
+                    else:
+                        n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
                     info[label] = n or 0
                 except Exception:
                     info[label] = 0
