@@ -180,8 +180,6 @@ def ensure_yard_tables(engine, yard_id: str) -> None:
             pass
 
        # FIX 5: guarantee constraint exists before any current-record upsert.
-        # The EXCEPTION handler lives inside PL/pgSQL so the connection stays
-        # healthy even if the constraint already exists under a concurrent txn.
         conn.execute(text(f"""
             DO $$
             BEGIN
@@ -766,7 +764,7 @@ def _load_current_from_ops(
     dfs: list[pd.DataFrame] = []
     for tbl in tables:
         try:
-            filters: list[str] = ["time_out IS NULL"]  # FIX: primary yard-presence signal
+            filters: list[str] = ["(time_out IS NULL OR record_type = 'current')"]# FIX: primary yard-presence signal
             params: dict = {}
 
             if vessel_id:

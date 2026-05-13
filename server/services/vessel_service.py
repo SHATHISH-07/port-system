@@ -644,6 +644,7 @@ def get_unified_stay_analysis(
             loaded_override=loaded,
             discharged_override=discharged,
             crane_count_override=crane_count,
+            history_df=df_hist,         
             optional_unit_ids=optional_unit_ids,
         )
         if "error" not in hist_result:
@@ -773,7 +774,7 @@ def get_terminal_map_data(yard_id: str = None) -> dict:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main dashboard entry point
-# ─────────────────────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────   ──────────────────────────────
 
 def analyze_vessel_dashboard(
     df: pd.DataFrame,
@@ -792,6 +793,11 @@ def analyze_vessel_dashboard(
     # ── Unit ID filtering (What-If workloads) ────────────────────────────────
     if optional_unit_ids:
         vessel_df = df[df["unit_id"].isin(optional_unit_ids)].copy()
+        if (
+            "actual_outbound_carrier_visit_id" not in vessel_df.columns
+            or vessel_df["actual_outbound_carrier_visit_id"].isna().all()
+        ):
+            vessel_df["actual_outbound_carrier_visit_id"] = vessel_service
     else:
         vessel_df = pd.DataFrame()
         if "outbound_service" in df.columns:

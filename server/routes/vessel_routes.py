@@ -77,6 +77,7 @@ async def get_vessel_analysis(
                 loaded_override=loaded,
                 discharged_override=discharged,
                 crane_count_override=crane_count,
+                history_df=df_hist,
             )
             if "error" not in hist_result:
                 return hist_result
