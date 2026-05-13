@@ -177,7 +177,7 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         print(f"     Skipped (< {min_visit_rows} rows) : {skipped_rows}")
         print(f"     Skipped (< {min_hours}h)     : {skipped_noise}")
         print(f"     Skipped (> {max_hours}h)   : {skipped_error}")
-        print(f"     Target range       : {y.min():.1f}h – {y.max():.1f}h")
+        print(f"     Target range       : {y.min():.1f}h - {y.max():.1f}h")
         print(f"     Target mean        : {y.mean():.1f}h")
         print(f"     Model type         : VotingRegressor (Ridge + XGBoost + GBR)")
         logger.info(
@@ -195,7 +195,7 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         _cached_model_bundle = None
 
         training_status.set("completed", "Model trained successfully")
-        print("[OK] Model trained and saved →", settings.MODEL_PATH)
+        print("[OK] Model trained and saved ->", settings.MODEL_PATH)
         logger.info("ML training completed successfully")
 
         # ── Record model version in DB ────────────────────────────────────────

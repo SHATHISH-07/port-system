@@ -3,3 +3,8 @@ __pycache__
 data/
 
 test-data/master_test_dataset.csv
+
+scratch/
+
+system_verification_log.txt
+verification_log.txt

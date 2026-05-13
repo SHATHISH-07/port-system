@@ -132,7 +132,7 @@ async def log_requests(request: Request, call_next):
         response     = await call_next(request)
         elapsed      = time.time() - start
         logger.info(
-            "%s %s → %s  (%.3fs)",
+            "%s %s -> %s  (%.3fs)",
             request.method, request.url.path, response.status_code, elapsed,
         )
         return response

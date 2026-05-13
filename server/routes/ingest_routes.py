@@ -211,16 +211,6 @@ def _ensure_current_position(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _drop_current_time_fields(df: pd.DataFrame) -> pd.DataFrame:
-    drop_cols = [
-        c for c in ("move_complete_time", "time_in", "time_out", "time_completed")
-        if c in df.columns
-    ]
-    if drop_cols:
-        df = df.drop(columns=drop_cols, errors="ignore")
-    return df
-
-
 def _fail(reason: str) -> dict:
     return {
         "status":         "failed",
@@ -326,7 +316,7 @@ def _detect_type(df: pd.DataFrame, explicit: Optional[str]) -> Optional[str]:
 
     if "time_out" in cols:
         non_null_ratio = df["time_out"].notna().mean()
-        return "history" if non_null_ratio >= 0.30 else "current"
+        return "history" if non_null_ratio >= 0.30 else "history"  # all container data is history now
 
     if {"unit_id", "outbound_service"}.issubset(cols):
         return "history"
@@ -447,9 +437,9 @@ async def upload_data(
             f"Could not identify dataset type from headers: {list(df.columns)[:15]}"
         )
 
+    # All container data ingests as history; current is derived at runtime
     if dataset_type == "current":
-        df = _drop_current_time_fields(df)
-        df = _ensure_current_position(df)
+        dataset_type = "history"
 
     if dataset_type == "history":
         for col in ("move_complete_time", "time_in", "time_out"):
@@ -528,11 +518,8 @@ def _process_ingestion(
     try:
         df = df.copy()
 
-        if dataset_type == "current":
-            df = _drop_current_time_fields(df)
-            df = _ensure_current_position(df)
-
         if dataset_type == "history":
+            df = df[[c for c in df.columns if not re.search(r'_m\d+$', c)]].copy()
             df = _coerce_datetime_columns(df, ["time_in", "time_out", "move_complete_time"])
             # ── lineage: discharge rows → populate actual_inbound_carrier_visit_id
             if "category_id" in df.columns and "actual_outbound_carrier_visit_id" in df.columns:
@@ -754,10 +741,9 @@ def _insert_yard_data(
             accepted, rejected, error_str = _insert_crane_operations(
                 engine, yard, df, ingestion_id
             )
-        elif dataset_type in ("history", "current"):
-            record_type = "history" if dataset_type == "history" else "current"
+        elif dataset_type == "history":
             accepted, rejected, error_str = _insert_container_operations(
-                engine, yard, df, ingestion_id, record_type=record_type
+                engine, yard, df, ingestion_id, record_type="history"
             )
 
         # FIX: run vessel summary update as a background task so it never
@@ -805,6 +791,9 @@ def _insert_container_operations(
         "stow_code_1", "stow_code_2", "stow_code_3",
     ]
 
+    # Strip any pandas merge-suffixed columns before building insert dataframe
+    clean_cols = [c for c in df.columns if not re.search(r'_m\d+$', c)]
+    df = df[clean_cols].copy()
     valid_cols = [c for c in cols if c in df.columns]
     insert_df = df[valid_cols].copy()
 
@@ -849,10 +838,12 @@ def _insert_container_operations(
                 stmt = stmt.on_conflict_do_update(
                     index_elements=["unit_id", "yard_id"],
                     set_=update_set,
+                    where=text("record_type = 'current'"),
                 )
                 with engine.begin() as conn:
                     conn.execute(stmt)
             else:
+                # History: plain insert, no conflict handling
                 with engine.begin() as conn:
                     conn.execute(table.insert(), records)
 
@@ -861,42 +852,6 @@ def _insert_container_operations(
             errors.append(str(e))
             logger.error("[Ingestion] Container insert error for %s: %s", yard, e)
 
-
-    # FIX: sync active containers to legacy current_containers table for backward compat
-    if record_type == "current" and accepted > 0:
-        legacy_tbl = f"{yard}_current_containers"
-        try:
-            legacy_meta = MetaData()
-            legacy_table = Table(legacy_tbl, legacy_meta, autoload_with=engine)
-            legacy_cols = {c.name for c in legacy_table.columns}
-
-            legacy_df = insert_df.copy()
-            # Drop time columns that were removed from current_containers schema
-            for drop_col in ("move_complete_time", "time_in", "time_out", "record_type"):
-                if drop_col in legacy_df.columns:
-                    legacy_df = legacy_df.drop(columns=[drop_col])
-
-            # Only keep columns that exist in the legacy table
-            keep = [c for c in legacy_df.columns if c in legacy_cols]
-            legacy_df = legacy_df[keep]
-
-            legacy_records = _prepare_records(legacy_df)
-            if legacy_records:
-                legacy_stmt = pg_insert(legacy_table).values(legacy_records)
-                legacy_update = {
-                    c.name: legacy_stmt.excluded[c.name]
-                    for c in legacy_table.columns
-                    if c.name not in {"id", "unit_id", "created_at"}
-                    and c.name in legacy_df.columns
-                }
-                legacy_stmt = legacy_stmt.on_conflict_do_update(
-                    index_elements=["unit_id"],
-                    set_=legacy_update,
-                )
-                with engine.begin() as conn:
-                    conn.execute(legacy_stmt)
-        except Exception as leg_exc:
-            logger.warning("[Ingestion] Legacy current_containers sync skipped for %s: %s", yard, leg_exc)
 
     return accepted, len(df) - accepted, "; ".join(errors)
 
