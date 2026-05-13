@@ -3,16 +3,32 @@ from __future__ import annotations
 import logging
 import traceback
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from pydantic import BaseModel
+from typing import List, Optional
 
 from auth.dependencies import get_current_user
 from db.queries import load_from_db
 from models.stay_model import predict_stay_duration_from_metrics
 from services.heatmap_service import get_vessel_heatmap
-from services.vessel_service import analyze_vessel_dashboard
+from services.vessel_service import (
+    analyze_vessel_dashboard,
+    get_unified_stay_analysis,
+    get_yard_heatmap_data,
+    get_terminal_map_data
+)
 
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/vessel", tags=["vessel"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Request Models
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FilterByUnitsRequest(BaseModel):
+    unit_ids: List[str]
+    vessel_id: Optional[str] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -182,4 +198,68 @@ async def predict_manual(
 
     except Exception as exc:
         logger.error("predict_manual error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /vessel/yard-map
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/yard-map")
+async def get_yard_map_route(
+    vessel_id: str = Query(None, alias="vesselId"),
+    yard_id: str = Query(None, alias="yardId"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Returns block density data for the 2D Terminal Grid.
+    If vesselId is provided, the data is restricted to that vessel's cargo.
+    """
+    try:
+        # Note: Must query time_out IS NULL for live yard state (handled in service)
+       return get_yard_heatmap_data(vessel_id=vessel_id, yard_id=yard_id)
+    except Exception as exc:
+        logger.error("yard_map error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /vessel/terminal-map
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/terminal-map")
+async def get_terminal_map_route(
+    yard_id: str = Query(None, alias="yardId"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Returns full terminal infrastructure data (berths, lanes, etc.).
+    """
+    try:
+        return get_terminal_map_data(yard_id=yard_id)
+    except Exception as exc:
+        logger.error("terminal_map error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /vessel/filter-by-units
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/filter-by-units")
+async def filter_by_units_route(
+    request: FilterByUnitsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Returns a unified stay analysis scoped to a specific list of Unit IDs.
+    Used for 'What-If' planning with custom container lists.
+    """
+    try:
+        return get_unified_stay_analysis(
+            vessel_id=request.vessel_id or "UPLOADED_LIST",
+            optional_unit_ids=request.unit_ids
+        )
+    except Exception as exc:
+        logger.error("filter_by_units error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))

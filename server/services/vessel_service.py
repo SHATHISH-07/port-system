@@ -610,12 +610,14 @@ def get_unified_stay_analysis(
     loaded: int = None,
     discharged: int = None,
     crane_count: int = None,
+    optional_unit_ids: list[str] = None,
 ) -> dict:
     """
     Single entry point for all three stay-time analysis modes:
       1. Vessel-only       — pass only vessel_id
       2. Workload-adjusted — pass loaded and/or discharged
       3. Crane-adjusted    — pass crane_count (can combine with mode 2)
+      4. Workload-filtered — pass optional_unit_ids (What-If planning)
 
     Tries current yard data first, falls back to history automatically.
     Returns the same structure as analyze_vessel_dashboard.
@@ -632,6 +634,7 @@ def get_unified_stay_analysis(
         discharged_override=discharged,
         crane_count_override=crane_count,
         history_df=df_hist,
+        optional_unit_ids=optional_unit_ids,
     )
 
     if "error" in result:
@@ -641,11 +644,132 @@ def get_unified_stay_analysis(
             loaded_override=loaded,
             discharged_override=discharged,
             crane_count_override=crane_count,
+            optional_unit_ids=optional_unit_ids,
         )
         if "error" not in hist_result:
             return hist_result
 
     return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dashboard & Heatmap builders
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_yard_heatmap_data(
+    vessel_id: str = None,
+    yard_id: str = None,
+) -> list[dict]:
+
+    """
+    Aggregation for the 2D Terminal Map.
+    Scans runtime 'current' yard state (where time_out IS NULL) and groups by block.
+    """
+    from db.queries import load_from_db
+    # load_from_db("current") uses time_out IS NULL signal internally
+    df = load_from_db("current",yard_id=yard_id)
+
+    if df.empty:
+        return []
+
+    if vessel_id and "outbound_service" in df.columns:
+        df = df[
+            df["outbound_service"].astype(str).str.strip().str.upper()
+            == vessel_id.strip().upper()
+        ].copy()
+        
+
+    blocks = defaultdict(lambda: {
+    "density": 0,
+    "reefer": 0,
+    "hazmat": 0,
+    "oog": 0,
+    "stack_heights": [],
+    "max_stack": 0,
+    "unit_rows": []    # ← was "units": [], must be "unit_rows"
+})
+
+    for _, row in df.iterrows():
+        pos_str = row.get("current_position") or row.get("ctr_to_position")
+        if not pos_str:
+            continue
+
+        pos_info = parse_position(pos_str)
+        if not pos_info or not pos_info["is_yard"]:
+            continue
+
+        bk = block_label(pos_info) or "UNKNOWN"
+        b = blocks[bk]
+        b["density"] += 1
+        
+        # Flags
+        if _is_yes(row.get("reefer")): b["reefer"] += 1
+        if _is_yes(row.get("hazardous_flag")): b["hazmat"] += 1
+        if _is_yes(row.get("oog_unit")): b["oog"] += 1
+        
+        # Stack height
+        tier = pos_info.get("tier")
+        try:
+            h = int(tier) if tier and str(tier).isdigit() else 1
+            b["stack_heights"].append(h)
+            if h > b["max_stack"]: b["max_stack"] = h
+        except:
+            pass
+
+        b["unit_rows"].append(row.to_dict())
+
+
+    # Format for frontend
+    result = []
+    for bk, data in blocks.items():
+        avg_h = sum(data["stack_heights"]) / len(data["stack_heights"]) if data["stack_heights"] else 1
+        max_density = max((b["density"] for b in blocks.values()), default=1)
+
+        result.append({
+    "block_id":          bk,
+    "total_containers":  data["density"],
+    "reefer_count":      data["reefer"],
+    "hazmat_count":      data["hazmat"],
+    "oog_count":         data["oog"],
+    "density_pct":       round(data["density"] / max(max_density, 1), 4),
+    "avg_stack_height":  round(avg_h, 1),
+    "containers": [
+        {
+            "unit_id":         u.get("unit_id"),
+            "position":        u.get("current_position") or u.get("ctr_to_position"),
+            "freight_kind":    u.get("freight_kind"),
+            "outbound_service": u.get("outbound_service"),
+        }
+        for u in data["unit_rows"][:100]
+    ]
+})
+    return result
+
+
+
+def get_terminal_map_data(yard_id: str = None) -> dict:
+    """
+    Extended terminal structure for 2D/3D visualization.
+    """
+    heatmap = get_yard_heatmap_data(yard_id=yard_id)
+    infrastructure = {
+        "berths": [
+            {"id": "B1", "slots": [1, 2, 3], "status": "available"},
+            {"id": "B2", "slots": [4, 5, 6], "status": "occupied"},
+            {"id": "B3", "slots": [7, 8, 9], "status": "available"},
+        ],
+        "lanes": [
+            {"id": "L1", "occupancy": 0.2},
+            {"id": "L2", "occupancy": 0.5},
+            {"id": "L3", "occupancy": 0.8},
+        ]
+    }
+    return {
+        "heatmap": heatmap,
+        "infrastructure": infrastructure,
+        "total_containers": sum(b["total_containers"] for b in heatmap),
+        "timestamp": pd.Timestamp.now().isoformat()
+    }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main dashboard entry point
@@ -658,29 +782,28 @@ def analyze_vessel_dashboard(
     discharged_override: int = None,
     crane_count_override: int = None,
     history_df: pd.DataFrame = None,
+    optional_unit_ids: list[str] = None,
 ) -> dict:
     if df is None or df.empty:
         return {"error": "No data available", "vessel": vessel_service}
 
-    if (
-        "outbound_service" not in df.columns
-        and "actual_outbound_carrier_visit_id" not in df.columns
-    ):
-        return {"error": "Missing required columns", "vessel": vessel_service}
-
     search_key = str(vessel_service).strip().upper()
 
-    vessel_df = pd.DataFrame()
-    if "outbound_service" in df.columns:
-        vessel_df = df[
-            df["outbound_service"].astype(str).str.strip().str.upper() == search_key
-        ].copy()
+    # ── Unit ID filtering (What-If workloads) ────────────────────────────────
+    if optional_unit_ids:
+        vessel_df = df[df["unit_id"].isin(optional_unit_ids)].copy()
+    else:
+        vessel_df = pd.DataFrame()
+        if "outbound_service" in df.columns:
+            vessel_df = df[
+                df["outbound_service"].astype(str).str.strip().str.upper() == search_key
+            ].copy()
 
-    if vessel_df.empty and "actual_outbound_carrier_visit_id" in df.columns:
-        vessel_df = df[
-            df["actual_outbound_carrier_visit_id"]
-            .astype(str).str.strip().str.upper() == search_key
-        ].copy()
+        if vessel_df.empty and "actual_outbound_carrier_visit_id" in df.columns:
+            vessel_df = df[
+                df["actual_outbound_carrier_visit_id"]
+                .astype(str).str.strip().str.upper() == search_key
+            ].copy()
 
     if vessel_df.empty:
         suggestions: list[str] = []
