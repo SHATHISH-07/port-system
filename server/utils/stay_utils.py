@@ -79,9 +79,7 @@ def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
 
     event_sources = [
         "move_complete_time",
-        "crane_time",
         "time_in",
-        "time_completed",
         "updated_at",
         "created_at",
     ]
