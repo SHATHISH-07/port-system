@@ -1246,14 +1246,6 @@ def analyze_vessel_dashboard(
 
     avg_hours = actual.get("avg_hours") or 0
 
-    berth_analysis, berth_rec, berth_conflicts = _build_berth_tables(
-        visit_df=visit_df,
-        total_loaded=total_loaded,
-        total_discharged=total_discharged,
-        avg_hours=avg_hours,
-        historical_crane_avg=historical_crane_avg,
-    )
-
     from config import settings
     top_visit_stats_merged = actual.get("visits", {}).get(str(top_visit_id), {})
     exclude_ratio = top_visit_stats_merged.get("crane_exclude_ratio", 0.0)
@@ -1280,13 +1272,6 @@ def analyze_vessel_dashboard(
         risks.append("Operations appear stable.")
 
     steps: list[str] = []
-    if berth_rec:
-        steps.append(
-            f"Prioritise berth {berth_rec['berth']} — "
-            f"{berth_rec.get('recommendation_reason', '')}"
-        )
-    else:
-        steps.append("Allocate cranes based on cargo concentration.")
     if crane_ids:
         steps.append(
             f"Assign {len(crane_ids)} cranes: {', '.join(crane_ids[:4])} confirmed operational."
@@ -1349,15 +1334,6 @@ def analyze_vessel_dashboard(
         })
     crane_assignment.sort(key=lambda x: x["total_units"], reverse=True)
 
-    final_berth_analysis = berth_analysis
-    final_berth_rec      = berth_rec
-    final_berth_conflict = berth_conflicts
-
-    if not final_berth_analysis and op_preds and "berth_analysis" in op_preds:
-        final_berth_analysis = op_preds["berth_analysis"]
-        if final_berth_analysis:
-            final_berth_rec = dict(final_berth_analysis[0])
-
     return {
         "mode":                    "vessel",
         "operational_predictions": op_preds,
@@ -1367,11 +1343,6 @@ def analyze_vessel_dashboard(
         "predicted":               predicted,
         "risks":                   risks,
         "execution_plan":          steps,
-        "berth_analysis":          final_berth_analysis,
-        "berth_impact_table":      final_berth_analysis,
-        "berth_recommendation":    final_berth_rec,
-        "berth_conflict_table":    final_berth_conflict,
-        "berth_conflicts":         final_berth_conflict,
         "crane_assignment":        crane_assignment,
         "top_visit_stats": {
             "loaded":                 total_loaded,
