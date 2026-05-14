@@ -132,19 +132,30 @@ def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
         return {**empty_stats, "_crane_move_count": total_moves}
 
     crane_count = int(valid["crane_id"].nunique())
+    IDLE_THRESHOLD_SEC = 1800  # 30 minutes
 
-    # Sum individual crane active windows (avoids inflating idle gaps between visits)
-    total_crane_hours = 0.0
+    # Calculate Net MPH per crane: only count active working time
+    # (gaps between consecutive moves ≤ 30 min)
+    crane_mphs: list[float] = []
+    total_active_hours = 0.0
     for _, cgrp in valid.groupby("crane_id"):
-        cmin = cgrp["crane_time"].min()
-        cmax = cgrp["crane_time"].max()
-        if pd.notna(cmin) and pd.notna(cmax):
-            total_crane_hours += max((cmax - cmin).total_seconds() / 3600, 0.1)
+        sorted_times = cgrp["crane_time"].dropna().sort_values()
+        if len(sorted_times) < 2:
+            continue
+        gaps = sorted_times.diff().dt.total_seconds().dropna()
+        active_gaps = gaps[gaps <= IDLE_THRESHOLD_SEC]
+        if active_gaps.empty:
+            active_hrs = len(sorted_times) * (3 / 60)  # ~3 min per move fallback
+        else:
+            active_hrs = max(active_gaps.sum() / 3600, 0.05)
+        total_active_hours += active_hrs
+        crane_mphs.append(len(cgrp) / active_hrs)
 
-    eff  = len(valid)
+    eff = len(valid)
+    # Average Net MPH across all cranes
     mphc = (
-        min((eff / total_crane_hours) / max(crane_count, 1), 999.0)
-        if total_crane_hours > 0 else 0.0
+        round(sum(crane_mphs) / max(len(crane_mphs), 1), 2)
+        if crane_mphs else 0.0
     )
 
     restows = (
@@ -157,7 +168,7 @@ def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
         "_crane_move_count":      total_moves,
         "_crane_effective_moves": eff,
         "_crane_count":           float(crane_count),
-        "_crane_duration_hours":  float(total_crane_hours),
+        "_crane_duration_hours":  float(total_active_hours),
         "_crane_mphc":            float(mphc),
         "_crane_intensity":       float(eff / max(container_count, 1)),
         "_crane_restow_ratio":    float(restows / eff) if eff > 0 else 0.0,
@@ -714,7 +725,7 @@ def get_yard_heatmap_data(
     })
 
     for _, row in df.iterrows():
-        pos_str = row.get("current_position") or row.get("ctr_to_position")
+        pos_str = row.get("current_position") or row.get("ctr_to_position") or row.get("ctr_from_position")
         if not pos_str:
             continue
 

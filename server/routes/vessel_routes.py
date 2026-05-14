@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+import io
+import json
+import pandas as pd
+from fastapi import APIRouter, Depends, HTTPException, Query, Form, File, UploadFile
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy import text
 
-from auth.dependencies import get_current_user, require_admin
+from auth.dependencies import get_current_user
 from db.connection import get_engine
 from db.queries import load_from_db
-from services.heatmap_service import get_vessel_heatmap
 from services.vessel_service import (
     analyze_vessel_dashboard,
     get_yard_heatmap_data,
@@ -102,7 +104,10 @@ async def get_vessel_analysis(
 
 @router.post("/heatmap")
 async def get_vessel_heatmap_route(
-    request: HeatmapRequest,
+    vessel_id: str = Form(...),
+    yard_id: str = Form(...),
+    unit_ids: Optional[str] = Form(None),
+    file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -110,21 +115,70 @@ async def get_vessel_heatmap_route(
 
     Accepts:
       - vessel_id  (required): outbound_service identifier
-      - unit_ids   (optional): specific container IDs to locate in the yard
+      - unit_ids   (optional): specific container IDs to locate in the yard (comma-separated string)
       - yard_id    (optional): filter to a specific yard
+      - file       (optional): csv/json/excel file containing container IDs
 
     Returns block-level container positions, density, flags, and infrastructure.
     Used by the frontend for heatmap, 2D terminal map, 3D digital twin, and
     container position lookup.
     """
     try:
+        parsed_units = []
+        if unit_ids:
+            parsed_units.extend([u.strip() for u in unit_ids.split(",") if u.strip()])
+            
+        if file and file.filename:
+            content = await file.read()
+            ext = file.filename.split('.')[-1].lower()
+            try:
+                if ext == 'csv':
+                    df = pd.read_csv(io.BytesIO(content))
+                elif ext in ['xls', 'xlsx']:
+                    df = pd.read_excel(io.BytesIO(content))
+                elif ext == 'json':
+                    data = json.loads(content.decode("utf-8"))
+                    if isinstance(data, list):
+                        if len(data) > 0 and isinstance(data[0], dict):
+                            df = pd.DataFrame(data)
+                        else:
+                            df = pd.DataFrame({"container_id": data})
+                    elif isinstance(data, dict):
+                        df = pd.DataFrame([data])
+                    else:
+                        df = pd.DataFrame()
+                else:
+                    raise ValueError(f"Unsupported file format: {ext}")
+                
+                # Try to find a column with 'id', 'unit', or 'container'
+                id_col = None
+                for col in df.columns:
+                    if 'id' in str(col).lower() or 'unit' in str(col).lower() or 'container' in str(col).lower():
+                        id_col = col
+                        break
+                
+                if id_col is None and len(df.columns) > 0:
+                    id_col = df.columns[0]
+                
+                if id_col is not None:
+                    file_units = df[id_col].dropna().astype(str).str.strip().tolist()
+                    parsed_units.extend(file_units)
+                    
+            except Exception as parse_exc:
+                logger.error("Error parsing uploaded file: %s", parse_exc)
+                raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(parse_exc)}")
+
+        parsed_units = list(set(parsed_units))
+
         return get_yard_heatmap_data(
-            vessel_id=request.vessel_id,
-            unit_ids=request.unit_ids,
-            yard_id=request.yard_id,
+            vessel_id=vessel_id,
+            unit_ids=parsed_units if parsed_units else None,
+            yard_id=yard_id,
         )
     except Exception as exc:
-        logger.error("vessel_heatmap error for %s: %s", request.vessel_id, exc, exc_info=True)
+        logger.error("vessel_heatmap error for %s: %s", vessel_id, exc, exc_info=True)
+        if isinstance(exc, HTTPException):
+            raise
         raise HTTPException(status_code=500, detail=str(exc))
 
 @router.get("/yard/summary")

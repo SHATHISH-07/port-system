@@ -14,6 +14,34 @@ logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/crane", tags=["Crane Analytics"])
 
 
+def _net_active_hours(time_series: pd.Series, idle_threshold_sec: float = 1800) -> float:
+    """
+    Calculate NET active working hours from a series of timestamps.
+    
+    Only counts the time between consecutive moves where the gap is
+    ≤ idle_threshold_sec (default 30 min). Longer gaps are treated as
+    crane idle / off-shift time and excluded.
+    
+    This gives realistic MPH: a crane making 75 moves with 2-3 minute
+    cycles shows ~20+ MPH instead of ~2 MPH (which would include 
+    overnight idle time).
+    """
+    sorted_times = time_series.dropna().sort_values()
+    if len(sorted_times) < 2:
+        return max(len(sorted_times) * (1 / 60), 0.05)  # ~1 min per move minimum
+    
+    gaps = sorted_times.diff().dt.total_seconds().dropna()
+    # Only count gaps that are within the active working threshold
+    active_gaps = gaps[gaps <= idle_threshold_sec]
+    
+    if active_gaps.empty:
+        # All gaps exceed threshold — estimate 3 min per move as minimum
+        return len(sorted_times) * (3 / 60)
+    
+    active_seconds = active_gaps.sum()
+    return max(active_seconds / 3600, 0.05)  # floor at ~3 minutes
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GET /analytics/crane-performance
 # ─────────────────────────────────────────────────────────────────────────────
@@ -82,29 +110,29 @@ def get_crane_performance(
 
         # ── Yard-level breakdown ──────────────────────────────────────────────
         yard_stats: list[dict] = []
+        idle_threshold_sec = settings.CRANE_IDLE_THRESHOLD_MINUTES * 60  # 30 min
+
         if "yard_id" in valid_df.columns:
             for yard, ygrp in valid_df.groupby("yard_id"):
                 ymoves = len(ygrp)
                 ycranes = int(ygrp["crane_id"].nunique())
                 yvisits = int(ygrp["carrier_visit"].nunique())
                 
-                # High-precision crane-hour calculation
-                total_crane_hours = 0.0
-                for _, cgrp in ygrp.groupby("crane_id"):
-                    cmin = cgrp["time_completed"].min()
-                    cmax = cgrp["time_completed"].max()
-                    if pd.notna(cmin) and pd.notna(cmax):
-                        # Use actual duration, floor at 6 minutes (0.1h) for single-move instances
-                        total_crane_hours += max((cmax - cmin).total_seconds() / 3600, 0.1)
+                # Net crane productivity: per crane per visit, active hours only
+                visit_mphs: list[float] = []
+                for visit, vgrp in ygrp.groupby("carrier_visit"):
+                    for crane_id_inner, cgrp in vgrp.groupby("crane_id"):
+                        active_hrs = _net_active_hours(cgrp["time_completed"], idle_threshold_sec)
+                        if active_hrs > 0 and len(cgrp) >= 2:
+                            visit_mphs.append(len(cgrp) / active_hrs)
+                
+                avg_crane_mph = round(sum(visit_mphs) / max(len(visit_mphs), 1), 2) if visit_mphs else 0.0
                 
                 # Gross Output (Terminal moves per total clock hour)
                 ymin_t = ygrp["time_completed"].min()
                 ymax_t = ygrp["time_completed"].max()
                 ydur = max((ymax_t - ymin_t).total_seconds() / 3600, 1.0) if pd.notna(ymin_t) and pd.notna(ymax_t) else 1.0
                 gross_mph = ymoves / ydur
-                
-                # Average asset efficiency
-                avg_crane_mph = ymoves / max(total_crane_hours, 0.1)
                 
                 yard_stats.append({
                     "terminal_name": f"{yard.upper()} Terminal",
@@ -124,13 +152,16 @@ def get_crane_performance(
         crane_stats: list[dict] = []
         for crane, grp in valid_df.groupby("crane_id"):
             moves  = len(grp)
-            min_t  = grp["time_completed"].min()
-            max_t  = grp["time_completed"].max()
-            dur    = (
-                max((max_t - min_t).total_seconds() / 3600, 0.1)
-                if pd.notna(min_t) and pd.notna(max_t) else 0.1
-            )
-            mphc    = min(moves / dur, 999.0)
+            
+            # Calculate Net MPH per visit for this crane, then average
+            crane_visit_mphs: list[float] = []
+            for visit, vgrp in grp.groupby("carrier_visit"):
+                active_hrs = _net_active_hours(vgrp["time_completed"], idle_threshold_sec)
+                if active_hrs > 0 and len(vgrp) >= 2:
+                    crane_visit_mphs.append(len(vgrp) / active_hrs)
+            
+            mphc = round(sum(crane_visit_mphs) / max(len(crane_visit_mphs), 1), 2) if crane_visit_mphs else 0.0
+            
             restows = (
                 len(grp[grp["move_kind"].isin(["RESTOW", "SHIFT"])])
                 if "move_kind" in grp.columns else 0
