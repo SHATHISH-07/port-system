@@ -1044,27 +1044,3 @@ def _update_vessel_visits(engine, yard: str, df: pd.DataFrame, dataset_type: str
 
         with engine.begin() as conn:
             conn.execute(stmt)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Log endpoint
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/logs")
-def get_ingestion_logs(
-    limit: int = 50,
-    admin: dict = Depends(require_admin),
-):
-    engine = get_engine()
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text("""
-                SELECT id, filename, dataset_type, status, records_total,
-                       records_accepted, records_rejected, completed_at, error_summary
-                FROM ingestion_logs
-                ORDER BY created_at DESC
-                LIMIT :lim
-            """),
-            {"lim": limit},
-        ).fetchall()
-    return {"logs": [dict(r._mapping) for r in rows]}

@@ -48,9 +48,10 @@ def _net_active_hours(time_series: pd.Series, idle_threshold_sec: float = 1800) 
 
 @router.get("/crane-performance")
 def get_crane_performance(
-    limit:    int  = 1000,
-    days:     int  = None,
-    crane_id: str  = None,
+    limit:    int  = Query(1000, alias="limit"),
+    days:     int  = Query(None, alias="days"),
+    crane_id: str  = Query(None, alias="craneId"),
+    yard_id:  str  = Query(None, alias="yardId"),
     user:     dict = Depends(get_current_user),
 ):
     """
@@ -58,7 +59,8 @@ def get_crane_performance(
 
     Optional filters:
       - days     : only consider moves in the last N days
-      - crane_id : filter to a specific crane
+      - crane_id : filter to a specific crane (craneId)
+      - yard_id  : filter to a specific yard (yardId)
       - limit    : max raw move rows returned
     """
     from config import settings
@@ -89,7 +91,12 @@ def get_crane_performance(
         available_cranes = sorted(df["crane_id"].dropna().unique().tolist())
 
         if crane_id:
-            df = df[df["crane_id"].astype(str).str.strip() == crane_id.strip()]
+            df = df[df["crane_id"].astype(str).str.strip().str.upper() == crane_id.strip().upper()]
+            if df.empty:
+                return {**_empty_crane_response(), "available_cranes": available_cranes}
+
+        if yard_id and "yard_id" in df.columns:
+            df = df[df["yard_id"].astype(str).str.strip().str.upper() == yard_id.strip().upper()]
             if df.empty:
                 return {**_empty_crane_response(), "available_cranes": available_cranes}
 

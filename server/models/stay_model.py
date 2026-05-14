@@ -172,7 +172,21 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
 
         _engine = get_engine()
         _now    = datetime.now(timezone.utc)
-        _vtag   = _now.strftime("%Y%m%d_%H%M%S")
+
+        with _engine.begin() as _conn:
+            # 1. Generate incremental version (v1, v2...)
+            v_row = _conn.execute(text("""
+                SELECT version FROM model_versions 
+                WHERE model_name = 'vessel_stay'
+                ORDER BY id DESC LIMIT 1
+            """)).fetchone()
+            
+            last_v = v_row[0] if v_row else "v0"
+            try:
+                v_num = int(str(last_v).replace("v", "")) + 1
+            except:
+                v_num = 1
+            _vtag = f"v{v_num}"
 
         # ── Holdout MAE via 5-fold CV ────────────────────────────────────────
         holdout_mae = None
@@ -222,49 +236,71 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
             )
 
             new_status = "active" if should_promote else "candidate"
+            tags = ["CHAMPION"] if should_promote else ["CHALLENGER"]
 
             if should_promote:
                 _conn.execute(text("""
-                    UPDATE model_versions SET status = 'retired', updated_at = :now
+                    UPDATE model_versions 
+                    SET status = 'retired', 
+                        tags = jsonb_set(tags, '{}', (tags - 'CHAMPION')::jsonb),
+                        updated_at = :now
                     WHERE model_name = 'vessel_stay' AND status = 'active'
                 """), {"now": _now})
-                logger.info("[ML] Previous model retired. New model promoted to active.")
+                logger.info("[ML] Previous champion retired. New model promoted to active.")
             else:
                 logger.warning(
                     "[ML] New model MAE %.4f is worse than previous %.4f — "
-                    "marking as 'candidate', NOT promoting.",
+                    "marking as 'CHALLENGER', NOT promoting.",
                     holdout_mae, prev_mae,
                 )
+
+            # Metadata enrichment
+            full_metrics = {
+                "holdout_mae": holdout_mae,
+                "timestamp": _now.isoformat(),
+                "hyperparameters": config or {},
+                "framework": "scikit-learn / XGBoost",
+                "sample_count": n_samples,
+                "target_mean": round(float(y.mean()), 2),
+                "target_min": round(float(y.min()), 2),
+                "target_max": round(float(y.max()), 2),
+            }
+
+            model_bytes = None
+            if model is not None:
+                import io
+                import joblib
+                buf = io.BytesIO()
+                joblib.dump({"model": model, "features": settings.FEATURE_NAMES}, buf)
+                model_bytes = buf.getvalue()
 
             _conn.execute(text("""
                 INSERT INTO model_versions
                     (model_name, version, artifact_path, feature_config_id,
-                     dataset_size, metrics, status, notes,
+                     dataset_size, metrics, status, tags, notes, model_binary,
                      trained_at, promoted_at, created_at, updated_at)
                 VALUES
                     ('vessel_stay', :ver, :path, :fcid,
-                     :size, CAST(:metrics AS JSONB), :status,
-                     'Auto-trained via pipeline',
+                     :size, CAST(:metrics AS JSONB), :status, CAST(:tags AS JSONB),
+                     'Auto-trained via MLOps pipeline', :mb,
                      :now, :promoted_at, :now, :now)
                 ON CONFLICT (version) DO UPDATE SET
-                    status      = EXCLUDED.status,
-                    promoted_at = EXCLUDED.promoted_at,
-                    updated_at  = EXCLUDED.updated_at
+                    status       = EXCLUDED.status,
+                    tags         = EXCLUDED.tags,
+                    model_binary = COALESCE(EXCLUDED.model_binary, model_versions.model_binary),
+                    promoted_at  = EXCLUDED.promoted_at,
+                    updated_at   = EXCLUDED.updated_at
             """), {
-                "ver":        _vtag,
-                "path":       settings.MODEL_PATH,
-                "fcid":       fc_id,
-                "size":       n_samples,
-                "status":     new_status,
+                "ver":         _vtag,
+                "path":        settings.MODEL_PATH,
+                "fcid":        fc_id,
+                "size":        n_samples,
+                "status":      new_status,
+                "tags":        _json.dumps(tags),
+                "mb":          model_bytes,
                 "promoted_at": _now if should_promote else None,
-                "metrics":    _json.dumps({
-                    "sample_count":  n_samples,
-                    "holdout_mae":   holdout_mae,
-                    "target_mean":   round(float(y.mean()), 2),
-                    "target_min":    round(float(y.min()),  2),
-                    "target_max":    round(float(y.max()),  2),
-                }),
-                "now": _now,
+                "metrics":     _json.dumps(full_metrics),
+                "now":         _now,
             })
             logger.info("[ML] Model version recorded: vessel_stay@%s status=%s", _vtag, new_status)
     except Exception as _ve:
@@ -283,10 +319,30 @@ def load_stay_model():
     if _cached_model_bundle is not None:
         return _cached_model_bundle
 
-    if not os.path.exists(settings.MODEL_PATH):
-        return None
+    bundle = None
+    try:
+        from db.connection import get_engine
+        from sqlalchemy import text
+        import io
+        engine = get_engine()
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT model_binary FROM model_versions 
+                WHERE status = 'active' AND model_binary IS NOT NULL 
+                ORDER BY promoted_at DESC NULLS LAST LIMIT 1
+            """)).fetchone()
+            if row and row[0]:
+                buf = io.BytesIO(row[0])
+                bundle = joblib.load(buf)
+                logger.info("[ML] Loaded model from database")
+    except Exception as e:
+        logger.warning("[ML] Failed to load model from database, falling back to disk: %s", e)
 
-    bundle = joblib.load(settings.MODEL_PATH)
+    if bundle is None:
+        if not os.path.exists(settings.MODEL_PATH):
+            return None
+        bundle = joblib.load(settings.MODEL_PATH)
+        logger.info("[ML] Loaded model from disk")
 
     if bundle.get("features") != settings.FEATURE_NAMES:
         logger.warning(

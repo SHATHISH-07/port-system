@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fastapi import Query
+
 import logging
 from datetime import datetime, timezone
 
@@ -151,7 +153,7 @@ async def trigger_training(
 
 @router.get("/versions")
 def list_model_versions(
-    limit: int = 50,
+    limit: int = Query(50, alias="limit"),
     admin: dict = Depends(require_admin),
 ):
     """
@@ -163,8 +165,8 @@ def list_model_versions(
         with engine.connect() as conn:
             rows = conn.execute(text("""
                 SELECT
-                    id, model_name, version, artifact_path,
-                    dataset_size, metrics, status,
+                    id AS version_id, model_name, version, artifact_path,
+                    dataset_size, metrics, status, tags,
                     trained_at, promoted_at, notes
                 FROM model_versions
                 ORDER BY trained_at DESC NULLS LAST

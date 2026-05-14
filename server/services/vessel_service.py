@@ -250,6 +250,27 @@ def _visit_details(visit_groups: dict) -> dict:
             vdf["freight_kind"].value_counts().to_dict()
             if "freight_kind" in vdf.columns else {}
         )
+        
+        svc_name = (
+            str(vdf["outbound_service"].iloc[0]).strip()
+            if "outbound_service" in vdf.columns and not vdf["outbound_service"].isna().all()
+            else None
+        )
+
+        out[str(visit_id)] = {
+            "stay_hours":            stay_hours,
+            "vessel_service":        svc_name,
+            "start_time":            move_start.strftime("%Y-%m-%d %H:%M:%S") if move_start else None,
+            "end_time":              move_end.strftime("%Y-%m-%d %H:%M:%S") if move_end else None,
+            "loaded_containers":     loads,
+            "discharged_containers": discharges,
+            "move_start":            move_start.strftime("%Y-%m-%d %H:%M:%S") if move_start else None,
+            "move_end":              move_end.strftime("%Y-%m-%d %H:%M:%S") if move_end else None,
+            "total_units":           total_units,
+            "restow_count":          restow_count,
+            "avg_weight_kg":         avg_weight_kg,
+            "freight_kind_breakdown": freight_breakdown,
+        }
         pod_top5 = (
             vdf["port_of_discharge"].value_counts().head(5).to_dict()
             if "port_of_discharge" in vdf.columns else {}
@@ -1245,6 +1266,11 @@ def analyze_vessel_dashboard(
         "operational_predictions": op_preds,
         "delay_analysis":          delay_analysis,
         "vessel":                  vessel_service,
+        "vessel_service": (
+            str(vessel_df["outbound_service"].iloc[0]).strip()
+            if "outbound_service" in vessel_df.columns and not vessel_df["outbound_service"].isna().all()
+            else vessel_service
+        ),
         "actual":                  actual,
         "predicted":               predicted,
         "risks":                   risks,
@@ -1259,6 +1285,11 @@ def analyze_vessel_dashboard(
             "total_units":            total_units,
             "stay_hours":             actual_avg,
             "predicted_stay_hours":   predicted_avg_hours,
+            "vessel_service": (
+                str(vessel_df["outbound_service"].iloc[0]).strip()
+                if "outbound_service" in vessel_df.columns and not vessel_df["outbound_service"].isna().all()
+                else vessel_service
+            ),
             "avg_weight_kg":          top_visit_stats_merged.get("avg_weight_kg", 0.0),
             "freight_kind_breakdown": top_visit_stats_merged.get("freight_kind_breakdown", {}),
             "port_of_discharge_top5": top_visit_stats_merged.get("port_of_discharge_top5", {}),
