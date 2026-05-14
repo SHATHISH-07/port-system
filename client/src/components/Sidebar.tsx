@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Box, Typography, Tooltip, IconButton, useTheme, Button, Collapse } from "@mui/material";
 import {
-  AnalyticsOutlined,
   GridViewOutlined,
   HistoryOutlined,
   MenuRounded,
@@ -22,10 +21,9 @@ const OPEN = 280;
 const CLOSED = 80;
 
 const USER_ITEMS: { path: string; label: string; icon?: React.ElementType; userOnly?: boolean }[] = [
-  { path: "/history-analysis", label: "History Analysis", icon: HistoryOutlined },
-  { path: "/current-analysis", label: "Current Analysis", icon: AnalyticsOutlined },
+  { path: "/stay-analysis", label: "Stay Time Analysis", icon: HistoryOutlined },
+  { path: "/operational-dashboard", label: "Operational Dashboard", icon: GridViewOutlined },
   { path: "/crane-analytics", label: "Crane Analytics", icon: PrecisionManufacturingOutlined },
-  { path: "/heatmap", label: "Terminal Heatmap", icon: GridViewOutlined },
   { path: "/requests", label: "Requests", icon: AssignmentOutlined },
 ];
 

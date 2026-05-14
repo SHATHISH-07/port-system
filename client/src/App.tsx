@@ -8,9 +8,8 @@ import Layout from "./components/Layout";
 import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute, AdminRoute } from "./components/ProtectedRoute";
 
-const HistoryVesselAnalysis = lazy(() => import("./pages/HistoryVesselAnalysis"));
-const CurrentVesselAnalysis = lazy(() => import("./pages/CurrentVesselAnalysis"));
-const TerminalMap = lazy(() => import("./pages/TerminalMap"));
+const OperationalDashboard = lazy(() => import("./pages/OperationalDashboard"));
+const StayTimeAnalysis = lazy(() => import("./pages/StayTimeAnalysis"));
 const TrainModel = lazy(() => import("./pages/TrainModel"));
 const DataIngestion = lazy(() => import("./pages/DataIngestion"));
 const Login = lazy(() => import("./pages/Login"));
@@ -29,7 +28,7 @@ function PageLoader() {
 
 export default function App() {
   useEffect(() => {
-    const t = setTimeout(() => { import("./pages/TerminalMap"); }, 2000);
+    const t = setTimeout(() => { import("./pages/OperationalDashboard"); }, 2000);
     return () => clearTimeout(t);
   }, []);
 
@@ -44,13 +43,16 @@ export default function App() {
                 <Route path="/login" element={<Login />} />
 
                 {/* Common Protected Routes */}
-                <Route path="/" element={<Navigate to="/history-analysis" />} />
-                <Route path="/history-analysis" element={<ProtectedRoute><HistoryVesselAnalysis /></ProtectedRoute>} />
-                <Route path="/current-analysis" element={<ProtectedRoute><CurrentVesselAnalysis /></ProtectedRoute>} />
-                <Route path="/heatmap" element={<ProtectedRoute><TerminalMap /></ProtectedRoute>} />
+                <Route path="/" element={<Navigate to="/stay-analysis" />} />
+                <Route path="/stay-analysis" element={<ProtectedRoute><StayTimeAnalysis /></ProtectedRoute>} />
+                <Route path="/operational-dashboard" element={<ProtectedRoute><OperationalDashboard /></ProtectedRoute>} />
                 <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
-                {/* Moved CraneAnalytics here and changed to ProtectedRoute */}
                 <Route path="/crane-analytics" element={<ProtectedRoute><CraneAnalytics /></ProtectedRoute>} />
+
+                {/* Legacy Routes (Kept for now to prevent breaking any direct links during transition) */}
+                <Route path="/history-analysis" element={<Navigate to="/stay-analysis" />} />
+                <Route path="/current-analysis" element={<Navigate to="/stay-analysis" />} />
+                <Route path="/heatmap" element={<Navigate to="/operational-dashboard" />} />
 
                 {/* Admin Routes */}
                 <Route path="/train-model" element={<AdminRoute><TrainModel /></AdminRoute>} />

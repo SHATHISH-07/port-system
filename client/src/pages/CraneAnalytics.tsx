@@ -113,7 +113,7 @@ export default function CraneAnalytics() {
     const params: Record<string, string> = { limit: '1000' };
     if (craneId) params.crane_id = craneId;
 
-    api.get<ExtendedCraneResponse>('/analytics/crane-performance', { params })
+    api.get<ExtendedCraneResponse>('/crane/crane-performance', { params })
       .then(r => {
         setData(r.data);
         if (r.data.available_cranes && r.data.available_cranes.length > 0) {
@@ -439,7 +439,7 @@ export default function CraneAnalytics() {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={s.yard_id === "peb" ? "PEB Terminal" : s.yard_id === "cwit" ? "CWIT Terminal" : s.yard_id.toUpperCase()}
+                          label={s.yard_id === "peb" ? "PEB Terminal" : s.yard_id === "cwit" ? "CWIT Terminal" : (s.yard_id || "").toUpperCase()}
                           size="small"
                           variant="outlined"
                           sx={{ fontSize: "10px", fontWeight: 800, color: "text.primary" }}
@@ -497,7 +497,7 @@ export default function CraneAnalytics() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={v.yard_id === "peb" ? "PEB Terminal" : v.yard_id === "cwit" ? "CWIT Terminal" : v.yard_id.toUpperCase()}
+                        label={v.yard_id === "peb" ? "PEB Terminal" : v.yard_id === "cwit" ? "CWIT Terminal" : (v.yard_id || "").toUpperCase()}
                         size="small"
                         variant="outlined"
                         sx={{ fontSize: "10px", fontWeight: 800, color: "text.primary" }}

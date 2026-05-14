@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Box, Typography, useTheme, IconButton, Tooltip } from "@mui/material";
-import { alpha } from "@mui/material/styles";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { CenterFocusStrongRounded, RestartAltRounded } from "@mui/icons-material";
 

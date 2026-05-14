@@ -1299,7 +1299,7 @@ class TerminalScene {
     this.particleSystems.forEach(p => this.scene.remove(p)); this.particleSystems = [];
 
     const recRaw = data.recommended_berth || "";
-    const heatGroups: { cx: number; cz: number; bw: number; bd: number; conc: string; isMax: boolean }[] = [];
+    const heatGroups: { id: string; cx: number; cz: number; bw: number; bd: number; conc: string; isMax: boolean }[] = [];
 
     Object.entries(data.layout).forEach(([id, pos]: [string, any]) => {
       const px = Math.max(0, pos.x);
