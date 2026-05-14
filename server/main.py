@@ -18,12 +18,14 @@ from db.queries import (
     init_simplified_schema,
     init_training_metadata_schema,
 )
-from routes.analytics_routes import router as analytics_router
-from routes.auth_routes      import router as auth_router
-from routes.config_routes    import router as config_router
-from routes.ingest_routes    import router as ingest_router
-from routes.model_routes     import router as model_router
-from routes.vessel_routes    import router as vessel_router
+from routes.auth_routes   import router as auth_router
+from routes.config_routes import router as config_router
+from routes.ingest_routes import router as ingest_router
+from routes.model_routes  import router as model_router
+from routes.vessel_routes import router as vessel_router
+from routes.crane_routes  import router as crane_router
+from routes.user_routes   import router as user_router
+from routes.system_routes import router as system_router
 from services.retraining_service import scheduled_retraining_job
 
 
@@ -151,8 +153,10 @@ async def log_requests(request: Request, call_next):
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth_router)
+app.include_router(user_router)
+app.include_router(system_router)
 app.include_router(ingest_router)
-app.include_router(analytics_router)
+app.include_router(crane_router)
 app.include_router(model_router)
 app.include_router(config_router)
 app.include_router(vessel_router)

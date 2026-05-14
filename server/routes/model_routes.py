@@ -9,7 +9,7 @@ from sqlalchemy import text
 from auth.dependencies import require_admin
 from db.connection import get_engine
 from db.queries import load_from_db
-from db.training_metadata import get_latest_training_metadata
+from db.training_metadata import get_latest_training_metadata, get_training_metadata_history
 from models.training_status import training_status
 from services.retraining_service import background_train_and_update
 
@@ -18,54 +18,77 @@ router = APIRouter(prefix="/model", tags=["ML Model"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GET /model/status
+# GET /model/status  — combined model status + training progress + active version
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/status")
 def get_model_status(admin: dict = Depends(require_admin)):
-    """Return the status of the last completed training run."""
+    """
+    Unified model status endpoint. Returns:
+      - Current training progress (if a run is active)
+      - Last completed training metadata
+      - Active model version info
+    """
+    result: dict = {}
+
+    # ── Training progress ────────────────────────────────────────────────
+    progress = training_status.get()
+    result["training"] = progress
+
+    # ── Last completed training run ──────────────────────────────────────
     try:
         metadata = get_latest_training_metadata()
-        if not metadata:
-            return {
-                "status":  "no_data",
-                "message": "No completed training run found.",
+        if metadata:
+            result["last_trained"] = {
+                "timestamp":    metadata.get("last_trained_timestamp"),
+                "dataset_size": metadata.get("dataset_size"),
+                "training_type": metadata.get("training_type"),
+                "status":       metadata.get("status"),
+                "notes":        metadata.get("notes"),
             }
-        return {
-            "status":        "active",
-            "last_trained":  metadata.get("last_trained_timestamp"),
-            "dataset_size":  metadata.get("dataset_size"),
-            "training_type": metadata.get("training_type"),
-        }
+        else:
+            result["last_trained"] = None
     except Exception as e:
-        logger.error("Error fetching model status: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error fetching training metadata: %s", e)
+        result["last_trained"] = None
+
+    # ── Active model version ─────────────────────────────────────────────
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT id, model_name, version, dataset_size, metrics,
+                       status, trained_at, promoted_at
+                FROM model_versions
+                WHERE status = 'active'
+                ORDER BY promoted_at DESC NULLS LAST
+                LIMIT 1
+            """)).fetchone()
+        if row:
+            r = dict(row._mapping)
+            result["active_version"] = r
+        else:
+            result["active_version"] = None
+    except Exception as e:
+        logger.error("Error fetching active version: %s", e)
+        result["active_version"] = None
+
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GET /model/vessel-stay/training/status
+# POST /model/training  — trigger retraining
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/vessel-stay/training/status")
-def get_training_progress(admin: dict = Depends(require_admin)):
-    """Return live training progress (status, message, record count, …)."""
-    return training_status.get()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# POST /model/vessel-stay/training  (manual trigger)
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.post("/vessel-stay/training")
-async def trigger_manual_retraining(
+@router.post("/training")
+async def trigger_training(
     background_tasks: BackgroundTasks,
     data_source: str = Form("db"),
-    update_db: bool  = Form(False),
     file: UploadFile  = File(None),
     admin: dict       = Depends(require_admin),
 ):
     """
-    Manually trigger a model retrain.
+    Trigger a model retrain.
 
     - data_source="db"   → loads all history from the database (default)
     - data_source="file" → trains from an uploaded CSV / Excel file
@@ -96,7 +119,6 @@ async def trigger_manual_retraining(
         except Exception as e:
             raise HTTPException(400, f"Failed to parse uploaded file: {e}")
     else:
-        # Load all history from the DB
         df = load_from_db("history", full_load=True)
         logger.info("[ModelRoute] DB training: %d rows loaded", len(df))
 
@@ -107,7 +129,7 @@ async def trigger_manual_retraining(
 
     training_status.set(
         status="training",
-        message="Manual retraining started",
+        message="Retraining started",
         records_count=len(df),
         data_source=data_source,
         training_type="manual",
@@ -124,13 +146,19 @@ async def trigger_manual_retraining(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GET /model/versions
+# GET /model/versions  — list versions + training history + promote
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/versions")
-def list_model_versions(admin: dict = Depends(require_admin)):
-    """List all recorded model versions, newest first."""
+def list_model_versions(
+    limit: int = 50,
+    admin: dict = Depends(require_admin),
+):
+    """
+    List all model versions and training history in one response.
+    """
     engine = get_engine()
+    versions = []
     try:
         with engine.connect() as conn:
             rows = conn.execute(text("""
@@ -140,24 +168,25 @@ def list_model_versions(admin: dict = Depends(require_admin)):
                     trained_at, promoted_at, notes
                 FROM model_versions
                 ORDER BY trained_at DESC NULLS LAST
-                LIMIT 50
-            """)).fetchall()
-        return {"versions": [dict(r._mapping) for r in rows]}
+                LIMIT :lim
+            """), {"lim": limit}).fetchall()
+        versions = [dict(r._mapping) for r in rows]
     except Exception as e:
         logger.error("list_model_versions error: %s", e)
-        return {"versions": [], "error": str(e)}
 
+    # Training history
+    history = get_training_metadata_history(limit=limit)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# POST /model/versions/{version_id}/promote
-# version_id is a UUID (TEXT in Postgres)
-# ─────────────────────────────────────────────────────────────────────────────
+    return {
+        "versions": versions,
+        "training_history": history,
+    }
+
 
 @router.post("/versions/{version_id}/promote")
 def promote_model_version(version_id: str, admin: dict = Depends(require_admin)):
     """
-    Promote a specific model version to 'active', retiring any currently active version.
-    version_id is the UUID string from model_versions.id.
+    Promote a specific model version to 'active', retiring the current one.
     """
     engine = get_engine()
     now = datetime.now(timezone.utc)
@@ -197,18 +226,3 @@ def promote_model_version(version_id: str, admin: dict = Depends(require_admin))
 
     logger.info("[ModelRoute] Promoted version %s to active", version_id)
     return {"status": "ok", "promoted_version_id": version_id}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /model/training/history
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/training/history")
-def get_training_history(
-    limit: int = 20,
-    admin: dict = Depends(require_admin),
-):
-    """Return the full training run audit log."""
-    from db.training_metadata import get_training_metadata_history
-    records = get_training_metadata_history(limit=limit)
-    return {"history": records, "count": len(records)}

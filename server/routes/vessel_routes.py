@@ -1,34 +1,33 @@
 from __future__ import annotations
 
 import logging
-import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from pydantic import BaseModel
 from typing import List, Optional
+from sqlalchemy import text
 
-from auth.dependencies import get_current_user
+from auth.dependencies import get_current_user, require_admin
+from db.connection import get_engine
 from db.queries import load_from_db
-from models.stay_model import predict_stay_duration_from_metrics
 from services.heatmap_service import get_vessel_heatmap
 from services.vessel_service import (
     analyze_vessel_dashboard,
-    get_unified_stay_analysis,
     get_yard_heatmap_data,
-    get_terminal_map_data
 )
 
 logger = logging.getLogger("port_system")
-router = APIRouter(prefix="/vessel", tags=["vessel"])
+router = APIRouter(prefix="/vessel", tags=["Vessel Analytics"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Request Models
 # ─────────────────────────────────────────────────────────────────────────────
 
-class FilterByUnitsRequest(BaseModel):
-    unit_ids: List[str]
-    vessel_id: Optional[str] = None
+class HeatmapRequest(BaseModel):
+    vessel_id: str
+    unit_ids: Optional[List[str]] = None
+    yard_id: Optional[str] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -98,169 +97,185 @@ async def get_vessel_analysis(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GET /vessel/visits  — fast-path: vessel_visits summary table
+# POST /vessel/heatmap  — unified map/heatmap/container-position endpoint
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/visits")
-async def get_vessel_visits(
-    vessel_id: str = Query(None, alias="vesselId"),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Return pre-aggregated vessel visit summaries from the vessel_visits table.
-    Much faster than the full /analysis endpoint; use for list/overview views.
-    """
-    try:
-        df = load_from_db("vessel_visits", vessel_id=vessel_id)
-        if df.empty:
-            return {"visits": [], "total": 0}
-
-        records = df.to_dict(orient="records")
-        return {"visits": records, "total": len(records)}
-
-    except Exception as exc:
-        logger.error("vessel_visits error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /vessel/heatmap
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/heatmap")
+@router.post("/heatmap")
 async def get_vessel_heatmap_route(
-    vessel_id: str = Query(..., alias="vesselId"),
+    request: HeatmapRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Return yard heatmap data for a vessel.
+    Unified endpoint for all map/heatmap/terminal visualization data.
 
-    Tries the current yard snapshot first; falls back to history.
-    Both datasets are loaded once and reused.
+    Accepts:
+      - vessel_id  (required): outbound_service identifier
+      - unit_ids   (optional): specific container IDs to locate in the yard
+      - yard_id    (optional): filter to a specific yard
+
+    Returns block-level container positions, density, flags, and infrastructure.
+    Used by the frontend for heatmap, 2D terminal map, 3D digital twin, and
+    container position lookup.
     """
     try:
-        df_curr = load_from_db("current")
-        df_hist = load_from_db("history")
-
-        # Prefer current snapshot
-        result = get_vessel_heatmap(df_curr, vessel_id)
-
-        if "error" in result:
-            result = get_vessel_heatmap(df_hist, vessel_id)
-
-        return result
-
-    except Exception as exc:
-        logger.error("vessel_heatmap error for %s: %s", vessel_id, exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /vessel/predict-manual
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/predict-manual")
-async def predict_manual(
-    loaded: int = Query(0),
-    discharged: int = Query(0),
-    crane_count: int = Query(0),
-    vessel_id: str = Query(None, alias="vesselId"),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Metric-based stay prediction without needing historical container rows.
-
-    If `vesselId` is provided, historical crane averages and MPHC are pulled
-    from the vessel_visits summary table and used as the prediction baseline.
-    """
-    try:
-        historical_crane_avg: float = 0.0
-        historical_mph_avg: float = 0.0
-
-        if vessel_id:
-            vv_df = load_from_db("vessel_visits", vessel_id=vessel_id)
-            if not vv_df.empty:
-                if "avg_crane_count" in vv_df.columns:
-                    historical_crane_avg = float(
-                        vv_df["avg_crane_count"].dropna().mean() or 0.0
-                    )
-                if "avg_mphc" in vv_df.columns:
-                    historical_mph_avg = float(
-                        vv_df["avg_mphc"].dropna().mean() or 0.0
-                    )
-
-        return predict_stay_duration_from_metrics(
-            loaded,
-            discharged,
-            crane_count_override=crane_count or None,
-            historical_crane_avg=historical_crane_avg or None,
-            historical_mph_avg=historical_mph_avg or None,
+        return get_yard_heatmap_data(
+            vessel_id=request.vessel_id,
+            unit_ids=request.unit_ids,
+            yard_id=request.yard_id,
         )
-
     except Exception as exc:
-        logger.error("predict_manual error: %s", exc, exc_info=True)
+        logger.error("vessel_heatmap error for %s: %s", request.vessel_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /vessel/yard-map
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/yard-map")
-async def get_yard_map_route(
-    vessel_id: str = Query(None, alias="vesselId"),
+@router.get("/yard/summary")
+def get_yard_summary(
     yard_id: str = Query(None, alias="yardId"),
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Returns block density data for the 2D Terminal Grid.
-    If vesselId is provided, the data is restricted to that vessel's cargo.
+    Yard summary: record counts, per-yard breakdowns, and recent ingestions.
+    Optional `yardId` param scopes all counts to a specific yard.
     """
-    try:
-        # Note: Must query time_out IS NULL for live yard state (handled in service)
-       return get_yard_heatmap_data(vessel_id=vessel_id, yard_id=yard_id)
-    except Exception as exc:
-        logger.error("yard_map error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+    engine = get_engine()
+    counts: dict = {}
 
+    with engine.connect() as conn:
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /vessel/terminal-map
-# ─────────────────────────────────────────────────────────────────────────────
+        # ── Discover tables, optionally filtered to a specific yard ───────────
+        yard_filter = f"AND relname LIKE '{yard_id.lower().strip()}_%'" if yard_id else ""
 
-@router.get("/terminal-map")
-async def get_terminal_map_route(
-    yard_id: str = Query(None, alias="yardId"),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Returns full terminal infrastructure data (berths, lanes, etc.).
-    """
-    try:
-        return get_terminal_map_data(yard_id=yard_id)
-    except Exception as exc:
-        logger.error("terminal_map error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        # ── History/Operational containers ────────────────────────────────────
+        try:
+            ops_tbls = conn.execute(text(f"""
+                SELECT relname FROM pg_class
+                WHERE relkind IN ('r','p')
+                  AND relname LIKE '%_container_operations'
+                  {yard_filter}
+                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+            """)).fetchall()
+            total_history = 0
+            for (tbl,) in ops_tbls:
+                try:
+                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE record_type = 'history'")).scalar()
+                    total_history += (n or 0)
+                except Exception:
+                    pass
+            counts["history_containers"] = total_history
+        except Exception:
+            counts["history_containers"] = 0
 
+        # ── Current containers (Dynamic Extraction count) ─────────────────────
+        try:
+            total_current = 0
+            for (tbl,) in ops_tbls:
+                try:
+                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE time_out IS NULL")).scalar()
+                    total_current += (n or 0)
+                except Exception:
+                    pass
+            counts["current_containers"] = total_current
+        except Exception:
+            counts["current_containers"] = 0
 
-# ─────────────────────────────────────────────────────────────────────────────
-# POST /vessel/filter-by-units
-# ─────────────────────────────────────────────────────────────────────────────
+        # ── Crane movements ───────────────────────────────────────────────────
+        try:
+            crane_tbls = conn.execute(text(f"""
+                SELECT relname FROM pg_class
+                WHERE relkind IN ('r','p')
+                  AND relname LIKE '%_crane_operations'
+                  {yard_filter}
+                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+            """)).fetchall()
+            total_crane = 0
+            for (tbl,) in crane_tbls:
+                try:
+                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                    total_crane += (n or 0)
+                except Exception:
+                    pass
+            counts["crane_movements"] = total_crane
+        except Exception:
+            counts["crane_movements"] = 0
 
-@router.post("/filter-by-units")
-async def filter_by_units_route(
-    request: FilterByUnitsRequest,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Returns a unified stay analysis scoped to a specific list of Unit IDs.
-    Used for 'What-If' planning with custom container lists.
-    """
-    try:
-        return get_unified_stay_analysis(
-            vessel_id=request.vessel_id or "UPLOADED_LIST",
-            optional_unit_ids=request.unit_ids
-        )
-    except Exception as exc:
-        logger.error("filter_by_units error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        # ── Vessel visits ─────────────────────────────────────────────────────
+        try:
+            vv_tbls = conn.execute(text(f"""
+                SELECT relname FROM pg_class
+                WHERE relkind IN ('r','p')
+                  AND relname LIKE '%_vessel_visits'
+                  {yard_filter}
+                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+            """)).fetchall()
+            total_vv = 0
+            for (tbl,) in vv_tbls:
+                try:
+                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                    total_vv += (n or 0)
+                except Exception:
+                    pass
+            counts["vessel_visits"] = total_vv
+        except Exception:
+            counts["vessel_visits"] = 0
+
+        # ── Support tables ────────────────────────────────────────────────────
+        for table in ["ingestion_logs", "rejection_logs", "users", "training_metadata"]:
+            try:
+                counts[table] = conn.execute(
+                    text(f"SELECT COUNT(*) FROM {table}")
+                ).scalar()
+            except Exception:
+                counts[table] = 0
+
+        # ── Per-yard details ──────────────────────────────────────────────────
+        yards: list[dict] = []
+        try:
+            yard_rows = conn.execute(text(f"""
+                SELECT DISTINCT
+                    replace(relname, '_container_operations', '') AS yard_id
+                FROM pg_class
+                WHERE relkind IN ('r','p')
+                  AND relname LIKE '%_container_operations'
+                  {yard_filter}
+                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+                ORDER BY 1
+            """)).fetchall()
+
+            for (yid,) in yard_rows:
+                info: dict = {"yard_id": yid}
+                for suffix, label in [
+                    ("container_operations", "history_rows"),
+                    ("vessel_visits",        "visit_summaries"),
+                    ("crane_operations",     "crane_rows"),
+                ]:
+                    tbl = f"{yid}_{suffix}"
+                    try:
+                        if suffix == "container_operations":
+                            n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE record_type = 'history'")).scalar()
+                        else:
+                            n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
+                        info[label] = n or 0
+                    except Exception:
+                        info[label] = 0
+                yards.append(info)
+        except Exception:
+            pass
+
+        # ── Recent ingestion log ──────────────────────────────────────────────
+        try:
+            recent_logs = conn.execute(text("""
+                SELECT id, filename, dataset_type, status,
+                       records_total, completed_at
+                FROM ingestion_logs
+                ORDER BY created_at DESC
+                LIMIT 5
+            """)).fetchall()
+        except Exception:
+            recent_logs = []
+
+    return {
+        "yard_filter":       yard_id,
+        "counts":            counts,
+        "yards":             yards,
+        "recent_ingestions": [dict(r._mapping) for r in recent_logs],
+    }
+
