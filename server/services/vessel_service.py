@@ -189,20 +189,6 @@ def _enrich_group(group: pd.DataFrame, visit_id: str) -> pd.DataFrame:
     for col, val in stats.items():
         group[col] = val
 
-    if not crane_df.empty and "move_complete_time" in group.columns:
-        if "unit_id" in crane_df.columns:
-            unit_crane_time = (
-                crane_df.dropna(subset=["crane_time"])
-                .sort_values("crane_time")
-                .drop_duplicates(subset=["unit_id"], keep="first")
-                [["unit_id", "crane_time"]]
-            )
-            if not unit_crane_time.empty and "unit_id" in group.columns:
-                merged = group.merge(unit_crane_time, on="unit_id", how="left")
-                group["move_complete_time"] = group["move_complete_time"].fillna(
-                    merged["crane_time"]
-                )
-
     return group
 
 
