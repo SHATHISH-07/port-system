@@ -12,10 +12,7 @@ import BerthRecommendation from "../components/vessel-analysis/BerthRecommendati
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
 import HeatmapPage from "./HeatmapPage";
 
-/**
- * Editorial section anchor — numbered like a design report.
- * The faded large number creates visual depth without decoration.
- */
+
 function Section({
   n,
   label,
@@ -27,7 +24,6 @@ function Section({
 }) {
   return (
     <Box component="section" sx={{ pt: 4 }}>
-      {/* Section label row */}
       <Box
         sx={{
           display: "flex",
@@ -35,15 +31,15 @@ function Section({
           gap: 2.5,
           mb: 2.5,
           pb: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.1)",
+          borderBottom: "1px solid",
+          borderColor: "divider",
         }}
       >
-        {/* Big faded number — purely structural, not decorative */}
         <Typography
           sx={{
             fontSize: "2.25rem",
             fontWeight: 800,
-            color: "rgba(255,255,255,0.09)",
+            color: "text.disabled",
             lineHeight: 1,
             letterSpacing: "-2px",
             fontFamily: "monospace",
@@ -53,24 +49,16 @@ function Section({
         >
           {n}
         </Typography>
-        <Typography
-          sx={{
-            fontSize: "0.6875rem",
-            fontWeight: 600,
-            color: "#6b7280",
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-          }}
-        >
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
           {label}
         </Typography>
       </Box>
-
       {children}
     </Box>
   );
 }
 
+// main component
 const CurrentVesselAnalysis = () => {
   const [vesselId, setVesselId] = useState("");
   const [loaded, setLoaded] = useState("");
@@ -78,13 +66,15 @@ const CurrentVesselAnalysis = () => {
   const [data, setData] = useState<VesselAnalysisData | null>(null);
   const [heatmapData, setHeatmapData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{open: boolean, message: string, severity: "success" | "error" | "info" | "warning"}>({open: false, message: "", severity: "info"});
+  const [toast, setToast] = useState<{ open: boolean, message: string, severity: "success" | "error" | "info" | "warning" }>({ open: false, message: "", severity: "info" });
+
+
 
   const showToast = (message: string, severity: "success" | "error" | "info" | "warning" = "error") => {
-    setToast({open: true, message, severity});
+    setToast({ open: true, message, severity });
   };
 
-  const handleCloseToast = () => setToast(prev => ({...prev, open: false}));
+  const handleCloseToast = () => setToast(prev => ({ ...prev, open: false }));
 
   const fetchData = async () => {
     if (!vesselId.trim()) return;
@@ -95,31 +85,30 @@ const CurrentVesselAnalysis = () => {
       if (loaded) form.append("loaded", loaded);
       if (discharged) form.append("discharged", discharged);
 
-      console.info(`Fetching current vessel analysis data for vessel ID: ${vesselId.trim()}`);
-      const [analysisRes, heatmapRes] = await Promise.all([
-        api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form),
-        api.post("/vessel/heatmap", form),
-      ]);
+      const analysisPromise = api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form)
+        .then(res => {
+          setData(res.data);
+          setLoading(false);
+        });
 
-      console.info("Successfully fetched vessel analysis data.");
-      setData(analysisRes.data);
-      setHeatmapData(heatmapRes.data);
+      const heatmapPromise = api.post("/vessel/heatmap", form)
+        .then(res => setHeatmapData(res.data));
+
+      await Promise.allSettled([analysisPromise, heatmapPromise]);
     } catch (err: any) {
-      console.error("Error fetching current vessel data:", err);
       const detail = err?.response?.data?.detail || "";
       if (detail.includes("No dataset")) {
-        showToast("No current data found. Please upload via POST /upload/current.");
+        showToast("No current data found. Use Data Ingestion (/ingest) to upload records.");
       } else {
         showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
       }
     } finally {
-      setLoading(false);
+      // loading is managed inside the analysis promise
     }
   };
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: "auto" }}>
-
+    <Box>
       {/* ── Command bar ── */}
       <AnalysisHeader
         mode="current"
@@ -192,8 +181,8 @@ const CurrentVesselAnalysis = () => {
               [heatmapData && !heatmapData.error, data.yard_strategy].filter(Boolean).length === 2
                 ? "05"
                 : [heatmapData && !heatmapData.error, data.yard_strategy].filter(Boolean).length === 1
-                ? "04"
-                : "03"
+                  ? "04"
+                  : "03"
             }
             label="Berth Impact Analysis"
           >
@@ -204,9 +193,9 @@ const CurrentVesselAnalysis = () => {
           <Box sx={{ pb: 6 }} />
         </>
       )}
-      
+
       <Snackbar open={toast.open} autoHideDuration={6000} onClose={handleCloseToast} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={handleCloseToast} severity={toast.severity} sx={{ width: '100%' }}>
+        <Alert onClose={handleCloseToast} severity={toast.severity} variant="filled" sx={{ width: '100%' }}>
           {toast.message}
         </Alert>
       </Snackbar>

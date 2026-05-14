@@ -1,50 +1,68 @@
+import logging
 import pandas as pd
 import joblib
 import os
 from xgboost import XGBRegressor
+from sklearn.linear_model import Ridge
+from sklearn.ensemble import GradientBoostingRegressor, VotingRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 
 from utils.stay_utils import prepare_visit_data, compute_visit_stay
 from utils.feature_utils import create_features
-from utils.data_loader import load_csv
 from models.training_status import training_status
 
-from dotenv import load_dotenv
-load_dotenv()
+logger = logging.getLogger("port_system")
 
-MODEL_PATH = os.getenv("MODEL_PATH")
+from config import settings
 
-# Feature names in order of feature_utils.py file
-FEATURE_NAMES = [
-    "loaded",
-    "discharged",
-    "total_moves",
-    "imbalance",
-    "load_ratio",
-    "discharge_ratio",
+# Build the ensemble model
+def _build_ensemble():
+    # Ridge regression pipeline
+    ridge = Pipeline([
+        ("scaler", StandardScaler()),
+        ("ridge", Ridge(alpha=10.0)),
+    ])
+    # XGBoost regressor
+    xgb = XGBRegressor(
+        n_estimators=80,
+        max_depth=3,
+        learning_rate=0.08,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        min_child_weight=5,
+        reg_alpha=1.0,
+        reg_lambda=5.0,
+        random_state=42,
+        verbosity=0,
+    )
+    # Gradient boosting regressor
+    gbr = GradientBoostingRegressor(
+        n_estimators=60,
+        max_depth=2,
+        learning_rate=0.10,
+        subsample=0.75,
+        min_samples_leaf=8,
+        random_state=42,
+    )
+    # Voting regressor
+    return VotingRegressor(estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr)])
 
-    "container_count",
-    "avg_weight",
-    "heavy_count",
-    "reefer_count",
-    "hazard_count",
-    "oog_count",
-    "operation_hours",
-    "moves_per_hour",
-    "service_hash",
-]
 
-# Training parameters
-TRAIN_MIN_HOURS = 2     # Ignore stays shorter than 2 hours (noise)
-TRAIN_MAX_HOURS = 240   # Ignore stays longer than 240 hours (outliers)
-MIN_VISIT_ROWS  = 5     # Ignore visits with fewer than 5 rows
-
-# Function to train the model
-def train_model(df):
+# Function to train the stay model
+def train_stay_model(df, config: dict = None):
     try:
         training_status.set("training", "Training started")
+        logger.info("ML training started")
 
-        # Group the dataset by visit ID
-        grouped = df.groupby("Actual Outbound Carrier visit ID")
+        # Apply config overrides for training filters
+        cfg = config or {}
+        min_hours = cfg.get("min_hours", settings.TRAIN_MIN_HOURS)
+        max_hours = cfg.get("max_hours", settings.TRAIN_MAX_HOURS)
+        min_visit_rows = cfg.get("min_visit_rows", settings.MIN_VISIT_ROWS)
+
+        # Group the dataset by visit ID (using the DB column name)
+        grouped = df.groupby("actual_outbound_carrier_visit_id")
 
         # Lists to store training data and target values
         X, y = [], []
@@ -57,7 +75,7 @@ def train_model(df):
         # Iterate through each visit ID and group
         for visit_id, group in grouped:
 
-            if len(group) < MIN_VISIT_ROWS:
+            if len(group) < min_visit_rows:
                 skipped_rows += 1
                 continue
             visit_df = prepare_visit_data(group)
@@ -66,11 +84,11 @@ def train_model(df):
             if stay is None:
                 continue
 
-            if stay < TRAIN_MIN_HOURS:
+            if stay < min_hours:
                 skipped_noise += 1
                 continue
 
-            if stay > TRAIN_MAX_HOURS:
+            if stay > max_hours:
                 skipped_error += 1
                 continue
             features = create_features(visit_df)
@@ -78,7 +96,7 @@ def train_model(df):
             if features is None:
                 continue
 
-            X.append([features[f] for f in FEATURE_NAMES])
+            X.append([features[f] for f in settings.FEATURE_NAMES])
             y.append(stay)
 
         # Check for empty training data after filtering
@@ -89,7 +107,7 @@ def train_model(df):
             )
 
         # Convert to pandas DataFrame and Series
-        X = pd.DataFrame(X, columns=FEATURE_NAMES)
+        X = pd.DataFrame(X, columns=settings.FEATURE_NAMES)
         y = pd.Series(y)
 
         # Print training statistics
@@ -99,62 +117,53 @@ def train_model(df):
         print(f"     Skipped (> 240h)   : {skipped_error}")
         print(f"     Target range       : {y.min():.1f}h - {y.max():.1f}h")
         print(f"     Target mean        : {y.mean():.1f}h")
+        print(f"     Model type         : VotingRegressor (Ridge + XGBoost + GBR)")
+        logger.info(f"ML training: {len(X)} samples, target mean={y.mean():.1f}h")
 
-        # XGBoost Regressor model
-        model = XGBRegressor(
-            n_estimators=150,
-            max_depth=6,
-            learning_rate=0.05,
-            subsample=1.0,
-            colsample_bytree=1.0,
-            min_child_weight=1,
-            gamma=0.0,
-            reg_alpha=0.0,
-            reg_lambda=0.1,
-            random_state=42,
-        )
-
-        # Train the model
-        model.fit(X, y)
+        # Build and train ensemble model
+        model = _build_ensemble()
+        model.fit(pd.DataFrame(X, columns=settings.FEATURE_NAMES), pd.Series(y))
 
         # Create models directory if it doesn't exist
-        os.makedirs("models", exist_ok=True)
+        os.makedirs(os.path.dirname(settings.MODEL_PATH), exist_ok=True)
 
         # Save the model and features
         joblib.dump({
             "model":    model,
-            "features": FEATURE_NAMES,
-        }, MODEL_PATH)
+            "features": settings.FEATURE_NAMES,
+        }, settings.MODEL_PATH)
 
-        global _cached_bundle
-        _cached_bundle = None
+        global _cached_model_bundle
+        _cached_model_bundle = None
 
         training_status.set("completed", "Model trained successfully")
-        print("[OK] Model trained and saved ->", MODEL_PATH)
+        print("[OK] Model trained and saved ->", settings.MODEL_PATH)
+        logger.info("ML training completed successfully")
 
     except Exception as e:
         training_status.set("failed", str(e))
+        logger.error(f"ML training failed: {e}")
         print("[ERR] Training failed:", str(e))
 
 
-_cached_bundle = None
+_cached_model_bundle = None
 
 # LOAD MODEL
-def load_model():
-    global _cached_bundle
-    if _cached_bundle is not None:
-        return _cached_bundle
+def load_stay_model():
+    global _cached_model_bundle
+    if _cached_model_bundle is not None:
+        return _cached_model_bundle
 
-    if not os.path.exists(MODEL_PATH):
+    if not os.path.exists(settings.MODEL_PATH):
         return None
     
-    _cached_bundle = joblib.load(MODEL_PATH)
-    return _cached_bundle
+    _cached_model_bundle = joblib.load(settings.MODEL_PATH)
+    return _cached_model_bundle
 
 
 # PREDICT VISIT  (single visit DataFrame → predicted hours)
-def predict_visit(df):
-    bundle = load_model()
+def predict_visit_stay_duration(df):
+    bundle = load_stay_model()
 
     if bundle is None:
         return {"error": "Model not trained"}
@@ -177,7 +186,7 @@ def predict_visit(df):
 
 
 # PREDICT VESSEL  (all visits for one Outbound Service)
-def predict_vessel(prepared_visits: dict):
+def predict_vessel_stay_duration(prepared_visits: dict):
     if not prepared_visits:
         return {"error": "No data found for vessel"}
 
@@ -188,7 +197,7 @@ def predict_vessel(prepared_visits: dict):
             continue
 
         # Predict the stay time
-        pred = predict_visit(visit_df)
+        pred = predict_visit_stay_duration(visit_df)
 
         # Error dict → propagate
         if isinstance(pred, dict):
@@ -207,44 +216,9 @@ def predict_vessel(prepared_visits: dict):
     }
 
 
-# Estimate moves per hour from actual visits
-def estimate_moves_per_hour_from_actual(actual_visits):
-    rates = []
-
-    # Calculate moves per hour for each visit
-    if actual_visits:
-        for v in actual_visits.values():
-            moves = v["loaded_containers"] + v["discharged_containers"]
-            hours = v["stay_hours"]
-
-            if hours > 0:
-                rates.append({
-                    "rate": moves / hours,
-                    "load_ratio": v["loaded_containers"] / (moves + 1)
-                })
-
-    # Default rate if no rates available
-    if not rates:
-        return [{"rate": 50, "load_ratio": 0.5}]
-
-    return rates
-
-# Pick throughput based on load ratio
-def pick_throughput(rates, loaded, discharged):
-    total = loaded + discharged
-    input_ratio = loaded / (total + 1)
-
-    # Find closest match in history
-    closest = min(
-        rates,
-        key=lambda r: abs(r["load_ratio"] - input_ratio)
-    )
-
-    return closest["rate"]
-
 # Predict the stay time from input
-def predict_from_input(loaded: int, discharged: int,actual_visits=None):
-    bundle = load_model()
+def predict_stay_duration_from_metrics(loaded: int, discharged: int, actual_visits=None):
+    bundle = load_stay_model()
 
     if bundle is None:
         return {"error": "Model not trained"}
@@ -257,12 +231,7 @@ def predict_from_input(loaded: int, discharged: int,actual_visits=None):
     total_moves = loaded + discharged
     imbalance = abs(loaded - discharged)
 
-    # Estimate moves per hour from actual visits
-    rates = estimate_moves_per_hour_from_actual(actual_visits)
-    moves_per_hour = pick_throughput(rates, loaded, discharged)
-    operation_hours = total_moves / moves_per_hour
-
-    # Feature engineering
+    # Feature engineering without artificial time leakage
     features = {
         "loaded": loaded,
         "discharged": discharged,
@@ -277,8 +246,6 @@ def predict_from_input(loaded: int, discharged: int,actual_visits=None):
         "reefer_count": int(total_moves * 0.1),
         "hazard_count": int(total_moves * 0.05),
         "oog_count": int(total_moves * 0.02),
-        "operation_hours": operation_hours,
-        "moves_per_hour": moves_per_hour,
         "service_hash": 123456,
     }
 

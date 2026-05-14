@@ -1,7 +1,7 @@
 import pandas as pd
 from utils.datetime_utils import parse_datetime
 
-VESSEL_WINDOW_HOURS = 96
+from config import settings
 
 def prepare_visit_data(df):
     # Copy dataframe
@@ -34,7 +34,7 @@ def prepare_visit_data(df):
         vessel_dep = valid_out.mode().iloc[0]
     
         # Calculate time window
-        window_start = vessel_dep - pd.Timedelta(hours=VESSEL_WINDOW_HOURS)
+        window_start = vessel_dep - pd.Timedelta(hours=settings.VESSEL_WINDOW_HOURS)
         window_end   = vessel_dep + pd.Timedelta(hours=1) 
 
         # Filter data within the time window

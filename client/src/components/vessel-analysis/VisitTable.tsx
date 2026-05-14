@@ -1,7 +1,8 @@
 import {
   Box, Typography, Table, TableHead,
-  TableRow, TableCell, TableBody,
+  TableRow, TableCell, TableBody, useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 interface Visit {
   stay_hours: number;
@@ -10,58 +11,50 @@ interface Visit {
   move_start: string;
   move_end: string;
 }
+
 interface Props { visits: Record<string, Visit>; avg: number; }
 
-const stayColor = (v: number, avg: number) => {
-  if (v > avg * 1.3) return { color: "#f28b82", bg: "rgba(242,139,130,0.1)", border: "rgba(242,139,130,0.22)" };
-  if (v > avg) return { color: "#fdd663", bg: "rgba(253,214,99,0.1)", border: "rgba(253,214,99,0.22)" };
-  return { color: "#81c995", bg: "rgba(129,201,149,0.1)", border: "rgba(129,201,149,0.22)" };
-};
+const LIMIT = 10;
 
 export default function VisitTable({ visits, avg }: Props) {
-  // Sort rows by move_start descending (most recent first)
-  const allRows = Object.entries(visits || {}).sort((a, b) => {
-    return new Date(b[1].move_start).getTime() - new Date(a[1].move_start).getTime();
-  });
-  
-  // Limit to top 10 visits to prevent heavy React rendering delays
-  const rows = allRows.slice(0, 10);
-  const hasMore = allRows.length > 10;
-  
+  const theme = useTheme();
+
+  const allRows = Object.entries(visits || {}).sort((a, b) =>
+    new Date(b[1].move_start).getTime() - new Date(a[1].move_start).getTime()
+  );
+  const rows = allRows.slice(0, LIMIT);
+  const hasMore = allRows.length > LIMIT;
   const maxStay = Math.max(...rows.map(([, v]) => v.stay_hours), 1);
+
+  const stayColor = (v: number) => {
+    if (v > avg * 1.3) return theme.palette.error.main;
+    if (v > avg)       return theme.palette.warning.main;
+    return theme.palette.success.main;
+  };
 
   return (
     <Box
       sx={{
-        bgcolor: "#292a2d",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 1.5,
+        bgcolor: "background.paper",
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 2,
         overflow: "hidden",
       }}
     >
-      {/* Header strip */}
+      {/* Header */}
       <Box
         sx={{
-          px: 3,
-          py: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          px: 3, py: 2,
+          borderBottom: `1px solid ${theme.palette.divider}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <Typography
-          sx={{
-            fontSize: "0.6875rem",
-            fontWeight: 500,
-            color: "#9aa0a6",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
           Visit History {hasMore && `(Recent 10 of ${allRows.length})`}
         </Typography>
-        <Typography sx={{ fontSize: "0.6875rem", color: "#5f6368", fontFamily: "monospace" }}>
+        <Typography variant="caption" sx={{ color: "text.disabled", fontFamily: "monospace" }}>
           avg {avg.toFixed(1)} hrs / visit
         </Typography>
       </Box>
@@ -70,21 +63,7 @@ export default function VisitTable({ visits, avg }: Props) {
       <Box sx={{ overflowX: "auto" }}>
         <Table size="small">
           <TableHead>
-            <TableRow
-              sx={{
-                bgcolor: "rgba(255,255,255,0.025)",
-                "& th": {
-                  fontSize: "0.625rem",
-                  fontWeight: 600,
-                  color: "#5f6368",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  borderBottom: "1px solid rgba(255,255,255,0.08)",
-                  py: 1.5,
-                  whiteSpace: "nowrap",
-                },
-              }}
-            >
+            <TableRow>
               <TableCell sx={{ pl: 3 }}>Visit ID</TableCell>
               <TableCell>Stay Duration</TableCell>
               <TableCell>Loaded</TableCell>
@@ -94,27 +73,18 @@ export default function VisitTable({ visits, avg }: Props) {
           </TableHead>
           <TableBody>
             {rows.map(([id, v]) => {
-              const s = stayColor(v.stay_hours, avg);
+              const sc = stayColor(v.stay_hours);
               const barW = (v.stay_hours / maxStay) * 100;
               return (
-                <TableRow
-                  key={id}
-                  sx={{
-                    "&:hover": { bgcolor: "rgba(255,255,255,0.03)" },
-                    "& td": {
-                      borderBottom: "1px solid rgba(255,255,255,0.06)",
-                      py: 1.75,
-                    },
-                  }}
-                >
+                <TableRow key={id}>
                   {/* ID */}
                   <TableCell sx={{ pl: 3 }}>
                     <Typography
                       sx={{
                         fontSize: "0.8125rem",
                         fontWeight: 600,
-                        color: "#e8eaed",
-                        fontFamily: "'Roboto Mono', monospace",
+                        color: "text.primary",
+                        fontFamily: "monospace",
                         letterSpacing: "-0.3px",
                       }}
                     >
@@ -122,32 +92,37 @@ export default function VisitTable({ visits, avg }: Props) {
                     </Typography>
                   </TableCell>
 
-                  {/* Stay + mini bar */}
+                  {/* Stay + bar */}
                   <TableCell>
                     <Box
                       sx={{
                         display: "inline-flex",
                         alignItems: "center",
-                        px: 1,
-                        py: 0.3,
-                        borderRadius: 0.5,
-                        bgcolor: s.bg,
-                        border: `1px solid ${s.border}`,
+                        px: 1, py: 0.3,
+                        borderRadius: 1,
+                        bgcolor: alpha(sc, 0.1),
+                        border: `1px solid ${alpha(sc, 0.25)}`,
                         mb: 0.75,
                       }}
                     >
-                      <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: s.color }}>
+                      <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: sc }}>
                         {v.stay_hours.toFixed(1)} hrs
                       </Typography>
                     </Box>
-                    <Box sx={{ height: 2, width: 72, bgcolor: "rgba(255,255,255,0.08)", borderRadius: 1 }}>
+                    <Box
+                      sx={{
+                        height: 3, width: 72,
+                        bgcolor: alpha(theme.palette.text.primary, 0.08),
+                        borderRadius: 2,
+                      }}
+                    >
                       <Box
                         sx={{
                           height: "100%",
                           width: `${barW}%`,
-                          bgcolor: s.color,
-                          opacity: 0.65,
-                          borderRadius: 1,
+                          bgcolor: sc,
+                          opacity: 0.7,
+                          borderRadius: 2,
                         }}
                       />
                     </Box>
@@ -155,9 +130,11 @@ export default function VisitTable({ visits, avg }: Props) {
 
                   {/* Loaded */}
                   <TableCell>
-                    <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, color: "#bdc1c6", fontFamily: "monospace" }}>
+                    <Typography
+                      sx={{ fontSize: "0.875rem", fontWeight: 600, color: "text.primary", fontFamily: "monospace" }}
+                    >
                       {v.loaded_containers}
-                      <Typography component="span" sx={{ fontSize: "0.6875rem", color: "#5f6368", ml: 0.5, fontFamily: "inherit" }}>
+                      <Typography component="span" sx={{ fontSize: "0.6875rem", color: "text.disabled", ml: 0.5, fontFamily: "inherit" }}>
                         ctr
                       </Typography>
                     </Typography>
@@ -165,9 +142,11 @@ export default function VisitTable({ visits, avg }: Props) {
 
                   {/* Discharged */}
                   <TableCell>
-                    <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, color: "#bdc1c6", fontFamily: "monospace" }}>
+                    <Typography
+                      sx={{ fontSize: "0.875rem", fontWeight: 600, color: "text.primary", fontFamily: "monospace" }}
+                    >
                       {v.discharged_containers}
-                      <Typography component="span" sx={{ fontSize: "0.6875rem", color: "#5f6368", ml: 0.5, fontFamily: "inherit" }}>
+                      <Typography component="span" sx={{ fontSize: "0.6875rem", color: "text.disabled", ml: 0.5, fontFamily: "inherit" }}>
                         ctr
                       </Typography>
                     </Typography>
@@ -175,10 +154,10 @@ export default function VisitTable({ visits, avg }: Props) {
 
                   {/* Window */}
                   <TableCell>
-                    <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", fontFamily: "'Roboto Mono', monospace" }}>
+                    <Typography variant="caption" sx={{ display: "block", color: "text.secondary", fontFamily: "monospace" }}>
                       {v.move_start}
                     </Typography>
-                    <Typography sx={{ fontSize: "0.75rem", color: "#5f6368", fontFamily: "'Roboto Mono', monospace" }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontFamily: "monospace" }}>
                       → {v.move_end}
                     </Typography>
                   </TableCell>

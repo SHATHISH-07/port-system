@@ -1,4 +1,4 @@
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 
 interface Props {
   actual: number;
@@ -9,7 +9,8 @@ interface Props {
 }
 
 export default function PerformanceStats({ actual, predicted, mode, loaded, discharged }: Props) {
-  const isOverride = mode === "override";
+  const theme = useTheme();
+  const isOverride = mode === "override" || mode === "current-override";
   const diff = predicted - actual;
   const pct = actual !== 0 ? Math.abs((diff / actual) * 100).toFixed(1) : "—";
   const isBetter = diff <= 0;
@@ -20,8 +21,6 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
       value: actual.toFixed(1),
       unit: "hrs",
       sub: "Avg vessel stay time",
-      valueColor: "#e8eaed",
-      subColor: "#9aa0a6",
     },
     {
       label: isOverride
@@ -30,16 +29,14 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
       value: predicted.toFixed(1),
       unit: "hrs",
       sub: "Predicted stay time",
-      valueColor: "#8ab4f8",
-      subColor: "#9aa0a6",
+      valueColor: theme.palette.primary.main,
     },
     {
       label: "Variance",
       value: `${isBetter ? "−" : "+"}${Math.abs(diff).toFixed(2)}`,
       unit: "hrs",
       sub: `${pct}% ${isBetter ? "under" : "over"} actual`,
-      valueColor: isBetter ? "#81c995" : "#f28b82",
-      subColor: isBetter ? "rgba(129,201,149,0.7)" : "rgba(242,139,130,0.7)",
+      valueColor: isBetter ? theme.palette.success.main : theme.palette.error.main,
     },
   ];
 
@@ -48,9 +45,9 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
       sx={{
         display: "grid",
         gridTemplateColumns: "repeat(3, 1fr)",
-        bgcolor: "#292a2d",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 1.5,
+        bgcolor: "background.paper",
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 2,
         overflow: "hidden",
       }}
     >
@@ -60,39 +57,31 @@ export default function PerformanceStats({ actual, predicted, mode, loaded, disc
           sx={{
             px: 3.5,
             py: 3,
-            borderRight: i < 2 ? "1px solid rgba(255,255,255,0.08)" : "none",
+            borderRight: i < 2 ? `1px solid ${theme.palette.divider}` : "none",
           }}
         >
-          <Typography
-            sx={{
-              fontSize: "0.6875rem",
-              fontWeight: 500,
-              color: "#9aa0a6",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              mb: 1.5,
-            }}
-          >
+          <Typography variant="overline" sx={{ color: "text.secondary", display: "block", mb: 1.5 }}>
             {s.label}
           </Typography>
-          <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mb: 0.75 }}>
+          <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75, mb: 0.75 }}>
             <Typography
               sx={{
-                fontSize: "3rem",
+                fontSize: "2.75rem",
                 fontWeight: 300,
-                color: s.valueColor,
+                color: "text.secondary",
                 lineHeight: 1,
                 letterSpacing: "-2px",
-                fontFamily: "'Inter', 'Roboto', sans-serif",
+                fontFamily: "'Inter', sans-serif",
+                transition: "color 250ms ease",
               }}
             >
               {s.value}
             </Typography>
-            <Typography sx={{ fontSize: "1rem", color: "#5f6368", fontWeight: 400 }}>
+            <Typography sx={{ fontSize: "1rem", color: "text.secondary", fontWeight: 400 }}>
               {s.unit}
             </Typography>
           </Box>
-          <Typography sx={{ fontSize: "0.75rem", color: s.subColor }}>
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             {s.sub}
           </Typography>
         </Box>

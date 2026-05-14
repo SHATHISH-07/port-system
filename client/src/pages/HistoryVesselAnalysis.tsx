@@ -30,14 +30,15 @@ function Section({
           gap: 2.5,
           mb: 2.5,
           pb: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.1)",
+          borderBottom: "1px solid",
+          borderColor: "divider",
         }}
       >
         <Typography
           sx={{
             fontSize: "2.25rem",
             fontWeight: 800,
-            color: "rgba(255,255,255,0.09)",
+            color: "text.disabled",
             lineHeight: 1,
             letterSpacing: "-2px",
             fontFamily: "monospace",
@@ -47,15 +48,7 @@ function Section({
         >
           {n}
         </Typography>
-        <Typography
-          sx={{
-            fontSize: "0.6875rem",
-            fontWeight: 600,
-            color: "#6b7280",
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-          }}
-        >
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
           {label}
         </Typography>
       </Box>
@@ -80,17 +73,14 @@ const HistoryVesselAnalysis = () => {
     if (!vesselId.trim()) return;
     setLoading(true);
     try {
-      console.info(`Fetching history vessel analysis data for vessel ID: ${vesselId.trim()}`);
       const form = new FormData();
       form.append("vessel_id", vesselId.trim());
       const res = await api.post<VesselAnalysisData>("/vessel/vessel-history-analysis", form);
-      console.info("Successfully fetched vessel analysis data.");
       setData(res.data);
     } catch (err: any) {
-      console.error("Error fetching history vessel data:", err);
       const detail = err?.response?.data?.detail || "";
       if (detail.includes("No dataset")) {
-        showToast("No historical data found. Please upload via POST /upload/history.");
+        showToast("No historical data found. Use Data Ingestion (/ingest) to upload records.");
       } else {
         showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
       }
@@ -102,8 +92,7 @@ const HistoryVesselAnalysis = () => {
   const isManual = data?.mode === "manual" || data?.mode === "current-override";
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: "auto" }}>
-
+    <Box>
       {/* ── Command bar ── */}
       <AnalysisHeader
         mode="history"
@@ -179,7 +168,7 @@ const HistoryVesselAnalysis = () => {
       )}
 
       <Snackbar open={toast.open} autoHideDuration={6000} onClose={handleCloseToast} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={handleCloseToast} severity={toast.severity} sx={{ width: '100%' }}>
+        <Alert onClose={handleCloseToast} severity={toast.severity} variant="filled" sx={{ width: '100%' }}>
           {toast.message}
         </Alert>
       </Snackbar>
