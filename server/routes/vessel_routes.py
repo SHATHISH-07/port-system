@@ -41,7 +41,6 @@ async def get_vessel_analysis(
     vessel_id: str = Query(..., alias="vesselId"),
     loaded: int = Query(None, alias="loaded"),
     discharged: int = Query(None, alias="discharged"),
-    crane_count: int = Query(None, alias="craneCount"),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -66,7 +65,6 @@ async def get_vessel_analysis(
             vessel_id,
             loaded_override=loaded,
             discharged_override=discharged,
-            crane_count_override=crane_count,
             history_df=df_hist,
         )
 
@@ -77,7 +75,6 @@ async def get_vessel_analysis(
                 vessel_id,
                 loaded_override=loaded,
                 discharged_override=discharged,
-                crane_count_override=crane_count,
                 history_df=df_hist,
             )
             if "error" not in hist_result:

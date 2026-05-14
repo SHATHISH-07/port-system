@@ -59,9 +59,12 @@ def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
     Normalise a visit DataFrame into a form ready for stay computation and
     feature extraction.
 
-    Event-time priority:
-        move_complete_time → crane_time → time_in → time_completed
-        → updated_at → created_at
+    Event-time priority (for move_span_hours / feature engineering):
+        move_complete_time → time_in → updated_at → created_at
+
+    Stay computation time (for actual stay hours):
+        Primary: move_complete_time span (first move → last move)
+        Fallback (history): vessel_departure (time_out) − first event_time
 
     History datasets (has time_out with departed containers):
         - vessel_departure is read from time_out
@@ -77,6 +80,11 @@ def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
 
     df.columns = df.columns.str.strip()
 
+    # ── Parse move_complete_time specifically ────────────────────────────────
+    if "move_complete_time" in df.columns:
+        df["move_complete_time"] = pd.to_datetime(df["move_complete_time"], errors="coerce")
+
+    # ── Build event_time from priority sources ───────────────────────────────
     event_sources = [
         "move_complete_time",
         "time_in",
@@ -126,22 +134,36 @@ def compute_visit_stay(df: pd.DataFrame) -> float | None:
     """
     Compute stay duration in hours for a single prepared visit DataFrame.
 
-    History mode  (vessel_departure is present and valid):
-        stay = vessel_departure − earliest event_time
-        The fallback event-time span is intentionally NOT used for history
-        data — recording timestamps do not represent actual port presence.
+    Priority:
+        1. move_complete_time span  — first to last container move completion.
+           This is the most operationally accurate measure because it captures
+           exactly how long cargo operations ran on the vessel, with NO crane
+           data dependency whatsoever.
+        2. vessel_departure (time_out) − earliest event_time
+           (history fallback when move_complete_time is absent or too sparse)
 
-    Current mode  (vessel_departure absent / NaT):
-        Returns None — callers should use ML prediction instead.
+    Current mode (vessel_departure absent / NaT and no move_complete_time
+    span available) → returns None so callers use ML prediction.
     """
-    if df is None or df.empty or "event_time" not in df.columns:
+    if df is None or df.empty:
+        return None
+
+    # ── Priority 1: move_complete_time span ──────────────────────────────────
+    if "move_complete_time" in df.columns:
+        mct = pd.to_datetime(df["move_complete_time"], errors="coerce").dropna()
+        if len(mct) >= 2:
+            span_hours = (mct.max() - mct.min()).total_seconds() / 3600
+            if span_hours >= 0.5:  # at least 30 min of operations
+                return round(span_hours, 2)
+
+    # ── Priority 2: event_time span anchored at vessel departure ────────────
+    if "event_time" not in df.columns:
         return None
 
     start = df["event_time"].min()
     if pd.isna(start):
         return None
 
-    # ── History mode: use explicit departure time only ────────────────────────
     if "vessel_departure" in df.columns:
         valid_dep = df["vessel_departure"].dropna()
         if not valid_dep.empty:
@@ -150,13 +172,10 @@ def compute_visit_stay(df: pd.DataFrame) -> float | None:
                 stay_hours = (end - start).total_seconds() / 3600
                 if stay_hours > 0:
                     return round(stay_hours, 2)
-            # vessel_departure present but unusable → do NOT fall through to
-            # event-span fallback; return None so callers use ML prediction.
-            return None
+        # vessel_departure present but unusable → return None (ML path)
+        return None
 
-    # ── Current / no departure: event-time span (only for non-history) ────────
-    # Only executed when vessel_departure column is entirely absent, meaning
-    # this is a current-mode DataFrame. Return None so the ML path is used.
+    # No departure info available → ML path
     return None
 
 

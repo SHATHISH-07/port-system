@@ -14,14 +14,6 @@ def _is_yes(val) -> bool:
     return str(val).strip().upper() in ("YES", "Y", "TRUE", "1")
 
 
-def _safe_col(df: pd.DataFrame, col: str, default: float) -> float:
-    return (
-        float(df[col].iloc[0])
-        if col in df.columns and not df[col].isna().all()
-        else float(default)
-    )
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Feature engineering
 # ─────────────────────────────────────────────────────────────────────────────
@@ -31,7 +23,7 @@ def create_features(df: pd.DataFrame) -> dict | None:
 
     # ── Resolve event_time ───────────────────────────────────────────────────
     if "event_time" not in df.columns:
-        sources = ["move_complete_time", "crane_time", "time_in", "time_completed"]
+        sources = ["move_complete_time", "time_in", "time_completed", "updated_at", "created_at"]
         event_time = pd.Series(
             [pd.NaT] * len(df), index=df.index, dtype="datetime64[ns]"
         )
@@ -44,10 +36,23 @@ def create_features(df: pd.DataFrame) -> dict | None:
     if df.empty:
         return None
 
-    # ── Time span ────────────────────────────────────────────────────────────
-    t_start = df["event_time"].min()
-    t_end   = df["event_time"].max()
-    move_span_hours = max((t_end - t_start).total_seconds() / 3600, 0.1)
+    # ── Time span — from move_complete_time when available ───────────────────
+    move_span_hours = 0.1
+    if "move_complete_time" in df.columns:
+        mct = pd.to_datetime(df["move_complete_time"], errors="coerce").dropna()
+        if len(mct) >= 2:
+            move_span_hours = max(
+                (mct.max() - mct.min()).total_seconds() / 3600,
+                0.1,
+            )
+        elif len(mct) == 1:
+            # single timestamp — fall through to event_time span
+            pass
+
+    if move_span_hours <= 0.1:
+        t_start = df["event_time"].min()
+        t_end   = df["event_time"].max()
+        move_span_hours = max((t_end - t_start).total_seconds() / 3600, 0.1)
 
     # ── Move classification ──────────────────────────────────────────────────
     loaded     = 0
@@ -89,12 +94,9 @@ def create_features(df: pd.DataFrame) -> dict | None:
 
     # ── Fallback when NO moves could be classified ───────────────────────────
     # Do NOT fabricate a 50/50 split — it corrupts load_ratio/discharge_ratio.
-    # Instead keep total_moves at len(df) but leave loaded/discharged as-is
-    # (both 0) so the model receives accurate imbalance=0 and ratio≈0 signals,
-    # which is honest about the lack of position data.
+    # Keep total_moves at len(df) but leave loaded/discharged as-is (both 0).
     if total_moves == 0:
         total_moves = len(df)
-        # loaded and discharged remain 0 — no fabricated split
 
     imbalance       = abs(loaded - discharged)
     container_count = (
@@ -147,15 +149,7 @@ def create_features(df: pd.DataFrame) -> dict | None:
     ) if "container_length" in df.columns and not df["container_length"].isna().all() else 0.0
 
     heavy_ratio = heavy_count / max(total_moves, 1)
-
-    # ── Crane features ───────────────────────────────────────────────────────
-    crane_count          = _safe_col(df, "_crane_count",          1.0)
-    crane_mphc           = _safe_col(df, "_crane_mphc",           settings.MOVES_PER_HOUR_PER_CRANE)
-    crane_intensity      = _safe_col(df, "_crane_intensity",      1.0)
-    crane_duration_hours = _safe_col(df, "_crane_duration_hours", move_span_hours)
-    crane_restow_ratio   = _safe_col(df, "_crane_restow_ratio",   0.0)
-    crane_exclude_ratio  = _safe_col(df, "_crane_exclude_ratio",  0.0)
-    avg_weight_kg        = float(avg_weight)
+    avg_weight_kg = float(avg_weight)
 
     return {
         "loaded":                 int(loaded),
@@ -174,12 +168,6 @@ def create_features(df: pd.DataFrame) -> dict | None:
         "move_span_hours":        float(move_span_hours),
         "restow_intensity":       float(restow_intensity),
         "block_concentration":    float(block_concentration),
-        "crane_count":            float(crane_count),
-        "crane_mphc":             float(crane_mphc),
-        "crane_intensity":        float(crane_intensity),
-        "crane_duration_hours":   float(crane_duration_hours),
-        "crane_restow_ratio":     float(crane_restow_ratio),
-        "crane_exclude_ratio":    float(crane_exclude_ratio),
         "reefer_equipment_ratio": float(reefer_equipment_ratio),
         "pct_40ft":               float(pct_40ft),
         "avg_weight_kg":          avg_weight_kg,
