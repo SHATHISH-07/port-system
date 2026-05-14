@@ -1,217 +1,201 @@
+from __future__ import annotations
 import re
+import logging
 from collections import defaultdict
+import pandas as pd
+from utils.position_parser import (
+    block_label,
+    parse_position,
+)
+from services.vessel_service import _extract_move_side, _is_yes
 
-# Position and block regex
-POSITION_REGEX = re.compile(r'Y-[A-Z0-9]+-(G\d)(\d{2})(\d{2})(C\d)')
-BLOCK_REGEX = re.compile(r'Y-[A-Z0-9]+-(G\d)')
-
-# Check if value is YES
-def is_yes(val):
-    return str(val).strip().upper() == "YES"
+logger = logging.getLogger("port_system")
 
 
-# Get all blocks from the dataframe
-def get_all_blocks(df):
-    blocks = set()
+# ─────────────────────────────────────────────────────────────────────────────
+# Block helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
-    # Get all blocks from the dataframe
-    for pos in df["ctr_from_position"].dropna():
-        pos = str(pos)
-
-        if not pos.startswith("Y-"):
+def _all_blocks(df: pd.DataFrame) -> list[str]:
+    """Collect every unique block label present in any position column."""
+    blocks: set[str] = set()
+    for col in ("ctr_from_position", "ctr_to_position", "from_position", "to_position"):
+        if col not in df.columns:
             continue
-
-        match = BLOCK_REGEX.search(pos)
-        if match:
-            blocks.add(match.group(1))
-
+        for pos_str in df[col].dropna():
+            p = parse_position(pos_str)
+            if p and p["is_yard"]:
+                lbl = block_label(p)
+                if lbl:
+                    blocks.add(lbl)
     return sorted(blocks)
-    
-# Build layout for the blocks
-def build_layout(blocks):
-    layout = {}
 
+
+def _deterministic_layout(blocks: list[str]) -> dict:
+    """
+    Build a stable (x, y) grid layout from block labels using the parsed
+    position metadata rather than Python's hash().
+
+    Layout rules (same across all process restarts):
+    Returns a strict 3-column wrapping grid for blocks to ensure 
+    organized visualization without horizontal overflow.
+    """
+    layout: dict = {}
     if not blocks:
         return layout
 
-    cols = int(len(blocks) ** 0.5) + 1
-
-    # Build layout for the blocks
-    for i, block in enumerate(blocks):
-        x = i % cols
-        y = i // cols
-        layout[block] = {"x": x, "y": y}
+    # Sort alphabetically to ensure stable positions
+    sorted_blocks = sorted(blocks)
+    
+    COLS = 3
+    for idx, b in enumerate(sorted_blocks):
+        x = idx % COLS
+        y = idx // COLS
+        layout[b] = {"x": x, "y": y}
 
     return layout
 
-# Get vessel heatmap
-def get_vessel_heatmap(df, vessel_service: str):
-    # Filter by vessel service
-    vessel_df = df[
-        df["outbound_service"].astype(str).str.strip() == str(vessel_service)
-    ].copy()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main entry point
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_vessel_heatmap(df: pd.DataFrame, vessel_id: str) -> dict:
+    if df is None or df.empty:
+        return {"error": f"No data for vessel {vessel_id}", "vessel": vessel_id}
+
+    required = {"outbound_service", "actual_outbound_carrier_visit_id"}
+    if not required.issubset(df.columns):
+        return {"error": "Missing required columns", "vessel": vessel_id}
+
+    # Normalize searching
+    vessel_id_str = str(vessel_id).strip().upper()
+    
+    # Try multiple common columns for vessel/service identification
+    vessel_df = pd.DataFrame()
+    for col in ["outbound_service", "inbound_service", "vessel_id"]:
+        if col in df.columns:
+            matches = df[df[col].astype(str).str.strip().str.upper() == vessel_id_str]
+            if not matches.empty:
+                vessel_df = matches
+                break
 
     if vessel_df.empty:
-        return {"error": f"No data for vessel {vessel_service}"}
-    
-    # Get top visit ID
-    visit_counts = vessel_df["actual_outbound_carrier_visit_id"].value_counts()
-    top_visit_id = visit_counts.index[0]
+        return {"error": f"No data for vessel {vessel_id}", "vessel": vessel_id}
 
-    # Get top visit data
+    # Pick busiest visit by LOAD count
+    visit_scores: dict = {}
+    for visit_id, group in vessel_df.groupby("actual_outbound_carrier_visit_id"):
+        score = sum(
+            1 for _, row in group.iterrows()
+            if _extract_move_side(row)[0] == "LOAD"
+        )
+        visit_scores[visit_id] = score
+
+    top_visit_id = (
+        max(visit_scores, key=visit_scores.get)
+        if visit_scores
+        else vessel_df["actual_outbound_carrier_visit_id"].iloc[0]
+    )
+
     visit_df = vessel_df[
         vessel_df["actual_outbound_carrier_visit_id"] == top_visit_id
     ].copy()
 
-    # Filter by yard-to-vessel moves
-    visit_df = visit_df[
-        visit_df["ctr_from_position"].astype(str).str.startswith("Y-") &
-        visit_df["ctr_to_position"].astype(str).str.startswith("V-")
-    ]
-    
-    # Check if there are any yard-to-vessel moves
-    if visit_df.empty:
-        return {
-            "vessel": vessel_service,
-            "visit_id": str(top_visit_id),
-            "layout": {},
-            "blocks": {},
-            "summary": {"hazardous": 0, "reefer": 0, "oog": 0},
-            "error": "No yard-to-vessel moves"
-        }
-
-    # Initialize blocks
-    blocks = defaultdict(lambda: {
-        "count": 0,
-        "hazardous": 0,
-        "reefer": 0,
-        "oog": 0,
-        "cells": {}
+    # Aggregate by block
+    blocks_data: dict = defaultdict(lambda: {
+        "count": 0, "hazardous": 0, "reefer": 0, "oog": 0,
+        "load_moves": 0, "discharge_moves": 0, "cells": {},
     })
+    summary = {"hazardous": 0, "reefer": 0, "oog": 0}
 
-    # Process each yard-to-vessel move
     for _, row in visit_df.iterrows():
-
-        pos = str(row.get("ctr_from_position", ""))
-        unit = str(row.get("unit_id"))
-
-        match = POSITION_REGEX.search(pos)
-        if not match:
+        row = dict(row)
+        move_type, yard_pos = _extract_move_side(row)
+        if yard_pos is None or not yard_pos.get("is_yard"):
             continue
-        
-        # Extract block, row, bay, tier
-        block = match.group(1)
-        row_id = int(match.group(2))
-        bay = int(match.group(3))
-        tier = match.group(4)
-        
-        # Create key for row-bay combination
-        key = f"{row_id}-{bay}"
-        
-        # Initialize cell if not exists
-        if key not in blocks[block]["cells"]:
-            blocks[block]["cells"][key] = {
+
+        unit     = str(row.get("unit_id", ""))
+        bk       = block_label(yard_pos) or "UNKNOWN"
+        cell_key = (
+            f"{yard_pos.get('row','0')}-"
+            f"{yard_pos.get('bay','0')}-"
+            f"{yard_pos.get('tier','1')}"
+        )
+
+        b_data = blocks_data[bk]
+        if cell_key not in b_data["cells"]:
+            b_data["cells"][cell_key] = {
                 "containers": set(),
-                "tiers": defaultdict(int)
+                "tiers":      defaultdict(int),
+                "block":      yard_pos.get("block"),
+                "terminal":   yard_pos.get("terminal"),
             }
+        b_data["cells"][cell_key]["containers"].add(unit)
+        b_data["cells"][cell_key]["tiers"][yard_pos.get("tier", "1")] += 1
 
-        blocks[block]["cells"][key]["containers"].add(unit)
-        blocks[block]["cells"][key]["tiers"][tier] += 1
-        
-        # Update special container counts
-        if is_yes(row.get("hazardous_flag")):
-            blocks[block]["hazardous"] += 1
+        if move_type == "LOAD":
+            b_data["load_moves"] += 1
+        elif move_type == "DISCHARGE":
+            b_data["discharge_moves"] += 1
 
-        if is_yes(row.get("reefer")):
-            blocks[block]["reefer"] += 1
+        if _is_yes(row.get("hazardous_flag")):
+            b_data["hazardous"] += 1
+            summary["hazardous"] += 1
+        if _is_yes(row.get("reefer")):
+            b_data["reefer"] += 1
+            summary["reefer"] += 1
+        if _is_yes(row.get("oog_unit")):
+            b_data["oog"] += 1
+            summary["oog"] += 1
 
-        if is_yes(row.get("oog_unit")):
-            blocks[block]["oog"] += 1
-    
-    # Calculate max count
-    max_count = 1
-    
-    # Process each block
-    for block in blocks:
-        
-        total_set = set()
-        formatted_cells = []
+    if not blocks_data:
+        return {"error": "No yard positions found for this visit", "vessel": vessel_id}
 
-        # Format cells and calculate statistics
-        for key, val in blocks[block]["cells"].items():
-            r, b = key.split("-")
+    max_count    = 1
+    final_blocks: dict = {}
 
-            count = len(val["containers"])
-            total_set.update(val["containers"])
-            
-            # Format cells and calculate statistics
-            formatted_cells.append({
-                "row": int(r),
-                "bay": int(b),
-                "count": count,
-                "tiers": dict(val["tiers"])
+    for bk, info in blocks_data.items():
+        total_containers: set = set()
+        cells_list: list[dict] = []
+        for ck, val in info["cells"].items():
+            r, b, t = ck.split("-")
+            cnt = len(val["containers"])
+            total_containers.update(val["containers"])
+            cells_list.append({
+                "row": r, "bay": b, "tier": t,
+                "count": cnt, "tiers": dict(val["tiers"]),
             })
-        
-        # Set the count and cells
-        blocks[block]["count"] = len(total_set)
-        blocks[block]["cells"] = formatted_cells
-        
-        max_count = max(max_count, blocks[block]["count"])
-        
-    # Check if there are any valid container positions
-    if not blocks:
-        return {
-            "vessel": vessel_service,
-            "visit_id": str(top_visit_id),
-            "layout": {},
-            "blocks": {},
-            "summary": {"hazardous": 0, "reefer": 0, "oog": 0},
-            "error": "No valid container positions found"
-        }
+        info["count"] = len(total_containers)
+        info["cells"] = cells_list
+        max_count = max(max_count, info["count"])
+        final_blocks[bk] = dict(info)
 
-    # Calculate intensity and concentration
-    for block in blocks:
-        
-        # Calculate intensity
-        intensity = blocks[block]["count"] / max_count
-        blocks[block]["intensity"] = round(intensity, 4)
-        
-        # Set the intensity level
-        if intensity >= 0.7:
-            level = "High"
-        elif intensity >= 0.4:
-            level = "Medium"
-        else:
-            level = "Low"
+    for b in final_blocks.values():
+        intensity          = b["count"] / max_count
+        b["intensity"]     = round(intensity, 4)
+        b["concentration"] = (
+            "High"   if intensity >= 0.7
+            else "Medium" if intensity >= 0.4
+            else "Low"
+        )
 
-        blocks[block]["concentration"] = level
+    # Only include blocks that actually contain containers for this vessel/visit
+    relevant_blocks = list(final_blocks.keys())
+    layout          = _deterministic_layout(relevant_blocks)
 
-    # Get all blocks
-    all_blocks = get_all_blocks(df)
-    # Build layout
-    layout = build_layout(all_blocks)
-    # Get max block
-    max_block = max(blocks.keys(), key=lambda b: blocks[b]["count"])
+    max_block = max(final_blocks, key=lambda k: final_blocks[k]["count"])
 
-    # Calculate total hazardous, reefer, and OOG containers
-    total_haz = sum(b["hazardous"] for b in blocks.values())
-    total_ref = sum(b["reefer"] for b in blocks.values())
-    total_oog = sum(b["oog"] for b in blocks.values())
-
-    # Return the heatmap data
     return {
-        "vessel": vessel_service,
-        "visit_id": str(top_visit_id),
-
-        "recommended_berth": f"PEB-{max_block}",
-        "max_block": max_block,
-
-        "summary": {
-            "hazardous": total_haz,
-            "reefer": total_ref,
-            "oog": total_oog
-        },
-
-        "layout": layout,
-        "blocks": dict(blocks)
+        "vessel":             vessel_id_str,
+        "visit_id":           str(top_visit_id),
+        "recommended_berth":  max_block,
+        "berth_recommendation_reason": (
+            f"Highest container volume ({final_blocks[max_block]['count']} units)."
+        ),
+        "max_block":     max_block,
+        "summary":       summary,
+        "cargo_summary": summary,
+        "layout":        layout,
+        "blocks":        final_blocks,
     }

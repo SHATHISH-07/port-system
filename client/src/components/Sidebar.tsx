@@ -7,11 +7,12 @@ import {
   MenuRounded,
   AssignmentOutlined,
   LogoutOutlined,
-  SettingsOutlined,
   ExpandLess,
   ExpandMore,
   DarkModeOutlined,
-  LightModeOutlined
+  LightModeOutlined,
+  PrecisionManufacturingOutlined,
+  SettingsOutlined,
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -20,9 +21,10 @@ import { useColorMode } from "../theme/ThemeContext";
 const OPEN = 280;
 const CLOSED = 80;
 
-const USER_ITEMS = [
+const USER_ITEMS: { path: string; label: string; icon?: React.ElementType; userOnly?: boolean }[] = [
   { path: "/history-analysis", label: "History Analysis", icon: HistoryOutlined },
   { path: "/current-analysis", label: "Current Analysis", icon: AnalyticsOutlined },
+  { path: "/crane-analytics", label: "Crane Analytics", icon: PrecisionManufacturingOutlined },
   { path: "/heatmap", label: "Terminal Heatmap", icon: GridViewOutlined },
   { path: "/requests", label: "Requests", icon: AssignmentOutlined },
 ];
@@ -53,7 +55,7 @@ export default function Sidebar() {
   const menuIconActive = isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)";
   const menuIconHoverActive = isDark ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.12)";
 
-  const renderNavItems = (items: any[], isSubItem = false) => {
+  const renderNavItems = (items: { path: string; label: string; icon?: React.ElementType; userOnly?: boolean }[], isSubItem = false) => {
     return items.map(({ path, label, icon: Icon }) => {
       const active = loc.pathname === path;
       return (
@@ -151,16 +153,14 @@ export default function Sidebar() {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, mt: 0.5 }}>
             <Typography
               sx={{
-                fontSize: "0.75rem",
+                fontSize: "1rem",
                 fontWeight: 800,
                 color: textActiveColor,
                 lineHeight: 1.3,
                 letterSpacing: "0.03em",
               }}
             >
-              BERTH OPTIMIZATION &
-              <br />
-              YARD PREPARATION
+              Deck Optimiser
             </Typography>
             <Typography
               sx={{
@@ -196,7 +196,7 @@ export default function Sidebar() {
 
       {/* ─── Navigation Items ─── */}
       <Box sx={{ flex: 1, py: 1, overflowY: "auto", overflowX: "hidden" }}>
-        {renderNavItems(USER_ITEMS)}
+        {renderNavItems(USER_ITEMS.filter((item) => !(user?.role === "admin" && item.userOnly)))}
 
         {user?.role === "admin" && (
           <>

@@ -76,7 +76,19 @@ export default function TrainModel() {
         startPolling();
       }
     } catch (err: any) {
-      showToast(err?.response?.data?.detail || "Training request failed.", "error");
+      let errMsg = "Training request failed.";
+      if (err?.response?.data?.detail) {
+        errMsg = typeof err.response.data.detail === "string" 
+          ? err.response.data.detail 
+          : JSON.stringify(err.response.data.detail);
+      } else if (err?.response?.data?.error) {
+        errMsg = typeof err.response.data.error === "string"
+          ? err.response.data.error
+          : JSON.stringify(err.response.data.error);
+      } else if (err?.message) {
+        errMsg = err.message;
+      }
+      showToast(errMsg, "error");
     } finally {
       setLoading(false);
     }

@@ -9,6 +9,7 @@ DEFAULT_CONFIG = {
 
 # Stay time model training status
 class TrainingStatus:
+    # init training status
     def __init__(self):
         self._lock = threading.Lock()
         # Initialize training status
@@ -20,7 +21,8 @@ class TrainingStatus:
             "training_type": "",
             "last_config": DEFAULT_CONFIG.copy(),
         }
-
+    
+    # method to set the training status
     def set(self, status, message="", records_count=0, data_source="", training_type="", config=None):
         with self._lock:
             self.data["status"] = status
@@ -33,11 +35,13 @@ class TrainingStatus:
                 self.data["training_type"] = training_type
             if config:
                 self.data["last_config"] = config
-
+    
+    # method to get the training status
     def get(self):
         with self._lock:
             return dict(self.data)
-
+    
+    # method to get the last training config
     def get_last_config(self) -> dict:
         with self._lock:
             return dict(self.data.get("last_config", DEFAULT_CONFIG))

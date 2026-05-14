@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Box, Typography, Snackbar, Alert } from "@mui/material";
 import { api } from "../api/api";
-import { type VesselAnalysisData } from "../types/vessel";
+import { type VesselAnalysisData, type VesselHeatmapResponse } from "../types/vessel";
 
 import AnalysisHeader from "../components/vessel-analysis/AnalysisHeader";
 import PerformanceStats from "../components/vessel-analysis/PerformanceStats";
@@ -10,7 +10,9 @@ import ExecutionPlan from "../components/vessel-analysis/ExecutionPlan";
 import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
+import CraneAssignment from "../components/vessel-analysis/CraneAssignment";
 import HeatmapPage from "./HeatmapPage";
+import OperationalPlaceholder from "../components/vessel-analysis/OperationalPlaceholder";
 
 
 function Section({
@@ -37,9 +39,9 @@ function Section({
       >
         <Typography
           sx={{
-            fontSize: "2.25rem",
+            fontSize: "1.5rem",
             fontWeight: 800,
-            color: "text.disabled",
+            color: "text.secondary",
             lineHeight: 1,
             letterSpacing: "-2px",
             fontFamily: "monospace",
@@ -49,7 +51,7 @@ function Section({
         >
           {n}
         </Typography>
-        <Typography variant="overline" sx={{ color: "text.secondary" }}>
+        <Typography variant="h6" sx={{ color: "text.secondary" }}>
           {label}
         </Typography>
       </Box>
@@ -64,7 +66,7 @@ const CurrentVesselAnalysis = () => {
   const [loaded, setLoaded] = useState("");
   const [discharged, setDischarged] = useState("");
   const [data, setData] = useState<VesselAnalysisData | null>(null);
-  const [heatmapData, setHeatmapData] = useState<any>(null);
+  const [heatmapData, setHeatmapData] = useState<VesselHeatmapResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ open: boolean, message: string, severity: "success" | "error" | "info" | "warning" }>({ open: false, message: "", severity: "info" });
 
@@ -80,27 +82,44 @@ const CurrentVesselAnalysis = () => {
     if (!vesselId.trim()) return;
     setLoading(true);
     try {
-      const form = new FormData();
-      form.append("vessel_id", vesselId.trim());
-      if (loaded) form.append("loaded", loaded);
-      if (discharged) form.append("discharged", discharged);
+      const params: Record<string, string> = {
+        vesselId: vesselId.trim(),
+        datasetType: "current",
+      };
+      // Pass user-entered load/discharge so backend strategy updates
+      if (loaded && Number(loaded) > 0) params.loaded = loaded;
+      if (discharged && Number(discharged) > 0) params.discharged = discharged;
 
-      const analysisPromise = api.post<VesselAnalysisData>("/vessel/current-vessel-analysis", form)
-        .then(res => {
-          setData(res.data);
-          setLoading(false);
-        });
+      const analysisPromise = api.get<VesselAnalysisData>("/vessel/analysis", { params })
+        .then(res => { setData(res.data); });
 
-      const heatmapPromise = api.post("/vessel/heatmap", form)
-        .then(res => setHeatmapData(res.data));
+      const heatmapPromise = api.get<VesselHeatmapResponse>("/vessel/heatmap", {
+        params: { vesselId: vesselId.trim(), datasetType: "current" }
+      }).then(res => { setHeatmapData(res.data); });
 
       await Promise.allSettled([analysisPromise, heatmapPromise]);
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail || "";
-      if (detail.includes("No dataset")) {
+      setLoading(false);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: unknown; error?: unknown } } };
+      let detailMsg = "";
+      if (e?.response?.data?.detail) {
+        detailMsg = typeof e.response.data.detail === "string" 
+          ? e.response.data.detail 
+          : JSON.stringify(e.response.data.detail);
+      }
+      
+      if (detailMsg.includes("No dataset")) {
         showToast("No current data found. Use Data Ingestion (/ingest) to upload records.");
       } else {
-        showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
+        let errorMsg = "Error fetching data. Check the vessel ID.";
+        if (e?.response?.data?.error) {
+           errorMsg = typeof e.response.data.error === "string" 
+            ? e.response.data.error 
+            : JSON.stringify(e.response.data.error);
+        } else if (detailMsg) {
+           errorMsg = detailMsg;
+        }
+        showToast(errorMsg);
       }
     } finally {
       // loading is managed inside the analysis promise
@@ -120,73 +139,77 @@ const CurrentVesselAnalysis = () => {
         setDischarged={setDischarged}
         onAnalyze={fetchData}
         loading={loading}
-        data={data}
       />
 
-      {data && (
+      {!data && !loading ? (
+        <OperationalPlaceholder mode="current" />
+      ) : data && (
         <>
-          {/* ── 01 · Performance ── */}
-          <Section n="01" label="Performance Metrics">
-            <PerformanceStats
-              actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
-              predicted={data.predicted?.avg_hours ?? 0}
-              mode={data.mode || "current"}
-              loaded={data.input?.loaded}
-              discharged={data.input?.discharged}
+          {/* ── 01 · Performance & Recommendation ── */}
+          <Section n="01" label="Performance & Recommendation">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "2fr 1fr" }, gap: 3 }}>
+              <PerformanceStats
+                actual={data?.actual?.avg_hours ?? data?.predicted?.avg_hours ?? 0}
+                predicted={data?.predicted?.avg_hours ?? 0}
+                mode={data.mode || "current"}
+                loaded={data.input?.loaded ?? data.top_visit_stats?.loaded}
+                discharged={data.input?.discharged ?? data.top_visit_stats?.discharged}
+              />
+              <BerthRecommendation
+                berth={data.berth_recommendation?.berth}
+                concentration={data.berth_recommendation?.congestion_risk}
+              />
+            </Box>
+          </Section>
+
+          {/* ── 02 · Crane Assignment ── */}
+          <Section n="02" label="Crane Assignment">
+            <CraneAssignment
+              data={data.crane_assignment}
+              mode="current"
+              recommendedCranes={data.operational_predictions?.recommended_crane_count}
+              loadedOverride={loaded ? Number(loaded) : undefined}
+              dischargedOverride={discharged ? Number(discharged) : undefined}
             />
           </Section>
 
-          {/* ── 02 · Yard Heatmap ── */}
+          {/* ── 03 · Yard Heatmap ── */}
           {heatmapData && !heatmapData.error && (
-            <Section n="02" label="Live Yard Heatmap">
+            <Section n="03" label="Live Yard Heatmap">
               <HeatmapPage data={heatmapData} />
             </Section>
           )}
 
-          {/* ── 03 · Operational Intelligence ── */}
-          {/* Asymmetric 1:2 grid — berth on left, execution+risks share right */}
-          <Section n={heatmapData && !heatmapData.error ? "03" : "02"} label="Operational Intelligence">
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "280px 1fr" },
-                gridTemplateRows: { md: "1fr 1fr" },
-                gap: 2,
-              }}
-            >
-              {/* Berth — spans 2 rows on the left */}
-              <Box sx={{ gridRow: { md: "1 / 3" } }}>
-                <BerthRecommendation
-                  berth={data.berth_analysis?.[0]?.berth}
-                  concentration={data.berth_analysis?.[0]?.cargo_concentration}
-                />
-              </Box>
-              {/* Execution plan — top right */}
-              <ExecutionPlan steps={data.execution_plan} />
-              {/* Risks — bottom right */}
-              <RiskEvaluation risks={data.risks} />
+          {/* ── 04 · Strategy & Risk Analysis ── */}
+          <Section n={heatmapData && !heatmapData.error ? "04" : "03"} label="Strategy & Risk Analysis">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 3 }}>
+              <RiskEvaluation 
+                risks={data.risks || []} 
+                predictions={data.operational_predictions} 
+              />
+              <ExecutionPlan steps={data.execution_plan || []} />
             </Box>
           </Section>
 
-          {/* ── 04 · Yard Strategy ── */}
+          {/* ── 05 · Yard Strategy ── */}
           {data.yard_strategy && (
-            <Section n={heatmapData && !heatmapData.error ? "04" : "03"} label="Yard Preparation Strategy">
+            <Section n={heatmapData && !heatmapData.error ? "05" : "04"} label="Yard Preparation Strategy">
               <YardStrategy data={data.yard_strategy} />
             </Section>
           )}
 
-          {/* ── 05 · Berth Table ── */}
+          {/* ── 06 · Berth Impact Analysis ── */}
           <Section
             n={
               [heatmapData && !heatmapData.error, data.yard_strategy].filter(Boolean).length === 2
-                ? "05"
+                ? "06"
                 : [heatmapData && !heatmapData.error, data.yard_strategy].filter(Boolean).length === 1
-                  ? "04"
-                  : "03"
+                  ? "05"
+                  : "04"
             }
             label="Berth Impact Analysis"
           >
-            <BerthImpactTable data={data.berth_analysis} />
+            <BerthImpactTable data={data.berth_analysis} mode="current" />
           </Section>
 
           {/* Bottom spacer */}

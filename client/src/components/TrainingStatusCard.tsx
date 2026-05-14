@@ -31,6 +31,7 @@ export default function TrainingStatusCard({ onRetry }: Props) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStatus();
     let id: ReturnType<typeof setInterval> | undefined;
     if (statusData.status === "training") {

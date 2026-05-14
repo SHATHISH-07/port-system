@@ -11,6 +11,8 @@ import BerthImpactTable from "../components/vessel-analysis/BerthImpactTable";
 import BerthRecommendation from "../components/vessel-analysis/BerthRecommendation";
 import VisitTable from "../components/vessel-analysis/VisitTable";
 import YardStrategy from "../components/vessel-analysis/YardStrategy";
+import CraneAssignment from "../components/vessel-analysis/CraneAssignment";
+import OperationalPlaceholder from "../components/vessel-analysis/OperationalPlaceholder";
 
 function Section({
   n,
@@ -36,9 +38,9 @@ function Section({
       >
         <Typography
           sx={{
-            fontSize: "2.25rem",
+            fontSize: "1.5rem",
             fontWeight: 800,
-            color: "text.disabled",
+            color: "text.secondary",
             lineHeight: 1,
             letterSpacing: "-2px",
             fontFamily: "monospace",
@@ -48,7 +50,7 @@ function Section({
         >
           {n}
         </Typography>
-        <Typography variant="overline" sx={{ color: "text.secondary" }}>
+        <Typography variant="h6" sx={{ color: "text.secondary" }}>
           {label}
         </Typography>
       </Box>
@@ -61,28 +63,55 @@ const HistoryVesselAnalysis = () => {
   const [vesselId, setVesselId] = useState("");
   const [data, setData] = useState<VesselAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{open: boolean, message: string, severity: "success" | "error" | "info" | "warning"}>({open: false, message: "", severity: "info"});
+  const [toast, setToast] = useState<{ open: boolean, message: string, severity: "success" | "error" | "info" | "warning" }>({ open: false, message: "", severity: "info" });
 
   const showToast = (message: string, severity: "success" | "error" | "info" | "warning" = "error") => {
-    setToast({open: true, message, severity});
+    setToast({ open: true, message, severity });
   };
 
-  const handleCloseToast = () => setToast(prev => ({...prev, open: false}));
+  const handleCloseToast = () => setToast(prev => ({ ...prev, open: false }));
 
   const fetchData = async () => {
     if (!vesselId.trim()) return;
     setLoading(true);
     try {
-      const form = new FormData();
-      form.append("vessel_id", vesselId.trim());
-      const res = await api.post<VesselAnalysisData>("/vessel/vessel-history-analysis", form);
-      setData(res.data);
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail || "";
-      if (detail.includes("No dataset")) {
+      const res = await api.get<VesselAnalysisData & { error?: string; suggestions?: string[] }>("/vessel/analysis", {
+        params: { 
+          vesselId: vesselId.trim(),
+          datasetType: "history" 
+        }
+      });
+
+      // Backend returns 200 with {error:...} when vessel not found
+      if (res.data?.error) {
+        const suggs = res.data.suggestions ?? [];
+        const suggHint = suggs.length > 0 ? ` Did you mean: ${suggs.join(', ')}?` : '';
+        showToast(`${res.data.error}${suggHint}`, 'warning');
+        setData(null);
+      } else {
+        setData(res.data);
+      }
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: unknown; error?: unknown } } };
+      let detailMsg = "";
+      if (e?.response?.data?.detail) {
+        detailMsg = typeof e.response.data.detail === "string" 
+          ? e.response.data.detail 
+          : JSON.stringify(e.response.data.detail);
+      }
+      
+      if (detailMsg.includes("No dataset")) {
         showToast("No historical data found. Use Data Ingestion (/ingest) to upload records.");
       } else {
-        showToast(err?.response?.data?.error || "Error fetching data. Check the vessel ID.");
+        let errorMsg = "Error fetching data. Check the vessel ID.";
+        if (e?.response?.data?.error) {
+           errorMsg = typeof e.response.data.error === "string" 
+            ? e.response.data.error 
+            : JSON.stringify(e.response.data.error);
+        } else if (detailMsg) {
+           errorMsg = detailMsg;
+        }
+        showToast(errorMsg);
       }
     } finally {
       setLoading(false);
@@ -100,20 +129,27 @@ const HistoryVesselAnalysis = () => {
         setVesselId={setVesselId}
         onAnalyze={fetchData}
         loading={loading}
-        data={data}
       />
 
-      {data && (
+      {!data && !loading ? (
+        <OperationalPlaceholder mode="history" />
+      ) : data && (
         <>
-          {/* ── 01 · Performance ── */}
-          <Section n="01" label="Performance Metrics">
-            <PerformanceStats
-              actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
-              predicted={data.predicted?.avg_hours ?? 0}
-              mode={data.mode || "history"}
-              loaded={data.input?.loaded}
-              discharged={data.input?.discharged}
-            />
+          {/* ── 01 · Performance & Recommendation ── */}
+          <Section n="01" label="Performance & Recommendation">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "2fr 1fr" }, gap: 3 }}>
+              <PerformanceStats
+                actual={data.actual?.avg_hours ?? data.predicted?.avg_hours ?? 0}
+                predicted={data.predicted?.avg_hours ?? 0}
+                mode={data.mode || "history"}
+                loaded={data.input?.loaded ?? data.top_visit_stats?.loaded}
+                discharged={data.input?.discharged ?? data.top_visit_stats?.discharged}
+              />
+              <BerthRecommendation 
+                berth={data.berth_recommendation?.berth} 
+                concentration={data.berth_recommendation?.congestion_risk} 
+              />
+            </Box>
           </Section>
 
           {/* ── 02 · Visit History ── */}
@@ -123,43 +159,45 @@ const HistoryVesselAnalysis = () => {
             </Section>
           )}
 
-          {/* ── 03 · Operational Intelligence (asymmetric grid) ── */}
+          {/* ── 03 · Crane Assignment ── */}
           {!isManual && (
-            <Section n={isManual ? "02" : "03"} label="Operational Intelligence">
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: { xs: "1fr", md: "280px 1fr" },
-                  gridTemplateRows: { md: "1fr 1fr" },
-                  gap: 2,
-                }}
-              >
-                {/* Berth — spans 2 rows left */}
-                <Box sx={{ gridRow: { md: "1 / 3" } }}>
-                  <BerthRecommendation
-                    berth={data.berth_analysis?.[0]?.berth}
-                    concentration={data.berth_analysis?.[0]?.cargo_concentration}
-                  />
-                </Box>
-                {/* Execution — top right */}
-                <ExecutionPlan steps={data.execution_plan} />
-                {/* Risks — bottom right */}
-                <RiskAndStrategy risks={data.risks} />
+            <Section n="03" label="Crane Assignment by Visit">
+              <CraneAssignment
+                data={data.crane_assignment}
+                mode="history"
+              />
+            </Section>
+          )}
+
+          {/* ── 04 · Berth History ── */}
+          {!isManual && (
+            <Section n="04" label="Historical Berth Analysis">
+              <BerthImpactTable 
+                data={data.berth_analysis} 
+                conflicts={data.berth_conflicts}
+                mode="history" 
+              />
+            </Section>
+          )}
+
+          {/* ── 05 · Strategy & Risks ── */}
+          {!isManual && (
+            <Section n="05" label="Historical Strategy & Risk Analysis">
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 3 }}>
+                <RiskAndStrategy 
+                  risks={data.risks || []} 
+                  predictions={data.operational_predictions} 
+                  delays={data.delay_analysis || []}
+                />
+                <ExecutionPlan steps={data.execution_plan || []} />
               </Box>
             </Section>
           )}
 
-          {/* ── 04 · Yard Strategy ── */}
+          {/* ── 06 · Yard Strategy ── */}
           {!isManual && data.yard_strategy && (
-            <Section n="04" label="Yard Preparation Strategy">
+            <Section n="06" label="Yard Storage Strategy">
               <YardStrategy data={data.yard_strategy} />
-            </Section>
-          )}
-
-          {/* ── 05 · Berth Impact ── */}
-          {!isManual && (
-            <Section n="05" label="Berth Impact Analysis">
-              <BerthImpactTable data={data.berth_analysis} />
             </Section>
           )}
 
