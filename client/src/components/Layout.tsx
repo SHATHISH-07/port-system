@@ -30,7 +30,7 @@ export default function Layout({ children }: LayoutProps) {
           p: { xs: "20px 16px", md: "32px 40px" },
         }}
       >
-        <Box sx={{ width: "100%", maxWidth: 1400, mx: "auto" }}>
+        <Box sx={{ width: "100%", maxWidth: 2000, mx: "auto" }}>
           {children}
         </Box>
       </Box>

@@ -948,11 +948,16 @@ def analyze_vessel_dashboard(
             # historical_mph_avg: moves per hour across the full operational span
             # Use actual stay hours (not move_span_hours from features) as the denominator
             mph_rates = []
+            avg_hist_cranes = max(
+                sum(v for v in visit_crane_counts.values() if v > 0)
+                    / max(sum(1 for v in visit_crane_counts.values() if v > 0), 1),
+                    1.0,
+                )
             for f in historical_features_list:
                 span = f.get("move_span_hours", 0)
                 moves = f.get("total_moves", 0)
                 if span > 0 and moves > 0:
-                    mph_rates.append(moves / span)
+                    mph_rates.append(moves / span / avg_hist_cranes)  # ← per-crane rate
             if mph_rates:
                 historical_mph_avg = sum(mph_rates) / len(mph_rates)
 

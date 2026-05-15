@@ -9,7 +9,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute, AdminRoute } from "./components/ProtectedRoute";
 
 const OperationalDashboard = lazy(() => import("./pages/OperationalDashboard"));
-const StayTimeAnalysis = lazy(() => import("./pages/StayTimeAnalysis"));
+const StayTimeAnalysis = lazy(() => import("./pages/StayTimeAnalysis/StayTimeAnalysis"));
 const TrainModel = lazy(() => import("./pages/TrainModel"));
 const DataIngestion = lazy(() => import("./pages/DataIngestion"));
 const Login = lazy(() => import("./pages/Login"));
