@@ -1,10 +1,16 @@
+from __future__ import annotations
+
+import io
 import logging
 import os
+from datetime import datetime, timezone
+from typing import Optional
 
 import joblib
 import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor, VotingRegressor
 from sklearn.linear_model import Ridge
+from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
@@ -12,14 +18,134 @@ from xgboost import XGBRegressor
 from config import settings
 from models.training_status import training_status
 from utils.feature_utils import create_features
-from utils.stay_utils import compute_visit_stay, prepare_visit_data
+from utils.datetime_utils import parse_datetime
 
 logger = logging.getLogger("port_system")
 
+_cached_model_bundle = None
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Model builder
+# Internal helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _safe_parse(df: pd.DataFrame, col: str) -> pd.Series:
+    """Parse a datetime column if present; return NaT series otherwise."""
+    if col in df.columns:
+        return parse_datetime(df[col], col)
+    return pd.Series([pd.NaT] * len(df), index=df.index, dtype="datetime64[ns]")
+
+
+def _prepare_model_visit_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepare a visit dataframe for feature extraction without applying the
+    history window. This keeps the full operational span available so the
+    model learns from the real visit duration instead of a clipped slice.
+    """
+    df = df.copy()
+    if df.empty:
+        return df
+
+    df.columns = df.columns.str.strip()
+
+    if "move_complete_time" in df.columns:
+        df["move_complete_time"] = pd.to_datetime(df["move_complete_time"], errors="coerce")
+
+    event_sources = [
+        "move_complete_time",
+        "time_in",
+        "updated_at",
+        "created_at",
+    ]
+
+    event_time = pd.Series([pd.NaT] * len(df), index=df.index, dtype="datetime64[ns]")
+    for col in event_sources:
+        parsed = _safe_parse(df, col)
+        event_time = event_time.fillna(parsed)
+
+    df["event_time"] = event_time
+    df["vessel_departure"] = _safe_parse(df, "time_out")
+
+    df = df.dropna(subset=["event_time"])
+    if df.empty:
+        return df
+
+    return df.sort_values("event_time").reset_index(drop=True)
+
+
+def _compute_raw_visit_stay(df: pd.DataFrame) -> Optional[float]:
+    """
+    Compute stay duration in hours from the raw visit span.
+
+    Priority:
+        1. move_complete_time span (first -> last completion)
+        2. vessel_departure (time_out) - earliest event_time
+
+    No history windowing is used here.
+    """
+    if df is None or df.empty:
+        return None
+
+    if "move_complete_time" in df.columns:
+        mct = pd.to_datetime(df["move_complete_time"], errors="coerce").dropna()
+        if len(mct) >= 2:
+            span_hours = (mct.max() - mct.min()).total_seconds() / 3600
+            if span_hours >= 0.5:
+                return round(span_hours, 2)
+
+    if "event_time" not in df.columns:
+        return None
+
+    start = df["event_time"].min()
+    if pd.isna(start):
+        return None
+
+    if "vessel_departure" in df.columns:
+        valid_dep = df["vessel_departure"].dropna()
+        if not valid_dep.empty:
+            end = valid_dep.iloc[0]
+            if pd.notna(end) and end > start:
+                stay_hours = (end - start).total_seconds() / 3600
+                if stay_hours > 0:
+                    return round(stay_hours, 2)
+        return None
+
+    return None
+
+
+def _heuristic_span_from_metrics(
+    total_moves: int,
+    crane_count: int = 1,
+    historical_mph_avg: float = None,
+) -> float:
+    """
+    Estimate vessel stay from move count, crane count, and historical crane
+    throughput.
+
+    Formula: stay_hours = total_moves / (cranes * moves_per_hour_per_crane)
+
+    - historical_mph_avg is the observed crane throughput (moves/hour/crane).
+    - Falls back to settings.CRANE_MOVES_PER_HOUR_TARGET when not available.
+    - crane_count defaults to 1 when unknown (conservative estimate).
+    """
+    if total_moves <= 0:
+        return max(settings.TRAIN_MIN_HOURS, 8.0)
+
+    mph_per_crane = (
+        float(historical_mph_avg)
+        if historical_mph_avg and float(historical_mph_avg) > 0
+        else float(settings.CRANE_MOVES_PER_HOUR_TARGET)
+    )
+    # Clamp to a realistic operational range
+    mph_per_crane = max(5.0, min(60.0, mph_per_crane))
+
+    effective_cranes = max(1, int(crane_count))
+    vessel_rate = mph_per_crane * effective_cranes
+
+    estimated = total_moves / vessel_rate
+    # Floor at TRAIN_MIN_HOURS so we never return a sub-operational value
+    return max(float(settings.TRAIN_MIN_HOURS), round(estimated, 2))
+
 
 def _build_ensemble() -> VotingRegressor:
     ridge = Pipeline([
@@ -46,9 +172,23 @@ def _build_ensemble() -> VotingRegressor:
         min_samples_leaf=5,
         random_state=42,
     )
-    return VotingRegressor(
-        estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr)]
-    )
+    return VotingRegressor(estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr)])
+
+
+def _build_feature_row(
+    visit_df: pd.DataFrame,
+    feature_template: dict = None,
+) -> Optional[dict]:
+    features = create_features(visit_df)
+    if features is None:
+        return None
+
+    if feature_template:
+        for k, v in feature_template.items():
+            if k not in features or features[k] == 0:
+                features[k] = v
+
+    return features
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -57,24 +197,24 @@ def _build_ensemble() -> VotingRegressor:
 
 def train_stay_model(df: pd.DataFrame, config: dict = None):
     """
-    Train the vessel stay model using ONLY container operation data.
-    Stay target is derived from move_complete_time span (first → last container
-    move completion). No crane data is used in training.
+    Train the vessel stay model using only container operation data.
+
+    The stay target is derived from the raw visit span (not windowed), so the
+    model learns the full operational duration rather than a clipped slice.
     """
     try:
         training_status.set("training", "Training started")
         logger.info("ML training started")
 
         cfg = config or {}
-        min_hours      = cfg.get("min_hours",      settings.TRAIN_MIN_HOURS)
-        max_hours      = cfg.get("max_hours",       settings.TRAIN_MAX_HOURS)
-        min_visit_rows = cfg.get("min_visit_rows",  settings.MIN_VISIT_ROWS)
+        min_hours = cfg.get("min_hours", settings.TRAIN_MIN_HOURS)
+        max_hours = cfg.get("max_hours", settings.TRAIN_MAX_HOURS)
+        min_visit_rows = cfg.get("min_visit_rows", settings.MIN_VISIT_ROWS)
 
-        # ── Iterate visits ───────────────────────────────────────────────────
         grouped = df.groupby("actual_outbound_carrier_visit_id")
 
         X_rows, y_vals = [], []
-        skipped_rows  = 0
+        skipped_rows = 0
         skipped_noise = 0
         skipped_error = 0
 
@@ -83,14 +223,12 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
                 skipped_rows += 1
                 continue
 
-            visit_group  = group.copy()
+            raw_group = group.copy()
+            train_df = _prepare_model_visit_data(raw_group)
 
-            # Prepare data for feature extraction
-            visit_df = prepare_visit_data(visit_group)
-
-            # Compute stay purely from move_complete_time span
-            # (no crane data involved)
-            stay = compute_visit_stay(visit_df)
+            stay = _compute_raw_visit_stay(raw_group)
+            if stay is None:
+                stay = _compute_raw_visit_stay(train_df)
 
             if stay is None:
                 continue
@@ -101,19 +239,32 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
                 skipped_error += 1
                 continue
 
-            features = create_features(visit_df)
+            features = _build_feature_row(train_df)
             if features is None:
                 continue
 
-            X_rows.append([features[f] for f in settings.FEATURE_NAMES])
-            y_vals.append(stay)
+            row = []
+            missing_feature = False
+            for f in settings.FEATURE_NAMES:
+                if f not in features:
+                    missing_feature = True
+                    row.append(0.0)
+                else:
+                    val = features[f]
+                    try:
+                        row.append(float(val))
+                    except Exception:
+                        row.append(0.0)
+            if missing_feature:
+                logger.debug("Feature defaults were applied for visit %s", visit_id)
 
-        # ── Validate ─────────────────────────────────────────────────────────
+            X_rows.append(row)
+            y_vals.append(float(stay))
+
         if not X_rows:
             raise Exception(
-                f"No training data after filtering "
-                f"(noise={skipped_noise}, errors={skipped_error}, "
-                f"short_visits={skipped_rows})"
+                "No training data after filtering "
+                f"(noise={skipped_noise}, errors={skipped_error}, short_visits={skipped_rows})"
             )
 
         X = pd.DataFrame(X_rows, columns=settings.FEATURE_NAMES)
@@ -127,11 +278,8 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         print(f"     Target mean        : {y.mean():.1f}h")
         print(f"     Model type         : VotingRegressor (Ridge + XGBoost + GBR)")
         print(f"     Features           : {list(settings.FEATURE_NAMES)}")
-        logger.info(
-            f"ML training: {len(X)} samples, target mean={y.mean():.1f}h"
-        )
+        logger.info("ML training: %s samples, target mean=%.1fh", len(X), y.mean())
 
-        # ── Fit ──────────────────────────────────────────────────────────────
         model = _build_ensemble()
         model.fit(X, y)
 
@@ -145,56 +293,53 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         print("[OK] Model trained and saved ->", settings.MODEL_PATH)
         logger.info("ML training completed successfully")
 
-        # ── Record model version in DB ────────────────────────────────────────
         _record_model_version(len(X), y, config, model=model, X=X)
 
     except Exception as e:
         training_status.set("failed", str(e))
-        logger.error(f"ML training failed: {e}")
+        logger.error("ML training failed: %s", e)
         print("[ERR] Training failed:", str(e))
 
 
 def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None, X: pd.DataFrame = None):
     """
-    Record a new model version in the DB.
-    Promotion only happens when the new model's holdout MAE beats (or ties)
-    the previously active model.  If no previous model exists, promote
-    unconditionally.  On any DB error the function logs and returns silently
-    so a metadata failure never breaks the training pipeline.
+    Record a new model version in the DB. Promotes only when holdout MAE
+    beats (or ties) the current champion.
     """
     try:
         from db.connection import get_engine
         from sqlalchemy import text
         import json as _json
-        from datetime import datetime, timezone
-        import numpy as np
-        from sklearn.model_selection import cross_val_score
 
         _engine = get_engine()
-        _now    = datetime.now(timezone.utc)
+        _now = datetime.now(timezone.utc)
 
         with _engine.begin() as _conn:
-            # 1. Generate incremental version (v1, v2...)
             v_row = _conn.execute(text("""
-                SELECT version FROM model_versions 
+                SELECT version FROM model_versions
                 WHERE model_name = 'vessel_stay'
                 ORDER BY id DESC LIMIT 1
             """)).fetchone()
-            
+
             last_v = v_row[0] if v_row else "v0"
             try:
                 v_num = int(str(last_v).replace("v", "")) + 1
-            except:
+            except Exception:
                 v_num = 1
             _vtag = f"v{v_num}"
 
-        # ── Holdout MAE via 5-fold CV ────────────────────────────────────────
         holdout_mae = None
         if model is not None and X is not None and len(X) >= 20:
             try:
-                neg_maes = cross_val_score(model, X, y, cv=min(3, len(X)), scoring="neg_mean_absolute_error")
+                neg_maes = cross_val_score(
+                    model,
+                    X,
+                    y,
+                    cv=min(3, len(X)),
+                    scoring="neg_mean_absolute_error",
+                )
                 holdout_mae = round(float(-neg_maes.mean()), 4)
-                logger.info("[ML] Holdout MAE (5-fold CV): %.4f", holdout_mae)
+                logger.info("[ML] Holdout MAE: %.4f", holdout_mae)
             except Exception as cv_exc:
                 logger.warning("[ML] CV scoring failed (non-fatal): %s", cv_exc)
 
@@ -208,12 +353,11 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
                 ON CONFLICT (name) DO UPDATE SET updated_at = EXCLUDED.updated_at
                 RETURNING id
             """), {
-                "fn":  _json.dumps(settings.FEATURE_NAMES),
+                "fn": _json.dumps(settings.FEATURE_NAMES),
                 "now": _now,
             }).fetchone()
             fc_id = fc_row[0]
 
-            # ── Check previous active model's MAE ────────────────────────────
             prev_row = _conn.execute(text("""
                 SELECT metrics FROM model_versions
                 WHERE model_name = 'vessel_stay' AND status = 'active'
@@ -228,7 +372,6 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
                 except Exception:
                     pass
 
-            # Promote when: no previous model, no MAE available, or new MAE is better
             should_promote = (
                 prev_mae is None
                 or holdout_mae is None
@@ -240,8 +383,8 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
 
             if should_promote:
                 _conn.execute(text("""
-                    UPDATE model_versions 
-                    SET status = 'retired', 
+                    UPDATE model_versions
+                    SET status = 'retired',
                         tags = jsonb_set(tags, '{}', (tags - 'CHAMPION')::jsonb),
                         updated_at = :now
                     WHERE model_name = 'vessel_stay' AND status = 'active'
@@ -249,12 +392,10 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
                 logger.info("[ML] Previous champion retired. New model promoted to active.")
             else:
                 logger.warning(
-                    "[ML] New model MAE %.4f is worse than previous %.4f — "
-                    "marking as 'CHALLENGER', NOT promoting.",
+                    "[ML] New model MAE %.4f is worse than previous %.4f — marking as candidate.",
                     holdout_mae, prev_mae,
                 )
 
-            # Metadata enrichment
             full_metrics = {
                 "holdout_mae": holdout_mae,
                 "timestamp": _now.isoformat(),
@@ -268,8 +409,6 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
 
             model_bytes = None
             if model is not None:
-                import io
-                import joblib
                 buf = io.BytesIO()
                 joblib.dump({"model": model, "features": settings.FEATURE_NAMES}, buf)
                 model_bytes = buf.getvalue()
@@ -291,18 +430,19 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
                     promoted_at  = EXCLUDED.promoted_at,
                     updated_at   = EXCLUDED.updated_at
             """), {
-                "ver":         _vtag,
-                "path":        settings.MODEL_PATH,
-                "fcid":        fc_id,
-                "size":        n_samples,
-                "status":      new_status,
-                "tags":        _json.dumps(tags),
-                "mb":          model_bytes,
+                "ver": _vtag,
+                "path": settings.MODEL_PATH,
+                "fcid": fc_id,
+                "size": n_samples,
+                "status": new_status,
+                "tags": _json.dumps(tags),
+                "mb": model_bytes,
                 "promoted_at": _now if should_promote else None,
-                "metrics":     _json.dumps(full_metrics),
-                "now":         _now,
+                "metrics": _json.dumps(full_metrics),
+                "now": _now,
             })
             logger.info("[ML] Model version recorded: vessel_stay@%s status=%s", _vtag, new_status)
+
     except Exception as _ve:
         logger.warning("[ML] Could not record model version (non-fatal): %s", _ve)
 
@@ -310,9 +450,6 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
 # ─────────────────────────────────────────────────────────────────────────────
 # Model loading  (cached)
 # ─────────────────────────────────────────────────────────────────────────────
-
-_cached_model_bundle = None
-
 
 def load_stay_model():
     global _cached_model_bundle
@@ -323,12 +460,12 @@ def load_stay_model():
     try:
         from db.connection import get_engine
         from sqlalchemy import text
-        import io
+
         engine = get_engine()
         with engine.connect() as conn:
             row = conn.execute(text("""
-                SELECT model_binary FROM model_versions 
-                WHERE status = 'active' AND model_binary IS NOT NULL 
+                SELECT model_binary FROM model_versions
+                WHERE status = 'active' AND model_binary IS NOT NULL
                 ORDER BY promoted_at DESC NULLS LAST LIMIT 1
             """)).fetchone()
             if row and row[0]:
@@ -346,10 +483,11 @@ def load_stay_model():
 
     if bundle.get("features") != settings.FEATURE_NAMES:
         logger.warning(
-            "[ML] Model feature mismatch — bundle has %s, settings expects %s. "
-            "Attempting to serve with available features; schedule a retrain.",
-            bundle.get("features"), settings.FEATURE_NAMES,
+            "[ML] Model feature mismatch — bundle has %s, settings expects %s.",
+            bundle.get("features"),
+            settings.FEATURE_NAMES,
         )
+
     _cached_model_bundle = bundle
     return _cached_model_bundle
 
@@ -362,37 +500,79 @@ def predict_visit_stay_duration(
     df: pd.DataFrame,
     mph_override: float = None,
     feature_template: dict = None,
+    crane_count: int = 0,
 ) -> float | dict | None:
+    """
+    Predict stay duration for a single visit using the ML model.
+
+    Always runs ML inference — this function is exclusively for the
+    'predicted' output. Actual stay is computed separately in vessel_service.
+
+    The key invariant: features must be built from the UNWINDOWED raw data
+    so that move_span_hours reflects the true operational span the model was
+    trained on. Using prepare_visit_data (which applies history windowing)
+    at inference time was the root cause of severely under-predicted stays.
+
+    Heuristic: physics-based estimate used only as an outlier guard rail,
+    not blended in with a fixed weight.
+    """
     bundle = load_stay_model()
     if bundle is None:
         return {"error": "Model not trained"}
     if isinstance(bundle, dict) and "error" in bundle:
         return bundle
 
-    model         = bundle["model"]
+    model = bundle["model"]
     feature_names = bundle["features"]
 
-    features = create_features(df)
+    # ── CRITICAL: use _prepare_model_visit_data (no history windowing) ───────
+    # prepare_visit_data clips move times to a window around vessel_departure,
+    # producing a tiny move_span_hours that collapses all predictions to ~0.5h.
+    # _prepare_model_visit_data preserves the full operational span.
+    visit_df = _prepare_model_visit_data(df)
+    if visit_df.empty:
+        return None
+
+    features = _build_feature_row(visit_df, feature_template=feature_template)
     if features is None:
         return None
 
-    # Merge with feature template if provided (fills missing operational context)
-    if feature_template:
-        for k, v in feature_template.items():
-            if k not in features or features[k] == 0:
-                features[k] = v
+    # ── Inject move_span_hours from the actual computed stay when available ───
+    # create_features derives move_span_hours from event_time deltas, which
+    # may still be imprecise for sparse datasets. Override with the ground-
+    # truth span when we can compute it.
+    actual_stay = _compute_raw_visit_stay(visit_df)
+    if actual_stay is not None and actual_stay > 0:
+        features["move_span_hours"] = actual_stay
 
-    # Fill any remaining feature names with 0
     for f in feature_names:
         if f not in features:
             features[f] = 0.0
 
-    X    = pd.DataFrame(
-        [[features[f] for f in feature_names]],
-        columns=feature_names,
+    X = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
+    ml_pred = float(model.predict(X)[0])
+
+    # ── Physics-based sanity bound ───────────────────────────────────────────
+    total_moves = int(features.get("total_moves", len(visit_df)) or len(visit_df))
+    effective_cranes = crane_count if crane_count > 0 else max(1, int(features.get("_crane_count", 1) or 1))
+    heuristic = _heuristic_span_from_metrics(
+        total_moves=total_moves,
+        crane_count=effective_cranes,
+        historical_mph_avg=mph_override,
     )
-    pred = model.predict(X)[0]
-    return round(float(pred), 2)
+
+    # Trust ML within [0.4×, 3.0×] of the heuristic; average outside that band.
+    ABSOLUTE_MIN_HOURS = float(settings.TRAIN_MIN_HOURS)  # 2h
+    ABSOLUTE_MAX_HOURS = 240.0
+
+    if ml_pred < ABSOLUTE_MIN_HOURS:
+        pred = heuristic  # model has failed; fall back entirely
+    elif ml_pred > ABSOLUTE_MAX_HOURS:
+        pred = heuristic  # model has failed; fall back entirely
+    else:
+        pred = ml_pred    # trust the ML model
+
+    return round(float(max(float(settings.TRAIN_MIN_HOURS), pred)), 2)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -403,30 +583,67 @@ def predict_vessel_stay_duration(
     prepared_visits: dict,
     mph_override: float = None,
     feature_template: dict = None,
+    crane_counts: dict = None,
 ) -> dict:
+    """
+    Predict stay across all visits for a vessel.
+
+    prepared_visits: {visit_id: DataFrame} — must be raw (unwindowed) DFs so
+        that move_span_hours reflects the real operational span.
+    crane_counts: optional {visit_id: int} from DB. When provided, each
+        visit's crane count is passed to the heuristic for a physics-accurate
+        sanity bound.
+
+    Visits are weighted by container count so large visits dominate the
+    average over small outlier visits.
+    """
     if not prepared_visits:
         return {"error": "No data found for vessel"}
 
-    preds: list[float] = []
+    crane_counts = crane_counts or {}
+    weighted_sum = 0.0
+    total_weight = 0
+    visit_preds: dict[str, float] = {}
+
     for visit_id, visit_df in prepared_visits.items():
         if visit_df is None or visit_df.empty:
             continue
+
+        cranes = crane_counts.get(str(visit_id), 0)
+
         pred = predict_visit_stay_duration(
             visit_df,
-            mph_override=mph_override,
+            mph_override=None,
             feature_template=feature_template,
+            crane_count=cranes,
         )
         if isinstance(pred, dict):
             return pred
-        if pred is not None:
-            preds.append(pred)
+        if pred is None:
+            continue
 
-    if not preds:
+        weight = (
+            int(visit_df["unit_id"].nunique())
+            if "unit_id" in visit_df.columns
+            else len(visit_df)
+        )
+        weight = max(weight, 1)
+
+        visit_preds[str(visit_id)] = float(pred)
+        weighted_sum += float(pred) * weight
+        total_weight += weight
+
+    if not visit_preds:
         return {"error": "No prediction data available"}
 
+    weighted_avg = round(weighted_sum / total_weight, 2)
+    vals = list(visit_preds.values())
+
     return {
-        "avg_hours": round(sum(preds) / len(preds), 2),
-        "visits":    len(preds),
+        "avg_hours": weighted_avg,
+        "visits":    len(visit_preds),
+        "max_hours": round(max(vals), 2),
+        "min_hours": round(min(vals), 2),
     }
 
 
@@ -437,18 +654,18 @@ def predict_vessel_stay_duration(
 def predict_stay_duration_from_metrics(
     loaded: int,
     discharged: int,
+    crane_count: int = 1,
     historical_mph_avg: float = None,
     feature_template: dict = None,
+    historical_avg_stay_hours: float = None,   # ← ADD THIS
 ) -> dict:
     """
-    Predict vessel stay duration from load/discharge counts alone.
-    No crane data is used.
+    Predict vessel stay duration from load/discharge counts and crane info.
 
-    move_span_hours is estimated as:
-        total_moves / moves_per_hour_rate
-    where moves_per_hour_rate defaults to MOVES_PER_HOUR_PER_CRANE (a
-    per-vessel throughput baseline) or is overridden by historical_mph_avg
-    when available from prior visits of this service.
+    When a trained model is available the ML prediction is the primary output.
+    The physics heuristic acts only as a sanity bound (same logic as
+    predict_visit_stay_duration) — it does NOT get blended in with a fixed
+    weight.
     """
     bundle = load_stay_model()
     if bundle is None:
@@ -456,20 +673,17 @@ def predict_stay_duration_from_metrics(
     if isinstance(bundle, dict) and "error" in bundle:
         return bundle
 
-    model         = bundle["model"]
+    model = bundle["model"]
     feature_names = bundle["features"]
 
-    total_moves = loaded + discharged
-    imbalance   = abs(loaded - discharged)
+    total_moves = int(loaded) + int(discharged)
+    imbalance = abs(int(loaded) - int(discharged))
 
-    # Estimate operational duration from move throughput rate (no crane data)
-    throughput_rate = (
-        float(historical_mph_avg)
-        if historical_mph_avg and float(historical_mph_avg) > 0
-        else settings.MOVES_PER_HOUR_PER_CRANE
+    heuristic_span_hours = _heuristic_span_from_metrics(
+        total_moves=total_moves,
+        crane_count=crane_count,
+        historical_mph_avg=historical_mph_avg,
     )
-    # Minimum 6 hours to avoid unrealistically short predictions
-    estimated_span_hours = max(6.0, total_moves / max(throughput_rate, 1.0))
 
     features: dict = {
         "loaded":                 int(loaded),
@@ -486,7 +700,11 @@ def predict_stay_duration_from_metrics(
         "hazard_count":           int(total_moves * settings.DEFAULT_HAZARD_RATIO),
         "oog_count":              int(total_moves * settings.DEFAULT_OOG_RATIO),
         "service_hash":           123456,
-        "move_span_hours":        estimated_span_hours,
+        "move_span_hours": (
+    float(historical_avg_stay_hours)
+    if historical_avg_stay_hours and float(historical_avg_stay_hours) > 0
+    else heuristic_span_hours
+),
         "restow_intensity":       1.0,
         "block_concentration":    0.5,
         "reefer_equipment_ratio": settings.DEFAULT_REEFER_RATIO,
@@ -494,22 +712,31 @@ def predict_stay_duration_from_metrics(
         "heavy_ratio":            0.3,
     }
 
-    # Merge with feature template if provided
     if feature_template:
         for k, v in feature_template.items():
             if k not in features or features[k] == 0:
                 features[k] = v
 
-    # Fill any remaining feature names with 0
     for f in feature_names:
         if f not in features:
             features[f] = 0.0
 
-    X        = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
-    pred     = model.predict(X)[0]
-    avg_hours = round(float(pred), 2)
+    X = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
+    ml_pred = float(model.predict(X)[0])
 
-    # Derived metrics (informational only)
+    # Apply the same outlier-clamping as predict_visit_stay_duration.
+    ABSOLUTE_MIN_HOURS = float(settings.TRAIN_MIN_HOURS)
+    ABSOLUTE_MAX_HOURS = 240.0
+
+    if ml_pred < ABSOLUTE_MIN_HOURS:
+        avg_hours = heuristic_span_hours
+    elif ml_pred > ABSOLUTE_MAX_HOURS:
+        avg_hours = heuristic_span_hours
+    else:
+        avg_hours = ml_pred
+
+    avg_hours = round(float(max(float(settings.TRAIN_MIN_HOURS), avg_hours)), 2)
+
     suitable_berth = (
         settings.BERTH_HIGH_LABEL if total_moves > settings.BERTH_HIGH_VOLUME_THRESHOLD
         else settings.BERTH_MED_LABEL if total_moves > settings.BERTH_MED_VOLUME_THRESHOLD
@@ -520,17 +747,10 @@ def predict_stay_duration_from_metrics(
     )
 
     return {
-        "mode":   "manual",
-        "vessel": None,
-        "actual": {"visits": {}, "avg_hours": None},
+        "mode":     "manual",
+        "vessel":   None,
+        "actual":   {"visits": {}, "avg_hours": None},
         "predicted": {"avg_hours": avg_hours, "visits": 1},
-        "risks": [
-            f"Estimated {avg_hours:.1f}h stay based on {total_moves} total moves."
-        ],
-        "execution_plan": [
-            f"Assign vessel to {suitable_berth} based on volume.",
-            f"Estimated stay: {avg_hours:.1f} hours for {total_moves} moves.",
-        ],
         "berth_analysis": [{
             "berth":               suitable_berth,
             "block":               "A",

@@ -383,6 +383,19 @@ def init_training_metadata_schema(engine) -> None:
                 updated_at        TIMESTAMP DEFAULT NOW()
             );
         """))
+        # ── Migrations: add columns that may be missing from older deployments ──
+        migration_cols = [
+            ("model_versions", "tags",         "JSONB    DEFAULT '[]'::JSONB"),
+            ("model_versions", "model_binary", "BYTEA"),
+            ("model_versions", "promoted_at",  "TIMESTAMP"),
+        ]
+        for table, col, col_def in migration_cols:
+            try:
+                conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_def}"
+                ))
+            except Exception:
+                pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
