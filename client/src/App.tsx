@@ -8,7 +8,7 @@ import Layout from "./components/Layout";
 import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute, AdminRoute } from "./components/ProtectedRoute";
 
-const OperationalDashboard = lazy(() => import("./pages/OperationalDashboard"));
+const OperationalDashboard = lazy(() => import("./pages/Heatmap"));
 const StayTimeAnalysis = lazy(() => import("./pages/StayTimeAnalysis/StayTimeAnalysis"));
 const TrainModel = lazy(() => import("./pages/TrainModel"));
 const DataIngestion = lazy(() => import("./pages/DataIngestion"));
@@ -28,7 +28,7 @@ function PageLoader() {
 
 export default function App() {
   useEffect(() => {
-    const t = setTimeout(() => { import("./pages/OperationalDashboard"); }, 2000);
+    const t = setTimeout(() => { import("./pages/Heatmap"); }, 2000);
     return () => clearTimeout(t);
   }, []);
 

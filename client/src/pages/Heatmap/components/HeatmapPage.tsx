@@ -6,26 +6,7 @@ import {
   StarRounded
 } from "@mui/icons-material";
 
-//Heatmap page
-interface BlockData {
-  count: number;
-  hazardous: number;
-  reefer: number;
-  oog: number;
-  intensity: number;
-  concentration: "High" | "Medium" | "Low";
-}
-
-//Response data
-interface VesselHeatmapResponse {
-  vessel: string;
-  visit_id: string;
-  recommended_berth?: string;
-  max_block: string;
-  summary: { hazardous: number; reefer: number; oog: number };
-  layout: Record<string, { x: number; y: number }>;
-  blocks: Record<string, BlockData>;
-}
+import { type VesselHeatmapResponse, type HeatmapBlock } from "../../../types/vessel";
 
 //concentration color
 const CONC_COLOR = {
@@ -53,7 +34,7 @@ function BlockTile({
   blockId, block, isMax,
 }: {
   blockId: string;
-  block?: BlockData;
+  block?: HeatmapBlock;
   isMax: boolean;
 }) {
   if (!block || block.count === 0) return null;
@@ -124,7 +105,7 @@ function BlockTile({
   );
 }
 
-export default function HeatmapView({ data }: { data: VesselHeatmapResponse }) {
+export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
   if (!data) return null;
 
   const safeBerth = data.recommended_berth || "";
@@ -187,7 +168,7 @@ export default function HeatmapView({ data }: { data: VesselHeatmapResponse }) {
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3, p: 4 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <Box
         sx={{
           display: "grid",

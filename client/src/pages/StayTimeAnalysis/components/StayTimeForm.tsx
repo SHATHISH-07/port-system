@@ -33,6 +33,12 @@ export default function StayTimeForm({
         width: '100%',
       }}
     >
+      <Box sx={{
+        fontSize: '25px',
+        fontWeight: 'bold'
+      }}>
+        Stay Time Analysis
+      </Box>
       <Box
         sx={{
           display: 'flex',

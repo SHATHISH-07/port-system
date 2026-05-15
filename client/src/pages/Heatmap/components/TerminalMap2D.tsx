@@ -31,16 +31,16 @@ const Controls = ({ resetTransform }: { resetTransform: () => void }) => {
   return (
     <Box sx={{ position: "absolute", bottom: 24, right: 24, zIndex: 100, display: "flex", gap: 1 }}>
       <Tooltip title="Reset View">
-        <IconButton 
-          onClick={() => resetTransform()} 
+        <IconButton
+          onClick={() => resetTransform()}
           sx={{ bgcolor: "background.paper", border: "1px solid", borderColor: "divider", boxShadow: 3, "&:hover": { bgcolor: "action.hover" } }}
         >
           <RestartAltRounded />
         </IconButton>
       </Tooltip>
       <Tooltip title="Center View">
-        <IconButton 
-          onClick={() => resetTransform()} 
+        <IconButton
+          onClick={() => resetTransform()}
           sx={{ bgcolor: "background.paper", border: "1px solid", borderColor: "divider", boxShadow: 3, "&:hover": { bgcolor: "action.hover" } }}
         >
           <CenterFocusStrongRounded />
@@ -140,7 +140,6 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
   const waveColor = isDark ? "#38bdf8" : "#bae6fd";
   const roadColor = isDark ? "#1e2433" : "#e2e8f0";
 
-  // Rank-based color logic
   const allBlocks = data ? Object.entries(data.blocks || {})
     .filter(([, b]: [any, any]) => b.count > 0)
     .sort((a: any, b: any) => b[1].count - a[1].count) : [];
@@ -162,8 +161,8 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
         <Box sx={{ position: "absolute", top: 0, left: 0, right: 0, height: 120, background: "linear-gradient(transparent,rgba(56,189,248,0.18),transparent)", animation: "scan 1.8s linear infinite", pointerEvents: "none", zIndex: 99 }} />
       )}
 
-      {/* Overlays */}
-      <Box sx={{ position: "absolute", top: 16, right: 24, zIndex: 10, display: "flex", gap: 1 }}>
+      {/* Legend Overlays */}
+      <Box sx={{ position: "absolute", bottom: 24, left: 24, zIndex: 10, display: "flex", gap: 1 }}>
         <Box sx={{ display: "flex", gap: 2, px: 2, py: 1, bgcolor: isDark ? "rgba(18, 22, 31, 0.9)" : "rgba(255, 255, 255, 0.9)", backdropFilter: "blur(4px)", border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
           {[
             { c: "#dc2626", l: "Highest Density" },
@@ -179,12 +178,12 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
       </Box>
 
       {hovered && (
-        <Box sx={{ position: "absolute", top: 16, left: 16, zIndex: 10, px: 2, py: 1.4, bgcolor: isDark ? "rgba(18, 22, 31, 0.95)" : "rgba(255, 255, 255, 0.95)", border: "1px solid", borderColor: "primary.main", borderRadius: 1, minWidth: 140 }}>
+        <Box sx={{ position: "absolute", top: "50%", left: 24, transform: "translateY(-50%)", zIndex: 10, px: 2, py: 1.4, bgcolor: isDark ? "rgba(18, 22, 31, 0.95)" : "rgba(255, 255, 255, 0.95)", border: "1px solid", borderColor: "primary.main", borderRadius: 1, minWidth: 140 }}>
           <Typography sx={{ fontSize: "0.72rem", color: "primary.main", fontWeight: 800 }}>BLOCK {hovered}</Typography>
           {data?.blocks?.[hovered] && (
-             <Typography sx={{ fontSize: "0.85rem", color: "text.primary", fontWeight: 700, mt: 0.5 }}>
-               Volume: <span style={{ color: isDark ? "#38bdf8" : "#0284c7" }}>{data.blocks[hovered].count} CTN</span>
-             </Typography>
+            <Typography sx={{ fontSize: "0.85rem", color: "text.primary", fontWeight: 700, mt: 0.5 }}>
+              Volume: <span style={{ color: isDark ? "#38bdf8" : "#0284c7" }}>{data.blocks[hovered].count} CTN</span>
+            </Typography>
           )}
         </Box>
       )}
@@ -208,7 +207,7 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
                     <rect x="0" y="0" width="40" height="40" fill={isDark ? "#161b24" : "#ffffff"} opacity="0.5" />
                   </pattern>
 
-                  {/* Heatmap Gradients - DEEP CENTER */}
+                  {/* Heatmap Gradients */}
                   <radialGradient id="gradHigh">
                     <stop offset="0%" stopColor="#7f1d1d" stopOpacity="1" />
                     <stop offset="25%" stopColor="#dc2626" stopOpacity="0.9" />
@@ -230,7 +229,7 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
                 </defs>
 
                 <rect x="-100" y="-100" width="1400" height="1100" fill={bgColor} />
-                
+
                 <g opacity="0.2" style={{ pointerEvents: "none" }}>
                   {Array.from({ length: 33 }).map((_, i) => (
                     <path key={i} d={`M -100,${i * 30} Q 0,${i * 30 - 10} 100,${i * 30} T 300,${i * 30} T 500,${i * 30} T 700,${i * 30} T 900,${i * 30} T 1100,${i * 30} T 1300,${i * 30}`} fill="none" stroke={waveColor} strokeWidth="1.5" />

@@ -1,26 +1,15 @@
-import { Box, Typography, Divider } from "@mui/material";
-import {
-  WarningAmberRounded,
-  CheckCircleOutlineRounded,
-  HelpOutlineRounded,
-  StarRounded
-} from "@mui/icons-material";
+import { Box, Typography, Divider, Stack } from "@mui/material";
+import { StarRounded, ViewInArRounded, InventoryRounded, WarningAmberRounded, HelpOutlineRounded, CheckCircleOutlineRounded } from "@mui/icons-material";
+import type { BlockData, VesselHeatmapViewData } from "../../../types/heatmap";
 
-import { type VesselHeatmapResponse, type HeatmapBlock } from "../types/vessel";
-
-//concentration color
 const CONC_COLOR = {
-  High: { fill: "#dc2626", track: "rgba(220,38,38,0.18)", text: "#f87171", border: "rgba(220,38,38,0.30)" },
-  Medium: { fill: "#ea580c", track: "rgba(234,88,12,0.18)", text: "#fb923c", border: "rgba(234,88,12,0.30)" },
-  Low: { fill: "#16a34a", track: "rgba(22,163,74,0.18)", text: "#4ade80", border: "rgba(22,163,74,0.30)" },
-};
+  High: { fill: "#dc2626", text: "#f87171" },
+  Medium: { fill: "#ea580c", text: "#fb923c" },
+  Low: { fill: "#16a34a", text: "#4ade80" },
+} as const;
 
+const concColor = (c?: "High" | "Medium" | "Low") => CONC_COLOR[c ?? "Low"];
 
-//get color by concentration
-const concColor = (c?: "High" | "Medium" | "Low") =>
-  CONC_COLOR[c ?? "Low"];
-
-//row labels
 const ROW_LABELS: Record<number, string> = {
   0: "ROW A - FAR ZONE",
   1: "ROW B - MID ZONE",
@@ -28,21 +17,12 @@ const ROW_LABELS: Record<number, string> = {
   3: "ROW D - QUAY SIDE",
 };
 
-
-//block tile
-function BlockTile({
-  blockId, block, isMax,
-}: {
-  blockId: string;
-  block?: HeatmapBlock;
-  isMax: boolean;
-}) {
+function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockData; isMax: boolean }) {
   if (!block || block.count === 0) return null;
 
   const cc = concColor(block.concentration);
-  const pct = (block.intensity * 100).toFixed(0);
+  const pct = Math.round((block.intensity || 0) * 100);
 
-  //block tile
   return (
     <Box
       sx={{
@@ -65,57 +45,33 @@ function BlockTile({
         "&:hover": { transform: "translateY(-2px)" },
       }}
     >
-      {isMax && (
-        <StarRounded sx={{ position: "absolute", top: 8, right: 8, color: "#a855f7", fontSize: 20 }} />
-      )}
-
+      {isMax && <StarRounded sx={{ position: "absolute", top: 8, right: 8, color: "#a855f7", fontSize: 20 }} />}
       <Typography sx={{ position: "absolute", top: 12, left: 14, fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.08em", textTransform: "uppercase" }}>
         Block {blockId}
       </Typography>
-
       <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <Typography
-          sx={{
-            fontSize: "2.75rem",
-            fontWeight: 700,
-            color: "#ffffff",
-            lineHeight: 1,
-            fontFamily: "'Google Sans', Roboto, sans-serif",
-          }}
-        >
+        <Typography sx={{ fontSize: "2.75rem", fontWeight: 700, color: "#ffffff", lineHeight: 1, fontFamily: "'Google Sans', Roboto, sans-serif" }}>
           {pct}%
         </Typography>
         <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", mt: 0.5 }}>
           {block.count} Containers
         </Typography>
       </Box>
-
       <Box sx={{ position: "absolute", bottom: 16, width: "calc(100% - 32px)", height: 4, bgcolor: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
-        <Box
-          sx={{
-            height: "100%",
-            width: `${Math.min(Number(pct), 100)}%`,
-            bgcolor: cc.fill,
-            borderRadius: 3,
-            transition: "width 600ms ease",
-          }}
-        />
+        <Box sx={{ height: "100%", width: `${Math.min(pct, 100)}%`, bgcolor: cc.fill, borderRadius: 3, transition: "width 600ms ease" }} />
       </Box>
     </Box>
   );
 }
 
-export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
+export default function HeatmapView({ data }: { data: VesselHeatmapViewData }) {
   if (!data) return null;
 
   const safeBerth = data.recommended_berth || "";
-  const optimalNum = parseInt(safeBerth.replace(/\D/g, '')) || 2;
+  const optimalNum = parseInt(safeBerth.replace(/\D/g, ""), 10) || 2;
 
-  const chunkedRows: string[][] = [];
-  const activeBlockIds = Object.entries(data.blocks || {})
-    .filter(([, block]) => block.count > 0)
-    .map(([id]) => id);
-  const withoutMax = activeBlockIds.filter(id => id !== data.max_block);
+  const activeBlockIds = Object.entries(data.blocks || {}).filter(([, block]) => block.count > 0).map(([id]) => id);
+  const withoutMax = activeBlockIds.filter((id) => id !== data.max_block);
 
   withoutMax.sort((a, b) => {
     const posA = data.layout[a] || { x: 0, y: 0 };
@@ -123,103 +79,69 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
     return posA.y - posB.y || posA.x - posB.x;
   });
 
-  const totalItems = withoutMax.length + 1;
-  const lastRowLength = totalItems % 3 === 0 ? 3 : totalItems % 3;
-
+  const totalItems = withoutMax.length + (data.max_block ? 1 : 0);
+  const lastRowLength = totalItems % 3 === 0 ? 3 : totalItems % 3 || 3;
   const targetIndexInRow = Math.min(optimalNum - 1, lastRowLength - 1);
-  const insertIndex = (totalItems - lastRowLength) + targetIndexInRow;
+  const insertIndex = Math.max(0, totalItems - lastRowLength + targetIndexInRow);
 
   const finalOrder = [...withoutMax];
   if (data.max_block) finalOrder.splice(insertIndex, 0, data.max_block);
 
+  const chunkedRows: string[][] = [];
   for (let i = 0; i < finalOrder.length; i += 3) {
     chunkedRows.push(finalOrder.slice(i, i + 3));
   }
 
-  const totalContainers = Object.values(data.blocks || {}).reduce((s, b) => s + b.count, 0);
+  const totalContainers = Object.values(data.blocks || {}).reduce((s, b) => s + (b.count || 0), 0);
+  const hazmatTotal = data.summary?.hazmat_total ?? data.summary?.hazardous ?? 0;
+  const reeferTotal = data.summary?.reefer_total ?? data.summary?.reefer ?? 0;
+  const oogTotal = data.summary?.oog_total ?? data.summary?.oog ?? 0;
 
   const calcEfficiency = (targetBerth: number) => {
     if (targetBerth === optimalNum) return "100% Optimal";
-
     const distance = Math.abs(targetBerth - optimalNum);
-    const intensityWeight = data.blocks[data.max_block]?.intensity * 20 || 15;
+    const intensityWeight = (data.blocks[data.max_block || ""]?.intensity || 0) * 20 || 15;
     const penalty = Math.round((distance * 25) + intensityWeight);
-
     return `-${penalty}% efficiency`;
   };
 
   let maxBlockTargetX = 50;
-
-  if (chunkedRows.length > 0) {
-    const maxRow = chunkedRows.find(row => row.includes(data.max_block));
-
+  if (chunkedRows.length > 0 && data.max_block) {
+    const maxRow = chunkedRows.find((row) => row.includes(data.max_block!));
     if (maxRow) {
       const colIdx = maxRow.indexOf(data.max_block);
-      const rowLen = maxRow.length;
-
-      if (rowLen === 3) {
-        maxBlockTargetX = colIdx === 0 ? 16.6 : colIdx === 1 ? 50 : 83.3;
-      } else if (rowLen === 2) {
-        maxBlockTargetX = colIdx === 0 ? 33.3 : 66.6;
-      } else {
-        maxBlockTargetX = 50;
-      }
+      if (maxRow.length === 3) maxBlockTargetX = colIdx === 0 ? 16.6 : colIdx === 1 ? 50 : 83.3;
+      else if (maxRow.length === 2) maxBlockTargetX = colIdx === 0 ? 33.3 : 66.6;
     }
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "repeat(2,1fr)", sm: "repeat(4,1fr)", md: "repeat(7,1fr)" },
-          gap: 1.5,
-        }}
-      >
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3, pt: { xs: 10, lg: 12 }, pb: 16, px: { xs: 2, md: 4, lg: 6 } }}>
+
+      {/* Top Header Grid fixed for responsive wrapping without pushing off screen */}
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 1.5, minWidth: 0 }}>
         {[
           { label: "Vessel", value: data.vessel || "—", accent: "#ffffff" },
           { label: "Visit ID", value: data.visit_id || "—", accent: "#9aa0a6" },
           { label: "Total Containers", value: String(totalContainers), accent: "#ffffff" },
           { label: "Recommended Berth", value: data.recommended_berth || "Unassigned", accent: "#4ade80" },
           { label: "Highest Block", value: data.max_block || "—", accent: "#a855f7" },
-          { label: "Hazardous", value: String(data.summary?.hazardous ?? 0), accent: "#f87171" },
-          { label: "Reefer / OOG", value: `${data.summary?.reefer ?? 0} / ${data.summary?.oog ?? 0}`, accent: "#8ab4f8" },
+          { label: "Hazardous", value: String(hazmatTotal), accent: "#f87171" },
+          { label: "Reefer / OOG", value: `${reeferTotal} / ${oogTotal}`, accent: "#8ab4f8" },
         ].map(({ label, value, accent }) => (
-          <Box
-            key={label}
-            sx={{
-              bgcolor: "#0d1726",
-              border: "1px solid rgba(138,180,248,0.15)",
-              borderRadius: 1.5,
-              px: 2,
-              py: 1.5,
-            }}
-          >
-            <Typography sx={{ fontSize: "0.625rem", fontWeight: 500, color: "#8ab4f8", letterSpacing: "0.08em", textTransform: "uppercase", mb: 0.5 }}>
-              {label}
-            </Typography>
-            <Typography sx={{ fontSize: "1rem", fontWeight: 400, color: accent, lineHeight: 1.2, fontFamily: "'Google Sans', Roboto, sans-serif" }}>
-              {value}
-            </Typography>
+          <Box key={label} sx={{ border: "1px solid rgba(138,180,248,0.15)", borderRadius: 1.5, px: 2, py: 1.5, bgcolor: "background.paper", minWidth: 0 }}>
+            <Typography noWrap sx={{ fontSize: "0.625rem", fontWeight: 500, color: "#8ab4f8", letterSpacing: "0.08em", textTransform: "uppercase", mb: 0.5 }}>{label}</Typography>
+            <Typography noWrap sx={{ fontSize: "1rem", fontWeight: 400, color: accent, lineHeight: 1.2, fontFamily: "'Google Sans', Roboto, sans-serif" }}>{value}</Typography>
           </Box>
         ))}
       </Box>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 280px" }, gap: 3, alignItems: "start" }}>
-        <Box
-          sx={{
-            bgcolor: "#0d1726",
-            border: "1px solid rgba(138,180,248,0.15)",
-            borderRadius: 2,
-            overflow: "hidden",
-            backgroundImage: "linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-            position: "relative",
-            display: "flex",
-            flexDirection: "column"
-          }}
-        >
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 320px" }, gap: 3, alignItems: "start", minWidth: 0 }}>
+
+        {/* Left Side: Heatmap Blocks */}
+        <Box sx={{ bgcolor: "#0d1726", border: "1px solid rgba(138,180,248,0.15)", borderRadius: 2, overflow: "hidden", backgroundImage: "linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)", backgroundSize: "40px 40px", position: "relative", display: "flex", flexDirection: "column", minWidth: 0 }}>
           <Box sx={{ px: 3, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)", display: "flex", alignItems: "center", gap: 1, bgcolor: "#0d1726" }}>
-            <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase", flex: 1 }}>
+            <Typography noWrap sx={{ fontSize: "0.75rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase", flex: 1 }}>
               Vessel Cargo Concentration — {data.vessel}
             </Typography>
             <Box sx={{ display: "flex", gap: 0.75, alignItems: "center" }}>
@@ -227,47 +149,35 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
               <Typography sx={{ fontSize: "0.6875rem", color: "#4ade80", fontWeight: 600, letterSpacing: "0.05em" }}>LIVE</Typography>
             </Box>
           </Box>
-          <Box sx={{ p: 4, pb: 0, display: "flex", flexDirection: "column", gap: 6, flexGrow: 1 }}>
+
+          <Box sx={{ p: { xs: 2, md: 4 }, pb: 0, display: "flex", flexDirection: "column", gap: 6, flexGrow: 1 }}>
             {chunkedRows.map((rowBlockIds, rowIdx) => (
               <Box key={rowIdx} sx={{ position: "relative", zIndex: 2 }}>
-                <Typography
-                  sx={{
-                    position: "absolute", right: 0, top: -28,
-                    fontSize: "0.625rem", fontWeight: 600, color: "#475e7a",
-                    letterSpacing: "0.1em", textTransform: "uppercase"
-                  }}
-                >
+                <Typography sx={{ position: "absolute", right: 0, top: -28, fontSize: "0.625rem", fontWeight: 600, color: "#475e7a", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                   {ROW_LABELS[rowIdx] || `ROW ${rowIdx + 1} ZONE`}
                 </Typography>
-
                 <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 3 }}>
-                  {rowBlockIds.map(blockId => (
-                    <BlockTile
-                      key={blockId}
-                      blockId={blockId}
-                      block={data.blocks[blockId]}
-                      isMax={blockId === data.max_block}
-                    />
+                  {rowBlockIds.map((blockId) => (
+                    <BlockTile key={blockId} blockId={blockId} block={data.blocks[blockId]} isMax={blockId === data.max_block} />
                   ))}
                 </Box>
               </Box>
             ))}
           </Box>
 
-          <Box sx={{ position: "relative", pt: 6, pb: 4, px: 4, mt: "auto" }}>
+          <Box sx={{ position: "relative", pt: 6, pb: 4, px: 4, mt: "auto", display: { xs: "none", md: "block" } }}>
             <svg width="100%" height="80" style={{ position: "absolute", top: -20, left: 0, zIndex: 1, overflow: "visible" }}>
-              {[1, 2, 3].map(num => {
+              {[1, 2, 3].map((num) => {
                 const startX = num === 1 ? 16.6 : num === 2 ? 50 : 83.3;
                 const isOpt = optimalNum === num;
                 return (
                   <g key={num}>
                     <path d={`M ${startX}% 80 L ${maxBlockTargetX}% 0`} fill="none" stroke={isOpt ? "#4ade80" : "#dc2626"} strokeWidth="2" strokeDasharray="6,6" opacity={isOpt ? "1" : "0.5"} />
-                    <text x={`${(startX + maxBlockTargetX) / 2}%`} y="40" fill={isOpt ? "#4ade80" : "#dc2626"} fontSize="11" fontWeight="600" textAnchor="middle" style={{ textShadow: "0px 0px 4px #000" }}>{calcEfficiency(num)}</text>
+                    <text x={`${(startX + maxBlockTargetX) / 2}%`} y="40" fill={isOpt ? "#4ade80" : "#dc2626"} fontSize="11" fontWeight="700" textAnchor="middle">{calcEfficiency(num)}</text>
                   </g>
                 );
               })}
             </svg>
-
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, position: "relative", zIndex: 2 }}>
               {[1, 2, 3].map(num => {
                 const isOpt = optimalNum === num;
@@ -285,12 +195,47 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
             </Box>
           </Box>
         </Box>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+
+        {/* Right Side: Fixed Stack Panels */}
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+
+          <Box sx={{ bgcolor: "background.paper", border: "1px solid rgba(138,180,248,0.15)", borderRadius: 2, p: 2.5 }}>
+            <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase", mb: 2 }}>
+              Density Profile
+            </Typography>
+
+            <Stack spacing={2} divider={<Divider sx={{ borderColor: "rgba(138,180,248,0.1)" }} />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ViewInArRounded sx={{ color: 'text.secondary', fontSize: 18 }} />
+                  <Typography variant="caption" color="text.secondary">Highest block</Typography>
+                </Box>
+                <Typography sx={{ fontSize: "1.2rem", fontWeight: 900 }}>{data.max_block || "—"}</Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <InventoryRounded sx={{ color: 'text.secondary', fontSize: 18 }} />
+                  <Typography variant="caption" color="text.secondary">Total containers</Typography>
+                </Box>
+                <Typography sx={{ fontSize: "1.2rem", fontWeight: 900 }}>{totalContainers}</Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <WarningAmberRounded sx={{ color: 'warning.main', fontSize: 18 }} />
+                  <Typography variant="caption" color="text.secondary">Special cargo</Typography>
+                </Box>
+                <Typography sx={{ fontSize: "1.2rem", fontWeight: 900, color: "warning.main" }}>
+                  {hazmatTotal + reeferTotal + oogTotal}
+                </Typography>
+              </Box>
+            </Stack>
+          </Box>
+
           <Box sx={{ bgcolor: "#0d1726", border: "1.5px solid rgba(74, 222, 128, 0.4)", borderRadius: 2, overflow: "hidden" }}>
             <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)" }}>
-              <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                Berth Suitability
-              </Typography>
+              <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Berth Suitability</Typography>
             </Box>
             <Box sx={{ px: 2.5, py: 2.5 }}>
               <Typography sx={{ fontSize: 32, fontWeight: 700, color: "#4ade80", lineHeight: 1, fontFamily: "'Google Sans', Roboto, sans-serif", mb: 0.5 }}>
@@ -309,57 +254,16 @@ export default function HeatmapPage({ data }: { data: VesselHeatmapResponse }) {
               <Typography sx={{ fontSize: 20, fontWeight: 300, color: "#a855f7", fontFamily: "'Google Sans', Roboto, sans-serif" }}>
                 {data.max_block || "—"}
               </Typography>
-              {data.max_block && data.blocks[data.max_block] && (
-                <Typography sx={{ fontSize: "0.75rem", color: "#9aa0a6", mt: 0.25 }}>
-                  {data.blocks[data.max_block].count} Containers · {(data.blocks[data.max_block].intensity * 100).toFixed(0)}% utilisation
-                </Typography>
-              )}
             </Box>
           </Box>
 
           <Box sx={{ bgcolor: "#0d1726", border: "1px solid rgba(138,180,248,0.15)", borderRadius: 2, overflow: "hidden" }}>
-            <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)" }}>
-              <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                Cargo Summary
-              </Typography>
-            </Box>
-            <Box sx={{ px: 2.5, py: 2, display: "flex", flexDirection: "column", gap: 1.25 }}>
-              {[
-                { label: "Hazardous", value: data.summary?.hazardous ?? 0, accent: "#f87171", warnAt: 1 },
-                { label: "Reefer", value: data.summary?.reefer ?? 0, accent: "#60a5fa", warnAt: 1 },
-                { label: "OOG", value: data.summary?.oog ?? 0, accent: "#c084fc", warnAt: 1 },
-              ].map(({ label, value, accent, warnAt }) => (
-                <Box key={label} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <Typography sx={{ fontSize: "0.8125rem", color: "#9aa0a6" }}>{label}</Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                    {value >= warnAt && <WarningAmberRounded sx={{ fontSize: 13, color: accent }} />}
-                    <Typography sx={{ fontSize: "0.875rem", fontWeight: 500, color: value >= warnAt ? accent : "#5f6368" }}>
-                      {value}
-                    </Typography>
-                  </Box>
-                </Box>
-              ))}
-              {(data.summary?.hazardous ?? 0) === 0 &&
-                (data.summary?.reefer ?? 0) === 0 &&
-                (data.summary?.oog ?? 0) === 0 && (
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5 }}>
-                    <CheckCircleOutlineRounded sx={{ fontSize: 14, color: "#4ade80" }} />
-                    <Typography sx={{ fontSize: "0.75rem", color: "#4ade80" }}>No special cargo</Typography>
-                  </Box>
-                )}
-            </Box>
-          </Box>
-
-          <Box sx={{ bgcolor: "#0d1726", border: "1px solid rgba(138,180,248,0.15)", borderRadius: 2, overflow: "hidden", mt: 'auto' }}>
             <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(138,180,248,0.1)", display: "flex", alignItems: "center", gap: 1 }}>
               <HelpOutlineRounded sx={{ fontSize: 14, color: "#8ab4f8" }} />
-              <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                Concentration Legend
-              </Typography>
+              <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: "#8ab4f8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Concentration Legend</Typography>
             </Box>
             <Box sx={{ px: 2.5, py: 2 }}>
               <Box sx={{ width: "100%", height: 6, borderRadius: 2, mb: 1.5, background: "linear-gradient(90deg, #16a34a 0%, #ea580c 50%, #dc2626 100%)" }} />
-
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
                 {([
                   { level: "High", desc: "> 65% utilisation", ...CONC_COLOR.High },
