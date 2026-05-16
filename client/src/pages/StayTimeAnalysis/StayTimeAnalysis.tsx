@@ -10,6 +10,7 @@ import {
   Paper,
   Stack,
 } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 
 import MetricCard from './components/MetricCard';
 import StayTimeForm from './components/StayTimeForm';
@@ -260,157 +261,252 @@ export default function StayTimeAnalysis() {
       sx={{
         minHeight: '100vh',
         bgcolor: 'background.default',
-        width: '100%',
-        overflowX: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
       }}
     >
+      {/* Top Header Control Bar */}
       <Box
         sx={{
-          width: '100%',
-          px: { xs: 2, sm: 3, md: 4 },
-          py: { xs: 2, md: 4 },
+          px: { xs: 3, md: 6 },
+          py: 4,
+          bgcolor: alpha(theme.palette.background.default, 0.9),
+          backdropFilter: 'blur(25px)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1100,
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
         }}
       >
-        <Box
-          sx={{
-            mb: 4,
-            p: { xs: 3, md: 4 },
-            borderRadius: 4,
-            bgcolor: 'background.paper',
-            border: '1px solid',
-            borderColor: 'divider',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
-            width: '100%',
-          }}
-        >
-          <StayTimeForm
-            value={vesselId}
-            onChange={setVesselId}
-            loaded={loaded}
-            onLoadedChange={setLoaded}
-            discharged={discharged}
-            onDischargedChange={setDischarged}
-            onSubmit={handleAnalyze}
-            loading={loading}
-          />
-        </Box>
+        <StayTimeForm
+          value={vesselId}
+          onChange={setVesselId}
+          loaded={loaded}
+          onLoadedChange={setLoaded}
+          discharged={discharged}
+          onDischargedChange={setDischarged}
+          onSubmit={handleAnalyze}
+          loading={loading}
+        />
+      </Box>
 
-        {error && (
+      {error && (
+        <Box sx={{ px: { xs: 3, md: 6 }, mt: 2 }}>
           <Alert
             severity="error"
-            variant="outlined"
+            variant="filled"
+            onClose={() => setError(null)}
             sx={{
-              mb: 4,
               borderRadius: 3,
-              bgcolor: alpha(theme.palette.error.main, 0.02),
+              bgcolor: theme.palette.error.main,
+              boxShadow: `0 8px 24px ${alpha(theme.palette.error.main, 0.2)}`,
             }}
           >
             {error}
           </Alert>
-        )}
+        </Box>
+      )}
 
-        {!isLoaded && !loading && !error && (
-          <Box
-            sx={{
-              py: 12,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textAlign: 'center',
-              bgcolor: alpha(theme.palette.background.paper, 0.5),
-              borderRadius: 4,
-              border: '2px dashed',
-              borderColor: 'divider',
-              width: '100%',
-            }}
-          >
-            <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 500 }}>
-              Enter a Vessel ID to begin analysis
+      {/* Main Content Area */}
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          scrollBehavior: 'smooth',
+        }}
+      >
+
+        <Box sx={{ p: { xs: 2, sm: 3, md: 6 }, flex: 1 }}>
+          {!isLoaded && !loading && (
+            <Box
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                opacity: 0.8,
+              }}
+            >
+            <Box
+              sx={{
+                width: 120,
+                height: 120,
+                borderRadius: '50%',
+                bgcolor: alpha(theme.palette.primary.main, 0.05),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mb: 3,
+              }}
+            >
+              <SearchIcon sx={{ fontSize: 48, color: 'primary.main', opacity: 0.5 }} />
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>
+              Ready for Analysis
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Historical data and predictive insights will appear here.
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 400 }}>
+              Enter a Vessel ID or Service code above to generate operational insights.
             </Typography>
           </Box>
         )}
 
         {loading && (
-          <Box sx={{ py: 12, textAlign: 'center', width: '100%' }}>
-            <CircularProgress size={40} thickness={4} sx={{ mb: 3 }} />
-            <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-              Generating analysis...
+          <Box
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <CircularProgress
+              size={56}
+              thickness={5}
+              sx={{
+                mb: 3,
+                color: theme.palette.primary.main,
+                '& .MuiCircularProgress-circle': { strokeLinecap: 'round' },
+              }}
+            />
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+              Synthesizing Data
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Calculating variance, crane intensity, and bottleneck risks...
             </Typography>
           </Box>
         )}
 
         {isLoaded && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
-            <Grid container spacing={3} sx={{ width: '100%', m: 0 }}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <HeroMetricCard
-                  title="Predicted Stay"
-                  value={`${formatNumber(predictedAvg)}h`}
-                  subtitle="Forecast for next visit"
-                  color={theme.palette.primary.main}
-                />
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 5,
+              animation: 'fadeIn 0.6s ease-out forwards',
+              '@keyframes fadeIn': {
+                from: { opacity: 0, transform: 'translateY(20px)' },
+                to: { opacity: 1, transform: 'translateY(0)' },
+              },
+            }}
+          >
+            {/* Hero Header */}
+            <Box>
+              <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.15em' }}>
+                Operational Forecast
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mt: 0.5 }}>
+                <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: '-0.02em' }}>
+                  {analysisData?.vessel_service || vesselId}
+                </Typography>
+                <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                  Analysis Report
+                </Typography>
+              </Box>
+            </Box>
+
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 7 }}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 4,
+                    borderRadius: 5,
+                    border: '1px solid',
+                    borderColor: alpha(theme.palette.primary.main, 0.15),
+                    background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.5)} 100%)`,
+                    backdropFilter: 'blur(10px)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Box sx={{ position: 'relative', zIndex: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main', mb: 1, textTransform: 'uppercase' }}>
+                      Predicted Port Stay
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                      <Typography variant="h1" sx={{ fontWeight: 950, letterSpacing: '-0.04em', fontSize: { xs: '3.5rem', md: '5rem' } }}>
+                        {formatNumber(predictedAvg)}
+                      </Typography>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.5 }}>
+                        hours
+                      </Typography>
+                    </Box>
+                    <Typography variant="body1" sx={{ mt: 2, color: 'text.secondary', fontWeight: 500 }}>
+                      Based on {visitsCount} historical visits and current crane intensity targets.
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      right: -40,
+                      bottom: -40,
+                      width: 240,
+                      height: 240,
+                      borderRadius: '50%',
+                      background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.15)} 0%, transparent 70%)`,
+                      zIndex: 0,
+                    }}
+                  />
+                </Paper>
               </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <HeroMetricCard
-                  title="Historical Baseline"
-                  value={`${formatNumber(actualAvg)}h`}
-                  subtitle={`${visitsCount} visits • Avg stay across history`}
-                  color={theme.palette.text.primary}
-                />
+
+              <Grid size={{ xs: 12, md: 5 }}>
+                <Stack spacing={3} sx={{ height: '100%' }}>
+                  <MetricCard
+                    title="Historical Baseline"
+                    value={`${formatNumber(actualAvg)}h`}
+                    subtitle="Typical stay duration"
+                    accent="default"
+                  />
+                  <MetricCard
+                    title="Estimated Variance"
+                    value={`${variance >= 0 ? '+' : ''}${formatNumber(variance)}h`}
+                    subtitle="Relative to historical mean"
+                    accent={variance >= 0 ? 'warning' : 'success'}
+                  />
+                </Stack>
               </Grid>
             </Grid>
 
-            <Grid container spacing={3} sx={{ width: '100%', m: 0 }}>
-              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-                <MetricCard
-                  title="Variance"
-                  value={`${formatNumber(variance)}h`}
-                  subtitle="Predicted minus actual"
-                  accent={variance >= 0 ? 'warning' : 'success'}
-                />
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>
+                Resource Allocation & Efficiency
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <MetricCard
+                    title="History Coverage"
+                    value={formatNumber(visitsCount, 0)}
+                    subtitle="Analyzed visits"
+                    accent="primary"
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <MetricCard
+                    title="Crane Target"
+                    value="25.0"
+                    subtitle="MPHC objective"
+                    accent="success"
+                  />
+                </Grid>
               </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-                <MetricCard
-                  title="Visits"
-                  value={formatNumber(visitsCount, 0)}
-                  subtitle="Historical visits returned"
-                  accent="primary"
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-                <MetricCard
-                  title="Actual Avg"
-                  value={`${formatNumber(actualAvg)}h`}
-                  subtitle="Historical baseline"
-                  accent="success"
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-                <MetricCard
-                  title="Predicted Avg"
-                  value={`${formatNumber(predictedAvg)}h`}
-                  subtitle="Model output"
-                  accent="warning"
-                />
-              </Grid>
-            </Grid>
+            </Box>
 
-            <DelayAnalysisPanel delays={delayAnalysis} />
-
-            <Grid container spacing={3} sx={{ width: '100%', m: 0 }}>
-              <Grid size={{ xs: 12, xl: 7 }}>
+            <Grid container spacing={4}>
+              <Grid size={{ xs: 12 }}>
                 <StayTimeTrendChart visits={analysisData?.actual?.visits || {}} avgHours={actualAvg} />
               </Grid>
 
-              <Grid size={{ xs: 12, xl: 5 }}>
+              <Grid size={{ xs: 12, lg: 5 }}>
                 <PortBreakdownChart visits={analysisData?.actual?.visits || {}} />
               </Grid>
-
-              <Grid size={{ xs: 12 }}>
+              <Grid size={{ xs: 12, lg: 7 }}>
                 <ComparisonChart
                   actualAvg={actualAvg}
                   predictedAvg={predictedAvg}
@@ -419,11 +515,15 @@ export default function StayTimeAnalysis() {
               </Grid>
 
               <Grid size={{ xs: 12 }}>
+                <DelayAnalysisPanel delays={delayAnalysis} />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
                 <HistoryAnalysisTable
                   actualVisits={analysisData?.actual?.visits || {}}
                   assignments={analysisData?.crane_assignment || []}
-                  avgStay={analysisData?.actual?.avg_hours || 0}
-                  predictedStay={analysisData?.predicted?.avg_hours || 0}
+                  avgStay={actualAvg}
+                  predictedStay={predictedAvg}
                   vesselService={analysisData?.vessel_service || vesselId}
                 />
               </Grid>
@@ -432,5 +532,6 @@ export default function StayTimeAnalysis() {
         )}
       </Box>
     </Box>
+  </Box>
   );
 }

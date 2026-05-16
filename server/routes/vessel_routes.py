@@ -53,8 +53,8 @@ async def get_vessel_analysis(
     """
     try:
         # ── Step 1: load current yard snapshot ──────────────────────────────
-        df_curr = load_from_db("current")
-        df_hist = load_from_db("history")
+        df_curr = load_from_db("current", vessel_id=vessel_id)
+        df_hist = load_from_db("history", vessel_id=vessel_id)
 
         # Always pass history as the baseline so empirical averages are used
         result = analyze_vessel_dashboard(

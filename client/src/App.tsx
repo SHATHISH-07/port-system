@@ -9,18 +9,27 @@ import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute, AdminRoute } from "./components/ProtectedRoute";
 
 const OperationalDashboard = lazy(() => import("./pages/Heatmap"));
-const StayTimeAnalysis = lazy(() => import("./pages/StayTimeAnalysis/StayTimeAnalysis"));
+const StayTimeAnalysis = lazy(
+  () => import("./pages/StayTimeAnalysis/StayTimeAnalysis"),
+);
 const TrainModel = lazy(() => import("./pages/TrainModel"));
 const DataIngestion = lazy(() => import("./pages/DataIngestion"));
 const Login = lazy(() => import("./pages/Login"));
 const Requests = lazy(() => import("./pages/Requests"));
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 const SystemLogs = lazy(() => import("./pages/SystemLogs"));
-const CraneAnalytics = lazy(() => import("./pages/CraneAnalytics"));
+const CraneAnalytics = lazy(() => import("./pages/CraneAnalytics/CraneAnalytics"));
 
 function PageLoader() {
   return (
-    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "60vh",
+      }}
+    >
       <CircularProgress size={28} />
     </Box>
   );
@@ -28,7 +37,9 @@ function PageLoader() {
 
 export default function App() {
   useEffect(() => {
-    const t = setTimeout(() => { import("./pages/Heatmap"); }, 2000);
+    const t = setTimeout(() => {
+      import("./pages/Heatmap");
+    }, 2000);
     return () => clearTimeout(t);
   }, []);
 
@@ -44,21 +55,86 @@ export default function App() {
 
                 {/* Common Protected Routes */}
                 <Route path="/" element={<Navigate to="/stay-analysis" />} />
-                <Route path="/stay-analysis" element={<ProtectedRoute><StayTimeAnalysis /></ProtectedRoute>} />
-                <Route path="/yard-planning" element={<ProtectedRoute><OperationalDashboard /></ProtectedRoute>} />
-                <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
-                <Route path="/crane-analytics" element={<ProtectedRoute><CraneAnalytics /></ProtectedRoute>} />
+                <Route
+                  path="/stay-analysis"
+                  element={
+                    <ProtectedRoute>
+                      <StayTimeAnalysis />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/heatmap"
+                  element={
+                    <ProtectedRoute>
+                      <OperationalDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/requests"
+                  element={
+                    <ProtectedRoute>
+                      <Requests />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/crane-analytics"
+                  element={
+                    <ProtectedRoute>
+                      <CraneAnalytics />
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* Legacy Routes (Kept for now to prevent breaking any direct links during transition) */}
-                <Route path="/history-analysis" element={<Navigate to="/stay-analysis" />} />
-                <Route path="/current-analysis" element={<Navigate to="/stay-analysis" />} />
-                <Route path="/heatmap" element={<Navigate to="/operational-dashboard" />} />
+                <Route
+                  path="/history-analysis"
+                  element={<Navigate to="/stay-analysis" />}
+                />
+                <Route
+                  path="/current-analysis"
+                  element={<Navigate to="/stay-analysis" />}
+                />
+                <Route
+                  path="/heatmap"
+                  element={<Navigate to="/operational-dashboard" />}
+                />
 
                 {/* Admin Routes */}
-                <Route path="/train-model" element={<AdminRoute><TrainModel /></AdminRoute>} />
-                <Route path="/ingest" element={<AdminRoute><DataIngestion /></AdminRoute>} />
-                <Route path="/user-management" element={<AdminRoute><UserManagement /></AdminRoute>} />
-                <Route path="/system-logs" element={<AdminRoute><SystemLogs /></AdminRoute>} />
+                <Route
+                  path="/train-model"
+                  element={
+                    <AdminRoute>
+                      <TrainModel />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/ingest"
+                  element={
+                    <AdminRoute>
+                      <DataIngestion />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/user-management"
+                  element={
+                    <AdminRoute>
+                      <UserManagement />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/system-logs"
+                  element={
+                    <AdminRoute>
+                      <SystemLogs />
+                    </AdminRoute>
+                  }
+                />
               </Routes>
             </Suspense>
           </Layout>

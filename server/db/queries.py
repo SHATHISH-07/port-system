@@ -561,8 +561,12 @@ def _load_crane_ops(
             params: dict = {}
 
             if vessel_id:
-                filters.append("carrier_visit = :v_id")
-                params["v_id"] = vessel_id
+                if isinstance(vessel_id, (list, tuple)):
+                    filters.append("carrier_visit IN :v_ids")
+                    params["v_ids"] = tuple(vessel_id)
+                else:
+                    filters.append("carrier_visit = :v_id")
+                    params["v_id"] = vessel_id
 
             q = f"SELECT * FROM {tbl}"
             if filters:

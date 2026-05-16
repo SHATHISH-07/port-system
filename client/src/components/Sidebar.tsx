@@ -1,7 +1,15 @@
 import { useState } from "react";
-import { Box, Typography, Tooltip, IconButton, useTheme, Button, Collapse } from "@mui/material";
 import {
-  ViewModuleRounded  ,
+  Box,
+  Typography,
+  Tooltip,
+  IconButton,
+  useTheme,
+  Button,
+  Collapse,
+} from "@mui/material";
+import {
+  ViewModuleRounded,
   HistoryOutlined,
   MenuRounded,
   AssignmentOutlined,
@@ -20,10 +28,27 @@ import { useColorMode } from "../theme/ThemeContext";
 const OPEN = 280;
 const CLOSED = 80;
 
-const USER_ITEMS: { path: string; label: string; icon?: React.ElementType; userOnly?: boolean }[] = [
-  { path: "/stay-analysis", label: "Stay Time Analysis", icon: HistoryOutlined },
-  { path: "/yard-planning", label: "Yard Planning", icon: ViewModuleRounded  },
-  { path: "/crane-analytics", label: "Crane Analytics", icon: PrecisionManufacturingOutlined },
+const USER_ITEMS: {
+  path: string;
+  label: string;
+  icon?: React.ElementType;
+  userOnly?: boolean;
+}[] = [
+  {
+    path: "/stay-analysis",
+    label: "Stay Time Analysis",
+    icon: HistoryOutlined,
+  },
+  {
+    path: "/heatmap",
+    label: "Port Heatmap",
+    icon: ViewModuleRounded,
+  },
+  {
+    path: "/crane-analytics",
+    label: "Crane Analytics",
+    icon: PrecisionManufacturingOutlined,
+  },
   { path: "/requests", label: "Requests", icon: AssignmentOutlined },
 ];
 
@@ -49,15 +74,34 @@ export default function Sidebar() {
   const textColor = isDark ? "rgba(255,255,255,0.7)" : "#475569";
   const textActiveColor = isDark ? "#ffffff" : "#0f172a";
   const menuIconColor = isDark ? "rgba(255,255,255,0.5)" : "#64748b";
-  const menuIconHover = isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.05)";
-  const menuIconActive = isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)";
-  const menuIconHoverActive = isDark ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.12)";
+  const menuIconHover = isDark
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(15,23,42,0.05)";
+  const menuIconActive = isDark
+    ? "rgba(255,255,255,0.1)"
+    : "rgba(15,23,42,0.08)";
+  const menuIconHoverActive = isDark
+    ? "rgba(255,255,255,0.14)"
+    : "rgba(15,23,42,0.12)";
 
-  const renderNavItems = (items: { path: string; label: string; icon?: React.ElementType; userOnly?: boolean }[], isSubItem = false) => {
+  const renderNavItems = (
+    items: {
+      path: string;
+      label: string;
+      icon?: React.ElementType;
+      userOnly?: boolean;
+    }[],
+    isSubItem = false,
+  ) => {
     return items.map(({ path, label, icon: Icon }) => {
       const active = loc.pathname === path;
       return (
-        <Tooltip key={path} title={!open && !isSubItem ? label : ""} placement="right" arrow>
+        <Tooltip
+          key={path}
+          title={!open && !isSubItem ? label : ""}
+          placement="right"
+          arrow
+        >
           <Box
             component={Link}
             to={path}
@@ -84,10 +128,19 @@ export default function Sidebar() {
             }}
           >
             {Icon ? (
-              <Icon sx={{ fontSize: 22, flexShrink: 0, color: "inherit", transition: "color 150ms" }} />
+              <Icon
+                sx={{
+                  fontSize: 22,
+                  flexShrink: 0,
+                  color: "inherit",
+                  transition: "color 150ms",
+                }}
+              />
             ) : (
               !open && (
-                <Typography sx={{ fontSize: 13, fontWeight: 700, color: "inherit" }}>
+                <Typography
+                  sx={{ fontSize: 13, fontWeight: 700, color: "inherit" }}
+                >
                   {label.charAt(0)}
                 </Typography>
               )
@@ -148,7 +201,14 @@ export default function Sidebar() {
         }}
       >
         {open && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, mt: 0.5 }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 0.25,
+              mt: 0.5,
+            }}
+          >
             <Typography
               sx={{
                 fontSize: "1rem",
@@ -175,7 +235,10 @@ export default function Sidebar() {
           </Box>
         )}
 
-        <Tooltip title={open ? "Collapse sidebar" : "Expand sidebar"} placement="right">
+        <Tooltip
+          title={open ? "Collapse sidebar" : "Expand sidebar"}
+          placement="right"
+        >
           <IconButton
             onClick={() => setOpen((v) => !v)}
             size="small"
@@ -194,7 +257,11 @@ export default function Sidebar() {
 
       {/* ─── Navigation Items ─── */}
       <Box sx={{ flex: 1, py: 1, overflowY: "auto", overflowX: "hidden" }}>
-        {renderNavItems(USER_ITEMS.filter((item) => !(user?.role === "admin" && item.userOnly)))}
+        {renderNavItems(
+          USER_ITEMS.filter(
+            (item) => !(user?.role === "admin" && item.userOnly),
+          ),
+        )}
 
         {user?.role === "admin" && (
           <>
@@ -229,18 +296,31 @@ export default function Sidebar() {
               <SettingsOutlined sx={{ fontSize: 22, color: "inherit" }} />
               {open && (
                 <>
-                  <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 600, color: "inherit" }}>
+                  <Typography
+                    sx={{
+                      flex: 1,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "inherit",
+                    }}
+                  >
                     Operations
                   </Typography>
-                  {adminOpen ? <ExpandLess sx={{ fontSize: 20 }} /> : <ExpandMore sx={{ fontSize: 20 }} />}
+                  {adminOpen ? (
+                    <ExpandLess sx={{ fontSize: 20 }} />
+                  ) : (
+                    <ExpandMore sx={{ fontSize: 20 }} />
+                  )}
                 </>
               )}
             </Box>
 
-            <Collapse in={adminOpen && open} timeout="auto" unmountOnExit={false}>
-              <Box sx={{ mt: 0.5 }}>
-                {renderNavItems(ADMIN_ITEMS, true)}
-              </Box>
+            <Collapse
+              in={adminOpen && open}
+              timeout="auto"
+              unmountOnExit={false}
+            >
+              <Box sx={{ mt: 0.5 }}>{renderNavItems(ADMIN_ITEMS, true)}</Box>
             </Collapse>
           </>
         )}
@@ -272,7 +352,9 @@ export default function Sidebar() {
                 "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
               }}
             >
-              <span style={{ fontWeight: 600 }}>{isDark ? "Light Mode" : "Dark Mode"}</span>
+              <span style={{ fontWeight: 600 }}>
+                {isDark ? "Light Mode" : "Dark Mode"}
+              </span>
             </Button>
 
             <Button
@@ -285,7 +367,9 @@ export default function Sidebar() {
                 px: 2,
                 borderRadius: "10px",
                 "&:hover": {
-                  bgcolor: isDark ? "rgba(255,70,70,0.1)" : "rgba(255,0,0,0.05)",
+                  bgcolor: isDark
+                    ? "rgba(255,70,70,0.1)"
+                    : "rgba(255,0,0,0.05)",
                   color: isDark ? "#ff6b6b" : "#d32f2f",
                 },
               }}
@@ -295,7 +379,11 @@ export default function Sidebar() {
           </>
         ) : (
           <>
-            <Tooltip title={isDark ? "Light Mode" : "Dark Mode"} placement="right" arrow>
+            <Tooltip
+              title={isDark ? "Light Mode" : "Dark Mode"}
+              placement="right"
+              arrow
+            >
               <IconButton
                 onClick={toggleColorMode}
                 sx={{
@@ -307,7 +395,11 @@ export default function Sidebar() {
                   "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
                 }}
               >
-                {isDark ? <LightModeOutlined sx={{ fontSize: 20 }} /> : <DarkModeOutlined sx={{ fontSize: 20 }} />}
+                {isDark ? (
+                  <LightModeOutlined sx={{ fontSize: 20 }} />
+                ) : (
+                  <DarkModeOutlined sx={{ fontSize: 20 }} />
+                )}
               </IconButton>
             </Tooltip>
 
@@ -321,7 +413,9 @@ export default function Sidebar() {
                   borderRadius: "10px",
                   color: textColor,
                   "&:hover": {
-                    bgcolor: isDark ? "rgba(255,70,70,0.1)" : "rgba(255,0,0,0.05)",
+                    bgcolor: isDark
+                      ? "rgba(255,70,70,0.1)"
+                      : "rgba(255,0,0,0.05)",
                     color: isDark ? "#ff6b6b" : "#d32f2f",
                   },
                 }}

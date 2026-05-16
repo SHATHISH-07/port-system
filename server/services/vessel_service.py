@@ -107,10 +107,36 @@ def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _fetch_crane_counts_batch(visit_ids: list[str]) -> dict[str, int]:
+    """
+    Fetch distinct crane counts for multiple visits in a single DB query.
+    Returns {visit_id: count}.
+    """
+    if not visit_ids:
+        return {}
+    from db.queries import load_from_db
+    try:
+        # Load crane operations for all visits
+        df = load_from_db("crane", vessel_id=visit_ids)
+        if df.empty:
+            return {vid: 0 for vid in visit_ids}
+
+        # Filter out excludes
+        valid = df[df["exclude"] != "Yes"] if "exclude" in df.columns else df
+        if valid.empty or "crane_id" not in valid.columns or "vessel_id" not in valid.columns:
+            return {vid: 0 for vid in visit_ids}
+
+        # Group by vessel_id and count unique cranes
+        counts = valid.groupby("vessel_id")["crane_id"].nunique().to_dict()
+        return {str(vid): int(counts.get(vid, 0)) for vid in visit_ids}
+    except Exception as exc:
+        logger.warning("Batch crane fetch failed: %s", exc)
+    return {vid: 0 for vid in visit_ids}
+
+
 def _fetch_assigned_crane_count(visit_id: str) -> int:
     """
     Fetch the number of distinct cranes assigned to a visit directly from the DB.
-    Returns 0 if no crane data is found.
     """
     crane_df = _fetch_crane_for_visit(visit_id)
     if crane_df.empty:
@@ -540,10 +566,10 @@ def get_yard_heatmap_data(
     """
     from db.queries import load_from_db
 
-    df = load_from_db("current", yard_id=yard_id)
+    df = load_from_db("current", yard_id=yard_id, vessel_id=vessel_id)
 
     if df.empty:
-        df = load_from_db("history", yard_id=yard_id)
+        df = load_from_db("history", yard_id=yard_id, vessel_id=vessel_id)
 
     if df.empty:
         return {
@@ -899,10 +925,9 @@ def analyze_vessel_dashboard(
     # A visit has history data when time-based stay can be computed directly.
     is_current_mode = not bool(actual_raw.get("visits"))
 
-    # ── Fetch crane counts from DB for all visits ────────────────────────────
-    visit_crane_counts: dict = {}
-    for visit_id in visit_groups:
-        visit_crane_counts[str(visit_id)] = _fetch_assigned_crane_count(str(visit_id))
+    # ── Fetch crane counts from DB for all visits (BATCHED) ──────────────────
+    visit_ids = [str(vid) for vid in visit_groups.keys()]
+    visit_crane_counts = _fetch_crane_counts_batch(visit_ids)
 
     # ── Historical baseline for feature template ─────────────────────────────
     feature_template: dict = {}
@@ -918,6 +943,12 @@ def analyze_vessel_dashboard(
         baseline_vessel = baseline_vessel[
             baseline_vessel["outbound_service"].astype(str).str.strip().str.upper() == search_key
         ].copy()
+        
+        # ── OPTIMIZATION: Limit baseline to last 20 visits for speed ──────────
+        v_ids = baseline_vessel["actual_outbound_carrier_visit_id"].unique()
+        if len(v_ids) > 20:
+            last_20 = sorted(v_ids, reverse=True)[:20]
+            baseline_vessel = baseline_vessel[baseline_vessel["actual_outbound_carrier_visit_id"].isin(last_20)].copy()
 
     baseline_prepared: dict = {}
     if not baseline_vessel.empty:

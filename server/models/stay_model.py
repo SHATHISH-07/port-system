@@ -457,31 +457,34 @@ def load_stay_model():
         return _cached_model_bundle
 
     bundle = None
-    try:
-        from db.connection import get_engine
-        from sqlalchemy import text
+    # ── Try loading from disk first (User preference) ────────────────────────
+    if os.path.exists(settings.MODEL_PATH):
+        try:
+            bundle = joblib.load(settings.MODEL_PATH)
+            logger.info("[ML] Loaded model from disk -> %s", settings.MODEL_PATH)
+        except Exception as e:
+            logger.warning("[ML] Failed to load model from disk: %s", e)
 
-        engine = get_engine()
-        with engine.connect() as conn:
-            row = conn.execute(text("""
-                SELECT model_binary FROM model_versions
-                WHERE status = 'active' AND model_binary IS NOT NULL
-                ORDER BY promoted_at DESC NULLS LAST LIMIT 1
-            """)).fetchone()
-            if row and row[0]:
-                buf = io.BytesIO(row[0])
-                bundle = joblib.load(buf)
-                logger.info("[ML] Loaded model from database")
-    except Exception as e:
-        logger.warning("[ML] Failed to load model from database, falling back to disk: %s", e)
-
+    # ── Fallback to DB if disk load failed or file missing ──────────────────
     if bundle is None:
-        if not os.path.exists(settings.MODEL_PATH):
-            return None
-        bundle = joblib.load(settings.MODEL_PATH)
-        logger.info("[ML] Loaded model from disk")
+        try:
+            from db.connection import get_engine
+            from sqlalchemy import text
+            engine = get_engine()
+            with engine.connect() as conn:
+                row = conn.execute(text("""
+                    SELECT model_binary FROM model_versions
+                    WHERE status = 'active' AND model_binary IS NOT NULL
+                    ORDER BY promoted_at DESC NULLS LAST LIMIT 1
+                """)).fetchone()
+                if row and row[0]:
+                    buf = io.BytesIO(row[0])
+                    bundle = joblib.load(buf)
+                    logger.info("[ML] Loaded model from database fallback")
+        except Exception as e:
+            logger.warning("[ML] Failed to load model from database fallback: %s", e)
 
-    if bundle.get("features") != settings.FEATURE_NAMES:
+    if bundle and bundle.get("features") != settings.FEATURE_NAMES:
         logger.warning(
             "[ML] Model feature mismatch — bundle has %s, settings expects %s.",
             bundle.get("features"),
