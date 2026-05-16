@@ -3,6 +3,7 @@ import { Box, Typography, useTheme, IconButton, Tooltip } from "@mui/material";
 import { RestartAltRounded, CenterFocusStrongRounded } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 import * as THREE from "three";
+import type { VesselHeatmapViewData, BlockData } from "../../../types/heatmap";
 
 // ─── Scale & Coordinate System ────────────────────────────────────────────────
 const S = 0.028;
@@ -162,7 +163,7 @@ class TerminalScene {
   shipMeshes: Map<string, THREE.Group> = new Map();
   waterMesh!: THREE.Mesh;
   particleSystems: THREE.Points[] = [];
-  trucks: any[] = [];
+  trucks: { mesh: THREE.Group; path: THREE.Vector3[]; targetIdx: number; speed: number }[] = [];
   train!: THREE.Group;
   trainWheels: THREE.Mesh[] = [];
   truckWheels: THREE.Mesh[] = [];
@@ -985,18 +986,17 @@ class TerminalScene {
   buildDefaultShips() {
     BERTHS.forEach(b => this.buildShip(b.id, b.x, b.y, b.rot, b.defaultShip.name, false));
   }
-
-  applyData(data: any, computedMaxBlock: string | null, targetBerthId: string, _maxBlockData?: { count: number; concentration: string }) {
+  
+  applyData(data: VesselHeatmapViewData, computedMaxBlock: string | null, targetBerthId: string) {
     if (!data || !data.layout) return;
 
     this.blockMeshes.forEach(g => this.scene.remove(g)); this.blockMeshes.clear();
     this.heatBlobs.forEach(({ mesh }) => this.scene.remove(mesh)); this.heatBlobs = [];
     this.particleSystems.forEach(p => this.scene.remove(p)); this.particleSystems = [];
 
-    const recRaw = data.recommended_berth || "";
     const heatGroups: { id: string; cx: number; cz: number; bw: number; bd: number; conc: string; isMax: boolean }[] = [];
 
-    Object.entries(data.layout).forEach(([id, pos]: [string, any]) => {
+    Object.entries(data.layout).forEach(([id, pos]: [string, { x: number; y: number }]) => {
       const px = Math.max(0, pos.x);
       const py = Math.max(0, pos.y);
 
@@ -1006,6 +1006,7 @@ class TerminalScene {
 
       const blk = (data.blocks || {})[id];
       const isMax = id === computedMaxBlock;
+      const recRaw = (data.recommended_berth || "") as string | string[];
       const isRec = typeof recRaw === 'string' ? recRaw.includes(id) : Array.isArray(recRaw) ? recRaw.includes(id) : false;
 
       const hasData = !!blk && blk.count > 0;
@@ -1061,9 +1062,9 @@ class TerminalScene {
       this.blockMeshes.set(id, g);
     });
 
-    const allBlocks = Object.entries(data.blocks || {}).filter(([, b]: [any, any]) => b.count > 0).sort((a: any, b: any) => b[1].count - a[1].count);
-    const maxCount = allBlocks.length > 0 ? (allBlocks[0][1] as any).count : 0;
-    const highCountIds = allBlocks.filter(([, b]: [any, any]) => b.count === maxCount).map(([id]) => id);
+    const allBlocks = (Object.entries(data.blocks || {}) as [string, BlockData][]).filter(([, b]) => b.count > 0).sort((a, b) => b[1].count - a[1].count);
+    const maxCount = allBlocks.length > 0 ? allBlocks[0][1].count : 0;
+    const highCountIds = allBlocks.filter(([, b]) => b.count === maxCount).map(([id]) => id);
     const mediumCandidates = allBlocks.filter(([id]) => !highCountIds.includes(id));
     const mediumIds = mediumCandidates.slice(0, 3).map(([id]) => id);
 
@@ -1075,7 +1076,7 @@ class TerminalScene {
     heatGroups.forEach(({ id, cx, cz, bw, bd }) => {
       const isHigh = highCountIds.includes(id);
       const isMed = mediumIds.includes(id);
-      const col = isHigh ? "#dc2626" : (isMed ? "#ea580c" : "#16a34a");
+      const col = isHigh ? "#ff0000" : (isMed ? "#ff8800" : "#00ff00");
       const spread = isHigh ? 2.6 : (isMed ? 2.2 : 1.6);
       const peakOp = isHigh ? 1.0 : (isMed ? 0.85 : 0.75);
 
@@ -1286,10 +1287,9 @@ class TerminalScene {
 }
 
 interface TerminalMap3DProps {
-  data: any;
+  data: VesselHeatmapViewData | null;
   targetBerthId: string;
   computedMaxBlock: string | null;
-  maxBlockData?: { count: number; concentration: string };
   loading?: boolean;
 }
 
@@ -1297,7 +1297,6 @@ export default function TerminalMap3D({
   data,
   targetBerthId,
   computedMaxBlock,
-  maxBlockData,
   loading,
 }: TerminalMap3DProps) {
   const [hoveredBlock, setHoveredBlock] = useState<string | null>(null);
@@ -1339,7 +1338,7 @@ export default function TerminalMap3D({
       if (ro) ro.disconnect();
       if (ts) ts.destroy();
     };
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     if (sceneRef.current) {
@@ -1349,9 +1348,9 @@ export default function TerminalMap3D({
 
   useEffect(() => {
     if (sceneReady && sceneRef.current && data) {
-      sceneRef.current.applyData(data, computedMaxBlock, targetBerthId, maxBlockData);
+      sceneRef.current.applyData(data, computedMaxBlock, targetBerthId);
     }
-  }, [data, computedMaxBlock, targetBerthId, maxBlockData, sceneReady]);
+  }, [data, computedMaxBlock, targetBerthId, sceneReady]);
 
   const hoveredData = data?.blocks?.[hoveredBlock ?? ""];
 
@@ -1380,27 +1379,21 @@ export default function TerminalMap3D({
       {/* Legend */}
       <Box sx={{
         position: "absolute", bottom: 24, left: 24, zIndex: 10,
-        display: "flex", flexDirection: "column", gap: 0.8, px: 1.8, py: 1.2,
-        bgcolor: theme.palette.mode === "dark" ? "rgba(42,42,42,0.94)" : "rgba(233,238,246,0.96)",
-        border: "1px solid", borderColor: "divider", borderRadius: 1,
+        display: "flex", alignItems: "center", gap: 3, px: 2, py: 1.2,
+        bgcolor: theme.palette.mode === "dark" ? "rgba(18, 22, 31, 0.9)" : "rgba(255, 255, 255, 0.9)",
+        backdropFilter: "blur(4px)", border: "1px solid", borderColor: "divider", borderRadius: 1,
       }}>
-        <Typography sx={{
-          fontSize: "0.52rem", color: "text.secondary", fontWeight: 800,
-          letterSpacing: "1.5px", fontFamily: "'Roboto Mono', monospace", mb: 0.1,
-        }}>
-          HEAT INDEX
+        <Typography sx={{ fontSize: "0.55rem", color: "text.secondary", fontWeight: 800, letterSpacing: "1px", textTransform: "uppercase", mr: -1 }}>
+          Concentration
         </Typography>
         {[
-          { c: "#dc2626", l: "Highest Density" },
-          { c: "#ea580c", l: "Next 3 Blocks" },
-          { c: "#16a34a", l: "Remaining Yard" }
+          { c: "#ff0000", l: "High" },
+          { c: "#ffaa00", l: "Medium" },
+          { c: "#00ff00", l: "Low" }
         ].map(({ c, l }) => (
           <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Box sx={{
-              width: 22, height: 8, borderRadius: "3px",
-              background: `radial-gradient(ellipse at 30% 50%, ${c}cc 0%, ${c}55 50%, transparent 100%)`,
-            }} />
-            <Typography sx={{ fontSize: "0.60rem", color: "text.primary", fontWeight: 500 }}>{l}</Typography>
+            <Box sx={{ width: 10, height: 10, bgcolor: c, borderRadius: "2px" }} />
+            <Typography sx={{ fontSize: "0.7rem", color: "text.secondary", fontWeight: 500 }}>{l}</Typography>
           </Box>
         ))}
       </Box>

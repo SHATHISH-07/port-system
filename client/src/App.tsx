@@ -45,7 +45,7 @@ export default function App() {
                 {/* Common Protected Routes */}
                 <Route path="/" element={<Navigate to="/stay-analysis" />} />
                 <Route path="/stay-analysis" element={<ProtectedRoute><StayTimeAnalysis /></ProtectedRoute>} />
-                <Route path="/operational-dashboard" element={<ProtectedRoute><OperationalDashboard /></ProtectedRoute>} />
+                <Route path="/yard-planning" element={<ProtectedRoute><OperationalDashboard /></ProtectedRoute>} />
                 <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
                 <Route path="/crane-analytics" element={<ProtectedRoute><CraneAnalytics /></ProtectedRoute>} />
 

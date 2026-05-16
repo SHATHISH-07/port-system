@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Box, Typography, Tooltip, IconButton, useTheme, Button, Collapse } from "@mui/material";
 import {
-  GridViewOutlined,
+  ViewModuleRounded  ,
   HistoryOutlined,
   MenuRounded,
   AssignmentOutlined,
@@ -22,7 +22,7 @@ const CLOSED = 80;
 
 const USER_ITEMS: { path: string; label: string; icon?: React.ElementType; userOnly?: boolean }[] = [
   { path: "/stay-analysis", label: "Stay Time Analysis", icon: HistoryOutlined },
-  { path: "/operational-dashboard", label: "Operational Dashboard", icon: GridViewOutlined },
+  { path: "/yard-planning", label: "Yard Planning", icon: ViewModuleRounded  },
   { path: "/crane-analytics", label: "Crane Analytics", icon: PrecisionManufacturingOutlined },
   { path: "/requests", label: "Requests", icon: AssignmentOutlined },
 ];

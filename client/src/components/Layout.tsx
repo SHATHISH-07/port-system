@@ -10,6 +10,7 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const isLoginPage = location.pathname === "/login";
+  const isFullScreenPage = location.pathname === "/operational-dashboard" || location.pathname === "/yard-planning";
 
   if (isLoginPage) {
     return <>{children}</>;
@@ -27,10 +28,10 @@ export default function Layout({ children }: LayoutProps) {
           flexDirection: "column",
           overflowY: "auto",
           minWidth: 0,
-          p: { xs: "20px 16px", md: "32px 40px" },
+          p: isFullScreenPage ? 0 : { xs: "20px 16px", md: "32px 40px" },
         }}
       >
-        <Box sx={{ width: "100%", maxWidth: 2000, mx: "auto" }}>
+        <Box sx={{ width: "100%", maxWidth: isFullScreenPage ? "none" : 2000, mx: isFullScreenPage ? 0 : "auto", height: isFullScreenPage ? "100%" : "auto" }}>
           {children}
         </Box>
       </Box>
