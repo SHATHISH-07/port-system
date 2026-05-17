@@ -23,8 +23,10 @@ export default function TrainingStatusCard({ onRetry }: Props) {
 
   const fetchStatus = async () => {
     try {
-      const res = await api.get<TrainingStatusData>("/model/vessel-stay/training/status");
-      setStatusData(res.data);
+      const res = await api.get<any>("/model/status");
+      if (res.data?.training) {
+        setStatusData(res.data.training);
+      }
     } catch {
       // Silently ignore polling errors
     }

@@ -1,4 +1,5 @@
-import { Box, TextField, Button, alpha, useTheme, Typography, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import { Box, TextField, Button, alpha, useTheme, InputAdornment, Typography, MenuItem } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 
 interface CraneFilterFormProps {
   craneId: string;
@@ -6,6 +7,7 @@ interface CraneFilterFormProps {
   availableCranes: string[];
   days: string;
   onDaysChange: (val: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
   onClear: () => void;
   loading: boolean;
 }
@@ -13,9 +15,10 @@ interface CraneFilterFormProps {
 export default function CraneFilterForm({
   craneId,
   onCraneChange,
-  availableCranes,
+  availableCranes = ['STS01', 'STS02', 'STS03', 'STS04', 'STS05', 'STS06'],
   days,
   onDaysChange,
+  onSubmit,
   onClear,
   loading,
 }: CraneFilterFormProps) {
@@ -24,6 +27,7 @@ export default function CraneFilterForm({
   return (
     <Box
       component="form"
+      onSubmit={onSubmit}
       sx={{
         display: 'flex',
         flexDirection: 'column',
@@ -37,7 +41,6 @@ export default function CraneFilterForm({
       }}>
         Crane Performance Analysis
       </Box>
-
       <Box
         sx={{
           display: 'flex',
@@ -47,92 +50,115 @@ export default function CraneFilterForm({
           width: '100%',
         }}
       >
-        <FormControl 
-          variant="outlined" 
-          sx={{ 
+        <TextField
+          select
+          fullWidth
+          value={craneId}
+          onChange={(e) => onCraneChange(e.target.value)}
+          disabled={loading}
+          variant="outlined"
+          sx={{
             flex: 2,
             '& .MuiOutlinedInput-root': {
               borderRadius: 3,
               bgcolor: 'background.paper',
-              height: 56,
-              '& fieldset': { borderColor: alpha(theme.palette.divider, 0.8) },
-              '&:hover fieldset': { borderColor: theme.palette.primary.main },
+              '& fieldset': {
+                borderColor: alpha(theme.palette.divider, 0.8),
+              },
+              '&:hover fieldset': {
+                borderColor: theme.palette.primary.main,
+              },
+            },
+          }}
+          slotProps={{
+            select: {
+              displayEmpty: true,
+              renderValue: (selected: any) => {
+                if (!selected) {
+                  return <Box sx={{ color: 'text.secondary' }}>Select Asset / Crane (e.g. STS01)</Box>;
+                }
+                return selected;
+              }
+            },
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: 'text.secondary', ml: 1, mr: 1 }} />
+                </InputAdornment>
+              ),
             },
           }}
         >
-          <InputLabel id="crane-select-label">Select Asset / Crane ID</InputLabel>
-          <Select
-            labelId="crane-select-label"
-            value={craneId}
-            onChange={(e) => onCraneChange(e.target.value)}
-            label="Select Asset / Crane ID"
-            disabled={loading}
-          >
-            <MenuItem value=""><em>All Operational Assets</em></MenuItem>
-            {availableCranes.map((cid) => (
-              <MenuItem key={cid} value={cid}>{cid}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+          <MenuItem value="">
+            <em>Global Fleet / All Cranes</em>
+          </MenuItem>
+          {availableCranes.map((c) => (
+            <MenuItem key={c} value={c}>
+              {c}
+            </MenuItem>
+          ))}
+        </TextField>
 
         <TextField
-          label="Analysis Window"
+          placeholder="Analysis Window"
           type="number"
           value={days}
           onChange={(e) => onDaysChange(e.target.value)}
           disabled={loading}
-          variant="outlined"
           sx={{
             flex: 0.6,
-            minWidth: { xs: '100%', lg: 160 },
-            '& .MuiOutlinedInput-root': { 
-              borderRadius: 3, 
-              bgcolor: 'background.paper',
-              height: 56,
-            },
+            minWidth: { xs: '100%', lg: 140 },
+            '& .MuiOutlinedInput-root': { borderRadius: 3 },
           }}
         />
 
-        <Box sx={{ display: 'flex', gap: 1.5, flex: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 1.5,
+            minWidth: { xs: '100%', lg: 280 },
+            height: 56,
+          }}
+        >
           <Button
+            type="submit"
             variant="contained"
-            onClick={() => onCraneChange(craneId)}
             disabled={loading}
             sx={{
               flex: 1,
               borderRadius: 3,
-              height: 56,
               fontWeight: 700,
               textTransform: 'none',
               boxShadow: `0 8px 16px ${alpha(theme.palette.primary.main, 0.25)}`,
+              whiteSpace: 'nowrap',
+              height: '100%',
             }}
           >
-            {loading ? 'Processing...' : 'Run Analytics'}
+            {loading ? 'Analyzing...' : 'Run Analysis'}
           </Button>
 
-          {craneId && (
-            <Button
-              variant="outlined"
-              color="inherit"
-              onClick={onClear}
-              disabled={loading}
-              sx={{
-                borderRadius: 3,
-                height: 56,
-                minWidth: 56,
-                borderColor: alpha(theme.palette.divider, 0.4),
-                textTransform: 'none',
-                fontWeight: 700
-              }}
-            >
-              Clear
-            </Button>
-          )}
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={onClear}
+            disabled={loading}
+            sx={{
+              borderRadius: 3,
+              fontWeight: 700,
+              textTransform: 'none',
+              borderColor: alpha(theme.palette.divider, 0.4),
+              px: 3,
+              whiteSpace: 'nowrap',
+              height: '100%',
+            }}
+          >
+            Clear
+          </Button>
         </Box>
       </Box>
 
       <Typography variant="caption" sx={{ color: 'text.secondary', px: 1 }}>
-        Select a specific crane ID to view deep-dive asset metrics, or view global terminal benchmarks.
+        Select a specific Crane ID above or choose "Global Fleet / All Cranes" to analyze asset-level or system-wide performance.
       </Typography>
     </Box>
   );

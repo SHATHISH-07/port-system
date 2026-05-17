@@ -43,9 +43,15 @@ def get_retraining_config(admin: dict = Depends(require_admin)):
 
     return data
 
+from pydantic import BaseModel
+
+class ConfigUpdate(BaseModel):
+    retrain_threshold: int
+
 # update retraining configuration
 @router.patch("/retraining")
 # only admin can access this endpoint
-def update_retraining_config(threshold: int, admin: dict = Depends(require_admin)):
-    logger.info(f"Updating retraining threshold to {threshold}")
-    return retraining_config.update(threshold=threshold)
+def update_retraining_config(payload: ConfigUpdate, admin: dict = Depends(require_admin)):
+    logger.info(f"Updating retraining threshold to {payload.retrain_threshold}")
+    new_config = retraining_config.update(threshold=payload.retrain_threshold)
+    return {"config": new_config}

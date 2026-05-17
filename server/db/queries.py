@@ -224,6 +224,7 @@ def ensure_yard_tables(engine, yard_id: str) -> None:
             (cro_tbl, f"idx_{yard_id}_cro_visit",   "carrier_visit"),
             (cro_tbl, f"idx_{yard_id}_cro_crane",   "crane_id, time_completed DESC"),
             (cro_tbl, f"idx_{yard_id}_cro_unit",    "unit_id"),
+            (cro_tbl, f"idx_{yard_id}_cro_time",    "time_completed DESC"),
         ]
         for tbl, idx_name, cols in new_idx_defs:
             _add_index(conn, tbl, idx_name, cols)
@@ -407,6 +408,9 @@ def load_from_db(
     vessel_id: str = None,
     full_load: bool = False,
     yard_id: str = None,
+    days: int = None,
+    crane_id: str = None,
+    columns: list[str] = None,
 ) -> pd.DataFrame:
     from config import settings
 
@@ -430,7 +434,7 @@ def load_from_db(
             if dataset_type == "current":
                 return _load_current_from_ops(engine, new_tables, vessel_id, settings)
             if dataset_type == "crane":
-                return _load_crane_ops(engine, new_tables, vessel_id, full_load, settings)
+                return _load_crane_ops(engine, new_tables, vessel_id, full_load, settings, days=days, crane_id=crane_id, columns=columns)
             if dataset_type == "vessel_visits":
                 return _load_vessel_visits(engine, new_tables, vessel_id, settings)
 
@@ -552,6 +556,9 @@ def _load_current_from_ops(
 def _load_crane_ops(
     engine, tables: list[str], vessel_id: str | None,
     full_load: bool, settings,
+    days: int = None,
+    crane_id: str = None,
+    columns: list[str] = None,
 ) -> pd.DataFrame:
     """Load from new unified crane_operations tables."""
     dfs: list[pd.DataFrame] = []
@@ -568,7 +575,17 @@ def _load_crane_ops(
                     filters.append("carrier_visit = :v_id")
                     params["v_id"] = vessel_id
 
-            q = f"SELECT * FROM {tbl}"
+            if days and days > 0:
+                cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
+                filters.append("time_completed >= :cutoff")
+                params["cutoff"] = cutoff
+
+            if crane_id:
+                filters.append("crane_id = :crane_id")
+                params["crane_id"] = crane_id
+
+            col_select = ", ".join(columns) if columns else "*"
+            q = f"SELECT {col_select} FROM {tbl}"
             if filters:
                 q += " WHERE " + " AND ".join(filters)
             q += " ORDER BY time_completed DESC NULLS LAST"

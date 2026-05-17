@@ -2,13 +2,10 @@ import { useState, useRef } from "react";
 import {
   Box, Typography, Button, LinearProgress,
   Alert, Snackbar, Chip, useTheme, Card, CardContent,
-  Grid, Paper, CircularProgress,
+  Paper, CircularProgress,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import {
-  HistoryOutlined,
-  SettingsInputComponentOutlined,
-  PrecisionManufacturingOutlined,
   UploadFileOutlined,
   CheckCircleOutlined,
   ErrorOutlined,
@@ -16,7 +13,7 @@ import {
 } from "@mui/icons-material";
 import { api } from "../api/api";
 
-type IngestType = "history" | "current" | "crane";
+type IngestType = "history" | "crane";
 
 interface UploadResponse {
   status: string;           // "success" | "partial" | "failed"
@@ -36,37 +33,11 @@ const SCHEMAS: Record<IngestType, string[]> = {
     "unit_weight_in_kg", "verified_gross_mass_kg",
     "reefer", "hazardous_flag", "oog_unit", "port_of_discharge",
   ],
-  current: [
-    "unit_id", "actual_outbound_carrier_visit_id", "outbound_service",
-    "current_position", "ctr_from_position", "ctr_to_position",
-    "reefer", "hazardous_flag", "port_of_discharge",
-  ],
   crane: [
     "crane_id", "unit_id", "carrier_visit", "move_kind",
     "from_position", "to_position", "time_completed", "line_op",
   ],
 };
-
-const TYPE_META = [
-  {
-    id: "history" as IngestType,
-    label: "History Ingestion",
-    icon: <HistoryOutlined />,
-    desc: "Historical container moves for ML training.",
-  },
-  {
-    id: "current" as IngestType,
-    label: "Current Ingestion",
-    icon: <SettingsInputComponentOutlined />,
-    desc: "Live yard snapshot for operational analysis.",
-  },
-  {
-    id: "crane" as IngestType,
-    label: "Crane Ingestion",
-    icon: <PrecisionManufacturingOutlined />,
-    desc: "Crane move events for productivity tracking.",
-  },
-];
 
 function StatusChip({ status }: { status: string }) {
   const map: Record<string, { color: "success" | "error" | "warning" | "default"; icon: React.ReactElement }> = {
@@ -150,74 +121,125 @@ export default function DataIngestion() {
 
   const isLoading = uploading;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <Box sx={{ maxWidth: 1000, mx: "auto", p: 2 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: "text.primary" }}>
-          Data Ingestion
-        </Typography>
-        <Typography variant="body1" sx={{ color: "text.secondary" }}>
-          Upload raw CSV data for History, Current inventory, or Crane movements.
-        </Typography>
-      </Box>
-
-      <Grid container spacing={3}>
-        {/* ── Sidebar ── */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {TYPE_META.map((t) => (
-              <Card
-                key={t.id}
+    <Box
+      sx={{
+        minHeight: "100vh",
+        bgcolor: "background.default",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* Top Header Control Bar */}
+      <Box
+        sx={{
+          px: { xs: 3, md: 6 },
+          py: 4,
+          bgcolor: "transparent",
+          borderBottom: `1px solid ${theme.palette.divider}`,
+        }}
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, width: '100%' }}>
+          <Box sx={{ fontSize: '25px', fontWeight: 'bold' }}>
+            Data Ingestion & Integration
+          </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 2,
+              alignItems: 'center',
+            }}
+          >
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mr: 1 }}>
+              Select Ingestion Target:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Button
+                variant={activeType === "history" ? "contained" : "outlined"}
                 onClick={() => {
                   if (isLoading) return;
-                  setActiveType(t.id);
+                  setActiveType("history");
                   setFile(null);
                   setStatusData(null);
                 }}
+                disabled={isLoading}
                 sx={{
-                  cursor: isLoading ? "not-allowed" : "pointer",
-                  border: `2px solid ${activeType === t.id ? theme.palette.primary.main : "transparent"
-                    }`,
-                  bgcolor:
-                    activeType === t.id
-                      ? alpha(theme.palette.primary.main, 0.05)
-                      : "background.paper",
-                  transition: "all 0.2s",
-                  opacity: isLoading ? 0.6 : 1,
+                  borderRadius: 3,
+                  fontWeight: 700,
+                  textTransform: "none",
+                  px: 3,
+                  py: 1,
+                  boxShadow: activeType === "history" ? `0 8px 16px ${alpha(theme.palette.primary.main, 0.25)}` : "none",
                 }}
               >
-                <CardContent
-                  sx={{ display: "flex", alignItems: "flex-start", gap: 2, p: "16px !important" }}
-                >
-                  <Box
-                    sx={{
-                      p: 1,
-                      borderRadius: 1,
-                      bgcolor: activeType === t.id ? "primary.main" : "action.hover",
-                      color: activeType === t.id ? "white" : "text.secondary",
-                    }}
-                  >
-                    {t.icon}
-                  </Box>
-                  <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                      {t.label}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                      {t.desc}
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            ))}
+                History Ingestion
+              </Button>
+              <Button
+                variant={activeType === "crane" ? "contained" : "outlined"}
+                onClick={() => {
+                  if (isLoading) return;
+                  setActiveType("crane");
+                  setFile(null);
+                  setStatusData(null);
+                }}
+                disabled={isLoading}
+                sx={{
+                  borderRadius: 3,
+                  fontWeight: 700,
+                  textTransform: "none",
+                  px: 3,
+                  py: 1,
+                  boxShadow: activeType === "crane" ? `0 8px 16px ${alpha(theme.palette.primary.main, 0.25)}` : "none",
+                }}
+              >
+                Crane Ingestion
+              </Button>
+            </Box>
           </Box>
-        </Grid>
+          <Typography variant="caption" sx={{ color: 'text.secondary', px: 0.5 }}>
+            Upload raw CSV or Excel dataset files to keep the history logs and crane operations database records fully updated.
+          </Typography>
+        </Box>
+      </Box>
 
-        {/* ── Upload area ── */}
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Paper variant="outlined" sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
+      {/* Main Content Area */}
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          scrollBehavior: 'smooth',
+        }}
+      >
+        <Box sx={{ p: { xs: 2, sm: 3, md: 6 }, flex: 1, maxWidth: 1000, mx: "auto" }}>
+          {/* Hero Header */}
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.15em' }}>
+              Operational Integration
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mt: 0.5 }}>
+              <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: '-0.02em' }}>
+                {activeType === "history" ? "History Ingestion" : "Crane Ingestion"}
+              </Typography>
+              <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                Terminal Database Updater
+              </Typography>
+            </Box>
+          </Box>
+
+          <Paper 
+            variant="outlined" 
+            sx={{ 
+              p: 4, 
+              borderRadius: 4, 
+              textAlign: "center",
+              bgcolor: "background.paper",
+              border: "1px solid", 
+              borderColor: "divider",
+              boxShadow: "0 6px 24px rgba(0,0,0,0.03)"
+            }}
+          >
             {/* Drop zone */}
             <Box
               onClick={() => !isLoading && fileRef.current?.click()}
@@ -229,15 +251,20 @@ export default function DataIngestion() {
               }}
               sx={{
                 border: "2px dashed",
-                borderColor: file ? "primary.main" : "divider",
-                borderRadius: 2,
+                borderColor: file ? "primary.main" : theme.palette.divider,
+                borderRadius: 3,
                 p: 6,
                 cursor: isLoading ? "not-allowed" : "pointer",
                 bgcolor: file
-                  ? alpha(theme.palette.primary.main, 0.02)
+                  ? (theme.palette.mode === "dark" ? "rgba(96,165,250,0.02)" : "rgba(26,115,232,0.01)")
                   : "transparent",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                 "&:hover": !isLoading
-                  ? { bgcolor: alpha(theme.palette.primary.main, 0.05), borderColor: "primary.main" }
+                  ? { 
+                      bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0, 0, 0, 0.01)", 
+                      borderColor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
+                      transform: "scale(1.005)"
+                    }
                   : {},
               }}
             >
@@ -249,24 +276,24 @@ export default function DataIngestion() {
                 onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               />
               <UploadFileOutlined
-                sx={{ fontSize: 48, color: file ? "primary.main" : "text.disabled", mb: 2 }}
+                sx={{ fontSize: 52, color: file ? "primary.main" : "text.disabled", mb: 2, transition: "all 0.3s" }}
               />
               {file ? (
                 <>
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: "text.primary" }}>
                     {file.name}
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                    {(file.size / 1024).toFixed(1)} KB
+                  <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
+                    {(file.size / 1024).toFixed(1)} KB — click to choose a different file
                   </Typography>
                 </>
               ) : (
                 <>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Click or drag to upload {activeType} data
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: "text.primary" }}>
+                    Click or drag to upload {activeType === "history" ? "vessel stay history" : "crane operations"} data
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                    CSV and Excel formats supported — headers are auto-mapped.
+                  <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
+                    CSV and Excel formats supported — headers are automatically parsed and normalized.
                   </Typography>
                 </>
               )}
@@ -275,29 +302,36 @@ export default function DataIngestion() {
             {/* Schema hint + action */}
             <Box
               sx={{
-                mt: 3,
+                mt: 4,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "flex-start",
-                gap: 2,
+                gap: 3,
                 flexWrap: "wrap",
               }}
             >
-              <Box sx={{ textAlign: "left", flex: 1 }}>
+              <Box sx={{ textAlign: "left", flex: 1, minWidth: 280 }}>
                 <Typography
                   variant="caption"
-                  sx={{ fontWeight: 700, color: "text.secondary", display: "block" }}
+                  sx={{ fontWeight: 800, color: "text.secondary", display: "block", letterSpacing: "0.05em", mb: 1 }}
                 >
                   EXPECTED HEADERS ({activeType.toUpperCase()}):
                 </Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                   {SCHEMAS[activeType].map((h) => (
                     <Chip
                       key={h}
                       label={h}
                       size="small"
                       variant="outlined"
-                      sx={{ fontSize: "10px", height: "20px" }}
+                      sx={{ 
+                        fontSize: "11px", 
+                        height: "24px",
+                        borderRadius: 1.5,
+                        bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.015)",
+                        borderColor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+                        fontWeight: 500
+                      }}
                     />
                   ))}
                 </Box>
@@ -306,12 +340,24 @@ export default function DataIngestion() {
               <Button
                 variant="contained"
                 size="large"
+                disableElevation
                 disabled={!file || isLoading}
                 onClick={handleIngest}
                 startIcon={
                   uploading ? <CircularProgress size={16} color="inherit" /> : undefined
                 }
-                sx={{ px: 4, borderRadius: 2, alignSelf: "flex-end", whiteSpace: "nowrap" }}
+                sx={{ 
+                  px: 4, 
+                  py: 1.25,
+                  borderRadius: 2.5, 
+                  alignSelf: "flex-end", 
+                  whiteSpace: "nowrap",
+                  fontWeight: 600,
+                  textTransform: "none",
+                  boxShadow: theme.palette.mode === "dark"
+                    ? "0 4px 12px rgba(29, 78, 216, 0.2)"
+                    : "0 4px 12px rgba(29, 78, 216, 0.1)",
+                }}
               >
                 {uploading ? "Uploading & Processing…" : "Start Ingestion"}
               </Button>
@@ -320,55 +366,60 @@ export default function DataIngestion() {
 
           {/* Progress bar shown while uploading */}
           {uploading && (
-            <LinearProgress sx={{ mt: 1, borderRadius: 1 }} />
+            <LinearProgress sx={{ mt: 1.5, height: 6, borderRadius: 3 }} />
           )}
 
           {/* ── Status result card ── */}
           {statusData && (
             <Card
-              sx={{ mt: 3, borderRadius: 3, border: "1px solid", borderColor: "divider" }}
+              sx={{ 
+                mt: 4, 
+                borderRadius: 4, 
+                border: "1px solid", 
+                borderColor: "divider",
+                boxShadow: "0 6px 24px rgba(0,0,0,0.03)",
+                bgcolor: "background.paper"
+              }}
             >
-              <CardContent>
+              <CardContent sx={{ p: "24px !important" }}>
                 {/* Summary row */}
-                <Box sx={{ display: "flex", gap: 4, mb: 2, alignItems: "center", flexWrap: "wrap" }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 3, mb: 3 }}>
                   <Box>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.5 }}>
                       STATUS
                     </Typography>
-                    <Box sx={{ mt: 0.5 }}>
-                      <StatusChip status={statusData.status} />
-                    </Box>
+                    <StatusChip status={statusData.status} />
                   </Box>
 
                   <Box>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.5 }}>
                       DATASET TYPE
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 700, textTransform: "uppercase" }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, textTransform: "uppercase", color: "text.primary" }}>
                       {statusData.dataset_type}
                     </Typography>
                   </Box>
 
-                  <Box>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                      TOTAL
+                  <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)", border: `1px solid ${theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"}` }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25 }}>
+                      TOTAL ROWS
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: "monospace", color: "text.primary" }}>
                       {(statusData.accepted_count + statusData.rejected_count).toLocaleString()}
                     </Typography>
                   </Box>
 
-                  <Box>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                  <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: theme.palette.mode === "dark" ? "rgba(16,185,129,0.03)" : "rgba(16,185,129,0.02)", border: `1px solid ${theme.palette.mode === "dark" ? "rgba(16,185,129,0.1)" : "rgba(16,185,129,0.08)"}` }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25 }}>
                       ACCEPTED
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 800, color: "success.main" }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: "success.main", fontFamily: "monospace" }}>
                       {statusData.accepted_count.toLocaleString()}
                     </Typography>
                   </Box>
 
-                  <Box>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                  <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: statusData.rejected_count > 0 ? (theme.palette.mode === "dark" ? "rgba(239,68,68,0.03)" : "rgba(239,68,68,0.02)") : (theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)"), border: `1px solid ${statusData.rejected_count > 0 ? (theme.palette.mode === "dark" ? "rgba(239,68,68,0.1)" : "rgba(239,68,68,0.08)") : (theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)")}` }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25 }}>
                       REJECTED
                     </Typography>
                     <Typography
@@ -376,6 +427,7 @@ export default function DataIngestion() {
                       sx={{
                         fontWeight: 800,
                         color: statusData.rejected_count > 0 ? "error.main" : "text.secondary",
+                        fontFamily: "monospace"
                       }}
                     >
                       {statusData.rejected_count.toLocaleString()}
@@ -385,17 +437,15 @@ export default function DataIngestion() {
 
                 {/* Errors */}
                 {statusData.errors && statusData.errors.length > 0 && (
-                  <Alert severity="error" sx={{ mb: 2 }}>
+                  <Alert severity="error" variant="outlined" sx={{ borderRadius: 2.5 }}>
                     {statusData.errors.join("; ")}
                   </Alert>
                 )}
-
-                {/* Rejection info is returned in error_summary in this mode */}
               </CardContent>
             </Card>
           )}
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       <Snackbar
         open={toast.open}
@@ -406,7 +456,7 @@ export default function DataIngestion() {
         <Alert
           severity={toast.severity}
           variant="filled"
-          sx={{ width: "100%" }}
+          sx={{ width: "100%", borderRadius: 2.5 }}
           onClose={() => setToast((t) => ({ ...t, open: false }))}
         >
           {toast.message}

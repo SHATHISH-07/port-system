@@ -70,7 +70,8 @@ def get_crane_performance(
         days = settings.CRANE_ANALYTICS_WINDOW_DAYS
 
     try:
-        df = load_from_db("crane")
+        cols = ["crane_id", "time_completed", "yard_id", "exclude", "carrier_visit", "move_kind"]
+        df = load_from_db("crane", days=days, columns=cols)
 
         if df.empty:
             return _empty_crane_response()
@@ -119,20 +120,22 @@ def get_crane_performance(
         yard_stats: list[dict] = []
         idle_threshold_sec = settings.CRANE_IDLE_THRESHOLD_MINUTES * 60  # 30 min
 
+        # Precompute Net MPH per (yard, crane, visit) to avoid redundant loops
+        net_mph_cache = {}
+        if not valid_df.empty and "yard_id" in valid_df.columns:
+            for (yard, crane, visit), grp in valid_df.groupby(["yard_id", "crane_id", "carrier_visit"]):
+                active_hrs = _net_active_hours(grp["time_completed"], idle_threshold_sec)
+                if active_hrs > 0 and len(grp) >= 2:
+                    net_mph_cache[(yard, crane, visit)] = len(grp) / active_hrs
+
         if "yard_id" in valid_df.columns:
             for yard, ygrp in valid_df.groupby("yard_id"):
                 ymoves = len(ygrp)
                 ycranes = int(ygrp["crane_id"].nunique())
                 yvisits = int(ygrp["carrier_visit"].nunique())
                 
-                # Net crane productivity: per crane per visit, active hours only
-                visit_mphs: list[float] = []
-                for visit, vgrp in ygrp.groupby("carrier_visit"):
-                    for crane_id_inner, cgrp in vgrp.groupby("crane_id"):
-                        active_hrs = _net_active_hours(cgrp["time_completed"], idle_threshold_sec)
-                        if active_hrs > 0 and len(cgrp) >= 2:
-                            visit_mphs.append(len(cgrp) / active_hrs)
-                
+                # Fetch precomputed MPHs for this yard
+                visit_mphs = [mph for (y, c, v), mph in net_mph_cache.items() if y == yard]
                 avg_crane_mph = round(sum(visit_mphs) / max(len(visit_mphs), 1), 2) if visit_mphs else 0.0
                 
                 # Gross Output (Terminal moves per total clock hour)
@@ -157,15 +160,11 @@ def get_crane_performance(
 
         # ── Per-crane stats ───────────────────────────────────────────────────
         crane_stats: list[dict] = []
-        for crane, grp in valid_df.groupby("crane_id"):
+        for (crane, yard), grp in valid_df.groupby(["crane_id", "yard_id"]):
             moves  = len(grp)
             
-            # Calculate Net MPH per visit for this crane, then average
-            crane_visit_mphs: list[float] = []
-            for visit, vgrp in grp.groupby("carrier_visit"):
-                active_hrs = _net_active_hours(vgrp["time_completed"], idle_threshold_sec)
-                if active_hrs > 0 and len(vgrp) >= 2:
-                    crane_visit_mphs.append(len(vgrp) / active_hrs)
+            # Fetch precomputed MPHs for this crane and yard
+            crane_visit_mphs = [mph for (y, c, v), mph in net_mph_cache.items() if c == crane and y == yard]
             
             mphc = round(sum(crane_visit_mphs) / max(len(crane_visit_mphs), 1), 2) if crane_visit_mphs else 0.0
             
@@ -190,7 +189,7 @@ def get_crane_performance(
                 "productivity_rating": rating,
                 "avg_cycle_minutes":  round(60.0 / mphc, 1) if mphc > 0 else 0,
                 "restow_ratio":       round(restows / moves, 3),
-                "yard_id":            str(grp["yard_id"].iloc[0]) if "yard_id" in grp.columns else "N/A",
+                "yard_id":            str(yard),
                 "primary_visit":      str(top_visit)
             })
 
@@ -232,4 +231,5 @@ def _empty_crane_response() -> dict:
         "moves":                  [],
         "available_cranes":       [],
     }
+
 

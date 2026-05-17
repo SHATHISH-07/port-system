@@ -67,14 +67,16 @@ const Requests: React.FC = () => {
                     <Typography variant="h5" sx={{ mb: 0.5, color: "text.primary" }}>Operational Requests</Typography>
                     <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 380 }}>View and execute data uploads, model retrains, and config updates.</Typography>
                 </Box>
-                <Button 
-                    variant="contained" 
-                    disableElevation
-                    onClick={() => setOpenModal(true)}
-                    sx={{ textTransform: "none", fontWeight: 600, height: 40 }}
-                >
-                    New Request
-                </Button>
+                {user?.role !== "admin" && (
+                    <Button 
+                        variant="contained" 
+                        disableElevation
+                        onClick={() => setOpenModal(true)}
+                        sx={{ textTransform: "none", fontWeight: 600, height: 40 }}
+                    >
+                        New Request
+                    </Button>
+                )}
             </Box>
 
             <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, overflow: "hidden" }}>

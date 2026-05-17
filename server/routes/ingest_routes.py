@@ -294,10 +294,8 @@ def _derive_yard_id_from_row(row: pd.Series, dataset_type: str) -> Optional[str]
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _detect_type(df: pd.DataFrame, explicit: Optional[str]) -> Optional[str]:
-    if explicit and explicit.lower() in ("history", "crane"):
+    if explicit and explicit.lower() in ("history", "crane", "current"):
         return explicit.lower()
-    if explicit and explicit.lower() == "current":
-        return "history"  # treat as history; runtime extraction handles current view
 
     cols = set(df.columns)
 
@@ -437,11 +435,7 @@ async def upload_data(
             f"Could not identify dataset type from headers: {list(df.columns)[:15]}"
         )
 
-    # All container data ingests as history; current is derived at runtime
-    if dataset_type == "current":
-        dataset_type = "history"
-
-    if dataset_type == "history":
+    if dataset_type in ("history", "current"):
         for col in ("move_complete_time", "time_in", "time_out"):
             if col in df.columns:
                 df = _coerce_datetime_columns(df, [col])
@@ -741,9 +735,9 @@ def _insert_yard_data(
             accepted, rejected, error_str = _insert_crane_operations(
                 engine, yard, df, ingestion_id
             )
-        elif dataset_type == "history":
+        elif dataset_type in ("history", "current"):
             accepted, rejected, error_str = _insert_container_operations(
-                engine, yard, df, ingestion_id, record_type="history"
+                engine, yard, df, ingestion_id, record_type=dataset_type
             )
 
         # FIX: run vessel summary update as a background task so it never
