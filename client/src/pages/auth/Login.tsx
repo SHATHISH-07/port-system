@@ -33,15 +33,19 @@ const Login: React.FC = () => {
             });
 
             const token = response.data.access_token;
+
             const userResponse = await api.get("/auth/me", {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
 
             login(token, userResponse.data);
             navigate(from, { replace: true });
         } catch (err: unknown) {
             const e = err as { response?: { data?: { detail?: string } } };
-            setError(e?.response?.data?.detail || "Invalid username or password");
+
+            setError(
+                e?.response?.data?.detail || "Invalid username or password",
+            );
         } finally {
             setLoading(false);
         }
@@ -55,35 +59,56 @@ const Login: React.FC = () => {
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: "background.default",
-                p: 2
+                p: 2,
             }}
         >
             <Paper
                 elevation={0}
                 sx={{
-                    p: 5,
+                    p: 3,
                     width: "100%",
-                    maxWidth: 380,
+                    maxWidth: 320,
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    borderRadius: 3,
+                    borderRadius: 2.5,
                     border: "1px solid",
                     borderColor: "divider",
-                    boxShadow: "0 4px 24px rgba(0,0,0,0.04)"
+                    boxShadow: "0 4px 18px rgba(0,0,0,0.04)",
                 }}
             >
-                <Typography component="h1" variant="h5" sx={{ mb: 4, fontWeight: 700, letterSpacing: "-0.02em", color: "text.primary" }}>
+                <Typography
+                    component="h1"
+                    variant="h6"
+                    sx={{
+                        mb: 2.5,
+                        fontWeight: 700,
+                        letterSpacing: "-0.02em",
+                        color: "text.primary",
+                    }}
+                >
                     Terminal Optimizer
                 </Typography>
 
                 {error && (
-                    <Alert severity="error" sx={{ width: "100%", mb: 3, borderRadius: 2 }}>
+                    <Alert
+                        severity="error"
+                        sx={{
+                            width: "100%",
+                            mb: 2,
+                            borderRadius: 2,
+                            py: 0.3,
+                        }}
+                    >
                         {error}
                     </Alert>
                 )}
 
-                <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
+                <Box
+                    component="form"
+                    onSubmit={handleSubmit}
+                    sx={{ width: "100%" }}
+                >
                     <TextField
                         margin="normal"
                         required
@@ -93,10 +118,12 @@ const Login: React.FC = () => {
                         name="username"
                         autoComplete="username"
                         autoFocus
+                        size="small"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        sx={{ mb: 2 }}
+                        sx={{ mb: 1.5 }}
                     />
+
                     <TextField
                         margin="normal"
                         required
@@ -106,10 +133,12 @@ const Login: React.FC = () => {
                         type="password"
                         id="password"
                         autoComplete="current-password"
+                        size="small"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        sx={{ mb: 4 }}
+                        sx={{ mb: 2.5 }}
                     />
+
                     <Button
                         type="submit"
                         fullWidth
@@ -117,11 +146,12 @@ const Login: React.FC = () => {
                         disabled={loading}
                         disableElevation
                         sx={{
-                            py: 1.5,
-                            borderRadius: 2,
+                            py: 0.9,
+                            borderRadius: 1.8,
                             fontWeight: 600,
                             textTransform: "none",
-                            fontSize: "1rem"
+                            fontSize: "0.92rem",
+                            minHeight: 38,
                         }}
                     >
                         {loading ? "Authenticating..." : "Sign In"}
