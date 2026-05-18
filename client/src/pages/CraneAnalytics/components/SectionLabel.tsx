@@ -1,5 +1,4 @@
 import { Box, Typography } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
 interface SectionLabelProps {
   label: string;
@@ -7,26 +6,15 @@ interface SectionLabelProps {
 }
 
 export default function SectionLabel({ label, count }: SectionLabelProps) {
-  const theme = useTheme();
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 3 }}>
-      <Box
-        sx={{
-          width: 2,
-          height: 16,
-          borderRadius: 4,
-          background: `linear-gradient(180deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-          flexShrink: 0,
-        }}
-      />
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
       <Typography
         sx={{
-          fontSize: "0.65rem",
+          fontSize: "0.725rem",
           fontWeight: 800,
-          letterSpacing: "0.18em",
-          color: "text.disabled",
+          letterSpacing: "0.06em",
+          color: "text.secondary",
           textTransform: "uppercase",
-          fontFamily: "'DM Mono', monospace",
         }}
       >
         {label}
@@ -38,30 +26,23 @@ export default function SectionLabel({ label, count }: SectionLabelProps) {
             px: 1,
             py: 0.2,
             borderRadius: "4px",
-            bgcolor: `${theme.palette.primary.main}14`,
-            border: `1px solid ${theme.palette.primary.main}22`,
+            bgcolor: "action.selected",
+            border: "1px solid",
+            borderColor: "divider",
           }}
         >
           <Typography
             sx={{
-              fontSize: "0.6rem",
+              fontSize: "0.65rem",
               fontWeight: 800,
-              color: theme.palette.primary.main,
-              fontFamily: "'DM Mono', monospace",
-              letterSpacing: "0.05em",
+              color: "text.primary",
+              letterSpacing: "0.02em",
             }}
           >
             {count}
           </Typography>
         </Box>
       )}
-      <Box
-        sx={{
-          flex: 1,
-          height: "1px",
-          background: `linear-gradient(90deg, ${theme.palette.divider}, transparent)`,
-        }}
-      />
     </Box>
   );
 }

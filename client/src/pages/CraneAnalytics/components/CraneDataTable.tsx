@@ -1,5 +1,6 @@
 import {
   Box,
+  Card,
   Table,
   TableBody,
   TableCell,
@@ -64,14 +65,15 @@ export default function CraneDataTable({
 
   return (
     <Box sx={{ mt: 2.5 }}>
-      <Box
+      <Card
+        variant="outlined"
         sx={{
           borderRadius: 2,
-          border: `1px solid ${alpha(theme.palette.divider, 0.15)}`,
-          overflow: "hidden",
           bgcolor: "background.paper",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.02)",
           width: "100%",
+          overflow: "hidden",
+          borderColor: alpha(theme.palette.divider, 0.9),
+          boxShadow: "0 4px 16px rgba(0,0,0,0.02)",
         }}
       >
         <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
@@ -298,7 +300,7 @@ export default function CraneDataTable({
             ".MuiTablePagination-actions button": { color: "text.secondary", p: 0.5 },
           }}
         />
-      </Box>
+      </Card>
     </Box>
   );
 }

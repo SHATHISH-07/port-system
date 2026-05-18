@@ -94,7 +94,11 @@ export default function CraneAnalytics() {
         sx={{
           px: { xs: 2.5, md: 4 },
           py: 2.5,
-          bgcolor: "transparent",
+          bgcolor: alpha(theme.palette.background.default, 0.9),
+          backdropFilter: 'blur(25px)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1100,
           borderBottom: `1px solid ${theme.palette.divider}`,
         }}
       >
@@ -220,15 +224,9 @@ export default function CraneAnalytics() {
             >
               {/* Hero Header */}
               <Box>
-                <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.1em', fontSize: '0.7rem' }}>
-                  Operational Telemetry
-                </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
-                  <Typography sx={{ fontWeight: 900, fontSize: '1.5rem', letterSpacing: '-0.02em' }}>
+                  <Typography sx={{ fontWeight: 900, fontSize: '1.5rem', color: 'text.primary' }}>
                     {data.selected_crane ? data.selected_crane : "Global Fleet"}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                    Performance Dashboard
                   </Typography>
                 </Box>
               </Box>

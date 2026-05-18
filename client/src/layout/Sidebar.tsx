@@ -34,23 +34,23 @@ const USER_ITEMS: {
   icon?: React.ElementType;
   userOnly?: boolean;
 }[] = [
-  {
-    path: "/stay-analysis",
-    label: "Stay Time Analysis",
-    icon: HistoryOutlined,
-  },
-  {
-    path: "/heatmap",
-    label: "Port Heatmap",
-    icon: ViewModuleRounded,
-  },
-  {
-    path: "/crane-analytics",
-    label: "Crane Analytics",
-    icon: PrecisionManufacturingOutlined,
-  },
-  { path: "/requests", label: "Requests", icon: AssignmentOutlined },
-];
+    {
+      path: "/stay-analysis",
+      label: "Stay Time Analysis",
+      icon: HistoryOutlined,
+    },
+    {
+      path: "/heatmap",
+      label: "Port Heatmap",
+      icon: ViewModuleRounded,
+    },
+    {
+      path: "/crane-analytics",
+      label: "Crane Analytics",
+      icon: PrecisionManufacturingOutlined,
+    },
+    { path: "/requests", label: "Requests", icon: AssignmentOutlined },
+  ];
 
 const ADMIN_ITEMS = [
   { path: "/ingest", label: "Data Ingestion" },
@@ -176,6 +176,8 @@ export default function Sidebar() {
         display: "flex",
         flexDirection: "column",
         bgcolor: theme.palette.background.paper,
+        borderRight: "1px solid",
+        borderColor: isDark ? "grey.800" : "grey.200",
         boxShadow: isDark
           ? "4px 0 24px rgba(0,0,0,0.3)"
           : "4px 0 24px rgba(0,0,0,0.03)",

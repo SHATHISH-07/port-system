@@ -1,4 +1,4 @@
-import { Box, Grid, Typography } from "@mui/material";
+import { Box, Grid, Typography, Card } from "@mui/material";
 import { useTheme, alpha } from "@mui/material/styles";
 import SectionLabel from "./SectionLabel";
 
@@ -15,138 +15,102 @@ interface TerminalEfficiencyProps {
   yardStats: YardStat[];
 }
 
-function MphBar({ value, max }: { value: number; max: number }) {
-  const theme = useTheme();
-  const pct = Math.min((value / max) * 100, 100);
-  return (
-    <Box sx={{ mt: 1, width: "100%" }}>
-      <Box
-        sx={{
-          height: 2,
-          borderRadius: 2,
-          bgcolor: alpha(theme.palette.divider, 0.1),
-          overflow: "hidden",
-        }}
-      >
-        <Box
-          sx={{
-            height: "100%",
-            width: `${pct}%`,
-            borderRadius: 2,
-            background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${alpha(theme.palette.primary.main, 0.5)})`,
-            transition: "width 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
-          }}
-        />
-      </Box>
-    </Box>
-  );
-}
-
-export default function TerminalEfficiency({
-  yardStats,
-}: TerminalEfficiencyProps) {
+export default function TerminalEfficiency({ yardStats }: TerminalEfficiencyProps) {
   const theme = useTheme();
   if (!yardStats || yardStats.length === 0) return null;
 
-  const maxMph = Math.max(...yardStats.map((y) => y.avg_crane_productivity));
-
   return (
     <Box sx={{ mb: 2.5 }}>
-      <SectionLabel label="Terminal Efficiency" count={yardStats.length} />
+      <SectionLabel label="Terminal Efficiency" />
       <Grid container spacing={1.5}>
         {yardStats.map((y) => (
           <Grid size={{ xs: 12, md: 6 }} key={y.terminal_name}>
-            <Box
+            <Card
+              variant="outlined"
               sx={{
                 p: 2,
                 borderRadius: 2,
-                background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.background.paper, 0.4)} 100%)`,
-                backdropFilter: "blur(10px)",
-                border: "1px solid",
-                borderColor: alpha(theme.palette.primary.main, 0.15),
-                boxShadow: `0 4px 16px ${alpha(theme.palette.primary.main, 0.02)}`,
+                bgcolor: "background.paper",
+                borderColor: alpha(theme.palette.divider, 0.9),
+                boxShadow: "0 4px 16px rgba(0,0,0,0.02)",
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                cursor: "default",
                 "&:hover": {
-                  borderColor: alpha(theme.palette.primary.main, 0.35),
+                  borderColor: alpha(theme.palette.divider, 0.18),
                   transform: "translateY(-2px)",
-                  boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.06)}`,
+                  boxShadow: "0 6px 20px rgba(0,0,0,0.04)",
                 },
               }}
             >
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                }}
-              >
-                <Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Box sx={{ minWidth: 0 }}>
                   <Typography
                     sx={{
-                      fontSize: "0.8rem",
+                      fontSize: "0.85rem",
                       fontWeight: 800,
                       color: "text.primary",
-                      mb: 0.25,
-                      letterSpacing: "-0.01em",
+                      mb: 1,
                     }}
                   >
                     {y.terminal_name}
                   </Typography>
-                  <Box sx={{ display: "flex", gap: 1.5 }}>
-                    {[
-                      { val: y.active_cranes_count, label: "assets" },
-                      { val: y.unique_vessel_visits, label: "visits" },
-                      {
-                        val: y.total_system_moves.toLocaleString(),
-                        label: "moves",
-                      },
-                    ].map((item) => (
-                      <Typography
-                        key={item.label}
-                        sx={{
-                          fontSize: "0.6rem",
-                          color: "text.disabled",
-                          fontFamily: "'DM Mono', monospace",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {item.val}{" "}
-                        <Box component="span" sx={{ opacity: 0.6 }}>
-                          {item.label}
-                        </Box>
+                  
+                  <Box sx={{ display: "flex", gap: 3 }}>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", fontSize: "0.6rem" }}>
+                        Assets
                       </Typography>
-                    ))}
+                      <Typography sx={{ fontWeight: 800, fontSize: "0.85rem", mt: 0.25 }}>
+                        {y.active_cranes_count}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", fontSize: "0.6rem" }}>
+                        Visits
+                      </Typography>
+                      <Typography sx={{ fontWeight: 800, fontSize: "0.85rem", mt: 0.25 }}>
+                        {y.unique_vessel_visits}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", fontSize: "0.6rem" }}>
+                        Moves
+                      </Typography>
+                      <Typography sx={{ fontWeight: 800, fontSize: "0.85rem", mt: 0.25 }}>
+                        {y.total_system_moves.toLocaleString()}
+                      </Typography>
+                    </Box>
                   </Box>
                 </Box>
-                <Box sx={{ textAlign: "right" }}>
+
+                <Box sx={{ textAlign: "right", pl: 2, borderLeft: "1px solid", borderColor: alpha(theme.palette.divider, 0.08) }}>
                   <Typography
                     sx={{
-                      fontSize: "1.3rem",
+                      fontSize: "1.75rem",
                       fontWeight: 900,
-                      color: theme.palette.primary.main,
-                      letterSpacing: "-0.04em",
+                      color: "primary.main",
                       lineHeight: 1,
-                      fontFamily: "'DM Mono', monospace",
+                      letterSpacing: "-0.03em",
                     }}
                   >
                     {y.avg_crane_productivity.toFixed(1)}
                   </Typography>
                   <Typography
+                    variant="caption"
                     sx={{
-                      fontSize: "0.5rem",
+                      fontSize: "0.55rem",
                       fontWeight: 800,
-                      color: "text.disabled",
-                      letterSpacing: "0.12em",
-                      fontFamily: "'DM Mono', monospace",
+                      color: "text.secondary",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      mt: 0.5,
+                      display: "block",
                     }}
                   >
                     AVG MPH
                   </Typography>
                 </Box>
               </Box>
-              <MphBar value={y.avg_crane_productivity} max={maxMph} />
-            </Box>
+            </Card>
           </Grid>
         ))}
       </Grid>
