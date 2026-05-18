@@ -98,10 +98,10 @@ export default function ConfigPanel() {
   return (
     <Box
       sx={{
-        p: 3,
+        p: 2,
         bgcolor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.015)" : "rgba(0, 0, 0, 0.005)",
         border: `1px solid ${theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)"}`,
-        borderRadius: 3,
+        borderRadius: 2,
       }}
     >
       <Typography 
@@ -109,19 +109,20 @@ export default function ConfigPanel() {
         sx={{ 
           color: "text.secondary", 
           display: "block", 
-          mb: 3, 
-          letterSpacing: "0.1em",
-          fontWeight: 700 
+          mb: 1.5, 
+          letterSpacing: "0.08em",
+          fontWeight: 700,
+          fontSize: "0.68rem"
         }}
       >
         Retraining Trigger Configuration
       </Typography>
 
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 3.5 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
         {/* ── Threshold ───────────────────────────────────────── */}
         <Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.75 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary", fontSize: "0.8rem" }}>
               Auto-Retrain Threshold
             </Typography>
             <Tooltip
@@ -129,11 +130,11 @@ export default function ConfigPanel() {
               placement="top"
               arrow
             >
-              <InfoOutlined sx={{ fontSize: 16, color: "text.disabled", cursor: "default" }} />
+              <InfoOutlined sx={{ fontSize: 14, color: "text.disabled", cursor: "default" }} />
             </Tooltip>
           </Box>
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
             <TextField
               type="number"
               size="small"
@@ -141,9 +142,11 @@ export default function ConfigPanel() {
               onChange={(e) => setThreshold(e.target.value)}
               slotProps={{ input: { inputProps: { min: 1, step: 100 } } }}
               sx={{ 
-                width: 160,
+                width: 120,
                 "& .MuiOutlinedInput-root": {
                   borderRadius: 2,
+                  height: 32,
+                  fontSize: "0.8rem"
                 }
               }}
               disabled={saving}
@@ -155,12 +158,13 @@ export default function ConfigPanel() {
               disabled={!isDirty || saving}
               onClick={handleSave}
               sx={{ 
-                minWidth: 80, 
+                minWidth: 70, 
                 borderRadius: 2,
                 textTransform: "none",
                 fontWeight: 600,
-                px: 2,
-                height: 38,
+                px: 1.5,
+                height: 32,
+                fontSize: "0.75rem",
                 bgcolor: saved ? "success.main" : undefined,
                 color: saved ? "white" : undefined,
                 transition: "all 0.2s"
@@ -170,15 +174,15 @@ export default function ConfigPanel() {
             </Button>
           </Box>
 
-          <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.75 }}>
-            Default: 1,000 records. Takes effect immediately — no server restart needed.
+          <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.5, fontSize: "0.68rem" }}>
+            Default: 1,000 records. Takes effect immediately.
           </Typography>
         </Box>
 
         {/* ── Live progress bar ────────────────────────────────── */}
         <Box>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.75 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary", fontSize: "0.8rem" }}>
               New Records Since Last Training
             </Typography>
             {cfg ? (
@@ -188,12 +192,13 @@ export default function ConfigPanel() {
                   fontFamily: "monospace",
                   color: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
                   fontWeight: 700,
+                  fontSize: "0.8rem"
                 }}
               >
                 {formatNum(cfg.new_records_since_training)} / {formatNum(cfg.retrain_threshold)}
               </Typography>
             ) : (
-              <Skeleton width={80} height={20} />
+              <Skeleton width={60} height={16} />
             )}
           </Box>
 
@@ -201,14 +206,14 @@ export default function ConfigPanel() {
             variant="determinate"
             value={progress}
             sx={{
-              height: 8,
-              borderRadius: 4,
+              height: 6,
+              borderRadius: 3,
               bgcolor:
                 theme.palette.mode === "dark"
                   ? "rgba(255, 255, 255, 0.05)"
                   : "rgba(0, 0, 0, 0.04)",
               "& .MuiLinearProgress-bar": {
-                borderRadius: 4,
+                borderRadius: 3,
                 background: progress >= 100
                   ? "linear-gradient(90deg, #10b981 0%, #059669 100%)"
                   : theme.palette.mode === "dark"
@@ -217,14 +222,14 @@ export default function ConfigPanel() {
               },
             }}
           />
-          <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.75 }}>
+          <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.5, fontSize: "0.68rem" }}>
             {progress}% of threshold reached
             {progress >= 100 ? " — retraining will trigger on next upload" : ""}
           </Typography>
         </Box>
 
         {/* ── Stats row ────────────────────────────────────────── */}
-        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2.5 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
           {[
             {
               label: "Total History Records",
@@ -244,40 +249,40 @@ export default function ConfigPanel() {
             <Box 
               key={label}
               sx={{
-                p: 2.5,
-                borderRadius: 3,
+                p: 1.5,
+                borderRadius: 2,
                 bgcolor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.015)",
                 border: `1px solid ${theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)"}`,
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                 "&:hover": {
-                  transform: "translateY(-3px)",
+                  transform: "translateY(-1px)",
                   bgcolor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.025)",
                   boxShadow: theme.palette.mode === "dark"
-                    ? "0 4px 20px rgba(0, 0, 0, 0.15)"
-                    : "0 4px 20px rgba(0, 0, 0, 0.02)",
+                    ? "0 2px 10px rgba(0, 0, 0, 0.1)"
+                    : "0 2px 10px rgba(0, 0, 0, 0.01)",
                   borderColor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)",
                 }
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
-                <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 600 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, mb: 0.25 }}>
+                <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem" }}>
                   {label}
                 </Typography>
                 {tooltip && (
                   <Tooltip title={tooltip} placement="top" arrow>
-                    <InfoOutlined sx={{ fontSize: 13, color: "text.disabled", cursor: "default" }} />
+                    <InfoOutlined sx={{ fontSize: 11, color: "text.disabled", cursor: "default" }} />
                   </Tooltip>
                 )}
               </Box>
               {value !== null ? (
                 <Typography
                   variant="body1"
-                  sx={{ fontWeight: 700, color: "text.primary", fontFamily: "monospace", fontSize: "1.1rem" }}
+                  sx={{ fontWeight: 700, color: "text.primary", fontFamily: "monospace", fontSize: "0.95rem" }}
                 >
                   {value}
                 </Typography>
               ) : (
-                <Skeleton width={60} height={24} />
+                <Skeleton width={50} height={20} />
               )}
             </Box>
           ))}
@@ -285,7 +290,7 @@ export default function ConfigPanel() {
 
         {/* ── Last trained ─────────────────────────────────────── */}
         {lastTrainedDate && !Number.isNaN(lastTrainedDate.getTime()) && (
-          <Typography variant="caption" sx={{ color: "text.disabled", mt: 1, display: "block" }}>
+          <Typography variant="caption" sx={{ color: "text.disabled", mt: 0.5, display: "block", fontSize: "0.68rem" }}>
             Last training completed:{" "}
             <strong style={{ color: theme.palette.text.primary }}>{lastTrainedDate.toLocaleString()}</strong>
           </Typography>

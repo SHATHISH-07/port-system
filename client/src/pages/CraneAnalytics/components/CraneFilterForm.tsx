@@ -31,12 +31,12 @@ export default function CraneFilterForm({
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 2.5,
+        gap: 1.5,
         width: '100%',
       }}
     >
       <Box sx={{
-        fontSize: '25px',
+        fontSize: '18px',
         fontWeight: 'bold'
       }}>
         Crane Performance Analysis
@@ -45,7 +45,7 @@ export default function CraneFilterForm({
         sx={{
           display: 'flex',
           flexDirection: { xs: 'column', lg: 'row' },
-          gap: 2,
+          gap: 1.5,
           alignItems: { xs: 'stretch', lg: 'center' },
           width: '100%',
         }}
@@ -53,6 +53,7 @@ export default function CraneFilterForm({
         <TextField
           select
           fullWidth
+          size="small"
           value={craneId}
           onChange={(e) => onCraneChange(e.target.value)}
           disabled={loading}
@@ -60,8 +61,10 @@ export default function CraneFilterForm({
           sx={{
             flex: 2,
             '& .MuiOutlinedInput-root': {
-              borderRadius: 3,
+              borderRadius: 2,
               bgcolor: 'background.paper',
+              height: 40,
+              fontSize: '0.85rem',
               '& fieldset': {
                 borderColor: alpha(theme.palette.divider, 0.8),
               },
@@ -83,7 +86,7 @@ export default function CraneFilterForm({
             input: {
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon sx={{ color: 'text.secondary', ml: 1, mr: 1 }} />
+                  <SearchIcon sx={{ color: 'text.secondary', ml: 0.5, mr: 0.5, fontSize: 20 }} />
                 </InputAdornment>
               ),
             },
@@ -100,24 +103,26 @@ export default function CraneFilterForm({
         </TextField>
 
         <TextField
+          label="Days"
           placeholder="Analysis Window"
           type="number"
+          size="small"
           value={days}
           onChange={(e) => onDaysChange(e.target.value)}
           disabled={loading}
           sx={{
             flex: 0.6,
-            minWidth: { xs: '100%', lg: 140 },
-            '& .MuiOutlinedInput-root': { borderRadius: 3 },
+            minWidth: { xs: '100%', lg: 120 },
+            '& .MuiOutlinedInput-root': { borderRadius: 2, height: 40, fontSize: '0.85rem' },
           }}
         />
 
         <Box
           sx={{
             display: 'flex',
-            gap: 1.5,
-            minWidth: { xs: '100%', lg: 280 },
-            height: 56,
+            gap: 1,
+            minWidth: { xs: '100%', lg: 240 },
+            height: 40,
           }}
         >
           <Button
@@ -126,10 +131,11 @@ export default function CraneFilterForm({
             disabled={loading}
             sx={{
               flex: 1,
-              borderRadius: 3,
+              borderRadius: 2,
               fontWeight: 700,
               textTransform: 'none',
-              boxShadow: `0 8px 16px ${alpha(theme.palette.primary.main, 0.25)}`,
+              fontSize: '0.8rem',
+              boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}`,
               whiteSpace: 'nowrap',
               height: '100%',
             }}
@@ -143,11 +149,12 @@ export default function CraneFilterForm({
             onClick={onClear}
             disabled={loading}
             sx={{
-              borderRadius: 3,
+              borderRadius: 2,
               fontWeight: 700,
               textTransform: 'none',
+              fontSize: '0.8rem',
               borderColor: alpha(theme.palette.divider, 0.4),
-              px: 3,
+              px: 2.5,
               whiteSpace: 'nowrap',
               height: '100%',
             }}
@@ -157,7 +164,7 @@ export default function CraneFilterForm({
         </Box>
       </Box>
 
-      <Typography variant="caption" sx={{ color: 'text.secondary', px: 1 }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', px: 0.5, fontSize: '0.7rem' }}>
         Select a specific Crane ID above or choose "Global Fleet / All Cranes" to analyze asset-level or system-wide performance.
       </Typography>
     </Box>

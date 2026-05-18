@@ -9,9 +9,9 @@ interface GlobalKPIsProps {
 
 export default function GlobalKPIs({ data }: GlobalKPIsProps) {
   return (
-    <Box sx={{ mb: 5 }}>
+    <Box sx={{ mb: 2.5 }}>
       <SectionLabel label="Global Performance" />
-      <Grid container spacing={2.5}>
+      <Grid container spacing={1.5}>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <MetricCard
             title="Total System Moves"

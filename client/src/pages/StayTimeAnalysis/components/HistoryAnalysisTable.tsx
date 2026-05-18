@@ -154,44 +154,48 @@ export default function HistoryAnalysisTable({
     <Card
       variant="outlined"
       sx={{
-        borderRadius: 3,
+        borderRadius: 2,
         bgcolor: 'background.paper',
         width: '100%',
         overflow: 'hidden',
         borderColor: alpha(theme.palette.divider, 0.9),
-        boxShadow: '0 10px 30px rgba(0,0,0,0.04)',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
       }}
     >
-      <Box sx={{ px: 3, py: 2.25, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+      <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>
           History Analysis
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="caption" color="text.secondary">
           Sorted historical vessel visits with the key turnaround metrics
         </Typography>
       </Box>
 
-      <Box sx={{ p: 3, width: '100%', overflowX: 'auto' }}>
-        <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+      <Box sx={{ p: 2, width: '100%', overflowX: 'auto' }}>
+        <Box sx={{ mb: 1.5, display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
           <Chip
             label={`Vessel Service: ${vesselService || '-'}`}
             variant="outlined"
-            sx={{ fontWeight: 700, bgcolor: 'background.paper' }}
+            size="small"
+            sx={{ fontWeight: 700, bgcolor: 'background.paper', fontSize: '0.7rem', height: '22px' }}
           />
           <Chip
             label={`Predicted Avg Stay: ${formatNumber(predictedStay)}h`}
             variant="outlined"
-            sx={{ fontWeight: 700, bgcolor: 'background.paper' }}
+            size="small"
+            sx={{ fontWeight: 700, bgcolor: 'background.paper', fontSize: '0.7rem', height: '22px' }}
           />
           <Chip
             label={`Avg Stay: ${formatNumber(avgStay)}h`}
             variant="outlined"
-            sx={{ fontWeight: 700, bgcolor: 'background.paper' }}
+            size="small"
+            sx={{ fontWeight: 700, bgcolor: 'background.paper', fontSize: '0.7rem', height: '22px' }}
           />
           <Chip
             label={`Highest Restows: ${formatNumber(highestRestows, 0)}`}
             variant="outlined"
-            sx={{ fontWeight: 700, bgcolor: 'background.paper' }}
+            size="small"
+            sx={{ fontWeight: 700, bgcolor: 'background.paper', fontSize: '0.7rem', height: '22px' }}
           />
         </Box>
 
@@ -199,7 +203,7 @@ export default function HistoryAnalysisTable({
           component={Paper}
           variant="outlined"
           sx={{
-            borderRadius: 3,
+            borderRadius: 2,
             width: '100%',
             maxWidth: '100%',
             overflowX: 'auto',
@@ -207,7 +211,7 @@ export default function HistoryAnalysisTable({
             bgcolor: 'background.paper',
             borderColor: alpha(theme.palette.divider, 0.9),
             '&::-webkit-scrollbar': {
-              height: 10,
+              height: 8,
             },
             '&::-webkit-scrollbar-track': {
               backgroundColor: alpha(theme.palette.text.primary, 0.04),
@@ -223,10 +227,13 @@ export default function HistoryAnalysisTable({
             size="small"
             stickyHeader
             sx={{
-              minWidth: 1320,
+              minWidth: 1100,
               tableLayout: 'auto',
               '& .MuiTableCell-root': {
                 borderBottomColor: alpha(theme.palette.divider, 0.8),
+                fontSize: '0.75rem',
+                py: 0.75,
+                px: 1.5,
               },
               '& .MuiTableCell-head': {
                 fontWeight: 800,
@@ -240,25 +247,25 @@ export default function HistoryAnalysisTable({
           >
             <TableHead>
               <TableRow>
-                <TableCell sx={{ minWidth: 150 }}>{renderSort('visitId', 'Visit ID')}</TableCell>
-                <TableCell sx={{ minWidth: 190 }}>{renderSort('startTime', 'Start')}</TableCell>
-                <TableCell sx={{ minWidth: 190 }}>End</TableCell>
-                <TableCell align="right" sx={{ minWidth: 110 }}>
+                <TableCell sx={{ minWidth: 120 }}>{renderSort('visitId', 'Visit ID')}</TableCell>
+                <TableCell sx={{ minWidth: 150 }}>{renderSort('startTime', 'Start')}</TableCell>
+                <TableCell sx={{ minWidth: 150 }}>End</TableCell>
+                <TableCell align="right" sx={{ minWidth: 90 }}>
                   {renderSort('stayHours', 'Stay (h)')}
                 </TableCell>
-                <TableCell align="right" sx={{ minWidth: 110 }}>
+                <TableCell align="right" sx={{ minWidth: 90 }}>
                   {renderSort('loaded', 'Loaded')}
                 </TableCell>
-                <TableCell align="right" sx={{ minWidth: 120 }}>
+                <TableCell align="right" sx={{ minWidth: 90 }}>
                   {renderSort('discharged', 'Discharged')}
                 </TableCell>
-                <TableCell align="right" sx={{ minWidth: 100 }}>
+                <TableCell align="right" sx={{ minWidth: 80 }}>
                   {renderSort('totalUnits', 'Units')}
                 </TableCell>
-                <TableCell align="right" sx={{ minWidth: 110 }}>
+                <TableCell align="right" sx={{ minWidth: 90 }}>
                   {renderSort('restowCount', 'Restows')}
                 </TableCell>
-                <TableCell align="right" sx={{ minWidth: 120 }}>
+                <TableCell align="right" sx={{ minWidth: 90 }}>
                   {renderSort('assignedCranes', 'Cranes')}
                 </TableCell>
               </TableRow>
@@ -300,8 +307,8 @@ export default function HistoryAnalysisTable({
 
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={11}>
-                    <Box sx={{ py: 8, textAlign: 'center', color: 'text.secondary' }}>
+                  <TableCell colSpan={9}>
+                    <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
                       No history visits were returned for this vessel.
                     </Box>
                   </TableCell>

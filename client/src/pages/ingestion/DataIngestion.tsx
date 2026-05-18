@@ -134,14 +134,14 @@ export default function DataIngestion() {
       {/* Top Header Control Bar */}
       <Box
         sx={{
-          px: { xs: 3, md: 6 },
-          py: 4,
+          px: { xs: 2, md: 4 },
+          py: 2.5,
           bgcolor: "transparent",
           borderBottom: `1px solid ${theme.palette.divider}`,
         }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, width: '100%' }}>
-          <Box sx={{ fontSize: '25px', fontWeight: 'bold' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
+          <Box sx={{ fontSize: '18px', fontWeight: 'bold' }}>
             Data Ingestion & Integration
           </Box>
           <Box
@@ -152,7 +152,7 @@ export default function DataIngestion() {
               alignItems: 'center',
             }}
           >
-            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mr: 1 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mr: 1, fontSize: '0.8rem' }}>
               Select Ingestion Target:
             </Typography>
             <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -166,12 +166,14 @@ export default function DataIngestion() {
                 }}
                 disabled={isLoading}
                 sx={{
-                  borderRadius: 3,
+                  borderRadius: 2,
                   fontWeight: 700,
                   textTransform: "none",
-                  px: 3,
-                  py: 1,
-                  boxShadow: activeType === "history" ? `0 8px 16px ${alpha(theme.palette.primary.main, 0.25)}` : "none",
+                  px: 2,
+                  py: 0.6,
+                  height: 32,
+                  fontSize: '0.75rem',
+                  boxShadow: activeType === "history" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none",
                 }}
               >
                 History Ingestion
@@ -186,19 +188,21 @@ export default function DataIngestion() {
                 }}
                 disabled={isLoading}
                 sx={{
-                  borderRadius: 3,
+                  borderRadius: 2,
                   fontWeight: 700,
                   textTransform: "none",
-                  px: 3,
-                  py: 1,
-                  boxShadow: activeType === "crane" ? `0 8px 16px ${alpha(theme.palette.primary.main, 0.25)}` : "none",
+                  px: 2,
+                  py: 0.6,
+                  height: 32,
+                  fontSize: '0.75rem',
+                  boxShadow: activeType === "crane" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none",
                 }}
               >
                 Crane Ingestion
               </Button>
             </Box>
           </Box>
-          <Typography variant="caption" sx={{ color: 'text.secondary', px: 0.5 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', px: 0.5, fontSize: '0.7rem' }}>
             Upload raw CSV or Excel dataset files to keep the history logs and crane operations database records fully updated.
           </Typography>
         </Box>
@@ -212,17 +216,17 @@ export default function DataIngestion() {
           scrollBehavior: 'smooth',
         }}
       >
-        <Box sx={{ p: { xs: 2, sm: 3, md: 6 }, flex: 1, maxWidth: 1000, mx: "auto" }}>
+        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1, maxWidth: 800, mx: "auto" }}>
           {/* Hero Header */}
-          <Box sx={{ mb: 4 }}>
-            <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.15em' }}>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.1em', fontSize: '0.7rem' }}>
               Operational Integration
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mt: 0.5 }}>
-              <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: '-0.02em' }}>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.25rem' }}>
                 {activeType === "history" ? "History Ingestion" : "Crane Ingestion"}
               </Typography>
-              <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
                 Terminal Database Updater
               </Typography>
             </Box>
@@ -231,13 +235,13 @@ export default function DataIngestion() {
           <Paper
             variant="outlined"
             sx={{
-              p: 4,
-              borderRadius: 4,
+              p: 2.5,
+              borderRadius: 3,
               textAlign: "center",
               bgcolor: "background.paper",
               border: "1px solid",
               borderColor: "divider",
-              boxShadow: "0 6px 24px rgba(0,0,0,0.03)"
+              boxShadow: "0 4px 16px rgba(0,0,0,0.02)"
             }}
           >
             {/* Drop zone */}
@@ -252,8 +256,8 @@ export default function DataIngestion() {
               sx={{
                 border: "2px dashed",
                 borderColor: file ? "primary.main" : theme.palette.divider,
-                borderRadius: 3,
-                p: 6,
+                borderRadius: 2,
+                p: 3,
                 cursor: isLoading ? "not-allowed" : "pointer",
                 bgcolor: file
                   ? (theme.palette.mode === "dark" ? "rgba(96,165,250,0.02)" : "rgba(26,115,232,0.01)")
@@ -263,7 +267,7 @@ export default function DataIngestion() {
                   ? {
                     bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0, 0, 0, 0.01)",
                     borderColor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
-                    transform: "scale(1.005)"
+                    transform: "scale(1.002)"
                   }
                   : {},
               }}
@@ -276,24 +280,24 @@ export default function DataIngestion() {
                 onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               />
               <UploadFileOutlined
-                sx={{ fontSize: 52, color: file ? "primary.main" : "text.disabled", mb: 2, transition: "all 0.3s" }}
+                sx={{ fontSize: 36, color: file ? "primary.main" : "text.disabled", mb: 1, transition: "all 0.3s" }}
               />
               {file ? (
                 <>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: "text.primary" }}>
+                  <Typography variant="body1" sx={{ fontWeight: 700, color: "text.primary" }}>
                     {file.name}
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
+                  <Typography variant="caption" sx={{ color: "text.secondary", mt: 0.25, display: "block" }}>
                     {(file.size / 1024).toFixed(1)} KB — click to choose a different file
                   </Typography>
                 </>
               ) : (
                 <>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: "text.primary" }}>
+                  <Typography variant="body1" sx={{ fontWeight: 700, color: "text.primary" }}>
                     Click or drag to upload {activeType === "history" ? "vessel stay history" : "crane operations"} data
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
-                    CSV and Excel formats supported — headers are automatically parsed and normalized.
+                  <Typography variant="caption" sx={{ color: "text.secondary", mt: 0.25, display: "block" }}>
+                    CSV and Excel formats supported — headers are automatically parsed.
                   </Typography>
                 </>
               )}
@@ -302,22 +306,22 @@ export default function DataIngestion() {
             {/* Schema hint + action */}
             <Box
               sx={{
-                mt: 4,
+                mt: 2,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "flex-start",
-                gap: 3,
+                gap: 2,
                 flexWrap: "wrap",
               }}
             >
               <Box sx={{ textAlign: "left", flex: 1, minWidth: 280 }}>
                 <Typography
                   variant="caption"
-                  sx={{ fontWeight: 800, color: "text.secondary", display: "block", letterSpacing: "0.05em", mb: 1 }}
+                  sx={{ fontWeight: 800, color: "text.secondary", display: "block", letterSpacing: "0.05em", mb: 0.75, fontSize: "0.68rem" }}
                 >
                   EXPECTED HEADERS ({activeType.toUpperCase()}):
                 </Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                   {SCHEMAS[activeType].map((h) => (
                     <Chip
                       key={h}
@@ -325,9 +329,9 @@ export default function DataIngestion() {
                       size="small"
                       variant="outlined"
                       sx={{
-                        fontSize: "11px",
-                        height: "24px",
-                        borderRadius: 1.5,
+                        fontSize: "9px",
+                        height: "20px",
+                        borderRadius: 1,
                         bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.015)",
                         borderColor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
                         fontWeight: 500
@@ -339,17 +343,19 @@ export default function DataIngestion() {
 
               <Button
                 variant="contained"
-                size="large"
+                size="medium"
                 disableElevation
                 disabled={!file || isLoading}
                 onClick={handleIngest}
                 startIcon={
-                  uploading ? <CircularProgress size={16} color="inherit" /> : undefined
+                  uploading ? <CircularProgress size={14} color="inherit" /> : undefined
                 }
                 sx={{
-                  px: 4,
-                  py: 1.25,
-                  borderRadius: 2.5,
+                  px: 2.5,
+                  py: 0.75,
+                  borderRadius: 2,
+                  height: 36,
+                  fontSize: "0.8rem",
                   alignSelf: "flex-end",
                   whiteSpace: "nowrap",
                   fontWeight: 600,
@@ -366,68 +372,69 @@ export default function DataIngestion() {
 
           {/* Progress bar shown while uploading */}
           {uploading && (
-            <LinearProgress sx={{ mt: 1.5, height: 6, borderRadius: 3 }} />
+            <LinearProgress sx={{ mt: 1, height: 4, borderRadius: 2 }} />
           )}
 
           {/* ── Status result card ── */}
           {statusData && (
             <Card
               sx={{
-                mt: 4,
-                borderRadius: 4,
+                mt: 2,
+                borderRadius: 3,
                 border: "1px solid",
                 borderColor: "divider",
-                boxShadow: "0 6px 24px rgba(0,0,0,0.03)",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.02)",
                 bgcolor: "background.paper"
               }}
             >
-              <CardContent sx={{ p: "24px !important" }}>
+              <CardContent sx={{ p: "16px !important" }}>
                 {/* Summary row */}
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 3, mb: 3 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 2, mb: 2 }}>
                   <Box>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
                       STATUS
                     </Typography>
                     <StatusChip status={statusData.status} />
                   </Box>
 
                   <Box>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
                       DATASET TYPE
                     </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, textTransform: "uppercase", color: "text.primary" }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, textTransform: "uppercase", color: "text.primary", fontSize: "0.75rem" }}>
                       {statusData.dataset_type}
                     </Typography>
                   </Box>
 
-                  <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)", border: `1px solid ${theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"}` }}>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25 }}>
+                  <Box sx={{ p: 1, borderRadius: 2, bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)", border: `1px solid ${theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"}` }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
                       TOTAL ROWS
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: "monospace", color: "text.primary" }}>
+                    <Typography variant="body1" sx={{ fontWeight: 800, fontFamily: "monospace", color: "text.primary", fontSize: "0.9rem" }}>
                       {(statusData.accepted_count + statusData.rejected_count).toLocaleString()}
                     </Typography>
                   </Box>
 
-                  <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: theme.palette.mode === "dark" ? "rgba(16,185,129,0.03)" : "rgba(16,185,129,0.02)", border: `1px solid ${theme.palette.mode === "dark" ? "rgba(16,185,129,0.1)" : "rgba(16,185,129,0.08)"}` }}>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25 }}>
+                  <Box sx={{ p: 1, borderRadius: 2, bgcolor: theme.palette.mode === "dark" ? "rgba(16,185,129,0.03)" : "rgba(16,185,129,0.02)", border: `1px solid ${theme.palette.mode === "dark" ? "rgba(16,185,129,0.1)" : "rgba(16,185,129,0.08)"}` }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
                       ACCEPTED
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 800, color: "success.main", fontFamily: "monospace" }}>
+                    <Typography variant="body1" sx={{ fontWeight: 800, color: "success.main", fontFamily: "monospace", fontSize: "0.9rem" }}>
                       {statusData.accepted_count.toLocaleString()}
                     </Typography>
                   </Box>
 
-                  <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: statusData.rejected_count > 0 ? (theme.palette.mode === "dark" ? "rgba(239,68,68,0.03)" : "rgba(239,68,68,0.02)") : (theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)"), border: `1px solid ${statusData.rejected_count > 0 ? (theme.palette.mode === "dark" ? "rgba(239,68,68,0.1)" : "rgba(239,68,68,0.08)") : (theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)")}` }}>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25 }}>
+                  <Box sx={{ p: 1, borderRadius: 2, bgcolor: statusData.rejected_count > 0 ? (theme.palette.mode === "dark" ? "rgba(239,68,68,0.03)" : "rgba(239,68,68,0.02)") : (theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)"), border: `1px solid ${statusData.rejected_count > 0 ? (theme.palette.mode === "dark" ? "rgba(239,68,68,0.1)" : "rgba(239,68,68,0.08)") : (theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)")}` }}>
+                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
                       REJECTED
                     </Typography>
                     <Typography
-                      variant="h6"
+                      variant="body1"
                       sx={{
                         fontWeight: 800,
                         color: statusData.rejected_count > 0 ? "error.main" : "text.secondary",
-                        fontFamily: "monospace"
+                        fontFamily: "monospace",
+                        fontSize: "0.9rem"
                       }}
                     >
                       {statusData.rejected_count.toLocaleString()}
@@ -437,7 +444,7 @@ export default function DataIngestion() {
 
                 {/* Errors */}
                 {statusData.errors && statusData.errors.length > 0 && (
-                  <Alert severity="error" variant="outlined" sx={{ borderRadius: 2.5 }}>
+                  <Alert severity="error" variant="outlined" sx={{ borderRadius: 2 }}>
                     {statusData.errors.join("; ")}
                   </Alert>
                 )}

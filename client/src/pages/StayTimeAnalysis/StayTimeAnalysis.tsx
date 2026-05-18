@@ -201,15 +201,14 @@ export default function StayTimeAnalysis() {
       {/* Top Header Control Bar */}
       <Box
         sx={{
-          px: { xs: 3, md: 6 },
-          py: 4,
+          px: { xs: 2.5, md: 4 },
+          py: 2.5,
           bgcolor: alpha(theme.palette.background.default, 0.9),
           backdropFilter: 'blur(25px)',
           position: 'sticky',
           top: 0,
           zIndex: 1100,
           borderBottom: `1px solid ${theme.palette.divider}`,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
         }}
       >
         <StayTimeForm
@@ -225,15 +224,15 @@ export default function StayTimeAnalysis() {
       </Box>
 
       {error && (
-        <Box sx={{ px: { xs: 3, md: 6 }, mt: 2 }}>
+        <Box sx={{ px: { xs: 2.5, md: 4 }, mt: 2 }}>
           <Alert
             severity="error"
             variant="filled"
             onClose={() => setError(null)}
             sx={{
-              borderRadius: 3,
+              borderRadius: 2,
               bgcolor: theme.palette.error.main,
-              boxShadow: `0 8px 24px ${alpha(theme.palette.error.main, 0.2)}`,
+              boxShadow: `0 4px 16px ${alpha(theme.palette.error.main, 0.15)}`,
             }}
           >
             {error}
@@ -250,7 +249,7 @@ export default function StayTimeAnalysis() {
         }}
       >
 
-        <Box sx={{ p: { xs: 2, sm: 3, md: 6 }, flex: 1 }}>
+        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1 }}>
           {!isLoaded && !loading && (
             <Box
               sx={{
@@ -265,22 +264,22 @@ export default function StayTimeAnalysis() {
             >
               <Box
                 sx={{
-                  width: 120,
-                  height: 120,
+                  width: 90,
+                  height: 90,
                   borderRadius: '50%',
                   bgcolor: alpha(theme.palette.primary.main, 0.05),
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  mb: 3,
+                  mb: 2,
                 }}
               >
-                <SearchIcon sx={{ fontSize: 48, color: 'primary.main', opacity: 0.5 }} />
+                <SearchIcon sx={{ fontSize: 36, color: 'primary.main', opacity: 0.5 }} />
               </Box>
-              <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, mb: 0.5 }}>
                 Ready for Analysis
               </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 400 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 350 }}>
                 Enter a Vessel ID or Service code above to generate operational insights.
               </Typography>
             </Box>
@@ -297,18 +296,18 @@ export default function StayTimeAnalysis() {
               }}
             >
               <CircularProgress
-                size={56}
-                thickness={5}
+                size={40}
+                thickness={4.5}
                 sx={{
-                  mb: 3,
+                  mb: 2,
                   color: theme.palette.primary.main,
                   '& .MuiCircularProgress-circle': { strokeLinecap: 'round' },
                 }}
               />
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+              <Typography variant="body1" sx={{ fontWeight: 700, mb: 0.5 }}>
                 Synthesizing Data
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="caption" color="text.secondary">
                 Calculating variance, crane intensity, and bottleneck risks...
               </Typography>
             </Box>
@@ -319,7 +318,7 @@ export default function StayTimeAnalysis() {
               sx={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 5,
+                gap: 3,
                 animation: 'fadeIn 0.6s ease-out forwards',
                 '@keyframes fadeIn': {
                   from: { opacity: 0, transform: 'translateY(20px)' },
@@ -327,13 +326,13 @@ export default function StayTimeAnalysis() {
                 },
               }}
             >
-              <Grid container spacing={3}>
+              <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 7 }}>
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 4,
-                      borderRadius: 5,
+                      p: 2.5,
+                      borderRadius: 3,
                       border: '1px solid',
                       borderColor: alpha(theme.palette.primary.main, 0.15),
                       background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.5)} 100%)`,
@@ -348,9 +347,9 @@ export default function StayTimeAnalysis() {
                   >
                     <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
                       {/* Hero Header inside predicted stay time card */}
-                      <Box sx={{ mb: 4 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mt: 0.5 }}>
-                          <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                      <Box sx={{ mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
+                          <Typography sx={{ fontWeight: 900, fontSize: '1.5rem', color: 'text.primary' }}>
                             {analysisData?.vessel_service || vesselId}
                           </Typography>
                         </Box>
@@ -358,18 +357,18 @@ export default function StayTimeAnalysis() {
 
                       {/* Predicted Stay Time Info */}
                       <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main', mb: 1, textTransform: 'uppercase' }}>
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                           Predicted Port Stay
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                          <Typography variant="h1" sx={{ fontWeight: 950, letterSpacing: '-0.04em', fontSize: { xs: '3.5rem', md: '5rem' }, lineHeight: 1 }}>
+                          <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '2.5rem', md: '3.5rem' }, lineHeight: 1 }}>
                             {formatNumber(predictedAvg)}
                           </Typography>
-                          <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.5 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.5 }}>
                             hours
                           </Typography>
                         </Box>
-                        <Typography variant="body1" sx={{ mt: 2, color: 'text.secondary', fontWeight: 500 }}>
+                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'text.secondary', fontWeight: 500 }}>
                           Based on {visitsCount} historical visits.
                         </Typography>
                       </Box>
@@ -377,10 +376,10 @@ export default function StayTimeAnalysis() {
                     <Box
                       sx={{
                         position: 'absolute',
-                        right: -40,
-                        bottom: -40,
-                        width: 240,
-                        height: 240,
+                        right: -30,
+                        bottom: -30,
+                        width: 180,
+                        height: 180,
                         borderRadius: '50%',
                         background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.15)} 0%, transparent 70%)`,
                         zIndex: 0,
@@ -390,7 +389,7 @@ export default function StayTimeAnalysis() {
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 5 }}>
-                  <Stack spacing={3} sx={{ height: '100%', justifyContent: 'space-between' }}>
+                  <Stack spacing={2} sx={{ height: '100%', justifyContent: 'space-between' }}>
                     <MetricCard
                       title="Historical Baseline"
                       value={`${formatNumber(actualAvg)}h`}
@@ -407,7 +406,7 @@ export default function StayTimeAnalysis() {
                 </Grid>
               </Grid>
 
-              <Grid container spacing={4}>
+              <Grid container spacing={2.5}>
                 <Grid size={{ xs: 12 }}>
                   <StayTimeTrendChart visits={analysisData?.actual?.visits || {}} avgHours={actualAvg} />
                 </Grid>

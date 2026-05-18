@@ -218,7 +218,7 @@ export default function OperationalDashboard() {
   const [rawApiData, setRawApiData] = React.useState<ApiHeatmapResponse | null>(null);
   const [mapData, setMapData] = React.useState<VesselHeatmapViewData | null>(null);
 
-  const [mapView, setMapView] = React.useState<"HEATMAP" | "MAP2D" | "3D">("HEATMAP");
+  const [mapView, setMapView] = React.useState<"HEATMAP" | "MAP2D" | "3D">("3D");
   const [overlayView, setOverlayView] = React.useState<"NONE" | "BERTH">("NONE");
   const [inputsOpen, setInputsOpen] = React.useState(true);
 

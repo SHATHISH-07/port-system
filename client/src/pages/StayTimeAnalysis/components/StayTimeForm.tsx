@@ -29,12 +29,12 @@ export default function StayTimeForm({
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 2.5,
+        gap: 1.5,
         width: '100%',
       }}
     >
       <Box sx={{
-        fontSize: '25px',
+        fontSize: '18px',
         fontWeight: 'bold'
       }}>
         Stay Time Analysis
@@ -43,13 +43,14 @@ export default function StayTimeForm({
         sx={{
           display: 'flex',
           flexDirection: { xs: 'column', lg: 'row' },
-          gap: 2,
+          gap: 1.5,
           alignItems: { xs: 'stretch', lg: 'center' },
           width: '100%',
         }}
       >
         <TextField
           fullWidth
+          size="small"
           placeholder="Search Vessel Service (e.g. VS-PEB-07)"
           value={value}
           onChange={(e) => onChange(e.target.value.toUpperCase())}
@@ -58,8 +59,10 @@ export default function StayTimeForm({
           sx={{
             flex: 2,
             '& .MuiOutlinedInput-root': {
-              borderRadius: 3,
+              borderRadius: 2,
               bgcolor: 'background.paper',
+              height: 40,
+              fontSize: '0.85rem',
               '& fieldset': {
                 borderColor: alpha(theme.palette.divider, 0.8),
               },
@@ -72,7 +75,7 @@ export default function StayTimeForm({
             input: {
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon sx={{ color: 'text.secondary', ml: 1 }} />
+                  <SearchIcon sx={{ color: 'text.secondary', ml: 0.5, fontSize: 20 }} />
                 </InputAdornment>
               ),
             },
@@ -82,26 +85,28 @@ export default function StayTimeForm({
         <TextField
           placeholder="Load Moves"
           type="number"
+          size="small"
           value={loaded}
           onChange={(e) => onLoadedChange(e.target.value)}
           disabled={loading}
           sx={{
             flex: 0.6,
-            minWidth: { xs: '100%', lg: 140 },
-            '& .MuiOutlinedInput-root': { borderRadius: 3 },
+            minWidth: { xs: '100%', lg: 120 },
+            '& .MuiOutlinedInput-root': { borderRadius: 2, height: 40, fontSize: '0.85rem' },
           }}
         />
 
         <TextField
           placeholder="Discharge"
           type="number"
+          size="small"
           value={discharged}
           onChange={(e) => onDischargedChange(e.target.value)}
           disabled={loading}
           sx={{
             flex: 0.6,
-            minWidth: { xs: '100%', lg: 140 },
-            '& .MuiOutlinedInput-root': { borderRadius: 3 },
+            minWidth: { xs: '100%', lg: 120 },
+            '& .MuiOutlinedInput-root': { borderRadius: 2, height: 40, fontSize: '0.85rem' },
           }}
         />
 
@@ -110,14 +115,15 @@ export default function StayTimeForm({
           variant="contained"
           disabled={loading || !value.trim()}
           sx={{
-            borderRadius: 3,
-            px: 4,
-            py: 1.5,
+            borderRadius: 2,
+            px: 2.5,
+            py: 0.75,
             fontWeight: 700,
             textTransform: 'none',
-            boxShadow: `0 8px 16px ${alpha(theme.palette.primary.main, 0.25)}`,
-            minWidth: { xs: '100%', lg: 160 },
-            height: 56,
+            fontSize: '0.8rem',
+            boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}`,
+            minWidth: { xs: '100%', lg: 140 },
+            height: 40,
             whiteSpace: 'nowrap',
           }}
         >
@@ -125,7 +131,7 @@ export default function StayTimeForm({
         </Button>
       </Box>
 
-      <Typography variant="caption" sx={{ color: 'text.secondary', px: 1 }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', px: 0.5, fontSize: '0.7rem' }}>
         Leave Load/Discharge empty to use the service prediction, or enter values for a what-if estimate.
       </Typography>
     </Box>

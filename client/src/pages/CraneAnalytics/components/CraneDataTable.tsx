@@ -24,13 +24,13 @@ interface CraneDataTableProps {
 
 const thSx = (theme: Theme) => ({
   fontWeight: 800,
-  fontSize: "0.72rem",
-  letterSpacing: "0.08em",
+  fontSize: "0.68rem",
+  letterSpacing: "0.06em",
   textTransform: "uppercase" as const,
   color: "text.primary",
   borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
-  py: 2,
-  px: 3,
+  py: 0.75,
+  px: 1.5,
   bgcolor: theme.palette.mode === "light"
     ? alpha(theme.palette.grey[100], 0.96)
     : alpha(theme.palette.background.default, 0.92),
@@ -39,9 +39,9 @@ const thSx = (theme: Theme) => ({
 
 const tdSx = (theme: Theme) => ({
   borderBottom: `1px solid ${alpha(theme.palette.divider, 0.05)}`,
-  py: 1.8,
-  px: 3,
-  fontSize: "0.82rem",
+  py: 0.75,
+  px: 1.5,
+  fontSize: "0.75rem",
 });
 
 export default function CraneDataTable({
@@ -63,22 +63,22 @@ export default function CraneDataTable({
   );
 
   return (
-    <Box sx={{ mt: 5 }}>
+    <Box sx={{ mt: 2.5 }}>
       <Box
         sx={{
-          borderRadius: 3,
+          borderRadius: 2,
           border: `1px solid ${alpha(theme.palette.divider, 0.15)}`,
           overflow: "hidden",
           bgcolor: "background.paper",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.02)",
           width: "100%",
         }}
       >
-        <Box sx={{ px: 3, py: 2.25, borderBottom: "1px solid", borderColor: "divider" }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+        <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
+          <Typography sx={{ fontWeight: 800, fontSize: "0.9rem" }}>
             {craneId ? "Visit History" : "Asset Overview"}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="caption" color="text.secondary">
             {craneId
               ? `Operational visit logs for ${craneId} showing total moves and cranes deployed`
               : "Overview of all active crane assets, their throughput and productivity ratings"}
@@ -143,7 +143,7 @@ export default function CraneDataTable({
                     sx={{
                       ...tdSx(theme),
                       fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.75rem",
+                      fontSize: "0.72rem",
                       fontWeight: 700,
                     }}
                   >
@@ -158,7 +158,7 @@ export default function CraneDataTable({
                       ...tdSx(theme),
                       fontWeight: 800,
                       fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.8rem",
+                      fontSize: "0.75rem",
                     }}
                   >
                     {v.total_moves.toLocaleString()}
@@ -170,9 +170,9 @@ export default function CraneDataTable({
                           key={cid}
                           sx={{
                             display: "inline-flex",
-                            px: 1,
-                            py: 0.3,
-                            borderRadius: "5px",
+                            px: 0.75,
+                            py: 0.2,
+                            borderRadius: "4px",
                             border: `1px solid ${cid === craneId
                               ? alpha(theme.palette.primary.main, 0.35)
                               : alpha(theme.palette.divider, 0.12)
@@ -186,7 +186,7 @@ export default function CraneDataTable({
                           <Typography
                             sx={{
                               fontFamily: "'DM Mono', monospace",
-                              fontSize: "0.6rem",
+                              fontSize: "0.55rem",
                               fontWeight: 700,
                               color:
                                 cid === craneId
@@ -229,7 +229,7 @@ export default function CraneDataTable({
                     sx={{
                       ...tdSx(theme),
                       fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.78rem",
+                      fontSize: "0.72rem",
                       fontWeight: 700,
                     }}
                   >
@@ -244,7 +244,7 @@ export default function CraneDataTable({
                       ...tdSx(theme),
                       fontWeight: 800,
                       fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.8rem",
+                      fontSize: "0.75rem",
                     }}
                   >
                     {s.total_moves.toLocaleString()}
@@ -255,7 +255,7 @@ export default function CraneDataTable({
                       ...tdSx(theme),
                       fontWeight: 800,
                       fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.8rem",
+                      fontSize: "0.75rem",
                       color: "primary.main",
                     }}
                   >
@@ -267,7 +267,7 @@ export default function CraneDataTable({
                       ...tdSx(theme),
                       fontFamily: "'DM Mono', monospace",
                       fontWeight: 700,
-                      fontSize: "0.78rem",
+                      fontSize: "0.72rem",
                     }}
                   >
                     {s.avg_cycle_minutes?.toFixed(1) ?? "—"}
@@ -290,12 +290,12 @@ export default function CraneDataTable({
           sx={{
             borderTop: `1px solid ${alpha(theme.palette.divider, 0.06)}`,
             color: "text.disabled",
-            ".MuiTablePagination-toolbar": { minHeight: 46, px: 2.5 },
+            ".MuiTablePagination-toolbar": { minHeight: 40, px: 2 },
             ".MuiTablePagination-displayedRows": {
-              fontSize: "0.68rem",
+              fontSize: "0.65rem",
               fontFamily: "'DM Mono', monospace",
             },
-            ".MuiTablePagination-actions button": { color: "text.secondary" },
+            ".MuiTablePagination-actions button": { color: "text.secondary", p: 0.5 },
           }}
         />
       </Box>

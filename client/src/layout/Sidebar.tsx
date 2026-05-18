@@ -25,8 +25,8 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useColorMode } from "../theme/ThemeContext";
 
-const OPEN = 280;
-const CLOSED = 80;
+const OPEN = 230;
+const CLOSED = 64;
 
 const USER_ITEMS: {
   path: string;
@@ -108,13 +108,13 @@ export default function Sidebar() {
             sx={{
               display: "flex",
               alignItems: "center",
-              gap: 1.5,
-              height: isSubItem ? 36 : 44,
-              px: open ? (isSubItem ? 5 : 2) : 0,
-              mx: open ? 2 : "auto",
-              width: open ? "auto" : 48,
-              mb: 0.5,
-              borderRadius: "10px",
+              gap: 1.2,
+              height: isSubItem ? 30 : 38,
+              px: open ? (isSubItem ? 4 : 1.5) : 0,
+              mx: open ? 1.5 : "auto",
+              width: open ? "auto" : 38,
+              mb: 0.25,
+              borderRadius: "8px",
               textDecoration: "none",
               justifyContent: open ? "flex-start" : "center",
               transition: "all 0.2s ease-in-out",
@@ -130,7 +130,7 @@ export default function Sidebar() {
             {Icon ? (
               <Icon
                 sx={{
-                  fontSize: 22,
+                  fontSize: 19,
                   flexShrink: 0,
                   color: "inherit",
                   transition: "color 150ms",
@@ -139,7 +139,7 @@ export default function Sidebar() {
             ) : (
               !open && (
                 <Typography
-                  sx={{ fontSize: 13, fontWeight: 700, color: "inherit" }}
+                  sx={{ fontSize: 11, fontWeight: 700, color: "inherit" }}
                 >
                   {label.charAt(0)}
                 </Typography>
@@ -149,7 +149,7 @@ export default function Sidebar() {
             {open && (
               <Typography
                 sx={{
-                  fontSize: isSubItem ? 13 : 14,
+                  fontSize: isSubItem ? 11.5 : 12.5,
                   fontWeight: active ? 600 : 500,
                   color: "inherit",
                   whiteSpace: "nowrap",
@@ -191,13 +191,13 @@ export default function Sidebar() {
         sx={{
           display: "flex",
           flexDirection: open ? "row" : "column",
-          alignItems: open ? "flex-start" : "center",
+          alignItems: open ? "center" : "center",
           justifyContent: open ? "space-between" : "center",
-          p: open ? 2.5 : 2,
-          pt: 3.5,
-          gap: 2,
+          p: open ? "16px 20px" : "12px 16px",
+          pt: open ? 2.5 : 2,
+          gap: 1.5,
           flexShrink: 0,
-          mb: 1,
+          mb: 0.5,
         }}
       >
         {open && (
@@ -205,29 +205,28 @@ export default function Sidebar() {
             sx={{
               display: "flex",
               flexDirection: "column",
-              gap: 0.25,
-              mt: 0.5,
+              gap: 0.15,
             }}
           >
             <Typography
               sx={{
-                fontSize: "1rem",
-                fontWeight: 800,
+                fontSize: "0.85rem",
+                fontWeight: 700,
                 color: textActiveColor,
-                lineHeight: 1.3,
-                letterSpacing: "0.03em",
+                lineHeight: 1.2,
+                letterSpacing: "0.02em",
               }}
             >
               Deck Optimiser
             </Typography>
             <Typography
               sx={{
-                fontSize: "0.65rem",
+                fontSize: "0.6rem",
                 fontWeight: 700,
                 color: textColor,
                 textTransform: "uppercase",
-                mt: 0.5,
-                letterSpacing: "0.05em",
+                mt: 0.25,
+                letterSpacing: "0.04em",
               }}
             >
               {user?.role || "User"}
@@ -243,14 +242,14 @@ export default function Sidebar() {
             onClick={() => setOpen((v) => !v)}
             size="small"
             sx={{
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               flexShrink: 0,
               color: menuIconColor,
               "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
             }}
           >
-            <MenuRounded sx={{ fontSize: 24 }} />
+            <MenuRounded sx={{ fontSize: 20 }} />
           </IconButton>
         </Tooltip>
       </Box>
@@ -277,14 +276,14 @@ export default function Sidebar() {
               sx={{
                 display: "flex",
                 alignItems: "center",
-                gap: 1.5,
-                height: 44,
-                px: open ? 2 : 0,
-                mx: open ? 2 : "auto",
-                width: open ? "auto" : 48,
-                mt: 3,
-                mb: 0.5,
-                borderRadius: "10px",
+                gap: 1.2,
+                height: 38,
+                px: open ? 1.5 : 0,
+                mx: open ? 1.5 : "auto",
+                width: open ? "auto" : 38,
+                mt: 1.5,
+                mb: 0.25,
+                borderRadius: "8px",
                 cursor: "pointer",
                 justifyContent: open ? "flex-start" : "center",
                 transition: "all 0.2s ease-in-out",
@@ -293,13 +292,13 @@ export default function Sidebar() {
                 "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
               }}
             >
-              <SettingsOutlined sx={{ fontSize: 22, color: "inherit" }} />
+              <SettingsOutlined sx={{ fontSize: 19, color: "inherit" }} />
               {open && (
                 <>
                   <Typography
                     sx={{
                       flex: 1,
-                      fontSize: 14,
+                      fontSize: 12.5,
                       fontWeight: 600,
                       color: "inherit",
                     }}
@@ -307,9 +306,9 @@ export default function Sidebar() {
                     Operations
                   </Typography>
                   {adminOpen ? (
-                    <ExpandLess sx={{ fontSize: 20 }} />
+                    <ExpandLess sx={{ fontSize: 18 }} />
                   ) : (
-                    <ExpandMore sx={{ fontSize: 20 }} />
+                    <ExpandMore sx={{ fontSize: 18 }} />
                   )}
                 </>
               )}
@@ -329,12 +328,12 @@ export default function Sidebar() {
       {/* ─── Bottom Actions (Stacked) ─── */}
       <Box
         sx={{
-          p: open ? 2 : 1.5,
-          pb: 3,
+          p: open ? "12px 16px" : "8px 12px",
+          pb: 2,
           display: "flex",
           flexDirection: "column",
-          gap: 1,
-          alignItems: open ? "stretch" : "center", // Stretch items to full width when open
+          gap: 0.75,
+          alignItems: open ? "stretch" : "center",
           width: "100%",
         }}
       >
@@ -342,13 +341,15 @@ export default function Sidebar() {
           <>
             <Button
               onClick={toggleColorMode}
-              startIcon={isDark ? <LightModeOutlined /> : <DarkModeOutlined />}
+              startIcon={isDark ? <LightModeOutlined sx={{ fontSize: 18 }} /> : <DarkModeOutlined sx={{ fontSize: 18 }} />}
               sx={{
                 justifyContent: "flex-start",
-                height: 44,
+                height: 38,
                 color: textColor,
-                px: 2,
-                borderRadius: "10px",
+                fontSize: "12.5px",
+                px: 1.5,
+                borderRadius: "8px",
+                textTransform: "none",
                 "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
               }}
             >
@@ -359,13 +360,15 @@ export default function Sidebar() {
 
             <Button
               onClick={logout}
-              startIcon={<LogoutOutlined />}
+              startIcon={<LogoutOutlined sx={{ fontSize: 18 }} />}
               sx={{
                 justifyContent: "flex-start",
-                height: 44,
+                height: 38,
                 color: textColor,
-                px: 2,
-                borderRadius: "10px",
+                fontSize: "12.5px",
+                px: 1.5,
+                borderRadius: "8px",
+                textTransform: "none",
                 "&:hover": {
                   bgcolor: isDark
                     ? "rgba(255,70,70,0.1)"
@@ -387,18 +390,18 @@ export default function Sidebar() {
               <IconButton
                 onClick={toggleColorMode}
                 sx={{
-                  width: 44,
-                  height: 44,
+                  width: 36,
+                  height: 36,
                   flexShrink: 0,
-                  borderRadius: "10px",
+                  borderRadius: "8px",
                   color: textColor,
                   "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
                 }}
               >
                 {isDark ? (
-                  <LightModeOutlined sx={{ fontSize: 20 }} />
+                  <LightModeOutlined sx={{ fontSize: 18 }} />
                 ) : (
-                  <DarkModeOutlined sx={{ fontSize: 20 }} />
+                  <DarkModeOutlined sx={{ fontSize: 18 }} />
                 )}
               </IconButton>
             </Tooltip>
@@ -407,10 +410,10 @@ export default function Sidebar() {
               <IconButton
                 onClick={logout}
                 sx={{
-                  width: 44,
-                  height: 44,
+                  width: 36,
+                  height: 36,
                   flexShrink: 0,
-                  borderRadius: "10px",
+                  borderRadius: "8px",
                   color: textColor,
                   "&:hover": {
                     bgcolor: isDark
@@ -420,7 +423,7 @@ export default function Sidebar() {
                   },
                 }}
               >
-                <LogoutOutlined sx={{ fontSize: 20 }} />
+                <LogoutOutlined sx={{ fontSize: 18 }} />
               </IconButton>
             </Tooltip>
           </>

@@ -110,14 +110,14 @@ export default function TrainModel() {
       {/* Top Header Control Bar */}
       <Box
         sx={{
-          px: { xs: 3, md: 6 },
-          py: 4,
+          px: { xs: 2, md: 4 },
+          py: 2.5,
           bgcolor: "transparent",
           borderBottom: `1px solid ${theme.palette.divider}`,
         }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, width: '100%' }}>
-          <Box sx={{ fontSize: '25px', fontWeight: 'bold' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
+          <Box sx={{ fontSize: '18px', fontWeight: 'bold' }}>
             ML Model Training & Retraining Dashboard
           </Box>
           <Box
@@ -128,7 +128,7 @@ export default function TrainModel() {
               alignItems: 'center',
             }}
           >
-            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mr: 1 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mr: 1, fontSize: '0.8rem' }}>
               Select Data Ingest Source:
             </Typography>
             <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -141,12 +141,14 @@ export default function TrainModel() {
                 }}
                 disabled={loading || isTraining}
                 sx={{
-                  borderRadius: 3,
+                  borderRadius: 2,
                   fontWeight: 700,
                   textTransform: "none",
-                  px: 3,
-                  py: 1,
-                  boxShadow: dataSource === "db" ? `0 8px 16px ${alpha(theme.palette.primary.main, 0.25)}` : "none",
+                  px: 2,
+                  py: 0.6,
+                  height: 32,
+                  fontSize: '0.75rem',
+                  boxShadow: dataSource === "db" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none",
                 }}
               >
                 Use Database
@@ -159,19 +161,21 @@ export default function TrainModel() {
                 }}
                 disabled={loading || isTraining}
                 sx={{
-                  borderRadius: 3,
+                  borderRadius: 2,
                   fontWeight: 700,
                   textTransform: "none",
-                  px: 3,
-                  py: 1,
-                  boxShadow: dataSource === "file" ? `0 8px 16px ${alpha(theme.palette.primary.main, 0.25)}` : "none",
+                  px: 2,
+                  py: 0.6,
+                  height: 32,
+                  fontSize: '0.75rem',
+                  boxShadow: dataSource === "file" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none",
                 }}
               >
                 Upload CSV File
               </Button>
             </Box>
           </Box>
-          <Typography variant="caption" sx={{ color: 'text.secondary', px: 0.5 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', px: 0.5, fontSize: '0.7rem' }}>
             Configure and trigger model training runs using historical database records or an uploaded custom CSV dataset.
           </Typography>
         </Box>
@@ -185,17 +189,17 @@ export default function TrainModel() {
           scrollBehavior: 'smooth',
         }}
       >
-        <Box sx={{ p: { xs: 2, sm: 3, md: 6 }, flex: 1, maxWidth: 1000, mx: "auto" }}>
+        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1, maxWidth: 800, mx: "auto" }}>
           {/* Hero Header */}
-          <Box sx={{ mb: 4 }}>
-            <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.15em' }}>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.1em', fontSize: '0.7rem' }}>
               Machine Learning Retraining
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mt: 0.5 }}>
-              <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: '-0.02em' }}>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.25rem' }}>
                 {dataSource === "db" ? "Database Source" : "File Upload Source"}
               </Typography>
-              <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
                 Vessel Stay Predictor
               </Typography>
             </Box>
@@ -207,15 +211,15 @@ export default function TrainModel() {
               bgcolor: "background.paper",
               border: "1px solid",
               borderColor: "divider",
-              borderRadius: 4,
-              mb: 4,
+              borderRadius: 3,
+              mb: 2,
               overflow: "hidden",
-              boxShadow: "0 6px 24px rgba(0,0,0,0.03)",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.02)",
             }}
           >
             {/* File dropzone (Only active when dataSource is file) */}
             <Collapse in={dataSource === "file"}>
-              <Box sx={{ p: 4, pb: 2 }}>
+              <Box sx={{ p: 2.5, pb: 1.5 }}>
                 <Box
                   onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                   onDragLeave={() => setIsDragging(false)}
@@ -225,14 +229,14 @@ export default function TrainModel() {
                     border: `2px dashed ${isDragging
                       ? (theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8")
                       : theme.palette.divider}`,
-                    borderRadius: 3,
-                    p: 4,
+                    borderRadius: 2,
+                    p: 2.5,
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
                     textAlign: "center",
-                    gap: 1.5,
+                    gap: 1.2,
                     cursor: "pointer",
                     transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                     bgcolor: isDragging
@@ -241,13 +245,13 @@ export default function TrainModel() {
                     "&:hover": {
                       borderColor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
                       bgcolor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.02)",
-                      transform: "scale(1.005)",
+                      transform: "scale(1.002)",
                     },
                   }}
                 >
                   <input ref={fileRef} type="file" accept=".csv" hidden
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-                  <UploadFileOutlined sx={{ color: "text.disabled", fontSize: 32, mb: 1 }} />
+                  <UploadFileOutlined sx={{ color: "text.disabled", fontSize: 24, mb: 0.5 }} />
                   <Box sx={{ maxWidth: 280 }}>
                     {file ? (
                       <>
@@ -256,10 +260,10 @@ export default function TrainModel() {
                       </>
                     ) : (
                       <>
-                        <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 600 }}>
+                        <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 600, fontSize: "0.8rem" }}>
                           Drop a CSV here or click to browse
                         </Typography>
-                        <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.5 }}>
+                        <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.5, fontSize: "0.65rem" }}>
                           Requires headers matching standard vessel stay schemas
                         </Typography>
                       </>
@@ -268,11 +272,11 @@ export default function TrainModel() {
                 </Box>
 
                 {/* Save to DB checkbox */}
-                <FormGroup sx={{ mt: 2, ml: 0.5 }}>
+                <FormGroup sx={{ mt: 1.5, ml: 0.5 }}>
                   <FormControlLabel
                     control={<Checkbox size="small" checked={updateDb} onChange={(e) => setUpdateDb(e.target.checked)} disabled={loading || isTraining} />}
                     label={
-                      <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 500 }}>
+                      <Typography sx={{ color: "text.secondary", fontWeight: 500, fontSize: "0.75rem" }}>
                         Also save this file to the history database
                       </Typography>
                     }
@@ -283,26 +287,28 @@ export default function TrainModel() {
             </Collapse>
 
             {/* Config panel */}
-            <Box sx={{ p: 4 }}>
+            <Box sx={{ p: 2.5 }}>
               <ConfigPanel />
             </Box>
 
             <Divider sx={{ borderColor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
 
             {/* Actions */}
-            <Box sx={{ px: 4, py: 3, display: "flex", justifyContent: "flex-end", bgcolor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.01)" : "rgba(0,0,0,0.005)" }}>
+            <Box sx={{ px: 2.5, py: 1.5, display: "flex", justifyContent: "flex-end", bgcolor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.01)" : "rgba(0,0,0,0.005)" }}>
               <Button
                 variant="contained"
                 disableElevation
                 disabled={!canTrain}
                 onClick={() => handleTrain()}
                 sx={{
-                  minWidth: 180,
-                  borderRadius: 2.5,
+                  minWidth: 150,
+                  borderRadius: 2,
                   textTransform: "none",
                   fontWeight: 600,
-                  px: 3,
-                  py: 1.25,
+                  px: 2,
+                  py: 0.75,
+                  height: 36,
+                  fontSize: '0.8rem',
                   boxShadow: theme.palette.mode === "dark"
                     ? "0 4px 12px rgba(29, 78, 216, 0.2)"
                     : "0 4px 12px rgba(29, 78, 216, 0.1)",

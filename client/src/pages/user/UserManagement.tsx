@@ -90,23 +90,23 @@ const UserManagement: React.FC = () => {
 
     return (
         <Box sx={{ p: 0 }}>
-            <Box sx={{ mb: 4, pb: 3, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <Box sx={{ mb: 2, pb: 1.5, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <Box>
-                    <Typography variant="h5" sx={{ mb: 0.5, color: "text.primary" }}>User Management</Typography>
-                    <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 380 }}>Manage platform access, role permissions, and account security.</Typography>
+                    <Typography variant="h6" sx={{ fontSize: "1.1rem", mb: 0.5, color: "text.primary", fontWeight: 700 }}>User Management</Typography>
+                    <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", maxWidth: 380 }}>Manage platform access, role permissions, and account security.</Typography>
                 </Box>
                 <Button 
                     variant="contained" 
                     disableElevation
                     onClick={() => setOpenModal(true)}
-                    sx={{ textTransform: "none", fontWeight: 600, height: 40 }}
+                    sx={{ textTransform: "none", fontWeight: 600, height: 32, fontSize: "0.75rem", px: 2 }}
                 >
                     Add User
                 </Button>
             </Box>
 
             <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, overflow: "hidden" }}>
-                <Table>
+                <Table size="small">
                     <TableHead sx={{ backgroundColor: "background.paper" }}>
                         <TableRow>
                             <TableCell>ID</TableCell>

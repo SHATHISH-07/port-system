@@ -30,18 +30,18 @@ const SystemLogs: React.FC = () => {
 
     return (
         <Box sx={{ p: 0 }}>
-            <Box sx={{ mb: 4, pb: 3, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <Box sx={{ mb: 2, pb: 1.5, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <Box>
-                    <Typography variant="h5" sx={{ mb: 0.5, color: "text.primary" }}>System Logs</Typography>
-                    <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 380 }}>Review audit trails, security events, and platform activity.</Typography>
+                    <Typography variant="h6" sx={{ fontSize: "1.1rem", mb: 0.5, color: "text.primary", fontWeight: 700 }}>System Logs</Typography>
+                    <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", maxWidth: 380 }}>Review audit trails, security events, and platform activity.</Typography>
                 </Box>
             </Box>
 
             {loading ? (
-                <CircularProgress />
+                <CircularProgress size={24} />
             ) : (
                 <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, overflow: "hidden" }}>
-                    <Table>
+                    <Table size="small">
                         <TableHead sx={{ backgroundColor: "background.paper" }}>
                             <TableRow>
                                 <TableCell>ID</TableCell>

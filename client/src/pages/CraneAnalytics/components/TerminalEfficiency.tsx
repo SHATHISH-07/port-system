@@ -19,11 +19,11 @@ function MphBar({ value, max }: { value: number; max: number }) {
   const theme = useTheme();
   const pct = Math.min((value / max) * 100, 100);
   return (
-    <Box sx={{ mt: 1.5, width: "100%" }}>
+    <Box sx={{ mt: 1, width: "100%" }}>
       <Box
         sx={{
-          height: 3,
-          borderRadius: 4,
+          height: 2,
+          borderRadius: 2,
           bgcolor: alpha(theme.palette.divider, 0.1),
           overflow: "hidden",
         }}
@@ -32,7 +32,7 @@ function MphBar({ value, max }: { value: number; max: number }) {
           sx={{
             height: "100%",
             width: `${pct}%`,
-            borderRadius: 4,
+            borderRadius: 2,
             background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${alpha(theme.palette.primary.main, 0.5)})`,
             transition: "width 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
@@ -51,26 +51,26 @@ export default function TerminalEfficiency({
   const maxMph = Math.max(...yardStats.map((y) => y.avg_crane_productivity));
 
   return (
-    <Box sx={{ mb: 5 }}>
+    <Box sx={{ mb: 2.5 }}>
       <SectionLabel label="Terminal Efficiency" count={yardStats.length} />
-      <Grid container spacing={2}>
+      <Grid container spacing={1.5}>
         {yardStats.map((y) => (
           <Grid size={{ xs: 12, md: 6 }} key={y.terminal_name}>
             <Box
               sx={{
-                p: "24px",
-                borderRadius: 4,
+                p: 2,
+                borderRadius: 2,
                 background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.background.paper, 0.4)} 100%)`,
                 backdropFilter: "blur(10px)",
                 border: "1px solid",
                 borderColor: alpha(theme.palette.primary.main, 0.15),
-                boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.04)}`,
+                boxShadow: `0 4px 16px ${alpha(theme.palette.primary.main, 0.02)}`,
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                 cursor: "default",
                 "&:hover": {
                   borderColor: alpha(theme.palette.primary.main, 0.35),
-                  transform: "translateY(-4px)",
-                  boxShadow: `0 12px 40px ${alpha(theme.palette.primary.main, 0.1)}`,
+                  transform: "translateY(-2px)",
+                  boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.06)}`,
                 },
               }}
             >
@@ -84,16 +84,16 @@ export default function TerminalEfficiency({
                 <Box>
                   <Typography
                     sx={{
-                      fontSize: "0.85rem",
+                      fontSize: "0.8rem",
                       fontWeight: 800,
                       color: "text.primary",
-                      mb: 0.5,
+                      mb: 0.25,
                       letterSpacing: "-0.01em",
                     }}
                   >
                     {y.terminal_name}
                   </Typography>
-                  <Box sx={{ display: "flex", gap: 2 }}>
+                  <Box sx={{ display: "flex", gap: 1.5 }}>
                     {[
                       { val: y.active_cranes_count, label: "assets" },
                       { val: y.unique_vessel_visits, label: "visits" },
@@ -105,7 +105,7 @@ export default function TerminalEfficiency({
                       <Typography
                         key={item.label}
                         sx={{
-                          fontSize: "0.65rem",
+                          fontSize: "0.6rem",
                           color: "text.disabled",
                           fontFamily: "'DM Mono', monospace",
                           fontWeight: 600,
@@ -122,7 +122,7 @@ export default function TerminalEfficiency({
                 <Box sx={{ textAlign: "right" }}>
                   <Typography
                     sx={{
-                      fontSize: "1.6rem",
+                      fontSize: "1.3rem",
                       fontWeight: 900,
                       color: theme.palette.primary.main,
                       letterSpacing: "-0.04em",
@@ -134,10 +134,10 @@ export default function TerminalEfficiency({
                   </Typography>
                   <Typography
                     sx={{
-                      fontSize: "0.55rem",
+                      fontSize: "0.5rem",
                       fontWeight: 800,
                       color: "text.disabled",
-                      letterSpacing: "0.14em",
+                      letterSpacing: "0.12em",
                       fontFamily: "'DM Mono', monospace",
                     }}
                   >

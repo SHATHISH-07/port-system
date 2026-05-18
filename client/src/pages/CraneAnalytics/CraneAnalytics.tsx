@@ -92,8 +92,8 @@ export default function CraneAnalytics() {
       {/* Top Header Control Bar */}
       <Box
         sx={{
-          px: { xs: 3, md: 6 },
-          py: 4,
+          px: { xs: 2.5, md: 4 },
+          py: 2.5,
           bgcolor: "transparent",
           borderBottom: `1px solid ${theme.palette.divider}`,
         }}
@@ -111,15 +111,15 @@ export default function CraneAnalytics() {
       </Box>
 
       {error && (
-        <Box sx={{ px: { xs: 3, md: 6 }, mt: 2 }}>
+        <Box sx={{ px: { xs: 2.5, md: 4 }, mt: 2 }}>
           <Alert
             severity="error"
             variant="filled"
             onClose={() => setError(null)}
             sx={{
-              borderRadius: 3,
+              borderRadius: 2,
               bgcolor: theme.palette.error.main,
-              boxShadow: `0 8px 24px ${alpha(theme.palette.error.main, 0.2)}`,
+              boxShadow: `0 4px 16px ${alpha(theme.palette.error.main, 0.15)}`,
             }}
           >
             {error}
@@ -135,7 +135,7 @@ export default function CraneAnalytics() {
           scrollBehavior: 'smooth',
         }}
       >
-        <Box sx={{ p: { xs: 2, sm: 3, md: 6 }, flex: 1 }}>
+        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1 }}>
 
           {/* Ready for Analysis State */}
           {!isLoaded && !loading && (
@@ -148,27 +148,27 @@ export default function CraneAnalytics() {
                 justifyContent: 'center',
                 textAlign: 'center',
                 opacity: 0.8,
-                py: 10,
+                py: 4,
               }}
             >
               <Box
                 sx={{
-                  width: 120,
-                  height: 120,
+                  width: 90,
+                  height: 90,
                   borderRadius: '50%',
                   bgcolor: alpha(theme.palette.primary.main, 0.05),
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  mb: 3,
+                  mb: 2,
                 }}
               >
-                <SearchIcon sx={{ fontSize: 48, color: 'primary.main', opacity: 0.5 }} />
+                <SearchIcon sx={{ fontSize: 36, color: 'primary.main', opacity: 0.5 }} />
               </Box>
-              <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, mb: 0.5 }}>
                 Ready for Analysis
               </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 400 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 350 }}>
                 Enter a Crane ID or leave it empty to query global fleet statistics.
               </Typography>
             </Box>
@@ -183,22 +183,22 @@ export default function CraneAnalytics() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                py: 10,
+                py: 4,
               }}
             >
               <CircularProgress
-                size={56}
-                thickness={5}
+                size={40}
+                thickness={4.5}
                 sx={{
-                  mb: 3,
+                  mb: 2,
                   color: theme.palette.primary.main,
                   '& .MuiCircularProgress-circle': { strokeLinecap: 'round' },
                 }}
               />
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+              <Typography variant="body1" sx={{ fontWeight: 700, mb: 0.5 }}>
                 Synthesizing Data
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="caption" color="text.secondary">
                 Calculating moves, productivity ratings, and cycle times...
               </Typography>
             </Box>
@@ -210,7 +210,7 @@ export default function CraneAnalytics() {
               sx={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 5,
+                gap: 3,
                 animation: 'fadeIn 0.6s ease-out forwards',
                 '@keyframes fadeIn': {
                   from: { opacity: 0, transform: 'translateY(20px)' },
@@ -220,14 +220,14 @@ export default function CraneAnalytics() {
             >
               {/* Hero Header */}
               <Box>
-                <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.15em' }}>
+                <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.1em', fontSize: '0.7rem' }}>
                   Operational Telemetry
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mt: 0.5 }}>
-                  <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: '-0.02em' }}>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
+                  <Typography sx={{ fontWeight: 900, fontSize: '1.5rem', letterSpacing: '-0.02em' }}>
                     {data.selected_crane ? data.selected_crane : "Global Fleet"}
                   </Typography>
-                  <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
                     Performance Dashboard
                   </Typography>
                 </Box>
