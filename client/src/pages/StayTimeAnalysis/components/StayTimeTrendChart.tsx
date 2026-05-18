@@ -360,7 +360,7 @@ export default function StayTimeTrendChart({
                                         }}
                                         width={52}
                                         label={{
-                                            value: 'Moves (count)',
+                                            value: 'Container (count)',
                                             angle: 90,
                                             position: 'insideRight',
                                             offset: 12,
