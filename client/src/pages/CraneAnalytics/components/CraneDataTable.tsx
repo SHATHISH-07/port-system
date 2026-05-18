@@ -9,6 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useTheme, alpha } from "@mui/material/styles";
+import type { Theme } from "@mui/material/styles";
 import { RatingChip, TerminalBadge } from "./RatingChip";
 import type { ExtendedCraneResponse } from "../../../types/crane";
 
@@ -21,7 +22,7 @@ interface CraneDataTableProps {
   onCraneSelect: (craneId: string) => void;
 }
 
-const thSx = (theme: ReturnType<typeof useTheme>) => ({
+const thSx = (theme: Theme) => ({
   fontWeight: 800,
   fontSize: "0.72rem",
   letterSpacing: "0.08em",
@@ -36,7 +37,7 @@ const thSx = (theme: ReturnType<typeof useTheme>) => ({
   whiteSpace: "nowrap" as const,
 });
 
-const tdSx = (theme: ReturnType<typeof useTheme>) => ({
+const tdSx = (theme: Theme) => ({
   borderBottom: `1px solid ${alpha(theme.palette.divider, 0.05)}`,
   py: 1.8,
   px: 3,
@@ -78,8 +79,8 @@ export default function CraneDataTable({
             {craneId ? "Visit History" : "Asset Overview"}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {craneId 
-              ? `Operational visit logs for ${craneId} showing total moves and cranes deployed` 
+            {craneId
+              ? `Operational visit logs for ${craneId} showing total moves and cranes deployed`
               : "Overview of all active crane assets, their throughput and productivity ratings"}
           </Typography>
         </Box>
@@ -119,164 +120,163 @@ export default function CraneDataTable({
           <TableBody>
             {craneId
               ? (paginatedRows as typeof visitRows).map((v, index) => (
-                  <TableRow
-                    key={v.visit_id}
-                    hover
-                    sx={{
+                <TableRow
+                  key={v.visit_id}
+                  hover
+                  sx={{
+                    bgcolor:
+                      index % 2 === 0
+                        ? theme.palette.mode === "light"
+                          ? alpha(theme.palette.grey[50], 0.9)
+                          : alpha(theme.palette.action.hover, 0.18)
+                        : "transparent",
+                    "&:last-child td": { border: 0 },
+                    "&:hover": {
                       bgcolor:
-                        index % 2 === 0
-                          ? theme.palette.mode === "light"
-                            ? alpha(theme.palette.grey[50], 0.9)
-                            : alpha(theme.palette.action.hover, 0.18)
-                          : "transparent",
-                      "&:last-child td": { border: 0 },
-                      "&:hover": {
-                        bgcolor:
-                          theme.palette.mode === "light"
-                            ? alpha(theme.palette.primary.main, 0.05)
-                            : alpha(theme.palette.action.hover, 0.28),
-                      },
+                        theme.palette.mode === "light"
+                          ? alpha(theme.palette.primary.main, 0.05)
+                          : alpha(theme.palette.action.hover, 0.28),
+                    },
+                  }}
+                >
+                  <TableCell
+                    sx={{
+                      ...tdSx(theme),
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
                     }}
                   >
-                    <TableCell
-                      sx={{
-                        ...tdSx(theme),
-                        fontFamily: "'DM Mono', monospace",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {v.visit_id}
-                    </TableCell>
-                    <TableCell sx={tdSx(theme)}>
-                      <TerminalBadge id={v.yard_id} />
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        ...tdSx(theme),
-                        fontWeight: 800,
-                        fontFamily: "'DM Mono', monospace",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      {v.total_moves.toLocaleString()}
-                    </TableCell>
-                    <TableCell sx={tdSx(theme)}>
-                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                        {v.cranes_used.map((cid) => (
-                          <Box
-                            key={cid}
-                            sx={{
-                              display: "inline-flex",
-                              px: 1,
-                              py: 0.3,
-                              borderRadius: "5px",
-                              border: `1px solid ${
-                                cid === craneId
-                                  ? alpha(theme.palette.primary.main, 0.35)
-                                  : alpha(theme.palette.divider, 0.12)
+                    {v.visit_id}
+                  </TableCell>
+                  <TableCell sx={tdSx(theme)}>
+                    <TerminalBadge id={v.yard_id} />
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      ...tdSx(theme),
+                      fontWeight: 800,
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    {v.total_moves.toLocaleString()}
+                  </TableCell>
+                  <TableCell sx={tdSx(theme)}>
+                    <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                      {v.cranes_used.map((cid) => (
+                        <Box
+                          key={cid}
+                          sx={{
+                            display: "inline-flex",
+                            px: 1,
+                            py: 0.3,
+                            borderRadius: "5px",
+                            border: `1px solid ${cid === craneId
+                              ? alpha(theme.palette.primary.main, 0.35)
+                              : alpha(theme.palette.divider, 0.12)
                               }`,
-                              bgcolor:
+                            bgcolor:
+                              cid === craneId
+                                ? alpha(theme.palette.primary.main, 0.07)
+                                : "transparent",
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              fontFamily: "'DM Mono', monospace",
+                              fontSize: "0.6rem",
+                              fontWeight: 700,
+                              color:
                                 cid === craneId
-                                  ? alpha(theme.palette.primary.main, 0.07)
-                                  : "transparent",
+                                  ? "primary.main"
+                                  : "text.disabled",
+                              letterSpacing: "0.05em",
                             }}
                           >
-                            <Typography
-                              sx={{
-                                fontFamily: "'DM Mono', monospace",
-                                fontSize: "0.6rem",
-                                fontWeight: 700,
-                                color:
-                                  cid === craneId
-                                    ? "primary.main"
-                                    : "text.disabled",
-                                letterSpacing: "0.05em",
-                              }}
-                            >
-                              {cid}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))
+                            {cid}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))
               : (paginatedRows as typeof statRows).map((s, index) => (
-                  <TableRow
-                    key={`${s.crane_id}-${s.yard_id}`}
-                    hover
-                    onClick={() => onCraneSelect(s.crane_id)}
-                    sx={{
-                      cursor: "pointer",
+                <TableRow
+                  key={`${s.crane_id}-${s.yard_id}`}
+                  hover
+                  onClick={() => onCraneSelect(s.crane_id)}
+                  sx={{
+                    cursor: "pointer",
+                    bgcolor:
+                      index % 2 === 0
+                        ? theme.palette.mode === "light"
+                          ? alpha(theme.palette.grey[50], 0.9)
+                          : alpha(theme.palette.action.hover, 0.18)
+                        : "transparent",
+                    "&:last-child td": { border: 0 },
+                    "&:hover": {
                       bgcolor:
-                        index % 2 === 0
-                          ? theme.palette.mode === "light"
-                            ? alpha(theme.palette.grey[50], 0.9)
-                            : alpha(theme.palette.action.hover, 0.18)
-                          : "transparent",
-                      "&:last-child td": { border: 0 },
-                      "&:hover": {
-                        bgcolor:
-                          theme.palette.mode === "light"
-                            ? alpha(theme.palette.primary.main, 0.05)
-                            : alpha(theme.palette.action.hover, 0.28),
-                      },
+                        theme.palette.mode === "light"
+                          ? alpha(theme.palette.primary.main, 0.05)
+                          : alpha(theme.palette.action.hover, 0.28),
+                    },
+                  }}
+                >
+                  <TableCell
+                    sx={{
+                      ...tdSx(theme),
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
                     }}
                   >
-                    <TableCell
-                      sx={{
-                        ...tdSx(theme),
-                        fontFamily: "'DM Mono', monospace",
-                        fontSize: "0.78rem",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {s.crane_id}
-                    </TableCell>
-                    <TableCell sx={tdSx(theme)}>
-                      <TerminalBadge id={s.yard_id} />
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        ...tdSx(theme),
-                        fontWeight: 800,
-                        fontFamily: "'DM Mono', monospace",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      {s.total_moves.toLocaleString()}
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        ...tdSx(theme),
-                        fontWeight: 800,
-                        fontFamily: "'DM Mono', monospace",
-                        fontSize: "0.8rem",
-                        color: "primary.main",
-                      }}
-                    >
-                      {s.moves_per_hour.toFixed(1)}
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        ...tdSx(theme),
-                        fontFamily: "'DM Mono', monospace",
-                        fontWeight: 700,
-                        fontSize: "0.78rem",
-                      }}
-                    >
-                      {s.avg_cycle_minutes?.toFixed(1) ?? "—"}
-                    </TableCell>
-                    <TableCell align="right" sx={tdSx(theme)}>
-                      <RatingChip rating={s.productivity_rating} />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                    {s.crane_id}
+                  </TableCell>
+                  <TableCell sx={tdSx(theme)}>
+                    <TerminalBadge id={s.yard_id} />
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      ...tdSx(theme),
+                      fontWeight: 800,
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    {s.total_moves.toLocaleString()}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      ...tdSx(theme),
+                      fontWeight: 800,
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: "0.8rem",
+                      color: "primary.main",
+                    }}
+                  >
+                    {s.moves_per_hour.toFixed(1)}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      ...tdSx(theme),
+                      fontFamily: "'DM Mono', monospace",
+                      fontWeight: 700,
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    {s.avg_cycle_minutes?.toFixed(1) ?? "—"}
+                  </TableCell>
+                  <TableCell align="right" sx={tdSx(theme)}>
+                    <RatingChip rating={s.productivity_rating} />
+                  </TableCell>
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
 

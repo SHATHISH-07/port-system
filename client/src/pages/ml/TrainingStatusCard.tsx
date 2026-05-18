@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Box, Card, CardContent, Typography, CircularProgress, Chip, Button, Divider } from "@mui/material";
 import { CheckCircleOutlined, ErrorOutlined, InfoOutlined, ReplayOutlined } from "@mui/icons-material";
-import { api } from "../api/api";
+import { api } from "../../api/api";
 
 interface TrainingStatusData {
   status: "idle" | "training" | "completed" | "error";

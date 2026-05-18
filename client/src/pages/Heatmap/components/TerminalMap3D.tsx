@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Box, Typography, useTheme, IconButton, Tooltip } from "@mui/material";
-import { RestartAltRounded, CenterFocusStrongRounded } from "@mui/icons-material";
+import { RestartAltRounded } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 import * as THREE from "three";
 import type { VesselHeatmapViewData, BlockData } from "../../../types/heatmap";
@@ -85,6 +85,25 @@ function makeLabel(text: string, fontSize: number, color: string): THREE.Mesh {
   return new THREE.Mesh(new THREE.PlaneGeometry(h * (W / H), h), mat);
 }
 
+function makeBillboardLabel(text: string, fontSize: number, color: string): THREE.Sprite {
+  const W = 512, H = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = color;
+  ctx.font = `bold ${fontSize}px 'Inter', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, W / 2, H / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+  const h = fontSize * 0.015;
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(h * (W / H), h, 1);
+  return sprite;
+}
+
 function makeHeatBlob(colorHex: string, rx: number, rz: number, peakOpacity: number, innerRatio = 1.0): THREE.Mesh {
   const RES = 512;
   const c = document.createElement("canvas");
@@ -155,6 +174,7 @@ class TerminalScene {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
+  isDark = false;
   animId = 0;
   hemiLight!: THREE.HemisphereLight;
   sunLight!: THREE.DirectionalLight;
@@ -177,7 +197,7 @@ class TerminalScene {
   private lastMouse = { x: 0, y: 0 };
   private theta = 0.55;
   private phi = 1.05;
-  private radius = 55;
+  private radius = 80;
   private target = new THREE.Vector3(-2, 0, 0);
   private clock = new THREE.Clock();
 
@@ -207,21 +227,21 @@ class TerminalScene {
   }
 
   setTheme(mode: 'light' | 'dark') {
-    const isDark = mode === 'dark';
-    const skyColor = isDark ? 0x060c14 : 0x8ab4f8;
+    this.isDark = mode === 'dark';
+    const skyColor = this.isDark ? 0x060c14 : 0x8ab4f8;
     this.renderer.setClearColor(skyColor, 1);
     if (this.scene.fog) { (this.scene.fog as THREE.FogExp2).color.setHex(skyColor); }
     if (this.hemiLight) {
-      this.hemiLight.color.setHex(isDark ? 0xd0e8f5 : 0xffffff);
-      this.hemiLight.groundColor.setHex(isDark ? 0x8fa890 : 0xa1b4c7);
-      this.hemiLight.intensity = isDark ? 0.7 : 1.1;
+      this.hemiLight.color.setHex(this.isDark ? 0xd0e8f5 : 0xffffff);
+      this.hemiLight.groundColor.setHex(this.isDark ? 0x8fa890 : 0xa1b4c7);
+      this.hemiLight.intensity = this.isDark ? 0.7 : 1.1;
     }
     if (this.sunLight) {
-      this.sunLight.intensity = isDark ? 2.2 : 3.0;
-      this.sunLight.color.setHex(isDark ? 0xfff5e0 : 0xffffff);
+      this.sunLight.intensity = this.isDark ? 2.2 : 3.0;
+      this.sunLight.color.setHex(this.isDark ? 0xfff5e0 : 0xffffff);
     }
     if (this.waterMesh && this.waterMesh.material) {
-      (this.waterMesh.material as THREE.MeshStandardMaterial).color.setHex(isDark ? 0x18385e : 0x2b6ca3);
+      (this.waterMesh.material as THREE.MeshStandardMaterial).color.setHex(this.isDark ? 0x18385e : 0x2b6ca3);
     }
   }
 
@@ -872,7 +892,7 @@ class TerminalScene {
     [200, 400, 600].forEach(cy => this.buildSTSCrane(EDGE_E, cy, -90));
   }
 
-  buildShip(id: string, svgX: number, svgY: number, rotDeg: number, name: string, isTarget: boolean) {
+  buildShip(id: string, svgX: number, svgY: number, rotDeg: number, name: string, isTarget: boolean, visitId?: string) {
     const g = new THREE.Group();
     const pos = to3D(svgX, svgY);
     const L = SHIP_LEN, W = SHIP_WID, DR = SHIP_DRAFT;
@@ -958,17 +978,18 @@ class TerminalScene {
 
     if (isTarget) {
       const ringR = Math.max(L, W) * 0.62;
-      const ring = new THREE.Mesh(new THREE.RingGeometry(ringR, ringR + 0.12, 72), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+      const ring = new THREE.Mesh(new THREE.RingGeometry(ringR, ringR + 0.12, 72), new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = -0.18;
       g.add(ring);
     }
 
-    const labelColor = isTarget ? "#38bdf8" : "#94a3b8";
-    const label = makeLabel(name.toUpperCase(), 30, labelColor);
+    const labelColor = this.isDark ? "#ffffff" : "#000000";
+    const label = makeBillboardLabel(name.toUpperCase(), 36, labelColor);
     label.position.set(0, DR / 2 + 2.4, 0);
-    label.rotation.x = -Math.PI / 7;
     g.add(label);
+
+
 
     g.position.set(pos.x, 0, pos.z);
     g.rotation.y = THREE.MathUtils.degToRad(-rotDeg);
@@ -984,9 +1005,9 @@ class TerminalScene {
   }
 
   buildDefaultShips() {
-    BERTHS.forEach(b => this.buildShip(b.id, b.x, b.y, b.rot, b.defaultShip.name, false));
+    // Empty: do not render default ships
   }
-  
+
   applyData(data: VesselHeatmapViewData, computedMaxBlock: string | null, targetBerthId: string) {
     if (!data || !data.layout) return;
 
@@ -1117,7 +1138,9 @@ class TerminalScene {
     });
     BERTHS.forEach(b => {
       const isTarget = b.id === targetBerthId;
-      this.buildShip(b.id, b.x, b.y, b.rot, isTarget ? data.vessel : b.defaultShip.name, isTarget);
+      if (isTarget) {
+        this.buildShip(b.id, b.x, b.y, b.rot, data.vessel || "ACTIVE VESSEL", true, data.visit_id);
+      }
     });
   }
 
@@ -1277,7 +1300,7 @@ class TerminalScene {
 
   resetView() {
     this.target.set(0, 0, 0);
-    this.radius = 45;
+    this.radius = 80;
     this.theta = -Math.PI / 4;
     this.phi = Math.PI / 4;
     this.updateCamera();
@@ -1378,12 +1401,12 @@ export default function TerminalMap3D({
 
       {/* Legend */}
       <Box sx={{
-        position: "absolute", bottom: 24, left: 24, zIndex: 10,
-        display: "flex", alignItems: "center", gap: 3, px: 2, py: 1.2,
+        position: "absolute", bottom: 16, left: 16, zIndex: 10,
+        display: "flex", alignItems: "center", gap: 1.5, px: 1.2, py: 0.6,
         bgcolor: theme.palette.mode === "dark" ? "rgba(18, 22, 31, 0.9)" : "rgba(255, 255, 255, 0.9)",
         backdropFilter: "blur(4px)", border: "1px solid", borderColor: "divider", borderRadius: 1,
       }}>
-        <Typography sx={{ fontSize: "0.55rem", color: "text.secondary", fontWeight: 800, letterSpacing: "1px", textTransform: "uppercase", mr: -1 }}>
+        <Typography sx={{ fontSize: "0.5rem", color: "text.secondary", fontWeight: 800, letterSpacing: "0.5px", textTransform: "uppercase", mr: 0.5 }}>
           Concentration
         </Typography>
         {[
@@ -1391,9 +1414,9 @@ export default function TerminalMap3D({
           { c: "#ffaa00", l: "Medium" },
           { c: "#00ff00", l: "Low" }
         ].map(({ c, l }) => (
-          <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Box sx={{ width: 10, height: 10, bgcolor: c, borderRadius: "2px" }} />
-            <Typography sx={{ fontSize: "0.7rem", color: "text.secondary", fontWeight: 500 }}>{l}</Typography>
+          <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Box sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }} />
+            <Typography sx={{ fontSize: "0.6rem", color: "text.secondary", fontWeight: 500 }}>{l}</Typography>
           </Box>
         ))}
       </Box>
@@ -1426,21 +1449,14 @@ export default function TerminalMap3D({
       )}
 
       {/* Navigation Controls */}
-      <Box sx={{ position: "absolute", bottom: 24, right: 24, zIndex: 100, display: "flex", gap: 1 }}>
+      <Box sx={{ position: "absolute", bottom: 16, right: 64, zIndex: 100, display: "flex", gap: 1 }}>
         <Tooltip title="Reset View">
           <IconButton
             onClick={() => sceneRef.current?.resetView()}
-            sx={{ bgcolor: theme.palette.mode === "dark" ? "rgba(42,42,42,0.9)" : "rgba(255,255,255,0.9)", border: "1px solid", borderColor: "divider", boxShadow: 3, "&:hover": { bgcolor: "action.hover" } }}
+            sx={{ bgcolor: theme.palette.mode === "dark" ? "rgba(42,42,42,0.9)" : "rgba(255,255,255,0.9)", border: "1px solid", borderColor: "divider", boxShadow: 3, "&:hover": { bgcolor: "action.hover" }, p: 0.6, width: 28, height: 28 }}
+            size="small"
           >
-            <RestartAltRounded />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Center View">
-          <IconButton
-            onClick={() => sceneRef.current?.resetView()}
-            sx={{ bgcolor: theme.palette.mode === "dark" ? "rgba(42,42,42,0.9)" : "rgba(255,255,255,0.9)", border: "1px solid", borderColor: "divider", boxShadow: 3, "&:hover": { bgcolor: "action.hover" } }}
-          >
-            <CenterFocusStrongRounded />
+            <RestartAltRounded fontSize="small" />
           </IconButton>
         </Tooltip>
       </Box>

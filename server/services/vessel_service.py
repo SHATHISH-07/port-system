@@ -574,6 +574,7 @@ def get_yard_heatmap_data(
     if df.empty:
         return {
             "vessel": vessel_id,
+            "visit_id": "",
             "yard_id": yard_id,
             "blocks": [],
             "summary": {
@@ -597,9 +598,16 @@ def get_yard_heatmap_data(
         mask |= (df["actual_outbound_carrier_visit_id"].astype(str).str.strip().str.upper() == v_id_upper)
     df = df[mask].copy()
 
+    visit_id = ""
+    if not df.empty and "actual_outbound_carrier_visit_id" in df.columns:
+        valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
+        if not valid_visits.empty:
+            visit_id = str(valid_visits.iloc[0])
+
     if df.empty:
         return {
             "vessel": vessel_id,
+            "visit_id": "",
             "yard_id": yard_id,
             "error": f"No containers found for vessel '{vessel_id}'",
             "blocks": [],
@@ -623,6 +631,7 @@ def get_yard_heatmap_data(
     if df.empty:
         return {
             "vessel": vessel_id,
+            "visit_id": "",
             "yard_id": yard_id,
             "error": "No matching containers found in the yard",
             "blocks": [],
@@ -824,6 +833,7 @@ def get_yard_heatmap_data(
 
     return {
         "vessel": vessel_id,
+        "visit_id": visit_id,
         "yard_id": yard_id,
         "blocks": block_list,
         "summary": summary,

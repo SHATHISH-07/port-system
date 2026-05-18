@@ -15,7 +15,7 @@ import GlobalKPIs from './components/GlobalKPIs';
 import AssetDeepDive from './components/AssetDeepDive';
 import TerminalEfficiency from './components/TerminalEfficiency';
 import CraneDataTable from './components/CraneDataTable';
-import type { ExtendedCraneResponse } from '../../../types/crane';
+import type { ExtendedCraneResponse } from '../../types/crane';
 
 const ROWS_PER_PAGE = 10;
 
@@ -34,7 +34,7 @@ export default function CraneAnalytics() {
       setLoading(true);
       setError(null);
       setPage(0);
-      
+
       const params: Record<string, string> = { limit: "1000" };
       if (id && id.trim()) params.craneId = id.trim();
       if (windowDays) params.days = windowDays;
@@ -54,8 +54,8 @@ export default function CraneAnalytics() {
         })
         .catch((err) => {
           setError(
-            err?.response?.data?.message || 
-            err?.message || 
+            err?.response?.data?.message ||
+            err?.message ||
             "Operational data unreachable. Verify terminal connectivity."
           );
           setData(null);
@@ -136,7 +136,7 @@ export default function CraneAnalytics() {
         }}
       >
         <Box sx={{ p: { xs: 2, sm: 3, md: 6 }, flex: 1 }}>
-          
+
           {/* Ready for Analysis State */}
           {!isLoaded && !loading && (
             <Box

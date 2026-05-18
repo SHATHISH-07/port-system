@@ -2,13 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import {
   Box, Typography, Button, LinearProgress,
   Alert, Snackbar, Divider, Collapse, Checkbox, FormGroup,
-  FormControlLabel, useTheme, Paper,
+  FormControlLabel, useTheme
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { UploadFileOutlined } from "@mui/icons-material";
-import { api } from "../api/api";
-import TrainingStatusCard from "../components/TrainingStatusCard";
-import ConfigPanel from "../components/ConfigPanel";
+import { api } from "../../api/api";
+import TrainingStatusCard from "./TrainingStatusCard";
+import ConfigPanel from "./ConfigPanel";
 
 export default function TrainModel() {
   const theme = useTheme();
@@ -78,8 +78,8 @@ export default function TrainModel() {
     } catch (err: any) {
       let errMsg = "Training request failed.";
       if (err?.response?.data?.detail) {
-        errMsg = typeof err.response.data.detail === "string" 
-          ? err.response.data.detail 
+        errMsg = typeof err.response.data.detail === "string"
+          ? err.response.data.detail
           : JSON.stringify(err.response.data.detail);
       } else if (err?.response?.data?.error) {
         errMsg = typeof err.response.data.error === "string"
@@ -205,7 +205,7 @@ export default function TrainModel() {
           <Box
             sx={{
               bgcolor: "background.paper",
-              border: "1px solid", 
+              border: "1px solid",
               borderColor: "divider",
               borderRadius: 4,
               mb: 4,
@@ -296,7 +296,7 @@ export default function TrainModel() {
                 disableElevation
                 disabled={!canTrain}
                 onClick={() => handleTrain()}
-                sx={{ 
+                sx={{
                   minWidth: 180,
                   borderRadius: 2.5,
                   textTransform: "none",

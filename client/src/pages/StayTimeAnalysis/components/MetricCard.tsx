@@ -13,17 +13,6 @@ export default function MetricCard({
 }) {
     const theme = useTheme();
 
-    const bg =
-        accent === 'primary'
-            ? alpha(theme.palette.primary.main, 0.08)
-            : accent === 'success'
-                ? alpha(theme.palette.success.main, 0.08)
-                : accent === 'warning'
-                    ? alpha(theme.palette.warning.main, 0.08)
-                    : accent === 'error'
-                        ? alpha(theme.palette.error.main, 0.08)
-                        : theme.palette.background.paper;
-
     const valueColor =
         accent === 'primary'
             ? theme.palette.primary.main

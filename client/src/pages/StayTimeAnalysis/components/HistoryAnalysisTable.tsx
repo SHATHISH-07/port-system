@@ -3,9 +3,7 @@ import {
   Card,
   Box,
   Typography,
-  Grid,
   Chip,
-  Stack,
   Table,
   TableBody,
   TableCell,
@@ -17,10 +15,6 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import Inventory2Icon from '@mui/icons-material/Inventory2';
-import TimelineIcon from '@mui/icons-material/Timeline';
 
 type SortKey =
   | 'visitId'
@@ -125,11 +119,6 @@ export default function HistoryAnalysisTable({
     return sortRows(visitRows, orderBy, order);
   }, [actualVisits, assignments, orderBy, order]);
 
-  const totalVisits = rows.length;
-  const averageStay =
-    totalVisits > 0 ? rows.reduce((sum, row) => sum + Number(row.stayHours || 0), 0) / totalVisits : 0;
-  const totalUnits = rows.reduce((sum, row) => sum + Number(row.totalUnits || 0), 0);
-  const longestStay = rows.reduce((max, row) => Math.max(max, Number(row.stayHours || 0)), 0);
   const highestRestows = rows.reduce((max, row) => Math.max(max, Number(row.restowCount || 0)), 0);
 
   const handleSort = (key: SortKey) => {
@@ -183,140 +172,6 @@ export default function HistoryAnalysisTable({
       </Box>
 
       <Box sx={{ p: 3, width: '100%', overflowX: 'auto' }}>
-        <Grid container spacing={2.5} sx={{ mb: 3 }}>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: alpha(theme.palette.primary.main, 0.18),
-                bgcolor: alpha(theme.palette.primary.main, 0.04),
-              }}
-            >
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                <TimelineIcon fontSize="small" />
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: 'text.secondary',
-                      display: 'block',
-                      fontWeight: 700,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    Visits
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-                    {totalVisits}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Box>
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: alpha(theme.palette.success.main, 0.18),
-                bgcolor: alpha(theme.palette.success.main, 0.04),
-              }}
-            >
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                <AccessTimeIcon fontSize="small" />
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: 'text.secondary',
-                      display: 'block',
-                      fontWeight: 700,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    Avg Stay
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-                    {formatNumber(averageStay)}h
-                  </Typography>
-                </Box>
-              </Stack>
-            </Box>
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: alpha(theme.palette.warning.main, 0.18),
-                bgcolor: alpha(theme.palette.warning.main, 0.05),
-              }}
-            >
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                <LocalShippingIcon fontSize="small" />
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: 'text.secondary',
-                      display: 'block',
-                      fontWeight: 700,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    Longest Stay
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-                    {formatNumber(longestStay)}h
-                  </Typography>
-                </Box>
-              </Stack>
-            </Box>
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: alpha(theme.palette.info.main, 0.18),
-                bgcolor: alpha(theme.palette.info.main, 0.04),
-              }}
-            >
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                <Inventory2Icon fontSize="small" />
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: 'text.secondary',
-                      display: 'block',
-                      fontWeight: 700,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    Total Units
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-                    {formatNumber(totalUnits, 0)}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Box>
-          </Grid>
-        </Grid>
-
         <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           <Chip
             label={`Vessel Service: ${vesselService || '-'}`}

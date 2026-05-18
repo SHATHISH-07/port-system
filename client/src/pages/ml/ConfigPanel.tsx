@@ -10,7 +10,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import { InfoOutlined } from "@mui/icons-material";
-import { api } from "../api/api";
+import { api } from "../../api/api";
 
 interface RetrainingConfig {
   retrain_threshold: number;

@@ -9,7 +9,7 @@ export default function MetricCard({
     title: string;
     value: string | number;
     subtitle: string;
-    accent?: 'default' | 'primary' | 'success' | 'warning' | 'error';
+    accent?: 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info';
 }) {
     const theme = useTheme();
 

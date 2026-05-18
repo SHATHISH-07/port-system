@@ -121,7 +121,7 @@ export default function StayTimeForm({
             whiteSpace: 'nowrap',
           }}
         >
-          {loading ? 'Analyzing...' : 'Run Analysis'}
+          Run Analysis
         </Button>
       </Box>
 

@@ -2,23 +2,10 @@ import { useState } from "react";
 import { Box, Typography, useTheme, IconButton, Tooltip } from "@mui/material";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import {
-  CenterFocusStrongRounded,
   RestartAltRounded,
 } from "@mui/icons-material";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-export interface BlockData {
-  count: number;
-}
-
-export interface VesselHeatmapViewData {
-  vessel: string;
-  max_block: string;
-  recommended_berth?: string[];
-  blocks: Record<string, BlockData>;
-  layout: Record<string, { x: number; y: number }>;
-}
+import type { VesselHeatmapViewData, BlockData } from "../../../types/heatmap";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -128,8 +115,8 @@ const Controls = ({ resetTransform }: { resetTransform: () => void }) => (
   <Box
     sx={{
       position: "absolute",
-      bottom: 24,
-      right: 24,
+      bottom: 16,
+      right: 64,
       zIndex: 100,
       display: "flex",
       gap: 1,
@@ -144,23 +131,13 @@ const Controls = ({ resetTransform }: { resetTransform: () => void }) => (
           borderColor: "divider",
           boxShadow: 3,
           "&:hover": { bgcolor: "action.hover" },
+          p: 0.6,
+          width: 28,
+          height: 28,
         }}
+        size="small"
       >
-        <RestartAltRounded />
-      </IconButton>
-    </Tooltip>
-    <Tooltip title="Center View">
-      <IconButton
-        onClick={() => resetTransform()}
-        sx={{
-          bgcolor: "background.paper",
-          border: "1px solid",
-          borderColor: "divider",
-          boxShadow: 3,
-          "&:hover": { bgcolor: "action.hover" },
-        }}
-      >
-        <CenterFocusStrongRounded />
+        <RestartAltRounded fontSize="small" />
       </IconButton>
     </Tooltip>
   </Box>
@@ -333,15 +310,16 @@ const Ship = ({
 interface TerminalMap2DProps {
   data: VesselHeatmapViewData | null;
   loading: boolean;
+  targetBerthId?: string;
 }
 
-export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
+export default function TerminalMap2D({ data, loading, targetBerthId: propTargetBerthId }: TerminalMap2DProps) {
   const [hovered, setHovered] = useState<string | null>(null);
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
 
   // ── Determine target berth ────────────────────────────────────────────────
-  let targetBerthId = "R1";
+  let targetBerthId = propTargetBerthId || "R1";
   let computedMaxBlock: string | null = null;
 
   if (data) {
@@ -353,27 +331,29 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
       }
     });
 
-    const highestBlockId = computedMaxBlock ?? data.max_block;
-    if (highestBlockId && data.layout?.[highestBlockId]) {
-      const pos = data.layout[highestBlockId];
-      const maxBlockX = BLK_START_X + pos.x * (BLK_W + BLK_GAP_X) + BLK_W / 2;
-      const maxBlockY = BLK_START_Y + pos.y * (BLK_H + BLK_GAP_Y) + BLK_H / 2;
-      let minDistance = Infinity;
-      BERTHS.forEach((berth) => {
-        const dist = Math.hypot(berth.x - maxBlockX, berth.y - maxBlockY);
-        if (dist < minDistance) {
-          minDistance = dist;
-          targetBerthId = berth.id;
-        }
-      });
+    if (!propTargetBerthId) {
+      const highestBlockId = computedMaxBlock ?? data.max_block;
+      if (highestBlockId && data.layout?.[highestBlockId]) {
+        const pos = data.layout[highestBlockId];
+        const maxBlockX = BLK_START_X + pos.x * (BLK_W + BLK_GAP_X) + BLK_W / 2;
+        const maxBlockY = BLK_START_Y + pos.y * (BLK_H + BLK_GAP_Y) + BLK_H / 2;
+        let minDistance = Infinity;
+        BERTHS.forEach((berth) => {
+          const dist = Math.hypot(berth.x - maxBlockX, berth.y - maxBlockY);
+          if (dist < minDistance) {
+            minDistance = dist;
+            targetBerthId = berth.id;
+          }
+        });
+      }
     }
   }
 
   // ── Heat tier classification ───────────────────────────────────────────────
   const allBlocks = data
     ? Object.entries(data.blocks)
-        .filter(([, b]) => b.count > 0)
-        .sort((a, b) => b[1].count - a[1].count)
+      .filter(([, b]) => b.count > 0)
+      .sort((a, b) => b[1].count - a[1].count)
     : [];
 
   const maxCount = allBlocks.length > 0 ? allBlocks[0][1].count : 0;
@@ -467,12 +447,12 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
 
       {/* Map canvas */}
       <TransformWrapper
-        initialScale={1}
+        initialScale={0.72}
         minScale={0.4}
         maxScale={5}
         centerOnInit
         wheel={{ step: 0.001 }}
-        panning={{ disabled: true }}
+        panning={{ disabled: false }}
         doubleClick={{ disabled: false, mode: "zoomIn" }}
       >
         {({ resetTransform }) => (
@@ -882,16 +862,10 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
                   const isTarget = data
                     ? targetBerthId === berth.id
                     : berth.id === "R1";
-                  const shipName = isTarget
-                    ? data
-                      ? data.vessel
-                      : "TARGET VESSEL"
-                    : berth.defaultShip.name;
-                  const shipColor = isTarget
-                    ? isDark
-                      ? "#0284c7"
-                      : "#0ea5e9"
-                    : berth.defaultShip.color;
+                  if (!isTarget) return null; // Keep all other berths completely empty!
+
+                  const shipName = data ? data.vessel : "TARGET VESSEL";
+                  const shipColor = isDark ? "#0284c7" : "#0ea5e9";
                   return (
                     <Ship
                       key={berth.id}
@@ -939,14 +913,14 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
       </TransformWrapper>
 
       {/* Legend */}
-      <Box sx={{ position: "absolute", bottom: 24, left: 24, zIndex: 10 }}>
+      <Box sx={{ position: "absolute", bottom: 16, left: 16, zIndex: 10 }}>
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: 3,
-            px: 2,
-            py: 1.2,
+            gap: 1.5,
+            px: 1.2,
+            py: 0.6,
             bgcolor: isDark
               ? "rgba(18, 22, 31, 0.9)"
               : "rgba(255, 255, 255, 0.9)",
@@ -958,12 +932,12 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
         >
           <Typography
             sx={{
-              fontSize: "0.55rem",
+              fontSize: "0.5rem",
               color: "text.secondary",
               fontWeight: 800,
-              letterSpacing: "1px",
+              letterSpacing: "0.5px",
               textTransform: "uppercase",
-              mr: -1,
+              mr: 0.5,
             }}
           >
             Concentration
@@ -973,13 +947,13 @@ export default function TerminalMap2D({ data, loading }: TerminalMap2DProps) {
             { c: "#ffaa00", l: "Medium" },
             { c: "#00ff00", l: "Low" },
           ].map(({ c, l }) => (
-            <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
               <Box
-                sx={{ width: 10, height: 10, bgcolor: c, borderRadius: "2px" }}
+                sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }}
               />
               <Typography
                 sx={{
-                  fontSize: "0.7rem",
+                  fontSize: "0.6rem",
                   color: "text.secondary",
                   fontWeight: 500,
                 }}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress } from "@mui/material";
-import { api } from "../api/api";
+import { api } from "../../api/api";
 
 interface AuditLog {
     id: number;

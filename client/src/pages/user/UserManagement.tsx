@@ -2,10 +2,10 @@ import React, { useState, useEffect } from "react";
 import {
     Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Button, Chip, Dialog, DialogTitle, DialogContent,
-    DialogActions, TextField, MenuItem
+    DialogActions, TextField, MenuItem, Alert, Snackbar
 } from "@mui/material";
-import { api } from "../api/api";
-import { useAuth } from "../auth/AuthContext";
+import { api } from "../../api/api";
+import { useAuth } from "../../auth/AuthContext";
 
 interface User {
     id: number;
@@ -25,6 +25,15 @@ const UserManagement: React.FC = () => {
     const [role, setRole] = useState("user");
     
     const { user: currentUser } = useAuth();
+
+    const [toast, setToast] = useState<{
+        open: boolean;
+        message: string;
+        severity: "success" | "error" | "info" | "warning";
+    }>({ open: false, message: "", severity: "info" });
+
+    const showToast = (message: string, severity: typeof toast.severity) =>
+        setToast({ open: true, message, severity });
 
     const fetchUsers = async () => {
         try {
@@ -48,9 +57,10 @@ const UserManagement: React.FC = () => {
             setPassword("");
             setRole("user");
             fetchUsers();
+            showToast("User account created successfully.", "success");
         } catch (error) {
             console.error("Failed to create user", error);
-            alert("Failed to create user. Username may already exist.");
+            showToast("Failed to create user. Username may already exist.", "error");
         }
     };
 
@@ -58,9 +68,10 @@ const UserManagement: React.FC = () => {
         try {
             await api.put(`/users/${userId}/toggle-active`);
             fetchUsers();
+            showToast("User status updated successfully.", "success");
         } catch (error) {
             console.error("Failed to toggle active status", error);
-            alert("Failed to update status.");
+            showToast("Failed to update status.", "error");
         }
     };
 
@@ -70,10 +81,10 @@ const UserManagement: React.FC = () => {
             await api.put(`/users/${selectedUser.id}/reset-password`, { new_password: password });
             setOpenResetModal(false);
             setPassword("");
-            alert("Password reset successfully.");
+            showToast("Password reset successfully.", "success");
         } catch (error) {
             console.error("Failed to reset password", error);
-            alert("Failed to reset password.");
+            showToast("Failed to reset password.", "error");
         }
     };
 
@@ -209,6 +220,17 @@ const UserManagement: React.FC = () => {
                     <Button onClick={handleResetPassword} variant="contained" color="warning">Reset</Button>
                 </DialogActions>
             </Dialog>
+
+            <Snackbar
+                open={toast.open}
+                autoHideDuration={6000}
+                onClose={() => setToast((t) => ({ ...t, open: false }))}
+                anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+            >
+                <Alert severity={toast.severity} variant="filled" onClose={() => setToast((t) => ({ ...t, open: false }))}>
+                    {toast.message}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

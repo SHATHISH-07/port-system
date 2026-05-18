@@ -28,7 +28,7 @@ export default function Layout({ children }: LayoutProps) {
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          overflowY: "auto",
+          overflow: isFullScreenPage ? "hidden" : "auto",
           minWidth: 0,
           p: isFullScreenPage ? 0 : { xs: "20px 16px", md: "32px 40px" },
         }}

@@ -2,10 +2,10 @@ import React, { useState, useEffect } from "react";
 import {
     Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Button, Chip, Dialog, DialogTitle, DialogContent,
-    DialogActions, TextField, MenuItem
+    DialogActions, TextField, MenuItem, Alert, Snackbar
 } from "@mui/material";
-import { api } from "../api/api";
-import { useAuth } from "../auth/AuthContext";
+import { api } from "../../api/api";
+import { useAuth } from "../../auth/AuthContext";
 
 interface OperationalRequest {
     id: number;
@@ -23,6 +23,15 @@ const Requests: React.FC = () => {
     const [payload, setPayload] = useState("");
     
     const { user } = useAuth();
+
+    const [toast, setToast] = useState<{
+        open: boolean;
+        message: string;
+        severity: "success" | "error" | "info" | "warning";
+    }>({ open: false, message: "", severity: "info" });
+
+    const showToast = (message: string, severity: typeof toast.severity) =>
+        setToast({ open: true, message, severity });
 
     const fetchRequests = async () => {
         try {
@@ -44,9 +53,10 @@ const Requests: React.FC = () => {
             setOpenModal(false);
             setPayload("");
             fetchRequests();
+            showToast("Request submitted successfully.", "success");
         } catch (error) {
             console.error("Failed to create request", error);
-            alert("Failed to create request.");
+            showToast("Failed to create request.", "error");
         }
     };
 
@@ -54,9 +64,10 @@ const Requests: React.FC = () => {
         try {
             await api.put(`/requests/${id}/status`, { status });
             fetchRequests();
+            showToast(`Request successfully ${status}.`, "success");
         } catch (error) {
             console.error("Failed to update status", error);
-            alert("Failed to update status.");
+            showToast("Failed to update status.", "error");
         }
     };
 
@@ -154,6 +165,17 @@ const Requests: React.FC = () => {
                     <Button onClick={handleCreateRequest} variant="contained">Submit</Button>
                 </DialogActions>
             </Dialog>
+
+            <Snackbar
+                open={toast.open}
+                autoHideDuration={6000}
+                onClose={() => setToast((t) => ({ ...t, open: false }))}
+                anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+            >
+                <Alert severity={toast.severity} variant="filled" onClose={() => setToast((t) => ({ ...t, open: false }))}>
+                    {toast.message}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

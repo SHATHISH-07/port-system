@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import * as React from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Box,
@@ -14,6 +14,8 @@ import {
   Stack,
   Divider,
   Drawer,
+  Alert,
+  Snackbar,
 } from "@mui/material";
 import {
   FullscreenRounded,
@@ -21,10 +23,6 @@ import {
   ClearRounded,
   SearchRounded,
   CloseRounded,
-  MapRounded,
-  ViewInArRounded,
-  GridOnRounded,
-  DirectionsBoatRounded,
 } from "@mui/icons-material";
 import { api } from "../../api/api";
 import TerminalMap2D from "./components/TerminalMap2D";
@@ -82,9 +80,40 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
 
   const blocksObj: Record<string, BlockData> = {};
   const layoutObj: Record<string, { x: number; y: number }> = {};
-  const sortedBlockIds = [...newData.blocks].map((b) => b.block_id).filter(Boolean).sort();
 
-  sortedBlockIds.forEach((id, idx) => {
+  const activeBlockIds = [...newData.blocks].map((b) => b.block_id).filter(Boolean);
+  const paddingCandidates = ["CWIT-3A", "CWIT-3B", "PEB-5B", "PEB-4A", "PEB-4B", "PEB-5A"];
+  const emptyBlockIds: string[] = [];
+
+  for (const candidate of paddingCandidates) {
+    if (!activeBlockIds.includes(candidate)) {
+      emptyBlockIds.push(candidate);
+    }
+  }
+
+  let genIdx = 1;
+  while (emptyBlockIds.length < 3) {
+    const candidate = `EXT-${genIdx++}`;
+    if (!activeBlockIds.includes(candidate) && !emptyBlockIds.includes(candidate)) {
+      emptyBlockIds.push(candidate);
+    }
+  }
+
+  // Position empty blocks at indices 5, 7, 8 (not in top row 0, 1, 2)
+  const finalBlockIds = new Array(9).fill("");
+  const emptyIndices = [5, 7, 8];
+  let actCount = 0;
+  let empCount = 0;
+
+  for (let i = 0; i < 9; i++) {
+    if (emptyIndices.includes(i)) {
+      finalBlockIds[i] = emptyBlockIds[empCount++] || `EMPTY-${empCount}`;
+    } else {
+      finalBlockIds[i] = activeBlockIds[actCount++] || emptyBlockIds[empCount++] || `EMPTY-${empCount}`;
+    }
+  }
+
+  finalBlockIds.forEach((id, idx) => {
     layoutObj[id] = { x: idx % 3, y: Math.floor(idx / 3) };
   });
 
@@ -97,32 +126,70 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
   const reeferTotalFromBlocks = newData.blocks.reduce((sum, b) => sum + (b.reefer_count || 0), 0);
   const oogTotalFromBlocks = newData.blocks.reduce((sum, b) => sum + (b.oog_count || 0), 0);
 
-  newData.blocks.forEach((b) => {
-    const count = b.total_containers || 0;
-    let intensity = b.intensity;
-    if (typeof intensity !== 'number' || intensity === 0) intensity = count / maxCount;
-    let concentration = b.concentration;
-    if (!concentration) concentration = intensity > 0.65 ? "High" : intensity > 0.3 ? "Medium" : "Low";
+  finalBlockIds.forEach((bId) => {
+    const b = newData.blocks.find(block => block.block_id === bId);
+    if (b) {
+      const count = b.total_containers || 0;
+      let intensity = b.intensity;
+      if (typeof intensity !== 'number' || intensity === 0) intensity = count / maxCount;
+      let concentration = b.concentration;
+      if (!concentration) concentration = intensity > 0.65 ? "High" : intensity > 0.3 ? "Medium" : "Low";
 
-    blocksObj[b.block_id] = {
-      count: count,
-      hazardous: b.hazmat_count || 0,
-      reefer: b.reefer_count || 0,
-      oog: b.oog_count || 0,
-      intensity: intensity,
-      concentration: concentration,
-      cells: b.cells || [],
-    };
-    if (count === maxCount && count > 0) computedMaxBlockId = b.block_id;
+      blocksObj[bId] = {
+        count: count,
+        hazardous: b.hazmat_count || 0,
+        reefer: b.reefer_count || 0,
+        oog: b.oog_count || 0,
+        intensity: intensity,
+        concentration: concentration,
+        cells: b.cells || [],
+      };
+      if (count === maxCount && count > 0) computedMaxBlockId = bId;
+    } else {
+      blocksObj[bId] = {
+        count: 0,
+        hazardous: 0,
+        reefer: 0,
+        oog: 0,
+        intensity: 0,
+        concentration: "Low",
+        cells: [],
+      };
+    }
   });
+
+  // Deterministic calculation of closest physical berth to the highest density block
+  let targetBerthId = "R1";
+  const BERTH_COORDS = [
+    { id: "T1", x: 260, y: 60 },
+    { id: "T2", x: 600, y: 60 },
+    { id: "B1", x: 260, y: 760 },
+    { id: "B2", x: 600, y: 760 },
+    { id: "R1", x: 1010, y: 280 },
+    { id: "R2", x: 1010, y: 580 },
+  ];
+  const highestBlockId = computedMaxBlockId || newData.max_block || "";
+  if (highestBlockId && layoutObj[highestBlockId]) {
+    const pos = layoutObj[highestBlockId];
+    const maxBlockX = 80 + pos.x * 200 + 80;
+    const maxBlockY = 190 + pos.y * 160 + 60;
+    let minDistance = Infinity;
+    BERTH_COORDS.forEach((berth) => {
+      const dist = Math.hypot(berth.x - maxBlockX, berth.y - maxBlockY);
+      if (dist < minDistance) {
+        minDistance = dist;
+        targetBerthId = berth.id;
+      }
+    });
+  }
 
   return {
     ...newData,
     visit_id: newData.visit_id || "",
-    targetBerthId: newData.primary_berth ? newData.primary_berth.berth : "",
+    targetBerthId: targetBerthId,
     computedMaxBlock: computedMaxBlockId,
     max_block: computedMaxBlockId || "",
-    recommended_berth: newData.primary_berth ? newData.primary_berth.berth : newData.recommended_berth || "",
+    recommended_berth: targetBerthId,
     blocks: blocksObj,
     layout: layoutObj,
     summary: {
@@ -141,35 +208,62 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
 export default function OperationalDashboard() {
   const [searchParams] = useSearchParams();
   const theme = useTheme();
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const [inputsOpen, setInputsOpen] = useState(true);
-  const [mapView, setMapView] = useState<"HEATMAP" | "MAP2D" | "3D">("3D");
-  const [overlayView, setOverlayView] = useState<"BERTH" | "NONE">("NONE");
+  const [vesselInput, setVesselInput] = React.useState(searchParams.get("vesselId") || "");
+  const [yardInput, setYardInput] = React.useState(searchParams.get("yardId") || "");
+  const [containerFile, setContainerFile] = React.useState<File | null>(null);
 
-  const [vesselInput, setVesselInput] = useState(searchParams.get("vessel") || "VS-PEB-07");
-  const [yardInput, setYardInput] = useState("");
-  const [containerFile, setContainerFile] = useState<File | null>(null);
-  const [rawApiData, setRawApiData] = useState<ApiHeatmapResponse | null>(null);
-  const [mapData, setMapData] = useState<VesselHeatmapViewData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [rawApiData, setRawApiData] = React.useState<ApiHeatmapResponse | null>(null);
+  const [mapData, setMapData] = React.useState<VesselHeatmapViewData | null>(null);
+
+  const [mapView, setMapView] = React.useState<"HEATMAP" | "MAP2D" | "3D">("HEATMAP");
+  const [overlayView, setOverlayView] = React.useState<"NONE" | "BERTH">("NONE");
+  const [inputsOpen, setInputsOpen] = React.useState(true);
+
+  const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: "success" | "info" | "warning" | "error" }>({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
 
   const load = async () => {
-    if (!vesselInput.trim()) return;
+    if (!vesselInput.trim()) {
+      setToast({
+        open: true,
+        message: "Please enter a Vessel ID",
+        severity: "warning",
+      });
+      return;
+    }
+
+    if (!containerFile) {
+      setToast({
+        open: true,
+        message: "A container list file is required to execute analysis.",
+        severity: "warning",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       let unitIds: string[] | undefined;
-      if (containerFile) {
-        const text = await containerFile.text();
-        try {
-          const parsed = JSON.parse(text);
-          unitIds = Array.isArray(parsed) ? parsed : undefined;
-        } catch {
-          alert("Invalid JSON file — expected an array of container IDs.");
-          setLoading(false);
-          return;
-        }
+      const text = await containerFile.text();
+      try {
+        const parsed = JSON.parse(text);
+        unitIds = Array.isArray(parsed) ? parsed : undefined;
+      } catch {
+        setToast({
+          open: true,
+          message: "Invalid JSON file — expected an array of container IDs.",
+          severity: "error",
+        });
+        setLoading(false);
+        return;
       }
 
       const payload: Record<string, string | string[]> = {
@@ -182,52 +276,68 @@ export default function OperationalDashboard() {
         headers: { "Content-Type": "application/json" },
       });
 
-      const res: ApiHeatmapResponse = response.data;
-      if (res.error) {
-        alert(res.error);
+      const data = response.data;
+      if (data.error) {
+        setToast({
+          open: true,
+          message: data.error,
+          severity: "error",
+        });
+        setRawApiData(null);
+        setMapData(null);
       } else {
-        setRawApiData(res);
-        setMapData(adaptDataForMaps(res));
+        setRawApiData(data);
+        const adapted = adaptDataForMaps(data);
+        setMapData(adapted);
+        setToast({
+          open: true,
+          message: `Successfully loaded yard analysis for ${vesselInput.trim()}`,
+          severity: "success",
+        });
         setInputsOpen(false);
       }
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error(err);
-      const msg =
-        err instanceof Error ? err.message : "Error fetching dashboard data.";
-      alert(msg);
+      const msg = err.response?.data?.detail || err.message || "Failed to load heatmap data";
+      setToast({
+        open: true,
+        message: msg,
+        severity: "error",
+      });
+      setRawApiData(null);
+      setMapData(null);
     } finally {
       setLoading(false);
     }
   };
 
   const handleViewToggle = (
-    _: React.MouseEvent<HTMLElement> | null,
-    newView: string | null,
+    _e: React.MouseEvent<HTMLElement>,
+    next: "HEATMAP" | "MAP2D" | "3D" | "BERTH" | null
   ) => {
-    if (!newView) return;
-    if (newView === "BERTH") {
-      setOverlayView(newView);
+    if (!next) return;
+    if (next === "BERTH") {
+      setOverlayView("BERTH");
     } else {
-      setMapView(newView as "HEATMAP" | "MAP2D" | "3D");
       setOverlayView("NONE");
+      setMapView(next);
     }
   };
 
-  const totalMoves = useMemo(() => rawApiData?.summary?.total_containers || rawApiData?.blocks?.reduce((s, b) => s + (b.total_containers || 0), 0) || 0, [rawApiData]);
-  const totalBlocks = useMemo(() => rawApiData?.summary?.total_blocks ?? (Array.isArray(rawApiData?.blocks) ? rawApiData.blocks.length : 0), [rawApiData]);
-  const hazmat = useMemo(() => rawApiData?.summary?.hazmat_total ?? rawApiData?.summary?.hazardous ?? 0, [rawApiData]);
-  const reefer = useMemo(() => rawApiData?.summary?.reefer_total ?? rawApiData?.summary?.reefer ?? 0, [rawApiData]);
-  const oog = useMemo(() => rawApiData?.summary?.oog_total ?? rawApiData?.summary?.oog ?? 0, [rawApiData]);
+  const totalMoves = mapData?.summary?.total_containers || 0;
+  const totalBlocks = mapData?.summary?.total_blocks || 0;
+  const hazmat = mapData?.summary?.hazardous || 0;
+  const reefer = mapData?.summary?.reefer || 0;
+  const oog = mapData?.summary?.oog || 0;
   const hasSpecial = hazmat > 0 || reefer > 0 || oog > 0;
 
   return (
     <Box
       ref={wrapperRef}
       sx={{
-        position: "relative",
         width: "100%",
         height: "100%",
-        minHeight: 600,
+        position: "relative",
         overflow: "hidden",
         bgcolor: "background.default",
       }}
@@ -243,12 +353,12 @@ export default function OperationalDashboard() {
               overflowX: "hidden",
             }}
           >
-            <HeatmapView data={mapData} loading={loading} />
+            <HeatmapView data={mapData} targetBerthId={mapData?.targetBerthId || ""} loading={loading} />
           </Box>
         )}
         {mapView === "MAP2D" && (
           <Box sx={{ width: "100%", height: "100%", overflow: "hidden" }}>
-            <TerminalMap2D data={mapData} loading={loading} />
+            <TerminalMap2D data={mapData} targetBerthId={mapData?.targetBerthId || ""} loading={loading} />
           </Box>
         )}
         {mapView === "3D" && (
@@ -268,126 +378,128 @@ export default function OperationalDashboard() {
         elevation={6}
         sx={{
           position: "absolute",
-          top: 24,
-          left: 24,
+          top: 16,
+          left: 16,
           zIndex: 10,
           backdropFilter: "blur(20px)",
           bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.8 : 0.9),
-          borderRadius: 4,
+          borderRadius: 3,
           overflow: "hidden",
           transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-          width: inputsOpen ? 340 : "auto",
+          width: inputsOpen ? 260 : "auto",
           border: "1px solid",
           borderColor: theme.palette.divider,
           boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[4],
         }}
       >
         {!inputsOpen ? (
-          <Box sx={{ px: 2, py: 1.5, display: "flex", alignItems: "center", gap: 1.5, cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }} onClick={() => setInputsOpen(true)}>
+          <Box sx={{ px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1, cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }} onClick={() => setInputsOpen(true)}>
             <SearchRounded fontSize="small" color="primary" />
-            <Typography variant="body2" sx={{ fontWeight: 800, letterSpacing: 0.5 }}>
+            <Typography variant="body2" sx={{ fontSize: "0.75rem", fontWeight: 800, letterSpacing: 0.5 }}>
               VESSEL:{" "}
               <Typography
                 component="span"
-                sx={{ color: "primary.main", fontWeight: 900 }}
+                sx={{ fontSize: "0.75rem", color: "primary.main", fontWeight: 900 }}
               >
                 {vesselInput || "NONE"}
               </Typography>
             </Typography>
           </Box>
         ) : (
-          <Box sx={{ p: 2.5 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-              <Typography variant="overline" sx={{ fontWeight: 900, color: "text.secondary", letterSpacing: 1.5 }}>
+          <Box sx={{ p: 1.8 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+              <Typography sx={{ fontSize: "0.6rem", fontWeight: 900, color: "text.secondary", letterSpacing: 1.2, textTransform: "uppercase" }}>
                 Command Parameters
               </Typography>
-              <IconButton size="small" onClick={() => setInputsOpen(false)} sx={{ mr: -1 }}>
-                <CloseRounded fontSize="small" />
+              <IconButton size="small" onClick={() => setInputsOpen(false)} sx={{ mr: -0.5 }}>
+                <CloseRounded sx={{ fontSize: 16 }} />
               </IconButton>
             </Box>
-            <Stack spacing={2}>
-              <TextField size="small" fullWidth label="Vessel ID" value={vesselInput} onChange={(e) => setVesselInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
-              <TextField size="small" fullWidth label="Yard ID (Optional)" value={yardInput} onChange={(e) => setYardInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
+            <Stack spacing={1.2}>
+              <TextField size="small" fullWidth label="Vessel ID" value={vesselInput} onChange={(e) => setVesselInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
+              <TextField size="small" fullWidth label="Yard ID (Optional)" value={yardInput} onChange={(e) => setYardInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
               <Box>
-                <Button fullWidth component="label" variant="outlined" startIcon={<UploadFileRounded />} sx={{ fontWeight: 700, textTransform: "none", justifyContent: "flex-start", color: 'text.primary', borderColor: 'divider' }}>
-                  {containerFile ? containerFile.name : "Upload Container List"}
+                <Button fullWidth component="label" variant="outlined" startIcon={<UploadFileRounded sx={{ fontSize: 16 }} />} sx={{ fontSize: '0.75rem', py: 0.6, fontWeight: 700, textTransform: "none", justifyContent: "flex-start", color: 'text.primary', borderColor: 'divider' }}>
+                  <Typography noWrap sx={{ fontSize: '0.75rem', maxWidth: 180 }}>
+                    {containerFile ? containerFile.name : "Upload Container List"}
+                  </Typography>
                   <input ref={fileInputRef} type="file" hidden accept=".txt,.csv,.json" onChange={(e) => setContainerFile(e.target.files?.[0] || null)} />
                 </Button>
                 {containerFile && (
-                  <Button size="small" onClick={() => { setContainerFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} startIcon={<ClearRounded sx={{ fontSize: 14 }} />} sx={{ mt: 0.5 }}>
+                  <Button size="small" onClick={() => { setContainerFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} startIcon={<ClearRounded sx={{ fontSize: 12 }} />} sx={{ mt: 0.25, py: 0, fontSize: '0.65rem' }}>
                     Clear File
                   </Button>
                 )}
               </Box>
-              <Button variant="contained" fullWidth onClick={load} disabled={loading} sx={{ fontWeight: 800, py: 1.5 }}>
+              <Button variant="contained" fullWidth onClick={load} disabled={loading} sx={{ fontWeight: 800, py: 1, fontSize: '0.8rem' }}>
                 {loading ? "Analyzing..." : "Execute Analysis"}
               </Button>
             </Stack>
           </Box>
         )}
       </Paper>
-
       {/* TOP RIGHT: KPI BAR */}
       {rawApiData && (
         <Paper
           elevation={6}
           sx={{
             position: "absolute",
-            top: 24,
-            right: 24,
+            top: 16,
+            right: 16,
             zIndex: 10,
             backdropFilter: "blur(20px)",
             bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.8 : 0.9),
-            borderRadius: 4,
-            p: 1.5,
+            borderRadius: 3,
+            px: 1.5,
+            py: 0.8,
             display: { xs: "none", lg: "flex" },
             alignItems: "center",
-            gap: 3,
+            gap: 2,
             border: "1px solid",
             borderColor: theme.palette.divider,
             boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[4],
           }}
         >
           <Box>
-            <Typography variant="caption" sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase" }}>Primary Block</Typography>
-            <Typography sx={{ fontSize: "1.1rem", fontWeight: 900, color: "error.main", fontFamily: "'Inter', monospace" }}>{mapData?.max_block || "-"}</Typography>
+            <Typography sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase", fontSize: "0.58rem" }}>Primary Block</Typography>
+            <Typography sx={{ fontSize: "0.9rem", fontWeight: 900, color: "error.main", fontFamily: "'Inter', monospace" }}>{mapData?.max_block || "-"}</Typography>
           </Box>
           <Divider orientation="vertical" flexItem />
           <Box>
-            <Typography variant="caption" sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase" }}>Target Berth</Typography>
-            <Typography sx={{ fontSize: "1.1rem", fontWeight: 900, color: "success.main", fontFamily: "'Inter', monospace" }}>{rawApiData?.primary_berth?.berth || rawApiData?.recommended_berth || "-"}</Typography>
+            <Typography sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase", fontSize: "0.58rem" }}>Target Berth Near</Typography>
+            <Typography sx={{ fontSize: "0.9rem", fontWeight: 900, color: "success.main", fontFamily: "'Inter', monospace" }}>{rawApiData?.primary_berth?.berth || rawApiData?.recommended_berth || "-"}</Typography>
           </Box>
           <Divider orientation="vertical" flexItem />
           <Box>
-            <Typography variant="caption" sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase" }}>Total Volume</Typography>
-            <Typography sx={{ fontSize: "1.1rem", fontWeight: 900, color: "text.primary", fontFamily: "'Inter', monospace" }}>{totalMoves.toLocaleString()} CTN</Typography>
+            <Typography sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase", fontSize: "0.58rem" }}>Total Volume</Typography>
+            <Typography sx={{ fontSize: "0.9rem", fontWeight: 900, color: "text.primary", fontFamily: "'Inter', monospace" }}>{totalMoves.toLocaleString()} CTN</Typography>
           </Box>
           <Divider orientation="vertical" flexItem />
           <Box>
-            <Typography variant="caption" sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase" }}>Blocks</Typography>
-            <Typography sx={{ fontSize: "1.1rem", fontWeight: 900, color: "text.primary", fontFamily: "'Inter', monospace" }}>{totalBlocks}</Typography>
+            <Typography sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase", fontSize: "0.58rem" }}>Blocks</Typography>
+            <Typography sx={{ fontSize: "0.9rem", fontWeight: 900, color: "text.primary", fontFamily: "'Inter', monospace" }}>{totalBlocks}</Typography>
           </Box>
 
           {hasSpecial && (
             <>
               <Divider orientation="vertical" flexItem />
-              <Stack direction="row" spacing={3}>
+              <Stack direction="row" spacing={2}>
                 {hazmat > 0 && (
                   <Box>
-                    <Typography variant="caption" sx={{ display: "block", color: "error.main", fontWeight: 800, textTransform: "uppercase" }}>Hazmat</Typography>
-                    <Typography sx={{ fontSize: "1.1rem", fontWeight: 900, color: "error.main", fontFamily: "'Inter', monospace" }}>{hazmat}</Typography>
+                    <Typography sx={{ display: "block", color: "error.main", fontWeight: 800, textTransform: "uppercase", fontSize: "0.58rem" }}>Hazmat</Typography>
+                    <Typography sx={{ fontSize: "0.9rem", fontWeight: 900, color: "error.main", fontFamily: "'Inter', monospace" }}>{hazmat}</Typography>
                   </Box>
                 )}
                 {reefer > 0 && (
                   <Box>
-                    <Typography variant="caption" sx={{ display: "block", color: "info.main", fontWeight: 800, textTransform: "uppercase" }}>Reefer</Typography>
-                    <Typography sx={{ fontSize: "1.1rem", fontWeight: 900, color: "info.main", fontFamily: "'Inter', monospace" }}>{reefer}</Typography>
+                    <Typography sx={{ display: "block", color: "info.main", fontWeight: 800, textTransform: "uppercase", fontSize: "0.58rem" }}>Reefer</Typography>
+                    <Typography sx={{ fontSize: "0.9rem", fontWeight: 900, color: "info.main", fontFamily: "'Inter', monospace" }}>{reefer}</Typography>
                   </Box>
                 )}
                 {oog > 0 && (
                   <Box>
-                    <Typography variant="caption" sx={{ display: "block", color: "warning.main", fontWeight: 800, textTransform: "uppercase" }}>OOG</Typography>
-                    <Typography sx={{ fontSize: "1.1rem", fontWeight: 900, color: "warning.main", fontFamily: "'Inter', monospace" }}>{oog}</Typography>
+                    <Typography sx={{ display: "block", color: "warning.main", fontWeight: 800, textTransform: "uppercase", fontSize: "0.58rem" }}>OOG</Typography>
+                    <Typography sx={{ fontSize: "0.9rem", fontWeight: 900, color: "warning.main", fontFamily: "'Inter', monospace" }}>{oog}</Typography>
                   </Box>
                 )}
               </Stack>
@@ -401,14 +513,14 @@ export default function OperationalDashboard() {
         elevation={8}
         sx={{
           position: "absolute",
-          bottom: 24,
+          bottom: 16,
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 10,
           backdropFilter: "blur(20px)",
           bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.8 : 0.9),
-          borderRadius: 10,
-          p: 0.75,
+          borderRadius: 8,
+          p: 0.4,
           border: "1px solid",
           borderColor: theme.palette.divider,
           boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[10],
@@ -420,7 +532,7 @@ export default function OperationalDashboard() {
           onChange={handleViewToggle}
           sx={{
             "& .MuiToggleButton-root": {
-              borderRadius: 6, px: { xs: 1.5, md: 2.5 }, py: 1, border: "none", fontWeight: 700, textTransform: "none", color: "text.secondary",
+              borderRadius: 5, px: { xs: 1.2, md: 1.8 }, py: 0.55, border: "none", fontWeight: 700, textTransform: "none", color: "text.secondary", fontSize: "0.75rem",
               "&.Mui-selected": { bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" } }
             }
           }}
@@ -428,7 +540,7 @@ export default function OperationalDashboard() {
           <ToggleButton value="HEATMAP">Block Illustrator</ToggleButton>
           <ToggleButton value="MAP2D">2D Heatmap</ToggleButton>
           <ToggleButton value="3D">3D Heatmap</ToggleButton>
-          <Divider flexItem orientation="vertical" sx={{ mx: 0.5, my: 1 }} />
+          <Divider flexItem orientation="vertical" sx={{ mx: 0.5, my: 0.6 }} />
           <ToggleButton value="BERTH">Recommended Berth</ToggleButton>
         </ToggleButtonGroup>
       </Paper>
@@ -494,10 +606,22 @@ export default function OperationalDashboard() {
 
       <IconButton
         onClick={() => document.fullscreenElement ? document.exitFullscreen() : wrapperRef.current?.requestFullscreen()}
-        sx={{ position: "absolute", bottom: 24, right: 24, zIndex: 10, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", boxShadow: 3 }}
+        sx={{ position: "absolute", bottom: 16, right: 16, zIndex: 10, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", boxShadow: 3, p: 0.6, width: 28, height: 28 }}
+        size="small"
       >
-        <FullscreenRounded />
+        <FullscreenRounded fontSize="small" />
       </IconButton>
+
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={6000}
+        onClose={() => setToast((t) => ({ ...t, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity={toast.severity} variant="filled" onClose={() => setToast((t) => ({ ...t, open: false }))}>
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

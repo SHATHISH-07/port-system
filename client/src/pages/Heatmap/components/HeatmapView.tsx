@@ -1,9 +1,9 @@
-import { Box, Typography, Divider, useTheme, alpha } from "@mui/material";
+import { Box, Typography, useTheme, alpha, IconButton, Tooltip } from "@mui/material";
 import {
   StarRounded,
-  HelpOutlineRounded,
-  CheckCircleOutlineRounded,
+  RestartAltRounded,
 } from "@mui/icons-material";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import type { Theme } from "@mui/material/styles";
 import type { BlockData, VesselHeatmapViewData } from "../../../types/heatmap";
 
@@ -51,27 +51,28 @@ function BlockTile({
   isMax: boolean;
 }) {
   const theme = useTheme();
-  if (!block || block.count === 0) return null;
+  if (!block) return null;
 
   const colors = getConcColor(theme);
   const cc = colors[block.concentration || "Low"];
   const pct = Math.round((block.intensity || 0) * 100);
   const isDark = theme.palette.mode === "dark";
+  const isEmpty = block.count === 0;
 
   return (
     <Box
       sx={{
-        bgcolor: isDark ? theme.palette.background.paper : theme.palette.background.paper,
+        bgcolor: isEmpty
+          ? (isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)")
+          : theme.palette.background.paper,
         border: isMax
           ? `2px solid ${theme.palette.primary.main}`
-          : `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+          : `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
         boxShadow: isMax
           ? isDark
             ? `0 0 24px ${alpha(theme.palette.primary.main, 0.25)}`
             : `0 8px 24px ${alpha(theme.palette.primary.main, 0.15)}`
-          : isDark
-            ? "none"
-            : "0 2px 4px rgba(0,0,0,0.02)",
+          : "none",
         borderRadius: 2,
         p: 2,
         position: "relative",
@@ -83,9 +84,10 @@ function BlockTile({
         flex: "0 1 calc(33.333% - 16px)",
         minWidth: 180,
         maxWidth: 280,
+        opacity: isEmpty ? 0.45 : 1,
         transition: "transform 150ms",
         zIndex: 2,
-        "&:hover": { transform: "translateY(-2px)" },
+        "&:hover": { transform: isEmpty ? "none" : "translateY(-2px)" },
       }}
     >
       {isMax && (
@@ -106,9 +108,11 @@ function BlockTile({
           left: 14,
           fontSize: "0.6875rem",
           fontWeight: 600,
-          color: isDark
-            ? theme.palette.primary.light
-            : theme.palette.primary.main,
+          color: isEmpty
+            ? "text.disabled"
+            : isDark
+              ? theme.palette.primary.light
+              : theme.palette.primary.main,
           letterSpacing: "0.08em",
           textTransform: "uppercase",
         }}
@@ -127,7 +131,7 @@ function BlockTile({
           sx={{
             fontSize: "2.75rem",
             fontWeight: 700,
-            color: isDark ? "#ffffff" : theme.palette.text.primary,
+            color: isEmpty ? "text.disabled" : isDark ? "#ffffff" : theme.palette.text.primary,
             lineHeight: 1,
             fontFamily: "'Google Sans', Roboto, sans-serif",
           }}
@@ -155,15 +159,217 @@ function BlockTile({
           overflow: "hidden",
         }}
       >
+        {!isEmpty && (
+          <Box
+            sx={{
+              height: "100%",
+              width: `${Math.min(pct, 100)}%`,
+              bgcolor: cc.fill,
+              borderRadius: 3,
+              transition: "width 600ms ease",
+            }}
+          />
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+function BerthCard({
+  id,
+  label,
+  isTarget,
+  vesselName,
+  isDark,
+}: {
+  id: string;
+  label: string;
+  isTarget: boolean;
+  vesselName?: string;
+  isDark: boolean;
+}) {
+  const isHorizontal = id.startsWith("T") || id.startsWith("B");
+
+  if (!isTarget) {
+    return (
+      <Box
+        sx={{
+          width: isHorizontal ? 180 : 140,
+          height: isHorizontal ? 92 : 180,
+          border: `1px dashed ${isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"}`,
+          bgcolor: isDark ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)",
+          borderRadius: 2,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          transition: "all 0.3s ease",
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: "0.75rem",
+            fontWeight: 800,
+            color: isDark ? "text.secondary" : "#64748b",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        >
+          {label}
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{
+            fontSize: "0.6rem",
+            color: "text.disabled",
+            mt: 0.5,
+            textTransform: "uppercase",
+            fontWeight: 700,
+          }}
+        >
+          Vacant
+        </Typography>
+      </Box>
+    );
+  }
+
+  const w = isHorizontal ? 180 : 140;
+  const h = isHorizontal ? 92 : 180;
+
+  return (
+    <Box
+      sx={{
+        width: w,
+        height: h,
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 5,
+        transition: "all 0.3s ease",
+        transform: "scale(1.05)",
+      }}
+    >
+      <Box
+        sx={{
+          position: "absolute",
+          top: isHorizontal ? -12 : 6,
+          left: "50%",
+          transform: "translateX(-50%)",
+          bgcolor: "#10b981",
+          color: "#000",
+          fontSize: "0.55rem",
+          fontWeight: 950,
+          px: 1.25,
+          py: 0.2,
+          borderRadius: 0.5,
+          textTransform: "uppercase",
+          letterSpacing: 1.5,
+          whiteSpace: "nowrap",
+          boxShadow: "0 2px 8px rgba(16, 185, 129, 0.4)",
+          zIndex: 10,
+        }}
+      >
+        Optimal
+      </Box>
+
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          position: "relative",
+          filter: `drop-shadow(0 0 12px ${alpha("#10b981", isDark ? 0.35 : 0.2)})`,
+        }}
+      >
+        <svg width={w} height={h} style={{ display: "block" }}>
+          {isHorizontal ? (
+            <path
+              d="M 8,46 L 36,12 L 172,12 Q 178,12 178,18 L 178,74 Q 178,80 172,80 L 36,80 Z"
+              fill={isDark ? "#0f172a" : "#1e293b"}
+              stroke="#10b981"
+              strokeWidth={2.5}
+            />
+          ) : (
+            <path
+              d="M 70,172 L 12,144 L 12,18 Q 12,12 18,12 L 122,12 Q 128,12 128,18 L 128,144 Z"
+              fill={isDark ? "#0f172a" : "#1e293b"}
+              stroke="#10b981"
+              strokeWidth={2.5}
+            />
+          )}
+        </svg>
+
         <Box
           sx={{
-            height: "100%",
-            width: `${Math.min(pct, 100)}%`,
-            bgcolor: cc.fill,
-            borderRadius: 3,
-            transition: "width 600ms ease",
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            p: 2,
+            pr: isHorizontal ? 3 : 2,
+            pb: isHorizontal ? 2 : 4,
+            pointerEvents: "none",
           }}
-        />
+        >
+          <Typography
+            sx={{
+              fontSize: "0.75rem",
+              fontWeight: 900,
+              color: "#10b981",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              mt: !isHorizontal ? 2 : 0,
+            }}
+          >
+            {label}
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: "0.6875rem",
+              fontWeight: 800,
+              color: "#ffffff",
+              mt: 0.5,
+              fontFamily: "'Roboto Mono', monospace",
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {(vesselName || "ACTIVE VESSEL").toUpperCase()}
+          </Typography>
+
+          <Box
+            sx={{
+              display: "flex",
+              gap: "4px",
+              justifyContent: "center",
+              mt: 1.5,
+            }}
+          >
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Box
+                key={i}
+                sx={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: "50%",
+                  bgcolor: "#10b981",
+                  animation: "pulse 2s infinite",
+                  "@keyframes pulse": {
+                    "0%": { opacity: 0.4 },
+                    "50%": { opacity: 1 },
+                    "100%": { opacity: 0.4 },
+                  },
+                }}
+              />
+            ))}
+          </Box>
+        </Box>
       </Box>
     </Box>
   );
@@ -178,619 +384,399 @@ function HeatmapPlaceholder() {
     intensity: 0,
     concentration: "Low" as const,
     cells: [],
+    hazardous: 0,
+    reefer: 0,
+    oog: 0,
   };
 
   return (
     <Box
       sx={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100%",
         width: "100%",
-        gap: 3,
-        pt: { xs: 12, lg: 18 },
-        pb: 12,
-        px: { xs: 2, md: 4, lg: 6 },
+        height: "100%",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", xl: "1fr 320px" },
-          gap: 4,
-          alignItems: "start",
-          width: "100%",
-          maxWidth: 1600,
-          mx: "auto",
-        }}
+      <TransformWrapper
+        initialScale={0.72}
+        minScale={0.4}
+        maxScale={3}
+        centerOnInit
+        wheel={{ step: 0.002 }}
+        panning={{ disabled: false }}
       >
-        {/* Left Side: Empty Grid */}
-        <Box
-          sx={{
-            bgcolor: isDark ? theme.palette.background.default : "#f1f5f9",
-            border: `1px solid ${theme.palette.divider}`,
-            borderRadius: 4,
-            overflow: "hidden",
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-            minWidth: 0,
-            opacity: 0.6,
-          }}
-        >
-          <Box sx={{ px: 3, py: 2.5, borderBottom: `1px solid ${theme.palette.divider}`, bgcolor: theme.palette.background.paper }}>
-            <Typography sx={{ fontSize: "0.875rem", fontWeight: 700, color: "text.disabled", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              Vessel Cargo Concentration — NO DATA SELECTED
-            </Typography>
-          </Box>
-          <Box sx={{ p: { xs: 3, md: 5 }, display: "flex", flexDirection: "column", gap: 8 }}>
-            {[0, 1].map((rowIdx) => (
-              <Box key={rowIdx} sx={{ position: "relative" }}>
-                <Typography sx={{ position: "absolute", right: 0, top: -32, fontSize: "0.6875rem", fontWeight: 700, color: "text.disabled", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-                  {ROW_LABELS[rowIdx] || `ROW ${rowIdx + 1} ZONE`}
-                </Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 3 }}>
-                  {[1, 2, 3].map((i) => (
-                    <BlockTile key={i} blockId="--" block={emptyBlock} isMax={false} />
-                  ))}
-                </Box>
-              </Box>
-            ))}
-          </Box>
-          {/* Bottom Berth area placeholder */}
-          <Box sx={{ pt: 8, pb: 5, px: 4, mt: "auto", display: { xs: "none", md: "block" } }}>
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 3 }}>
-              {[1, 2, 3].map((num) => (
-                <Box key={num} sx={{ border: `2px solid ${theme.palette.divider}`, bgcolor: theme.palette.background.paper, borderRadius: "12px 12px 0 0", p: 2, textAlign: "center" }}>
-                  <Typography sx={{ fontSize: "0.75rem", fontWeight: 800, color: "text.disabled", letterSpacing: "0.1em" }}>BERTH {num}</Typography>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Right Side: Empty Panels */}
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3, opacity: 0.6 }}>
-          <Box sx={{ bgcolor: theme.palette.background.paper, border: `1.5px solid ${theme.palette.divider}`, borderRadius: 4, p: 3 }}>
-            <Typography sx={{ fontSize: "0.75rem", fontWeight: 800, color: "text.disabled", textTransform: "uppercase", mb: 2 }}>Berth Suitability</Typography>
-            <Typography sx={{ fontSize: 40, fontWeight: 900, color: "text.disabled", lineHeight: 1 }}>—</Typography>
-          </Box>
-          <Box sx={{ bgcolor: theme.palette.background.paper, border: `1px solid ${theme.palette.divider}`, borderRadius: 4, p: 3 }}>
-            <Typography sx={{ fontSize: "0.75rem", fontWeight: 800, color: "text.disabled", textTransform: "uppercase", mb: 2 }}>Concentration Legend</Typography>
-            <Box sx={{ width: "100%", height: 8, borderRadius: 4, bgcolor: "divider", mb: 2 }} />
-          </Box>
-        </Box>
-      </Box>
-    </Box>
-  );
-}
-
-export default function HeatmapView({ data, loading }: { data?: VesselHeatmapViewData | null; loading?: boolean }) {
-  const theme = useTheme();
-  const isDark = theme.palette.mode === "dark";
-  const colors = getConcColor(theme);
-
-  if (loading || !data) return <HeatmapPlaceholder />;
-
-  const safeBerth = data.recommended_berth || "";
-  const optimalNum = parseInt(safeBerth.replace(/\D/g, ""), 10) || 2;
-
-  const activeBlockIds = Object.entries(data.blocks || {})
-    .filter(([, block]) => block.count > 0)
-    .map(([id]) => id);
-  const withoutMax = activeBlockIds.filter((id) => id !== data.max_block);
-
-  withoutMax.sort((a, b) => {
-    const posA = data.layout[a] || { x: 0, y: 0 };
-    const posB = data.layout[b] || { x: 0, y: 0 };
-    return posA.y - posB.y || posA.x - posB.x;
-  });
-
-  const totalItems = withoutMax.length + (data.max_block ? 1 : 0);
-  const lastRowLength = totalItems % 3 === 0 ? 3 : totalItems % 3 || 3;
-  const targetIndexInRow = Math.min(optimalNum - 1, lastRowLength - 1);
-  const insertIndex = Math.max(
-    0,
-    totalItems - lastRowLength + targetIndexInRow,
-  );
-
-  const finalOrder = [...withoutMax];
-  if (data.max_block) finalOrder.splice(insertIndex, 0, data.max_block);
-
-  const chunkedRows: string[][] = [];
-  for (let i = 0; i < finalOrder.length; i += 3) {
-    chunkedRows.push(finalOrder.slice(i, i + 3));
-  }
-
-  const calcEfficiency = (targetBerth: number) => {
-    if (targetBerth === optimalNum) return "100% Optimal";
-    const distance = Math.abs(targetBerth - optimalNum);
-    const intensityWeight =
-      (data.blocks[data.max_block || ""]?.intensity || 0) * 20 || 15;
-    const penalty = Math.round(distance * 25 + intensityWeight);
-    return `-${penalty}% efficiency`;
-  };
-
-  let maxBlockTargetX = 50;
-  if (chunkedRows.length > 0 && data.max_block) {
-    const maxRow = chunkedRows.find((row) => row.includes(data.max_block!));
-    if (maxRow) {
-      const colIdx = maxRow.indexOf(data.max_block);
-      if (maxRow.length === 3)
-        maxBlockTargetX = colIdx === 0 ? 16.6 : colIdx === 1 ? 50 : 83.3;
-      else if (maxRow.length === 2)
-        maxBlockTargetX = colIdx === 0 ? 33.3 : 66.6;
-    }
-  }
-
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100%",
-        width: "100%",
-        gap: 3,
-        pt: { xs: 12, lg: 18 },
-        pb: 12,
-        px: { xs: 2, md: 4, lg: 6 },
-      }}
-    >
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", xl: "1fr 320px" },
-          gap: 4,
-          alignItems: "start",
-          width: "100%",
-          maxWidth: 1600,
-          mx: "auto",
-        }}
-      >
-        {/* Left Side: Heatmap Blocks */}
-        <Box
-          sx={{
-            bgcolor: isDark ? theme.palette.background.default : "#e2e8f0",
-            border: `1px solid ${theme.palette.divider}`,
-            borderRadius: 4,
-            overflow: "hidden",
-            backgroundImage: isDark
-              ? "linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px)"
-              : "linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-            minWidth: 0,
-            boxShadow: isDark ? "none" : "inset 0 2px 10px rgba(0,0,0,0.04)",
-          }}
-        >
-          <Box
-            sx={{
-              px: 3,
-              py: 2.5,
-              borderBottom: `1px solid ${theme.palette.divider}`,
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-              bgcolor: theme.palette.background.paper,
-            }}
-          >
-            <Typography
-              noWrap
-              sx={{
-                fontSize: "0.875rem",
-                fontWeight: 700,
-                color: isDark
-                  ? theme.palette.primary.light
-                  : theme.palette.primary.main,
-                letterSpacing: "0.05em",
-                textTransform: "uppercase",
-                flex: 1,
-              }}
-            >
-              Vessel Cargo Concentration — {data.vessel}
-            </Typography>
-          </Box>
-
-          <Box
-            sx={{
-              p: { xs: 3, md: 5 },
-              pb: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              flexGrow: 1,
-            }}
-          >
-            {chunkedRows.map((rowBlockIds, rowIdx) => (
-              <Box key={rowIdx} sx={{ position: "relative", zIndex: 2 }}>
-                <Typography
+        {({ resetTransform }) => (
+          <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
+            {/* Unified zoom controls overlay */}
+            <Box sx={{ position: "absolute", top: 16, right: 16, zIndex: 100 }}>
+              <Tooltip title="Reset View">
+                <IconButton
+                  onClick={() => resetTransform()}
                   sx={{
-                    position: "absolute",
-                    right: 0,
-                    top: -32,
-                    fontSize: "0.6875rem",
-                    fontWeight: 700,
-                    color: isDark ? "#475e7a" : "#94a3b8",
-                    letterSpacing: "0.15em",
-                    textTransform: "uppercase",
+                    bgcolor: "background.paper",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    boxShadow: 3,
+                    "&:hover": { bgcolor: "action.hover" },
+                    p: 0.6,
+                    width: 28,
+                    height: 28,
                   }}
+                  size="small"
                 >
-                  {ROW_LABELS[rowIdx] || `ROW ${rowIdx + 1} ZONE`}
-                </Typography>
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    justifyContent: "center",
-                    gap: 3,
-                  }}
-                >
-                  {rowBlockIds.map((blockId) => (
-                    <BlockTile
-                      key={blockId}
-                      blockId={blockId}
-                      block={data.blocks[blockId]}
-                      isMax={blockId === data.max_block}
-                    />
-                  ))}
-                </Box>
-              </Box>
-            ))}
-          </Box>
+                  <RestartAltRounded fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
 
-          <Box
-            sx={{
-              position: "relative",
-              pt: 8,
-              pb: 5,
-              px: 4,
-              mt: "auto",
-              display: { xs: "none", md: "block" },
-            }}
-          >
-            <svg
-              width="100%"
-              height="80"
-              style={{
-                position: "absolute",
-                top: -20,
-                left: 0,
-                zIndex: 1,
-                overflow: "visible",
-              }}
-            >
-              {[1, 2, 3].map((num) => {
-                const startX = num === 1 ? 16.6 : num === 2 ? 50 : 83.3;
-                const isOpt = optimalNum === num;
-                return (
-                  <g key={num}>
-                    <path
-                      d={`M ${startX}% 80 L ${maxBlockTargetX}% 0`}
-                      fill="none"
-                      stroke={
-                        isOpt ? "#4ade80" : isDark ? "#ef4444" : "#dc2626"
-                      }
-                      strokeWidth="2.5"
-                      strokeDasharray="8,6"
-                      opacity={isOpt ? "1" : "0.5"}
-                    />
-                    <text
-                      x={`${(startX + maxBlockTargetX) / 2}%`}
-                      y="40"
-                      fill={isOpt ? "#4ade80" : isDark ? "#fca5a5" : "#991b1b"}
-                      fontSize="12"
-                      fontWeight="800"
-                      textAnchor="middle"
-                      style={{
-                        filter: isDark
-                          ? "drop-shadow(0 0 4px rgba(0,0,0,0.5))"
-                          : "none",
-                      }}
-                    >
-                      {calcEfficiency(num)}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: 3,
-                position: "relative",
-                zIndex: 2,
-              }}
-            >
-              {[1, 2, 3].map((num) => {
-                const isOpt = optimalNum === num;
-                return (
-                  <Box
-                    key={num}
-                    sx={{
-                      border: isOpt
-                        ? "2px solid #4ade80"
-                        : `2px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
-                      bgcolor: isOpt
-                        ? alpha("#4ade80", isDark ? 0.1 : 0.05)
-                        : theme.palette.background.paper,
-                      boxShadow: isOpt
-                        ? `0 -5px 20px ${alpha("#4ade80", 0.15)}`
-                        : isDark
-                          ? "none"
-                          : "0 2px 4px rgba(0,0,0,0.02)",
-                      borderRadius: "12px 12px 0 0",
-                      p: 2,
-                      textAlign: "center",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontSize: "0.75rem",
-                        fontWeight: 800,
-                        color: isOpt
-                          ? "#4ade80"
-                          : isDark
-                            ? theme.palette.text.secondary
-                            : "#64748b",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      {isOpt ? `OPTIMAL BERTH ${num}` : `BERTH ${num}`}
-                    </Typography>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        gap: "3px",
-                        justifyContent: "center",
-                        mt: 1.5,
-                      }}
-                    >
-                      {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <Box
-                          key={i}
-                          sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            bgcolor: isOpt
-                              ? "#4ade80"
-                              : isDark
-                                ? "rgba(138,180,248,0.15)"
-                                : "rgba(0,0,0,0.1)",
-                          }}
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                );
-              })}
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Right Side: Fixed Stack Panels */}
-        <Box
-          sx={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}
-        >
-          <Box
-            sx={{
-              bgcolor: theme.palette.background.paper,
-              border: `1.5px solid ${alpha("#4ade80", 0.4)}`,
-              borderRadius: 4,
-              overflow: "hidden",
-              boxShadow: isDark ? "none" : "0 8px 24px rgba(0,0,0,0.08)",
-            }}
-          >
-            <Box
-              sx={{
-                px: 2.5,
-                py: 2,
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                bgcolor: alpha("#4ade80", 0.03),
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: "0.75rem",
-                  fontWeight: 800,
-                  color: "#4ade80",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Berth Suitability
-              </Typography>
-            </Box>
-            <Box sx={{ px: 2.5, py: 3 }}>
-              <Typography
-                sx={{
-                  fontSize: 40,
-                  fontWeight: 900,
-                  color: "#4ade80",
-                  lineHeight: 1,
-                  fontFamily: "'Google Sans', Roboto, sans-serif",
-                  mb: 1,
-                }}
-              >
-                {data.recommended_berth || "Unassigned"}
-              </Typography>
-              {data.recommended_berth && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    mt: 1.5,
-                  }}
-                >
-                  <CheckCircleOutlineRounded
-                    sx={{ fontSize: 18, color: "#4ade80" }}
-                  />
-                  <Typography
-                    sx={{
-                      fontSize: "0.875rem",
-                      color: "#4ade80",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Optimal assignment
-                  </Typography>
-                </Box>
-              )}
-              <Divider sx={{ borderColor: theme.palette.divider, my: 2.5 }} />
-              <Typography
-                sx={{
-                  fontSize: "0.6875rem",
-                  fontWeight: 700,
-                  color: isDark
-                    ? theme.palette.primary.light
-                    : theme.palette.primary.main,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  mb: 1,
-                }}
-              >
-                Nearest High Density Block
-              </Typography>
-              <Typography
-                sx={{
-                  fontSize: 24,
-                  fontWeight: 300,
-                  color: isDark
-                    ? theme.palette.primary.light
-                    : theme.palette.primary.main,
-                  fontFamily: "'Google Sans', Roboto, sans-serif",
-                }}
-              >
-                {data.max_block || "—"}
-              </Typography>
-            </Box>
-          </Box>
-
-          <Box
-            sx={{
-              bgcolor: theme.palette.background.paper,
-              border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 4,
-              overflow: "hidden",
-              boxShadow: isDark ? "none" : "0 8px 24px rgba(0,0,0,0.08)",
-            }}
-          >
-            <Box
-              sx={{
-                px: 2.5,
-                py: 2,
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                bgcolor: theme.palette.background.paper,
-              }}
-            >
-              <HelpOutlineRounded
-                sx={{
-                  fontSize: 18,
-                  color: isDark
-                    ? theme.palette.primary.light
-                    : theme.palette.primary.main,
-                }}
-              />
-              <Typography
-                sx={{
-                  fontSize: "0.75rem",
-                  fontWeight: 800,
-                  color: isDark
-                    ? theme.palette.primary.light
-                    : theme.palette.primary.main,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Concentration Legend
-              </Typography>
-            </Box>
-            <Box sx={{ px: 2.5, py: 3 }}>
+            {/* Legend floating overlay */}
+            <Box sx={{ position: "absolute", bottom: 16, left: 16, zIndex: 100 }}>
               <Box
                 sx={{
-                  width: "100%",
-                  height: 8,
-                  borderRadius: 4,
-                  mb: 2,
-                  background:
-                    "linear-gradient(90deg, #16a34a 0%, #ea580c 50%, #dc2626 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  px: 1.2,
+                  py: 0.6,
+                  bgcolor: isDark
+                    ? "rgba(18, 22, 31, 0.9)"
+                    : "rgba(255, 255, 255, 0.9)",
+                  backdropFilter: "blur(4px)",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
                 }}
-              />
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                {(
-                  [
-                    {
-                      level: "High",
-                      desc: "> 65% utilisation",
-                      ...colors.High,
-                    },
-                    {
-                      level: "Medium",
-                      desc: "30 – 65% utilisation",
-                      ...colors.Medium,
-                    },
-                    {
-                      level: "Low",
-                      desc: "< 30% utilisation",
-                      ...colors.Low,
-                    },
-                  ] as const
-                ).map(({ level, desc, fill, text }) => (
-                  <Box
-                    key={level}
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
+              >
+                <Typography
+                  sx={{
+                    fontSize: "0.5rem",
+                    color: "text.secondary",
+                    fontWeight: 800,
+                    letterSpacing: "0.5px",
+                    textTransform: "uppercase",
+                    mr: 0.5,
+                  }}
+                >
+                  Concentration
+                </Typography>
+                {[
+                  { c: "#ff0000", l: "High" },
+                  { c: "#ffaa00", l: "Medium" },
+                  { c: "#00ff00", l: "Low" },
+                ].map(({ c, l }) => (
+                  <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
-                    >
-                      <Box
-                        sx={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: "50%",
-                          bgcolor: fill,
-                        }}
-                      />
-                      <Typography
-                        sx={{
-                          fontSize: "0.875rem",
-                          fontWeight: 700,
-                          color: text,
-                        }}
-                      >
-                        {level}
-                      </Typography>
-                    </Box>
+                      sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }}
+                    />
                     <Typography
                       sx={{
-                        fontSize: "0.75rem",
-                        color: theme.palette.text.secondary,
+                        fontSize: "0.6rem",
+                        color: "text.secondary",
+                        fontWeight: 500,
                       }}
                     >
-                      {desc}
+                      {l}
                     </Typography>
                   </Box>
                 ))}
               </Box>
             </Box>
+
+            <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 1200,
+                  p: 4,
+                  gap: 5,
+                  opacity: 0.6,
+                }}
+              >
+                {/* TOP BERTHS ROW */}
+                <Box sx={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                  <BerthCard id="T1" label="BERTH T1" isTarget={false} isDark={isDark} />
+                  <BerthCard id="T2" label="BERTH T2" isTarget={false} isDark={isDark} />
+                </Box>
+
+                {/* MIDDLE AREA: Yards + Right Berths */}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 180px",
+                    gap: 4,
+                    alignItems: "center",
+                    width: "100%",
+                    maxWidth: 1100,
+                  }}
+                >
+                  {/* Blocks */}
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[0, 1, 2].map((rowIdx) => (
+                      <Box key={rowIdx} sx={{ position: "relative" }}>
+                        <Typography sx={{ position: "absolute", right: 0, top: -32, fontSize: "0.6875rem", fontWeight: 700, color: "text.disabled", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+                          {ROW_LABELS[rowIdx] || `ROW ${rowIdx + 1} ZONE`}
+                        </Typography>
+                        <Box sx={{ display: "flex", justifyContent: "center", gap: 3 }}>
+                          {[1, 2, 3].map((i) => (
+                            <BlockTile key={i} blockId="--" block={emptyBlock} isMax={false} />
+                          ))}
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+
+                  {/* Right Side Berths */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <BerthCard id="R1" label="BERTH R1" isTarget={false} isDark={isDark} />
+                    <BerthCard id="R2" label="BERTH R2" isTarget={false} isDark={isDark} />
+                  </Box>
+                </Box>
+
+                {/* BOTTOM BERTHS ROW */}
+                <Box sx={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                  <BerthCard id="B1" label="BERTH B1" isTarget={false} isDark={isDark} />
+                  <BerthCard id="B2" label="BERTH B2" isTarget={false} isDark={isDark} />
+                </Box>
+              </Box>
+            </TransformComponent>
           </Box>
-        </Box>
-      </Box>
+        )}
+      </TransformWrapper>
+    </Box>
+  );
+}
+
+export default function HeatmapView({
+  data,
+  loading,
+  targetBerthId,
+}: {
+  data?: VesselHeatmapViewData | null;
+  loading?: boolean;
+  targetBerthId?: string;
+}) {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+
+  if (loading || !data) return <HeatmapPlaceholder />;
+
+  // Sort all 9 blocks by their (y * 3 + x) grid coordinates so they are ordered properly in the 3x3 layout
+  const blockIds = Object.keys(data.blocks || {});
+  const sortedBlockIds = [...blockIds].sort((a, b) => {
+    const posA = data.layout[a] || { x: 0, y: 0 };
+    const posB = data.layout[b] || { x: 0, y: 0 };
+    return (posA.y * 3 + posA.x) - (posB.y * 3 + posB.x);
+  });
+
+  const chunkedRows: string[][] = [];
+  for (let i = 0; i < sortedBlockIds.length; i += 3) {
+    chunkedRows.push(sortedBlockIds.slice(i, i + 3));
+  }
+
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        height: "100%",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <TransformWrapper
+        initialScale={0.72}
+        minScale={0.4}
+        maxScale={3}
+        centerOnInit
+        wheel={{ step: 0.002 }}
+        panning={{ disabled: false }}
+      >
+        {({ resetTransform }) => (
+          <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
+            {/* Unified zoom controls overlay */}
+            <Box sx={{ position: "absolute", top: 16, right: 16, zIndex: 100 }}>
+              <Tooltip title="Reset View">
+                <IconButton
+                  onClick={() => resetTransform()}
+                  sx={{
+                    bgcolor: "background.paper",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    boxShadow: 3,
+                    "&:hover": { bgcolor: "action.hover" },
+                    p: 0.6,
+                    width: 28,
+                    height: 28,
+                  }}
+                  size="small"
+                >
+                  <RestartAltRounded fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+
+            {/* Legend floating overlay */}
+            <Box sx={{ position: "absolute", bottom: 16, left: 16, zIndex: 100 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  px: 1.2,
+                  py: 0.6,
+                  bgcolor: isDark
+                    ? "rgba(18, 22, 31, 0.9)"
+                    : "rgba(255, 255, 255, 0.9)",
+                  backdropFilter: "blur(4px)",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: "0.5rem",
+                    color: "text.secondary",
+                    fontWeight: 800,
+                    letterSpacing: "0.5px",
+                    textTransform: "uppercase",
+                    mr: 0.5,
+                  }}
+                >
+                  Concentration
+                </Typography>
+                {[
+                  { c: "#ff0000", l: "High" },
+                  { c: "#ffaa00", l: "Medium" },
+                  { c: "#00ff00", l: "Low" },
+                ].map(({ c, l }) => (
+                  <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Box
+                      sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }}
+                    />
+                    <Typography
+                      sx={{
+                        fontSize: "0.6rem",
+                        color: "text.secondary",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {l}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 1200,
+                  p: 4,
+                  gap: 5,
+                }}
+              >
+                {/* TOP BERTHS ROW */}
+                <Box sx={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                  <BerthCard id="T1" label="BERTH T1" isTarget={targetBerthId === "T1"} vesselName={data.vessel} isDark={isDark} />
+                  <BerthCard id="T2" label="BERTH T2" isTarget={targetBerthId === "T2"} vesselName={data.vessel} isDark={isDark} />
+                </Box>
+
+                {/* MIDDLE AREA: Yards + Right Berths */}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 180px",
+                    gap: 4,
+                    alignItems: "center",
+                    width: "100%",
+                    maxWidth: 1100,
+                  }}
+                >
+                  {/* Yards 3x3 Grid */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                      width: "100%",
+                      alignItems: "center",
+                    }}
+                  >
+                    {chunkedRows.map((rowBlockIds, rowIdx) => (
+                      <Box key={rowIdx} sx={{ position: "relative", width: "100%", maxWidth: 900 }}>
+                        <Typography
+                          sx={{
+                            position: "absolute",
+                            right: 0,
+                            top: -32,
+                            fontSize: "0.6875rem",
+                            fontWeight: 700,
+                            color: isDark ? "#475e7a" : "#94a3b8",
+                            letterSpacing: "0.15em",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {ROW_LABELS[rowIdx] || `ROW ${rowIdx + 1} ZONE`}
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "center",
+                            gap: 3,
+                          }}
+                        >
+                          {rowBlockIds.map((blockId) => (
+                            <BlockTile
+                              key={blockId}
+                              blockId={blockId}
+                              block={data.blocks[blockId]}
+                              isMax={blockId === data.max_block}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+
+                  {/* Right Side Berths */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <BerthCard id="R1" label="BERTH R1" isTarget={targetBerthId === "R1"} vesselName={data.vessel} isDark={isDark} />
+                    <BerthCard id="R2" label="BERTH R2" isTarget={targetBerthId === "R2"} vesselName={data.vessel} isDark={isDark} />
+                  </Box>
+                </Box>
+
+                {/* BOTTOM BERTHS ROW */}
+                <Box sx={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                  <BerthCard id="B1" label="BERTH B1" isTarget={targetBerthId === "B1"} vesselName={data.vessel} isDark={isDark} />
+                  <BerthCard id="B2" label="BERTH B2" isTarget={targetBerthId === "B2"} vesselName={data.vessel} isDark={isDark} />
+                </Box>
+              </Box>
+            </TransformComponent>
+          </Box>
+        )}
+      </TransformWrapper>
     </Box>
   );
 }

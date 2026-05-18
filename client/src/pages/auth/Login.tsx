@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Box, Button, TextField, Typography, Paper, Alert } from "@mui/material";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
-import { api } from "../api/api";
+import { useAuth } from "../../auth/AuthContext";
+import { api } from "../../api/api";
 
 const Login: React.FC = () => {
     const [username, setUsername] = useState("");

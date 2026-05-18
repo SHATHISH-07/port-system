@@ -4,20 +4,20 @@ import CssBaseline from "@mui/material/CssBaseline";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import { ThemeContextProvider } from "./theme/ThemeContext";
-import Layout from "./components/Layout";
+import Layout from "./layout/Layout";
 import { AuthProvider } from "./auth/AuthContext";
-import { ProtectedRoute, AdminRoute } from "./components/ProtectedRoute";
+import { ProtectedRoute, AdminRoute } from "./pages/auth/ProtectedRoute";
 
 const OperationalDashboard = lazy(() => import("./pages/Heatmap"));
 const StayTimeAnalysis = lazy(
   () => import("./pages/StayTimeAnalysis/StayTimeAnalysis"),
 );
-const TrainModel = lazy(() => import("./pages/TrainModel"));
-const DataIngestion = lazy(() => import("./pages/DataIngestion"));
-const Login = lazy(() => import("./pages/Login"));
-const Requests = lazy(() => import("./pages/Requests"));
-const UserManagement = lazy(() => import("./pages/UserManagement"));
-const SystemLogs = lazy(() => import("./pages/SystemLogs"));
+const TrainModel = lazy(() => import("./pages/ml/TrainModel"));
+const DataIngestion = lazy(() => import("./pages/ingestion/DataIngestion"));
+const Login = lazy(() => import("./pages/auth/Login"));
+const Requests = lazy(() => import("./pages/user/Requests"));
+const UserManagement = lazy(() => import("./pages/user/UserManagement"));
+const SystemLogs = lazy(() => import("./pages/user/SystemLogs"));
 const CraneAnalytics = lazy(() => import("./pages/CraneAnalytics/CraneAnalytics"));
 
 function PageLoader() {

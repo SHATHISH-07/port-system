@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   Box, Typography, Button, LinearProgress,
   Alert, Snackbar, Chip, useTheme, Card, CardContent,
@@ -11,7 +11,7 @@ import {
   ErrorOutlined,
   HourglassEmptyOutlined,
 } from "@mui/icons-material";
-import { api } from "../api/api";
+import { api } from "../../api/api";
 
 type IngestType = "history" | "crane";
 
@@ -228,14 +228,14 @@ export default function DataIngestion() {
             </Box>
           </Box>
 
-          <Paper 
-            variant="outlined" 
-            sx={{ 
-              p: 4, 
-              borderRadius: 4, 
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 4,
+              borderRadius: 4,
               textAlign: "center",
               bgcolor: "background.paper",
-              border: "1px solid", 
+              border: "1px solid",
               borderColor: "divider",
               boxShadow: "0 6px 24px rgba(0,0,0,0.03)"
             }}
@@ -260,11 +260,11 @@ export default function DataIngestion() {
                   : "transparent",
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                 "&:hover": !isLoading
-                  ? { 
-                      bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0, 0, 0, 0.01)", 
-                      borderColor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
-                      transform: "scale(1.005)"
-                    }
+                  ? {
+                    bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0, 0, 0, 0.01)",
+                    borderColor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
+                    transform: "scale(1.005)"
+                  }
                   : {},
               }}
             >
@@ -324,8 +324,8 @@ export default function DataIngestion() {
                       label={h}
                       size="small"
                       variant="outlined"
-                      sx={{ 
-                        fontSize: "11px", 
+                      sx={{
+                        fontSize: "11px",
                         height: "24px",
                         borderRadius: 1.5,
                         bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.015)",
@@ -346,11 +346,11 @@ export default function DataIngestion() {
                 startIcon={
                   uploading ? <CircularProgress size={16} color="inherit" /> : undefined
                 }
-                sx={{ 
-                  px: 4, 
+                sx={{
+                  px: 4,
                   py: 1.25,
-                  borderRadius: 2.5, 
-                  alignSelf: "flex-end", 
+                  borderRadius: 2.5,
+                  alignSelf: "flex-end",
                   whiteSpace: "nowrap",
                   fontWeight: 600,
                   textTransform: "none",
@@ -372,10 +372,10 @@ export default function DataIngestion() {
           {/* ── Status result card ── */}
           {statusData && (
             <Card
-              sx={{ 
-                mt: 4, 
-                borderRadius: 4, 
-                border: "1px solid", 
+              sx={{
+                mt: 4,
+                borderRadius: 4,
+                border: "1px solid",
                 borderColor: "divider",
                 boxShadow: "0 6px 24px rgba(0,0,0,0.03)",
                 bgcolor: "background.paper"
