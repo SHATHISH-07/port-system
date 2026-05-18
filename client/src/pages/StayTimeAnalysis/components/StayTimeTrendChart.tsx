@@ -1,0 +1,544 @@
+import { Card, Box, Typography, useTheme, alpha, Grid } from '@mui/material';
+import {
+    ResponsiveContainer,
+    ComposedChart,
+    Line,
+    Area,
+    BarChart,
+    Bar,
+    Cell,
+    CartesianGrid,
+    XAxis,
+    YAxis,
+    Tooltip,
+    ReferenceLine,
+    Legend,
+} from 'recharts';
+
+function parseDate(value: string) {
+    const normalized = value?.includes(' ') ? value.replace(' ', 'T') : value;
+    const d = new Date(normalized);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function TrendChartTooltip({ active, payload, label }: any) {
+    if (!active || !payload?.length) return null;
+
+    return (
+        <Box
+            sx={{
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 1.5,
+                boxShadow: '0 12px 30px rgba(0,0,0,0.12)',
+                minWidth: 160,
+            }}
+        >
+            <Typography
+                variant="caption"
+                sx={{ color: 'text.secondary', display: 'block', mb: 0.75, fontWeight: 700 }}
+            >
+                Visit: {label}
+            </Typography>
+            {payload.map((item: any) => (
+                <Box
+                    key={item.dataKey}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25 }}
+                >
+                    <Box
+                        sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: item.color || 'text.primary',
+                            flexShrink: 0,
+                        }}
+                    />
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                        {item.name}:{' '}
+                        <Box component="span" sx={{ color: item.color || 'text.primary', fontWeight: 700 }}>
+                            {Number(item.value).toFixed(1)}
+                        </Box>
+                    </Typography>
+                </Box>
+            ))}
+        </Box>
+    );
+}
+
+function PortChartTooltip({ active, payload, label }: any) {
+    if (!active || !payload?.length) return null;
+
+    return (
+        <Box
+            sx={{
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 1.5,
+                boxShadow: '0 12px 30px rgba(0,0,0,0.12)',
+                minWidth: 160,
+            }}
+        >
+            <Typography
+                variant="caption"
+                sx={{
+                    color: 'text.secondary',
+                    display: 'block',
+                    mb: 0.5,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                }}
+            >
+                {label}
+            </Typography>
+            {payload.map((item: any) => (
+                <Typography key={item.dataKey} variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                    {item.value.toLocaleString()} units discharged
+                </Typography>
+            ))}
+        </Box>
+    );
+}
+
+// Port bar colors – a stepped blue-to-indigo palette for visual hierarchy
+const PORT_COLORS = [
+    '#2563EB',
+    '#3B82F6',
+    '#60A5FA',
+    '#93C5FD',
+    '#BFDBFE',
+    '#1D4ED8',
+    '#1E40AF',
+    '#172554',
+];
+
+export default function StayTimeTrendChart({
+    visits,
+    avgHours,
+}: {
+    visits: Record<string, any>;
+    avgHours: number;
+}) {
+    const theme = useTheme();
+
+    // ─── Trend chart data ────────────────────────────────────────────────────
+    const trendData = Object.entries(visits || {})
+        .map(([visitId, v]: any) => {
+            const startDate = parseDate(v.start_time);
+            return {
+                visitId,
+                startTs: startDate ? startDate.getTime() : 0,
+                stayHours: Number(v.stay_hours || 0),
+                loaded: Number(v.loaded_containers ?? v.loaded ?? 0),
+                discharged: Number(v.discharged_containers ?? v.discharged ?? 0),
+            };
+        })
+        .sort((a, b) => a.startTs - b.startTs);
+
+    // ─── Port breakdown data ─────────────────────────────────────────────────
+    const totals: Record<string, number> = {};
+    Object.values(visits || {}).forEach((v: any) => {
+        const ports = v.port_of_discharge_top5 || {};
+        Object.entries(ports).forEach(([key, count]) => {
+            totals[key] = (totals[key] || 0) + Number(count || 0);
+        });
+    });
+
+    const portData = Object.entries(totals)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 8);
+
+    // ─── Shared empty-state component ────────────────────────────────────────
+    const EmptyState = ({ message }: { message: string }) => (
+        <Box
+            sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1,
+                color: 'text.disabled',
+            }}
+        >
+            <Box
+                sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%',
+                    border: '2px dashed',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 18,
+                    mb: 0.5,
+                }}
+            >
+                —
+            </Box>
+            <Typography variant="body2" sx={{ color: 'text.disabled', textAlign: 'center' }}>
+                {message}
+            </Typography>
+        </Box>
+    );
+
+    return (
+        <Card
+            elevation={0}
+            sx={{
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                backdropFilter: 'blur(10px)',
+                border: '1px solid',
+                borderColor: alpha(theme.palette.divider, 0.8),
+                overflow: 'hidden',
+            }}
+        >
+            <Grid container>
+                {/* ── Left: Historical Performance Trend ──────────────────── */}
+                <Grid
+                    size={{ xs: 12, md: 8 }}
+                    sx={{
+                        borderRight: {
+                            md: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+                        },
+                        borderBottom: {
+                            xs: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+                            md: 'none',
+                        },
+                    }}
+                >
+                    {/* Header */}
+                    <Box
+                        sx={{
+                            px: 3,
+                            py: 2.5,
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: 2,
+                        }}
+                    >
+                        <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.3 }}>
+                                Historical Performance Trend
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mt: 0.25 }}>
+                                Port stay duration with load & discharge movements over time
+                            </Typography>
+                        </Box>
+
+                        {/* Baseline indicator – lives outside the chart so it never overlaps data */}
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.75,
+                                flexShrink: 0,
+                                bgcolor: alpha(theme.palette.warning.main, 0.1),
+                                border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`,
+                                borderRadius: 2,
+                                px: 1.25,
+                                py: 0.5,
+                            }}
+                        >
+                            <Box
+                                sx={{
+                                    width: 20,
+                                    height: 2,
+                                    borderTop: `2px dashed ${theme.palette.warning.main}`,
+                                }}
+                            />
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: theme.palette.warning.dark ?? theme.palette.warning.main,
+                                    fontWeight: 800,
+                                    fontSize: 10,
+                                    letterSpacing: '0.05em',
+                                }}
+                            >
+                                BASELINE · {avgHours.toFixed(1)}h
+                            </Typography>
+                        </Box>
+                    </Box>
+
+                    {/* Chart area – ResponsiveContainer MUST have an explicit pixel height, not 100% */}
+                    <Box sx={{ pt: 3, pb: 1, px: 2 }}>
+                        {trendData.length === 0 ? (
+                            <Box sx={{ height: 380, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <EmptyState message="No visit history available for this vessel." />
+                            </Box>
+                        ) : (
+                            <ResponsiveContainer width="100%" height={400}>
+                                <ComposedChart
+                                    data={trendData}
+                                    margin={{ top: 8, right: 24, left: 8, bottom: 32 }}
+                                >
+                                    <defs>
+                                        <linearGradient id="stayFill" x1="0" y1="0" x2="0" y2="1">
+                                            <stop
+                                                offset="5%"
+                                                stopColor={theme.palette.primary.main}
+                                                stopOpacity={0.18}
+                                            />
+                                            <stop
+                                                offset="95%"
+                                                stopColor={theme.palette.primary.main}
+                                                stopOpacity={0.01}
+                                            />
+                                        </linearGradient>
+                                    </defs>
+
+                                    <CartesianGrid
+                                        strokeDasharray="4 4"
+                                        vertical={false}
+                                        stroke={alpha(theme.palette.divider, 0.6)}
+                                    />
+
+                                    <XAxis
+                                        dataKey="visitId"
+                                        tickLine={false}
+                                        axisLine={{ stroke: alpha(theme.palette.divider, 0.4) }}
+                                        tick={{
+                                            fill: theme.palette.text.secondary,
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                        }}
+                                        dy={8}
+                                        label={{
+                                            value: 'Visit ID',
+                                            position: 'insideBottom',
+                                            offset: -18,
+                                            fill: theme.palette.text.secondary,
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                        }}
+                                    />
+
+                                    {/* Left Y-axis: Stay Hours */}
+                                    <YAxis
+                                        yAxisId="left"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tick={{
+                                            fill: theme.palette.text.secondary,
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                        }}
+                                        width={56}
+                                        label={{
+                                            value: 'Stay Time (hrs)',
+                                            angle: -90,
+                                            position: 'insideLeft',
+                                            offset: 12,
+                                            fill: theme.palette.text.secondary,
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            style: { textAnchor: 'middle' },
+                                        }}
+                                    />
+
+                                    {/* Right Y-axis: Move Count */}
+                                    <YAxis
+                                        yAxisId="right"
+                                        orientation="right"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tick={{
+                                            fill: theme.palette.text.secondary,
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                        }}
+                                        width={52}
+                                        label={{
+                                            value: 'Container (count)',
+                                            angle: 90,
+                                            position: 'insideRight',
+                                            offset: 12,
+                                            fill: theme.palette.text.secondary,
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            style: { textAnchor: 'middle' },
+                                        }}
+                                    />
+
+                                    <Tooltip
+                                        content={<TrendChartTooltip />}
+                                        cursor={{
+                                            stroke: alpha(theme.palette.primary.main, 0.4),
+                                            strokeWidth: 1.5,
+                                            strokeDasharray: '4 4',
+                                        }}
+                                    />
+
+                                    <Legend
+                                        verticalAlign="top"
+                                        align="right"
+                                        iconType="circle"
+                                        iconSize={8}
+                                        wrapperStyle={{
+                                            paddingBottom: 12,
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            paddingRight: 8,
+                                        }}
+                                    />
+
+                                    <ReferenceLine
+                                        yAxisId="left"
+                                        y={avgHours}
+                                        stroke={theme.palette.warning.main}
+                                        strokeDasharray="6 4"
+                                        strokeWidth={1.5}
+                                    />
+
+                                    <Area
+                                        yAxisId="left"
+                                        type="monotone"
+                                        dataKey="stayHours"
+                                        name="Stay (hrs)"
+                                        stroke={theme.palette.primary.main}
+                                        fill="url(#stayFill)"
+                                        strokeWidth={2.5}
+                                        dot={false}
+                                        activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }}
+                                        animationDuration={1200}
+                                    />
+
+                                    <Line
+                                        yAxisId="right"
+                                        type="monotone"
+                                        dataKey="loaded"
+                                        name="Loaded Containers"
+                                        stroke="#10B981"
+                                        strokeWidth={2}
+                                        dot={{ r: 3.5, fill: '#10B981', strokeWidth: 2, stroke: '#fff' }}
+                                        activeDot={{ r: 5, strokeWidth: 0 }}
+                                        animationDuration={1600}
+                                    />
+
+                                    <Line
+                                        yAxisId="right"
+                                        type="monotone"
+                                        dataKey="discharged"
+                                        name="Discharged Containers"
+                                        stroke="#3B82F6"
+                                        strokeWidth={2}
+                                        dot={{ r: 3.5, fill: '#3B82F6', strokeWidth: 2, stroke: '#fff' }}
+                                        activeDot={{ r: 5, strokeWidth: 0 }}
+                                        animationDuration={2000}
+                                    />
+                                </ComposedChart>
+                            </ResponsiveContainer>
+                        )}
+                    </Box>
+                </Grid>
+
+                {/* ── Right: Port Destination Breakdown ───────────────────── */}
+                <Grid
+                    size={{ xs: 12, md: 4 }}
+                >
+                    {/* Header */}
+                    <Box
+                        sx={{
+                            px: 3,
+                            py: 2.5,
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                        }}
+                    >
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.3 }}>
+                            Port Destination Breakdown
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mt: 0.25 }}>
+                            Discharged cargo volume by destination port
+                        </Typography>
+                    </Box>
+
+                    {/* Chart area */}
+                    <Box sx={{ pt: 3, pb: 2, pr: 2, pl: 1 }}>
+                        {portData.length === 0 ? (
+                            <Box sx={{ height: 380, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <EmptyState message="No port breakdown available." />
+                            </Box>
+                        ) : (
+                            <ResponsiveContainer width="100%" height={400}>
+                                <BarChart
+                                    data={portData}
+                                    layout="vertical"
+                                    margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+                                    barCategoryGap="28%"
+                                >
+                                    <CartesianGrid
+                                        strokeDasharray="4 4"
+                                        horizontal={false}
+                                        stroke={alpha(theme.palette.divider, 0.5)}
+                                    />
+
+                                    <XAxis
+                                        type="number"
+                                        tickLine={false}
+                                        axisLine={{ stroke: alpha(theme.palette.divider, 0.4) }}
+                                        tick={{
+                                            fill: theme.palette.text.secondary,
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                        }}
+                                        tickFormatter={(v) =>
+                                            v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)
+                                        }
+                                    />
+
+                                    <YAxis
+                                        type="category"
+                                        dataKey="name"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        // Let recharts calculate the width needed; set a sensible min
+                                        width={72}
+                                        tick={{
+                                            fill: theme.palette.text.primary,
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                        }}
+                                    />
+
+                                    <Tooltip
+                                        content={<PortChartTooltip />}
+                                        cursor={{
+                                            fill: alpha(theme.palette.text.primary, 0.04),
+                                        }}
+                                    />
+
+                                    <Bar
+                                        dataKey="value"
+                                        name="Discharged Units"
+                                        radius={[0, 5, 5, 0]}
+                                        barSize={18}
+                                        isAnimationActive
+                                        animationDuration={1200}
+                                    >
+                                        {portData.map((_entry, index) => (
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={PORT_COLORS[index % PORT_COLORS.length]}
+                                            />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
+                    </Box>
+                </Grid>
+            </Grid>
+        </Card>
+    );
+}

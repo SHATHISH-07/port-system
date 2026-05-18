@@ -1,0 +1,78 @@
+src/components/Sidebar.tsx(199,86): error TS2339: Property 'userOnly' does not exist on type '{ path: string; label: string; icon: OverridableComponent<SvgIconTypeMap<{}, "svg">> & { muiName: string; }; }'.
+src/pages/CraneAnalytics.tsx(209,24): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: string; variant: "body2"; fontWeight: number; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: string; variant: "body2"; fontWeight: number; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/CraneAnalytics.tsx(212,24): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: number; variant: "body2"; fontWeight: number; fontFamily: string; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: number; variant: "body2"; fontWeight: number; fontFamily: string; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/CurrentVesselAnalysis.tsx(209,31): error TS2322: Type 'import("D:/port-system/client/src/types/vessel").BerthAnalysisEntry[]' is not assignable to type 'import("D:/port-system/client/src/components/vessel-analysis/BerthImpactTable").BerthAnalysisEntry[]'.
+  Type 'BerthAnalysisEntry' is missing the following properties from type 'BerthAnalysisEntry': rank, terminal, total_moves, load_moves, and 8 more.
+src/pages/DataIngestion.tsx(13,3): error TS6133: 'CheckCircleOutlined' is declared but its value is never read.
+src/pages/DataIngestion.tsx(14,3): error TS6133: 'ErrorOutlined' is declared but its value is never read.
+src/pages/DataIngestion.tsx(101,10): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: string; variant: "h4"; fontWeight: number; color: "text.primary"; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: string; variant: "h4"; fontWeight: number; color: "text.primary"; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/DataIngestion.tsx(137,22): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: string; variant: "subtitle1"; fontWeight: number; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: string; variant: "subtitle1"; fontWeight: number; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/DataIngestion.tsx(165,20): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: string; variant: "h6"; fontWeight: number; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: string; variant: "h6"; fontWeight: number; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/DataIngestion.tsx(170,20): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: string[]; variant: "h6"; fontWeight: number; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: string[]; variant: "h6"; fontWeight: number; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/DataIngestion.tsx(178,18): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: string; variant: "caption"; fontWeight: number; color: "text.secondary"; display: string; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: string; variant: "caption"; fontWeight: number; color: "text.secondary"; display: string; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/DataIngestion.tsx(204,22): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: string; variant: "h6"; fontWeight: number; color: "success.main" | "warning.main"; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: string; variant: "h6"; fontWeight: number; color: "success.main" | "warning.main"; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/DataIngestion.tsx(210,22): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: number; variant: "h6"; fontWeight: number; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: number; variant: "h6"; fontWeight: number; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/DataIngestion.tsx(214,22): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: number; variant: "h6"; fontWeight: number; color: "error.main"; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: number; variant: "h6"; fontWeight: number; color: "error.main"; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/DataIngestion.tsx(221,22): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & TypographyOwnProps & CommonProps & Omit<any, "style" | ... 9 more ... | "variantMapping">): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: string; variant: "subtitle2"; color: "error"; fontWeight: number; mb: number; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<TypographyTypeMap<{}, "span">>): Element | null', gave the following error.
+    Type '{ children: string; variant: "subtitle2"; color: "error"; fontWeight: number; mb: number; }' is not assignable to type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+      Property 'fontWeight' does not exist on type 'IntrinsicAttributes & TypographyOwnProps & CommonProps & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "style" | ... 9 more ... | "variantMapping">'.
+src/pages/HistoryVesselAnalysis.tsx(180,33): error TS2322: Type 'import("D:/port-system/client/src/types/vessel").BerthAnalysisEntry[]' is not assignable to type 'import("D:/port-system/client/src/components/vessel-analysis/BerthImpactTable").BerthAnalysisEntry[]'.
+  Type 'BerthAnalysisEntry' is missing the following properties from type 'BerthAnalysisEntry': rank, terminal, total_moves, load_moves, and 8 more.
+src/pages/TerminalMap.tsx(1327,103): error TS2339: Property 'includes' does not exist on type 'never'.
+src/pages/TerminalMap.tsx(1442,61): error TS2339: Property 'vessel' does not exist on type '{ layout: Record<string, { x: number; y: number; }>; blocks?: Record<string, { count: number; concentration: string; intensity: number; hazardous?: number | undefined; reefer?: number | undefined; oog?: number | undefined; }> | undefined; recommended_berth?: string | undefined; }'.
+src/pages/TerminalMap.tsx(1506,51): error TS2345: Argument of type '{ x: number; z: number; }' is not assignable to parameter of type 'Vector3Like'.
+  Property 'y' is missing in type '{ x: number; z: number; }' but required in type 'Vector3Like'.
+src/pages/TerminalMap.tsx(1510,26): error TS2339: Property 'clone' does not exist on type '{ x: number; z: number; }'.

@@ -1,5 +1,11 @@
 __pycache__
 .env
-data/
 
 test-data/master_test_dataset.csv
+
+scratch/
+
+system_verification_log.txt
+verification_log.txt
+
+response_logs/

@@ -1,48 +1,50 @@
+import logging
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from db.connection import get_engine
-from sqlalchemy import text
-from auth.utils import verify_password, create_access_token
+from pydantic import BaseModel
+
 from auth.dependencies import get_current_user
+from auth.utils import authenticate_user, create_access_token, log_audit
+from config import settings
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+logger = logging.getLogger("port_system")
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-@router.post("/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    engine = get_engine()
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT id, username, password_hash, role, is_active FROM users WHERE username = :username"),
-            {"username": form_data.username}
-        ).fetchone()
 
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /auth/login
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/login", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = authenticate_user(form_data.username, form_data.password)
     
-    user = dict(result._mapping)
-    if not user["is_active"]:
-        raise HTTPException(status_code=400, detail="Inactive user")
-
-    if not verify_password(form_data.password, user["password_hash"]):
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
+        
+    access_token_expires = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["username"], "role": user["role"], "id": user["id"]}
+        data={"sub": user["username"]}, expires_delta=access_token_expires
     )
+    
+    log_audit("Login", f"User {user['username']} logged in", user["id"])
     return {"access_token": access_token, "token_type": "bearer"}
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /auth/me
+# ─────────────────────────────────────────────────────────────────────────────
 @router.get("/me")
-def read_users_me(current_user: dict = Depends(get_current_user)):
-    return {
-        "id": current_user["id"],
-        "username": current_user["username"],
-        "role": current_user["role"]
-    }
+async def read_users_me(current_user: dict = Depends(get_current_user)):
+    return current_user
+

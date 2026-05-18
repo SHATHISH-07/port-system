@@ -2,7 +2,7 @@ import datetime
 import logging
 from sqlalchemy import text
 from db.connection import get_engine
-from db.schema import init_training_metadata_schema
+from db.queries import init_training_metadata_schema
 from config import settings
 
 logger = logging.getLogger("port_system")
