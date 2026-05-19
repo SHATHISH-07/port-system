@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import logging
 import time
+import os
+import json
+from datetime import datetime
 from contextlib import asynccontextmanager
+from starlette.concurrency import iterate_in_threadpool
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -127,6 +131,68 @@ app.add_middleware(
 )
 
 
+_LOG_DIR = os.path.join(os.path.dirname(__file__), "response_logs")
+
+async def write_global_response_log(request: Request, response_body: bytes, status_code: int):
+    try:
+        path_str = request.url.path.strip("/")
+        if not path_str:
+            return
+        
+        # Translate e.g. "stowage/history/analysis" -> "stowage_history_analysis"
+        endpoint_name = path_str.replace("/", "_").replace("-", "_")
+        
+        # Skip docs, redoc, openapi, and favicon
+        if endpoint_name.startswith(("docs", "redoc", "openapi", "favicon", "static")):
+            return
+            
+        target_dir = os.path.join(_LOG_DIR, endpoint_name)
+        os.makedirs(target_dir, exist_ok=True)
+        
+        # Get query params
+        query_input = dict(request.query_params)
+        
+        # Get body if application/json
+        body_input = {}
+        content_type = request.headers.get("content-type", "").lower()
+        if "application/json" in content_type:
+            try:
+                body_bytes = await request.body()
+                if body_bytes:
+                    body_input = json.loads(body_bytes.decode("utf-8"))
+            except Exception:
+                pass
+                
+        input_data = {**query_input, **body_input}
+        
+        try:
+            response_data = json.loads(response_body.decode("utf-8"))
+        except Exception:
+            response_data = {"raw_response": response_body.decode("utf-8", errors="ignore")}
+            
+        # Stowage visualization specific filename override:
+        if endpoint_name == "stowage_visualization":
+            visit_id = input_data.get("visitId") or input_data.get("visit_id")
+            filename = "stowage_visualization_historical.json" if visit_id else "stowage_visualization_current.json"
+        else:
+            filename = f"{endpoint_name}.json"
+            
+        log_entry = {
+            "endpoint": endpoint_name,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "input": input_data,
+            "status_code": status_code,
+            "response": response_data,
+        }
+        
+        log_path = os.path.join(target_dir, filename)
+        with open(log_path, "w", encoding="utf-8") as f:
+            json.dump(log_entry, f, indent=2, default=str)
+            
+    except Exception as e:
+        logger.warning("Global response logging failed for %s: %s", request.url.path, e)
+
+
 # ── Request logging middleware ────────────────────────────────────────────────
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -138,6 +204,18 @@ async def log_requests(request: Request, call_next):
             "%s %s -> %s  (%.3fs)",
             request.method, request.url.path, response.status_code, elapsed,
         )
+        
+        if response.status_code == 200:
+            # Capture response body
+            response_body = b""
+            async for chunk in response.body_iterator:
+                response_body += chunk
+            # Recreate iterator so the client can consume it
+            response.body_iterator = iterate_in_threadpool(iter([response_body]))
+            
+            # Log response in separate subfolder
+            await write_global_response_log(request, response_body, response.status_code)
+
         return response
     except Exception as exc:
         elapsed = time.time() - start

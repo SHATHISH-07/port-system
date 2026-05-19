@@ -8,6 +8,10 @@ class CurrentPlanningRequest(BaseModel):
     containerIds: List[str] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# History Analysis Schemas
+# ---------------------------------------------------------------------------
+
 class HistorySummary(BaseModel):
     totalContainers: int
     heavyCount: int
@@ -15,10 +19,22 @@ class HistorySummary(BaseModel):
     mediumCount: int
 
 
-class EquipmentClassDistribution(BaseModel):
-    equipmentClass: str
+class FreightKindDistribution(BaseModel):
+    freightKind: str
     count: int
     percentage: float
+
+
+class ContainerSizeDistribution(BaseModel):
+    containerSize: str
+    count: int
+    percentage: float
+
+
+class SpecialCargoSummary(BaseModel):
+    reeferCount: int
+    hazardousCount: int
+    oogCount: int
 
 
 class DischargePortGrouping(BaseModel):
@@ -38,6 +54,13 @@ class WeightDistribution(BaseModel):
     belowDeck: List[WeightBandDistribution]
 
 
+# NEW – REQ 6.2: equipment class distribution
+class EquipmentClassDistribution(BaseModel):
+    equipmentClass: str
+    count: int
+    percentage: float
+
+
 class HistoricalVisit(BaseModel):
     visitId: str
     containerCount: int
@@ -46,11 +69,19 @@ class HistoricalVisit(BaseModel):
 
 class HistoryAnalysisResponse(BaseModel):
     summary: HistorySummary
-    equipmentClassDistribution: List[EquipmentClassDistribution]
+    freightKindDistribution: List[FreightKindDistribution]
+    containerSizeDistribution: List[ContainerSizeDistribution]
+    specialCargoSummary: SpecialCargoSummary
     dischargePortGrouping: List[DischargePortGrouping]
     weightDistribution: WeightDistribution
+    # NEW – REQ 6.2: breakdown of container / equipment classes seen in history
+    equipmentClassDistribution: List[EquipmentClassDistribution]
     historicalVisits: List[HistoricalVisit]
 
+
+# ---------------------------------------------------------------------------
+# Current Planning Schemas
+# ---------------------------------------------------------------------------
 
 class PlanningSummary(BaseModel):
     totalRequested: int
@@ -74,6 +105,18 @@ class Recommendation(BaseModel):
     recommendedReason: str
 
 
+class CurrentPlanningResponse(BaseModel):
+    vesselId: str
+    outboundService: str
+    visitId: Optional[str] = None
+    summary: PlanningSummary
+    recommendations: List[Recommendation]
+
+
+# ---------------------------------------------------------------------------
+# Visualization Schemas
+# ---------------------------------------------------------------------------
+
 class MapPosition(BaseModel):
     unitId: str
     currentYardBlock: Optional[str] = None
@@ -85,6 +128,12 @@ class MapPosition(BaseModel):
     reshuffleRisk: str
     outboundService: Optional[str] = None
     actualOutboundCarrierVisitId: Optional[str] = None
+    # Layout metadata
+    parsedBay: Optional[str] = None
+    parsedRow: Optional[str] = None
+    parsedTier: Optional[str] = None
+    parsedBlock: Optional[str] = None
+    parsedDeck: Optional[str] = None
 
 
 class MapGroup(BaseModel):
@@ -98,10 +147,15 @@ class UnifiedMap(BaseModel):
     groups: List[MapGroup]
 
 
-class CurrentPlanningResponse(BaseModel):
+class VisualizationSummary(BaseModel):
+    totalContainers: int
+    resolvedCount: int
+
+
+class StowageVisualizationResponse(BaseModel):
+    mode: str  # "CURRENT" or "HISTORICAL"
     vesselId: str
-    outboundService: str
+    yardId: Optional[str] = None
     visitId: Optional[str] = None
-    summary: PlanningSummary
-    recommendations: List[Recommendation]
     map: UnifiedMap
+    summary: VisualizationSummary

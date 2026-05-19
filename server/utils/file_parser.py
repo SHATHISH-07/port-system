@@ -65,11 +65,18 @@ def extract_container_ids_from_file(file_bytes: bytes, filename: str) -> list[st
         elif ext in ("xls", "xlsx"):
             df = pd.read_excel(BytesIO(file_bytes))
             container_ids = _extract_from_dataframe(df)
+            
+        elif ext == "txt":
+            container_ids = extract_container_ids_from_text(file_bytes.decode("utf-8"))
         else:
             logger.warning("Unsupported file format for container parsing: %s", ext)
+            raise ValueError(f"Unsupported file format: {ext}")
 
     except Exception as e:
         logger.error("Error parsing uploaded file %s: %s", filename, e)
+        if isinstance(e, ValueError):
+            raise
+        raise ValueError(f"Failed to parse file: {str(e)}")
 
     return list(dict.fromkeys([x for x in container_ids if x]))
 

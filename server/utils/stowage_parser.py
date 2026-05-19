@@ -1,67 +1,80 @@
-import re
-from typing import Any, Dict, Optional
+from typing import Any, Iterable, Optional
+from fastapi import Request
 
+from utils.file_parser import (
+    extract_container_ids_from_file,
+    extract_container_ids_from_text,
+)
 
-def parse_vessel_slot(slot_str: str) -> Optional[Dict[str, Any]]:
-    """
-    Parses a vessel slot string, e.g. V-MAE180253-942119
-    Returns the parsed components with a configurable decoded block if it matches standards.
-    """
-    if not slot_str:
+def clean_text(value: Any) -> Optional[str]:
+    if value is None:
         return None
-
-    parts = slot_str.split("-")
-    if len(parts) >= 3 and parts[0].upper() == "V":
-        visit_id = parts[1]
-        raw_slot = parts[2]
-        clean_slot = raw_slot.strip()
-
-        parsed = {
-            "type": "VESSEL",
-            "visitId": visit_id,
-            "slot": clean_slot,
-            "rawSlot": raw_slot,
-            "parsedSlot": clean_slot,
-            "decoded": {}
-        }
-
-        if len(clean_slot) == 6 and clean_slot.isdigit():
-            parsed["decoded"] = {
-                "bay": clean_slot[0:2],
-                "row": clean_slot[2:4],
-                "tier": clean_slot[4:6]
-            }
-
-        return parsed
-
-    return None
-
-
-def parse_yard_slot(slot_str: str) -> Optional[Dict[str, Any]]:
-    """
-    Parses a yard position string, e.g. Y-PEB-D45873C3
-    """
-    if not slot_str:
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "none", "null"}:
         return None
+    return text
 
-    parts = slot_str.split("-")
-    if len(parts) >= 3 and parts[0].upper() == "Y":
-        yard_area = parts[1]
-        raw_slot = parts[2]
+def merge_unique(existing: list[str], new_items: Iterable[str]) -> list[str]:
+    seen = set(existing)
+    merged = list(existing)
+    for item in new_items:
+        item = clean_text(item)
+        if item and item not in seen:
+            seen.add(item)
+            merged.append(item)
+    return merged
 
-        match = re.match(r"^([A-Za-z]+)(\d+.*)$", raw_slot)
-        block = match.group(1).upper() if match else raw_slot[0:1].upper()
+def coerce_container_ids(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        out: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                out = merge_unique(out, extract_container_ids_from_text(item))
+            else:
+                out = merge_unique(out, [str(item).strip()])
+        return out
+    if isinstance(value, str):
+        return extract_container_ids_from_text(value)
+    return [str(value).strip()] if str(value).strip() else []
 
-        return {
-            "type": "YARD",
-            "terminal": yard_area,
-            "yardArea": yard_area,
-            "block": block,
-            "slot": raw_slot,
-            "rawSlot": raw_slot
-        }
+async def parse_upload_request(request: Request) -> dict:
+    """Helper to parse application/json or multipart/form-data for endpoints taking container files."""
+    content_type = request.headers.get("content-type", "").lower()
+    vessel_id = None
+    yard_id = None
+    visit_id = None
+    container_ids: list[str] = []
+    filename = None
 
-    return None
+    if "application/json" in content_type:
+        body = await request.json()
+        vessel_id = clean_text(body.get("vesselId"))
+        yard_id = clean_text(body.get("yardId"))
+        visit_id = clean_text(body.get("visitId"))
+        container_ids = coerce_container_ids(body.get("containerIds"))
+    else:
+        form = await request.form()
+        vessel_id = clean_text(form.get("vesselId"))
+        yard_id = clean_text(form.get("yardId"))
+        visit_id = clean_text(form.get("visitId"))
 
+        if "containerIds" in form:
+            container_ids = coerce_container_ids(form.get("containerIds"))
 
-__all__ = ["parse_vessel_slot", "parse_yard_slot"]
+        upload = form.get("file")
+        if upload is not None and getattr(upload, "filename", None):
+            filename = upload.filename
+            content = await upload.read()
+            # ValueError handled by the route wrapper
+            file_ids = extract_container_ids_from_file(content, upload.filename)
+            container_ids = merge_unique(container_ids, file_ids)
+
+    return {
+        "vessel_id": vessel_id,
+        "yard_id": yard_id,
+        "visit_id": visit_id,
+        "container_ids": container_ids,
+        "filename": filename,
+    }
