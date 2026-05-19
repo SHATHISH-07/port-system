@@ -17,7 +17,7 @@ export default function StayTimeForm({
   onLoadedChange: (val: string) => void;
   discharged: string;
   onDischargedChange: (val: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.SubmitEvent<HTMLFormElement>) => void;
   loading: boolean;
 }) {
   const theme = useTheme();

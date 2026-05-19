@@ -19,6 +19,7 @@ const Requests = lazy(() => import("./pages/user/Requests"));
 const UserManagement = lazy(() => import("./pages/user/UserManagement"));
 const SystemLogs = lazy(() => import("./pages/user/SystemLogs"));
 const CraneAnalytics = lazy(() => import("./pages/CraneAnalytics/CraneAnalytics"));
+const StowagePlanning = lazy(() => import("./pages/StowagePlanning/StowagePlanning"));
 
 function PageLoader() {
   return (
@@ -84,6 +85,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <CraneAnalytics />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/stowage-planning"
+                  element={
+                    <ProtectedRoute>
+                      <StowagePlanning />
                     </ProtectedRoute>
                   }
                 />

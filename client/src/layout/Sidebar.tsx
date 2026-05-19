@@ -20,6 +20,7 @@ import {
   LightModeOutlined,
   PrecisionManufacturingOutlined,
   SettingsOutlined,
+  GridViewRounded,
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -48,6 +49,11 @@ const USER_ITEMS: {
       path: "/crane-analytics",
       label: "Crane Analytics",
       icon: PrecisionManufacturingOutlined,
+    },
+    {
+      path: "/stowage-planning",
+      label: "Stowage Planning",
+      icon: GridViewRounded,
     },
     { path: "/requests", label: "Requests", icon: AssignmentOutlined },
   ];

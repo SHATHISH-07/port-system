@@ -4,6 +4,7 @@ from db.queries import load_from_db
 from utils.current_container_lookup import lookup_containers_by_ids
 from utils.position_decoder import parse_vessel_slot
 from utils.stowage_rules import generate_recommendation, classify_weight_band, classify_deck_position
+from utils.position_parser import block_label
 
 
 def _normalize_column_name(name: str) -> str:
@@ -220,13 +221,7 @@ def get_historical_stowage_analysis(
 
     if equip_col is not None:
         eq_series = unique_df[equip_col].fillna("UNKNOWN").astype(str).str.strip()
-        # When both columns exist, combine them as "CLASS | type" for richer labelling
-        if "equipment_class" in unique_df.columns and "equipment_type" in unique_df.columns:
-            eq_series = (
-                unique_df["equipment_class"].fillna("UNKNOWN").astype(str).str.strip()
-                + " | "
-                + unique_df["equipment_type"].fillna("UNKNOWN").astype(str).str.strip()
-            )
+
         counts = eq_series.value_counts()
         for eq_class, count in counts.head(20).items():
             equip_class_dist.append({
@@ -343,10 +338,17 @@ def process_current_planning(
             "",
         )
 
-        current_yard_block = _safe_str(row.get("current_yard_block"), "UNKNOWN")
         current_slot_position = _safe_str(
             row.get("current_slot_position"), position_text or "UNKNOWN"
         )
+        
+        current_yard_block = _safe_str(row.get("current_yard_block"), "")
+        if not current_yard_block and current_slot_position != "UNKNOWN":
+            from utils.position_parser import parse_position
+            parsed_pos = parse_position(current_slot_position)
+            current_yard_block = block_label(parsed_pos) or "UNKNOWN"
+        if not current_yard_block:
+            current_yard_block = "UNKNOWN"
 
         actual_visit = _safe_str(
             _first_existing_value(row, ["actual_outbound_carrier_visit_id"]), None

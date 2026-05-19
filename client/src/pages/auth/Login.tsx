@@ -16,7 +16,7 @@ const Login: React.FC = () => {
 
     const from = location.state?.from?.pathname || "/";
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError("");
         setLoading(true);

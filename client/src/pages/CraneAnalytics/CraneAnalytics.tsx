@@ -65,7 +65,7 @@ export default function CraneAnalytics() {
     []
   );
 
-  const handleAnalyze = (e?: React.FormEvent) => {
+  const handleAnalyze = (e?: React.SubmitEvent<HTMLFormElement>) => {
     if (e) e.preventDefault();
     fetchData(craneId, days);
   };

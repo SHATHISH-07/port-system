@@ -7,7 +7,7 @@ interface CraneFilterFormProps {
   availableCranes: string[];
   days: string;
   onDaysChange: (val: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.SubmitEvent<HTMLFormElement>) => void;
   onClear: () => void;
   loading: boolean;
 }

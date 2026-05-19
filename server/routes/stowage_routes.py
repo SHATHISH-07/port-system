@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Form, File, UploadFile
 
 from auth.dependencies import get_current_user
 from schemas.stowage import (
@@ -42,6 +42,10 @@ def history_analysis(
 @router.post("/current/planning", response_model=CurrentPlanningResponse)
 async def current_planning(
     request: Request,
+    vesselId: Optional[str] = Form(None, description="Outbound Service / Vessel ID"),
+    yardId: Optional[str] = Form(None, description="Optional Yard ID"),
+    containerIds: Optional[str] = Form(None, description="Comma/newline separated container IDs or JSON array"),
+    file: Optional[UploadFile] = File(None, description="Container list text/json file"),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -81,6 +85,11 @@ async def current_planning(
 @router.post("/visualization", response_model=StowageVisualizationResponse)
 async def stowage_visualization(
     request: Request,
+    vesselId: Optional[str] = Form(None, description="Outbound Service / Vessel ID"),
+    yardId: Optional[str] = Form(None, description="Optional Yard ID"),
+    visitId: Optional[str] = Form(None, description="Optional Visit ID (for historical view)"),
+    containerIds: Optional[str] = Form(None, description="Comma/newline separated container IDs or JSON array"),
+    file: Optional[UploadFile] = File(None, description="Container list text/json file"),
     current_user: dict = Depends(get_current_user),
 ):
     """

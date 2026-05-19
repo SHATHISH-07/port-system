@@ -127,7 +127,7 @@ export default function StayTimeAnalysis() {
   const [loaded, setLoaded] = useState('');
   const [discharged, setDischarged] = useState('');
 
-  const handleAnalyze = async (e?: React.FormEvent) => {
+  const handleAnalyze = async (e?: React.SubmitEvent<HTMLFormElement>) => {
     if (e) e.preventDefault();
 
     const trimmedVesselId = vesselId.trim();
