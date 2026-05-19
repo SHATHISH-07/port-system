@@ -173,11 +173,48 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId, onSelect
     historicalVisits = [],
   } = data;
 
-  const total = summary.totalContainers || 0;
-  const heavy = summary.heavyCount || 0;
-  const medium = summary.mediumCount || 0;
-  const light = summary.lightCount || 0;
-  const haz = specialCargoSummary.hazardousCount || 0;
+  const total =
+    summary.totalContainers ??
+    summary.total_containers ??
+    summary.total ??
+    0;
+
+  const heavy =
+    summary.heavyCount ??
+    summary.heavy_count ??
+    summary.heavy ??
+    0;
+
+  const medium =
+    summary.mediumCount ??
+    summary.medium_count ??
+    summary.medium ??
+    0;
+
+  const light =
+    summary.lightCount ??
+    summary.light_count ??
+    summary.light ??
+    0;
+
+  const haz =
+    specialCargoSummary.hazardousCount ??
+    specialCargoSummary.hazardous_count ??
+    0;
+
+  const aboveDeck =
+    summary.aboveDeckCount ??
+    summary.above_deck_count ??
+    summary.aboveDeck ??
+    summary.above_deck ??
+    0;
+
+  const belowDeck =
+    summary.belowDeckCount ??
+    summary.below_deck_count ??
+    summary.belowDeck ??
+    summary.below_deck ??
+    0;
 
   // Top Discharge Ports Data
   const portBarData = dischargePortGrouping.slice(0, 5).map((item: any) => ({
@@ -197,19 +234,50 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId, onSelect
     Count: item.count,
   }));
 
+  // Weight distribution by deck location
+  const weightDistribution = data.weightDistribution || { aboveDeck: [], belowDeck: [] };
+  const aboveLight = weightDistribution.aboveDeck?.find((x: any) => x.band === 'LIGHT')?.count || 0;
+  const aboveMedium = weightDistribution.aboveDeck?.find((x: any) => x.band === 'MEDIUM')?.count || 0;
+  const aboveHeavy = weightDistribution.aboveDeck?.find((x: any) => x.band === 'HEAVY')?.count || 0;
+
+  const belowLight = weightDistribution.belowDeck?.find((x: any) => x.band === 'LIGHT')?.count || 0;
+  const belowMedium = weightDistribution.belowDeck?.find((x: any) => x.band === 'MEDIUM')?.count || 0;
+  const belowHeavy = weightDistribution.belowDeck?.find((x: any) => x.band === 'HEAVY')?.count || 0;
+
+  const deckWeightData = [
+    { name: 'Above Deck', Light: aboveLight, Medium: aboveMedium, Heavy: aboveHeavy },
+    { name: 'Below Deck', Light: belowLight, Medium: belowMedium, Heavy: belowHeavy },
+  ];
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 1600, mx: 'auto', width: '100%', pb: 4 }}>
-      {/* 4 Metric Cards */}
+      {/* 6 Metric Cards */}
       <Grid container spacing={3}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
           <MetricCard
             title="Total Containers"
             value={total.toLocaleString()}
-            subtitle="Analyzed historical placements"
+            subtitle="Analyzed placements"
             accent="primary"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+          <MetricCard
+            title="Above Deck"
+            value={aboveDeck.toLocaleString()}
+            subtitle="Stowed above deck"
+            accent="primary"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+          <MetricCard
+            title="Below Deck"
+            value={belowDeck.toLocaleString()}
+            subtitle="Stowed below deck"
+            accent="success"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
           <MetricCard
             title="Heavy Ratio"
             value={`${total ? Math.round((heavy / total) * 100) : 0}%`}
@@ -217,41 +285,41 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId, onSelect
             accent="error"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
           <MetricCard
             title="Light & Medium"
             value={(light + medium).toLocaleString()}
-            subtitle="Favorable stability ballast"
+            subtitle="Stability ballast"
             accent="success"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
           <MetricCard
             title="Hazardous Units"
             value={haz.toLocaleString()}
-            subtitle="Requires strict safety separation"
+            subtitle="Safety separation required"
             accent="warning"
           />
         </Grid>
       </Grid>
 
-      {/* Port Distributions & Equipment Dimensions */}
+      {/* Port Distributions, Equipment Dimensions & Deck Weight Distribution */}
       <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 7 }}>
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 4, border: '1px solid', borderColor: 'divider' }}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Paper elevation={0} sx={{ p: 3, borderRadius: 4, border: '1px solid', borderColor: 'divider', height: 320, display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5 }}>
               Top Discharge Destinations
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
               Distribution of inbound containers grouped by destination port
             </Typography>
-            <Box sx={{ height: 220 }}>
+            <Box sx={{ flex: 1, minHeight: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart layout="vertical" data={portBarData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.palette.divider} />
                   <XAxis type="number" stroke={theme.palette.text.secondary} fontSize={11} tickLine={false} />
                   <YAxis dataKey="name" type="category" stroke={theme.palette.text.secondary} fontSize={11} tickLine={false} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, borderColor: theme.palette.divider, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                     itemStyle={{ color: theme.palette.text.primary, fontWeight: 700 }}
                   />
@@ -262,15 +330,15 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId, onSelect
           </Paper>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 5 }}>
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 4, border: '1px solid', borderColor: 'divider' }}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Paper elevation={0} sx={{ p: 3, borderRadius: 4, border: '1px solid', borderColor: 'divider', height: 320, display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5 }}>
               Equipment Dimensions
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
               Stowage balance by container dimensions (20ft vs. 40ft)
             </Typography>
-            <Box sx={{ height: 220 }}>
+            <Box sx={{ flex: 1, minHeight: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -284,12 +352,39 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId, onSelect
                     <Cell fill="#0284c7" />
                     <Cell fill="#38bdf8" />
                   </Pie>
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, borderColor: theme.palette.divider, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                     itemStyle={{ color: theme.palette.text.primary, fontWeight: 700 }}
                   />
                   <Legend layout="vertical" align="right" verticalAlign="middle" />
                 </PieChart>
+              </ResponsiveContainer>
+            </Box>
+          </Paper>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Paper elevation={0} sx={{ p: 3, borderRadius: 4, border: '1px solid', borderColor: 'divider', height: 320, display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5 }}>
+              Deck Weight Distribution
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+              Container stability weights by deck location (Above vs Below)
+            </Typography>
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={deckWeightData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.palette.divider} />
+                  <XAxis dataKey="name" stroke={theme.palette.text.secondary} fontSize={11} tickLine={false} />
+                  <YAxis stroke={theme.palette.text.secondary} fontSize={11} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, borderColor: theme.palette.divider, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} />
+                  <Bar dataKey="Light" stackId="a" fill={theme.palette.success.main} radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="Medium" stackId="a" fill={theme.palette.warning.main} radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="Heavy" stackId="a" fill={theme.palette.error.main} radius={[4, 4, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </Box>
           </Paper>
@@ -312,8 +407,8 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId, onSelect
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.palette.divider} />
                   <XAxis type="number" stroke={theme.palette.text.secondary} fontSize={11} tickLine={false} />
                   <YAxis dataKey="name" type="category" stroke={theme.palette.text.secondary} fontSize={11} tickLine={false} width={120} />
-                  <Tooltip 
-                    cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }} 
+                  <Tooltip
+                    cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }}
                     contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, borderColor: theme.palette.divider, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                     itemStyle={{ color: theme.palette.text.primary, fontWeight: 700 }}
                   />
@@ -402,14 +497,9 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId, onSelect
                   }}
                 >
                   <TableCell component="th" scope="row" align="center" sx={{ width: '33.3%', fontWeight: 800 }}>
-                    <Button
-                      onClick={() => onSelectVisit(visit.visitId, vesselId, yardId)}
-                      variant="text"
-                      color="primary"
-                      sx={{ fontWeight: 800, textTransform: 'none', p: 0, minWidth: 0 }}
-                    >
+                    <span style={{ fontWeight: 800, color: theme.palette.text.primary }}>
                       {visit.visitId}
-                    </Button>
+                    </span>
                   </TableCell>
                   <TableCell align="center" sx={{ width: '33.3%', fontWeight: 700 }}>
                     {visit.containerCount.toLocaleString()}

@@ -17,6 +17,8 @@ class HistorySummary(BaseModel):
     heavyCount: int
     lightCount: int
     mediumCount: int
+    aboveDeckCount: int = 0
+    belowDeckCount: int = 0
 
 
 class FreightKindDistribution(BaseModel):
@@ -111,6 +113,7 @@ class CurrentPlanningResponse(BaseModel):
     visitId: Optional[str] = None
     summary: PlanningSummary
     recommendations: List[Recommendation]
+    dischargePortGrouping: List[DischargePortGrouping] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

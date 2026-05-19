@@ -175,16 +175,8 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
 
         rec_tier = _derive_recommended_tier(weight_band, rec["loadingPriority"])
 
-        group_key = (
-            current_yard_block
-            if current_yard_block and current_yard_block != "UNKNOWN"
-            else (outbound_svc or actual_visit or "GENERAL")
-        )
-        group_type = (
-            "yardBlock"
-            if current_yard_block and current_yard_block != "UNKNOWN"
-            else ("visitId" if actual_visit else "service")
-        )
+        group_key = port if port else "UNKNOWN"
+        group_type = "dischargePort"
 
         if group_key not in map_groups:
             map_groups[group_key] = {"groupId": group_key, "groupType": group_type, "positions": []}

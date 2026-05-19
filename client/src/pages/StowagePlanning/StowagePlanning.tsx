@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Box, Alert, useTheme, alpha } from '@mui/material';
 import HistoryAnalysisTab from './components/HistoryAnalysisTab';
 import CurrentPlanningTab from './components/CurrentPlanningTab';
-import VisualizationTab from './components/VisualizationTab';
 import StowageHeader from './components/StowageHeader';
 
 // Simple skeletons/placeholders for subcomponents (will be enriched in subsequent tasks)
@@ -10,7 +9,7 @@ import StowageHeader from './components/StowageHeader';
 export default function StowagePlanning() {
   const theme = useTheme();
 
-  // Tabs State: 0 = Analysis, 1 = Planning/Optimizer, 2 = Visualization
+  // Tabs State: 0 = Analysis, 1 = Planning/Optimizer
   const [activeTab, setActiveTab] = useState(0);
 
   // Global Parameters
@@ -27,16 +26,10 @@ export default function StowagePlanning() {
 
   // Triggers to execute subcomponent queries from the parent form search submission
   const [planningTrigger, setPlanningTrigger] = useState(0);
-  const [visTrigger, setVisTrigger] = useState(0);
 
   // Loading & Error States
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Shared Data States
-  const [visitIdToVisualize, setVisitIdToVisualize] = useState<string | null>(null);
-  const [optimizedContainerIds, setOptimizedContainerIds] = useState<string[]>([]);
-  const [visMode, setVisMode] = useState<'HISTORICAL' | 'CURRENT'>('HISTORICAL');
 
   const handleTabChange = (_e: React.SyntheticEvent, newValue: number) => {
     if (newValue !== null) {
@@ -58,13 +51,8 @@ export default function StowagePlanning() {
     setSearchVisitId(visitId.trim());
 
     // Trigger child tab fetch actions
-    if (activeTab === 0) {
-      setVisitIdToVisualize(visitId.trim() || null);
-      setVisMode('HISTORICAL');
-    } else if (activeTab === 1) {
+    if (activeTab === 1) {
       setPlanningTrigger((prev) => prev + 1);
-    } else if (activeTab === 2) {
-      setVisTrigger((prev) => prev + 1);
     }
 
     // Release loading state after search completes
@@ -73,24 +61,7 @@ export default function StowagePlanning() {
     }, 600);
   };
 
-  // Callback to visualize a specific historical visit and load header parameters automatically
-  const handleSelectVisitForVisualization = (vid: string, vId: string, yId: string) => {
-    setVesselId(vId);
-    setYardId(yId || '');
-    setVisitId(vid);
-    setSearchVesselId(vId);
-    setSearchYardId(yId || '');
-    setVisitIdToVisualize(vid);
-    setVisMode('HISTORICAL');
-    setActiveTab(2); // Switch to deck visualization tab
-  };
-
-  // Callback to visualize an optimized current planning container set
-  const handleSelectPlanningForVisualization = (cids: string[]) => {
-    setOptimizedContainerIds(cids);
-    setVisMode('CURRENT');
-    setActiveTab(2); // Auto switch to Visualization Tab
-  };
+  // Callbacks are no longer needed as Visual Bay Deck is removed
 
   return (
     <Box
@@ -158,7 +129,7 @@ export default function StowagePlanning() {
             vesselId={searchVesselId}
             yardId={searchYardId}
             visitId={searchVisitId}
-            onSelectVisit={handleSelectVisitForVisualization}
+            onSelectVisit={() => {}}
           />
         </Box>
 
@@ -169,20 +140,6 @@ export default function StowagePlanning() {
             globalFile={globalFile}
             globalContainerText={globalContainerText}
             trigger={planningTrigger}
-            onPlanOptimized={handleSelectPlanningForVisualization}
-          />
-        </Box>
-
-        <Box sx={{ display: activeTab === 2 ? 'block' : 'none', width: '100%', flex: 1 }}>
-          <VisualizationTab
-            vesselId={searchVesselId}
-            yardId={searchYardId}
-            visitId={visitIdToVisualize}
-            containerIds={optimizedContainerIds}
-            globalFile={globalFile}
-            globalContainerText={globalContainerText}
-            trigger={visTrigger}
-            mode={visMode}
           />
         </Box>
       </Box>

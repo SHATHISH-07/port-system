@@ -129,7 +129,6 @@ export default function CurrentPlanningTab({
   globalFile,
   globalContainerText,
   trigger,
-  onPlanOptimized,
 }: any) {
   const theme = useTheme();
 
@@ -199,7 +198,7 @@ export default function CurrentPlanningTab({
       if (typeof aVal === 'string' && typeof bVal === 'string') {
         return order === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       }
-      
+
       // numbers
       if (aVal < bVal) return order === 'asc' ? -1 : 1;
       if (aVal > bVal) return order === 'asc' ? 1 : -1;
@@ -230,9 +229,9 @@ export default function CurrentPlanningTab({
   });
 
   const deckPieData = [
-    { name: 'Top Deck', value: deckCounts.TOP_DECK, color: theme.palette.info.main },
+    { name: 'Top Deck', value: deckCounts.TOP_DECK, color: theme.palette.error.main },
     { name: 'Middle Deck', value: deckCounts.MIDDLE_DECK, color: theme.palette.warning.main },
-    { name: 'Below Deck', value: deckCounts.BELOW_DECK, color: theme.palette.primary.main },
+    { name: 'Below Deck', value: deckCounts.BELOW_DECK, color: theme.palette.success.main },
   ];
 
   const riskPieData = [
@@ -246,6 +245,22 @@ export default function CurrentPlanningTab({
     { name: 'Medium', Count: weightCounts.MEDIUM, color: theme.palette.warning.main },
     { name: 'Light', Count: weightCounts.LIGHT, color: theme.palette.success.main },
   ];
+
+  // Port of Discharge chart data
+  const portPieData = (optimizedData?.dischargePortGrouping || []).slice(0, 5).map((item: any, idx: number) => {
+    const colors = [
+      theme.palette.primary.main,
+      theme.palette.secondary.main,
+      theme.palette.success.main,
+      theme.palette.warning.main,
+      theme.palette.error.main,
+    ];
+    return {
+      name: item.port || 'UNKNOWN',
+      value: item.count,
+      color: colors[idx % colors.length],
+    };
+  });
 
   const executeOptimization = async () => {
     if (!vesselId) {
@@ -339,27 +354,11 @@ export default function CurrentPlanningTab({
                 Load sequence steps optimized to minimize yard reshuffles.
               </Typography>
             </Box>
-
-            <Button
-              variant="contained"
-              color="success"
-              onClick={() => onPlanOptimized(optimizedData.recommendations?.map((s: any) => s.unitId) || [])}
-              startIcon={<VisibilityIcon />}
-              sx={{
-                borderRadius: 2,
-                px: 3,
-                fontWeight: 700,
-                textTransform: 'none',
-                boxShadow: `0 4px 14px ${alpha(theme.palette.success.main, 0.25)}`,
-              }}
-            >
-              Visualize Plan Deck
-            </Button>
           </Box>
 
           {/* Analysis Charts */}
           <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: '1px solid', borderColor: 'divider', height: 260 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Deck Distribution</Typography>
                 <ResponsiveContainer width="100%" height="90%">
@@ -374,7 +373,7 @@ export default function CurrentPlanningTab({
               </Paper>
             </Grid>
 
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: '1px solid', borderColor: 'divider', height: 260 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Reshuffle Risk Profile</Typography>
                 <ResponsiveContainer width="100%" height="90%">
@@ -389,7 +388,7 @@ export default function CurrentPlanningTab({
               </Paper>
             </Grid>
 
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: '1px solid', borderColor: 'divider', height: 260 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Weight Categories</Typography>
                 <ResponsiveContainer width="100%" height="90%">
@@ -402,6 +401,21 @@ export default function CurrentPlanningTab({
                       {weightBarData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                     </Bar>
                   </BarChart>
+                </ResponsiveContainer>
+              </Paper>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: '1px solid', borderColor: 'divider', height: 260 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Discharge Ports</Typography>
+                <ResponsiveContainer width="100%" height="90%">
+                  <PieChart>
+                    <Pie data={portPieData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" stroke="none">
+                      {portPieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend verticalAlign="bottom" height={36} />
+                  </PieChart>
                 </ResponsiveContainer>
               </Paper>
             </Grid>

@@ -221,6 +221,13 @@ def get_historical_stowage_analysis(
 
     if equip_col is not None:
         eq_series = unique_df[equip_col].fillna("UNKNOWN").astype(str).str.strip()
+        # When both columns exist, combine them as "CLASS | type" for richer labelling
+        if "equipment_class" in unique_df.columns and "equipment_type" in unique_df.columns:
+            eq_series = (
+                unique_df["equipment_class"].fillna("UNKNOWN").astype(str).str.strip()
+                + " | "
+                + unique_df["equipment_type"].fillna("UNKNOWN").astype(str).str.strip()
+            )
 
         counts = eq_series.value_counts()
         for eq_class, count in counts.head(20).items():
@@ -250,12 +257,20 @@ def get_historical_stowage_analysis(
             })
         visits.sort(key=lambda x: x["moveCompleteTime"] or "", reverse=True)
 
+    above_deck_count = 0
+    below_deck_count = 0
+    if "historical_deck" in unique_df.columns:
+        above_deck_count = int((unique_df["historical_deck"] == "ABOVE_DECK").sum())
+        below_deck_count = int((unique_df["historical_deck"] == "BELOW_DECK").sum())
+
     return {
         "summary": {
             "totalContainers": total_containers,
             "heavyCount": heavy_count,
             "lightCount": light_count,
             "mediumCount": medium_count,
+            "aboveDeckCount": above_deck_count,
+            "belowDeckCount": below_deck_count,
         },
         "freightKindDistribution": freight_dist,
         "containerSizeDistribution": size_dist,
@@ -376,6 +391,23 @@ def process_current_planning(
 
         recommendations.append(rec)
 
+    # Calculate Port of Discharge grouping for the current planning recommendations
+    port_counts = {}
+    total_recs = len(recommendations)
+    for rec in recommendations:
+        port = rec.get("portOfDischarge") or "UNKNOWN"
+        port_counts[port] = port_counts.get(port, 0) + 1
+
+    discharge_port_grouping = []
+    # Sort ports by count descending
+    sorted_ports = sorted(port_counts.items(), key=lambda x: x[1], reverse=True)
+    for port, count in sorted_ports:
+        discharge_port_grouping.append({
+            "port": port,
+            "count": count,
+            "percentage": round((count / max(total_recs, 1)) * 100, 1)
+        })
+
     return {
         "vesselId": vessel_id,
         "outboundService": outbound_service or vessel_id,
@@ -386,12 +418,13 @@ def process_current_planning(
             "unresolvedCount": unresolved_count,
         },
         "recommendations": recommendations,
+        "dischargePortGrouping": discharge_port_grouping,
     }
 
 
 def _empty_history_response() -> dict:
     return {
-        "summary": {"totalContainers": 0, "heavyCount": 0, "lightCount": 0, "mediumCount": 0},
+        "summary": {"totalContainers": 0, "heavyCount": 0, "lightCount": 0, "mediumCount": 0, "aboveDeckCount": 0, "belowDeckCount": 0},
         "freightKindDistribution": [],
         "containerSizeDistribution": [],
         "specialCargoSummary": {
@@ -418,4 +451,5 @@ def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
             "unresolvedCount": total_requested,
         },
         "recommendations": [],
+        "dischargePortGrouping": [],
     }
