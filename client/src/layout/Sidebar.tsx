@@ -25,8 +25,8 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useColorMode } from "../theme/ThemeContext";
 
-const OPEN = 230;
-const CLOSED = 64;
+const OPEN = 250;
+const CLOSED = 54;
 
 const USER_ITEMS: {
   path: string;
