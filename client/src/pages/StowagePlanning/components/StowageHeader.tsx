@@ -164,7 +164,7 @@ export default function StowageHeader({
           )}
 
           {/* Upload Button */}
-          {activeTab === 1 && (
+          {activeTab >= 1 && (
             <Box
               sx={{
                 display: 'flex',
@@ -234,7 +234,7 @@ export default function StowageHeader({
           )}
 
           {/* Paste Container IDs */}
-          {activeTab === 1 && (
+          {activeTab >= 1 && (
             <TextField
               placeholder="Or paste Container IDs..."
               size="small"
@@ -271,7 +271,7 @@ export default function StowageHeader({
               whiteSpace: 'nowrap',
             }}
           >
-            {activeTab === 0 ? 'Sync Stowage' : 'Run Optimizer'}
+            {activeTab === 0 ? 'Sync Stowage' : (activeTab === 1 ? 'Run Optimizer' : 'Visualize Deck')}
           </Button>
         </Box>
 
@@ -332,6 +332,10 @@ export default function StowageHeader({
             <ToggleButton value={1}>
               <ConstructionIcon sx={{ fontSize: 16 }} />
               Planning & Ingestion
+            </ToggleButton>
+            <ToggleButton value={2}>
+              <GridOnIcon sx={{ fontSize: 16 }} />
+              Visualization
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>

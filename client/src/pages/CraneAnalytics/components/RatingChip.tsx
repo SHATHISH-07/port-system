@@ -41,7 +41,6 @@ export function RatingChip({ rating }: { rating: string }) {
           fontWeight: 800,
           color: style.color,
           letterSpacing: "0.12em",
-          fontFamily: "'DM Mono', monospace",
         }}
       >
         {style.label}
@@ -90,7 +89,6 @@ export function TerminalBadge({ id }: { id: string }) {
           fontWeight: 800,
           color: badgeColor,
           letterSpacing: "0.08em",
-          fontFamily: "'DM Mono', monospace",
         }}
       >
         {id.toUpperCase()}

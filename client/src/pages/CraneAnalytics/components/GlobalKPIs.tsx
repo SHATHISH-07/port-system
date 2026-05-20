@@ -38,10 +38,10 @@ export default function GlobalKPIs({ data }: GlobalKPIsProps) {
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <MetricCard
-            title="Anomaly Rate"
-            value={`${((data.summary?.anomaly_rate ?? 0) * 100).toFixed(1)}%`}
-            subtitle="Flagged for review"
-            accent="error"
+            title="Vessels Served"
+            value={data.summary?.unique_visits_served ?? 0}
+            subtitle="Unique carrier visits"
+            accent="primary"
           />
         </Grid>
       </Grid>

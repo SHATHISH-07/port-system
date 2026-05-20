@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 
 
@@ -43,6 +43,7 @@ class DischargePortGrouping(BaseModel):
     port: str
     count: int
     percentage: float
+    containerIds: List[str] = Field(default_factory=list)
 
 
 class WeightBandDistribution(BaseModel):
@@ -69,6 +70,31 @@ class HistoricalVisit(BaseModel):
     moveCompleteTime: Optional[str] = None
 
 
+# --- Crane Metrics (for history/analysis response) ---
+
+class BlockReshuffleCount(BaseModel):
+    block: str
+    count: int
+    percentage: float   # of total restow moves
+
+
+class CraneMetrics(BaseModel):
+    totalMoves: int
+    loadMoves: int
+    dischargeMoves: int
+    restowMoves: int
+    reshuffleRate: float          # restowMoves / (load + discharge) * 100
+    dualCycleCount: int
+    dualCycleRate: float          # dualCycleCount / productive * 100
+    avgMoveGapMinutes: float      # median gap between consecutive moves per crane
+    reshuffleByBlock: List[BlockReshuffleCount]
+
+
+class DischargeSequenceEntry(BaseModel):
+    port: str
+    dischargeOrder: int
+
+
 class HistoryAnalysisResponse(BaseModel):
     summary: HistorySummary
     freightKindDistribution: List[FreightKindDistribution]
@@ -79,6 +105,8 @@ class HistoryAnalysisResponse(BaseModel):
     # NEW – REQ 6.2: breakdown of container / equipment classes seen in history
     equipmentClassDistribution: List[EquipmentClassDistribution]
     historicalVisits: List[HistoricalVisit]
+    dischargeSequence: List[DischargeSequenceEntry] = Field(default_factory=list)
+    craneMetrics: Optional[CraneMetrics] = None   # None when crane data unavailable
 
 
 # ---------------------------------------------------------------------------
@@ -105,15 +133,56 @@ class Recommendation(BaseModel):
     loadingPriority: int
     reshuffleRisk: str
     recommendedReason: str
+    dischargeOrder: Optional[int] = None
 
+
+class DischargePortCount(BaseModel):
+    port: str
+    count: int
+
+class YardGroupSummary(BaseModel):
+    block: str
+    terminal: str
+    berthProximity: str
+    containerCount: int
+    inYardCount: int
+    loadedCount: int
+    heavyCount: int
+    mediumCount: int
+    lightCount: int
+    avgWeightKg: float
+    dominantDischargePort: str
+    dischargePortGroups: List[DischargePortCount]
+    reshuffleRisk: str
+    containerIds: List[str]
+
+class DischargePortStrategy(BaseModel):
+    port: str
+    dischargeOrder: int
+    containerCount: int
+    heavyCount: int
+    mediumCount: int
+    lightCount: int
+    inYardCount: int
+    loadedCount: int
+    currentBlocks: List[str]
+    recommendedBlocks: List[str]
+    concentrationScore: float
+    containerIds: List[str]
 
 class CurrentPlanningResponse(BaseModel):
     vesselId: str
     outboundService: str
     visitId: Optional[str] = None
+    terminal: str
     summary: PlanningSummary
     recommendations: List[Recommendation]
     dischargePortGrouping: List[DischargePortGrouping] = Field(default_factory=list)
+    yardBlockSummary: List[YardGroupSummary]
+    dischargePortStrategy: List[DischargePortStrategy]
+    reshuffleStats: dict
+    dischargeSequence: List[DischargeSequenceEntry] = Field(default_factory=list)
+    strategyInsights: List[str]
 
 
 # ---------------------------------------------------------------------------
@@ -122,16 +191,37 @@ class CurrentPlanningResponse(BaseModel):
 
 class MapPosition(BaseModel):
     unitId: str
-    currentYardBlock: Optional[str] = None
-    currentSlotPosition: Optional[str] = None
+    status: str                             # "LOADED" | "IN_YARD"
     weightCategory: str
+    weightKg: Optional[float] = None
+    freightKind: Optional[str] = None
+    equipmentClass: Optional[str] = None
+    containerLength: Optional[str] = None
     loadingPriority: int
-    recommendedDeck: str
-    recommendedTier: Optional[str] = None
     reshuffleRisk: str
     outboundService: Optional[str] = None
     actualOutboundCarrierVisitId: Optional[str] = None
-    # Layout metadata
+    portOfDischarge: Optional[str] = None
+
+    # Yard coordinates (where it is/was in the yard)
+    yardBlock: Optional[str] = None
+    yardRow: Optional[int] = None
+    yardCol: Optional[str] = None
+    yardTier: Optional[int] = None
+    yardSlotRaw: Optional[str] = None
+
+    # Vessel coordinates (populated only when status == "LOADED")
+    vesselBay: Optional[int] = None
+    vesselRow: Optional[int] = None
+    vesselTier: Optional[int] = None
+    vesselDeck: Optional[str] = None        # "ABOVE_DECK" | "BELOW_DECK"
+    vesselVisitId: Optional[str] = None
+
+    # Keep legacy fields so existing clients don't break
+    currentYardBlock: Optional[str] = None
+    currentSlotPosition: Optional[str] = None
+    recommendedDeck: Optional[str] = None
+    recommendedTier: Optional[str] = None
     parsedBay: Optional[str] = None
     parsedRow: Optional[str] = None
     parsedTier: Optional[str] = None
@@ -155,10 +245,37 @@ class VisualizationSummary(BaseModel):
     resolvedCount: int
 
 
+
+
+
+class YardBlockSummary(BaseModel):
+    blockId: str                    # e.g. "1A", "F"
+    zone: Optional[str] = None      # CWIT zone digit e.g. "1", None for PEB
+    blockLetter: Optional[str] = None  # e.g. "A"
+    terminal: str
+    berthProximity: str
+    colLabels: List[str]            # sorted unique columns seen in this block
+    tierMax: int                    # max tier observed
+    containerCount: int
+    loadedToVessel: int
+    inYard: int
+    dominantPod: Optional[str] = None
+    podGroups: List[DischargePortCount]
+    weightProfile: dict             # {"HEAVY": N, "MEDIUM": N, "LIGHT": N}
+    avgReshuffleRisk: str
+
+
+class YardGrid(BaseModel):
+    blocks: List[YardBlockSummary]
+    loadedTotal: int
+    inYardTotal: int
+
+
 class StowageVisualizationResponse(BaseModel):
     mode: str  # "CURRENT" or "HISTORICAL"
     vesselId: str
     yardId: Optional[str] = None
     visitId: Optional[str] = None
-    map: UnifiedMap
+    map: UnifiedMap                         # keep existing for compatibility
+    yardGrid: Optional[YardGrid] = None     # NEW
     summary: VisualizationSummary

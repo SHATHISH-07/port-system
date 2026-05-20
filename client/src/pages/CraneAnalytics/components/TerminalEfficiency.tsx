@@ -26,18 +26,22 @@ export default function TerminalEfficiency({ yardStats }: TerminalEfficiencyProp
         {yardStats.map((y) => (
           <Grid size={{ xs: 12, md: 6 }} key={y.terminal_name}>
             <Card
-              variant="outlined"
+              elevation={0}
               sx={{
-                p: 2,
-                borderRadius: 2,
-                bgcolor: "background.paper",
-                borderColor: alpha(theme.palette.divider, 0.9),
-                boxShadow: "0 4px 16px rgba(0,0,0,0.02)",
+                p: 2.5,
+                borderRadius: 3.5,
+                background: theme.palette.mode === 'light'
+                  ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.primary.main, 0.03)} 100%)`
+                  : `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.12)} 0%, ${alpha(theme.palette.primary.main, 0.02)} 100%)`,
+                backdropFilter: 'blur(10px)',
+                border: '1px solid',
+                borderColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.3 : 0.18),
+                boxShadow: theme.palette.mode === 'light' ? '0 4px 16px rgba(0,0,0,0.04)' : '0 6px 20px rgba(0,0,0,0.02)',
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                 "&:hover": {
-                  borderColor: alpha(theme.palette.divider, 0.18),
-                  transform: "translateY(-2px)",
-                  boxShadow: "0 6px 20px rgba(0,0,0,0.04)",
+                  transform: "translateY(-3px)",
+                  boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.1)}`,
+                  borderColor: alpha(theme.palette.primary.main, 0.35),
                 },
               }}
             >

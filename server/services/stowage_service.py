@@ -2,17 +2,29 @@ import pandas as pd
 from typing import Any, List, Optional
 from db.queries import load_from_db
 from utils.current_container_lookup import lookup_containers_by_ids
-from utils.position_decoder import parse_vessel_slot
-from utils.stowage_rules import generate_recommendation, classify_weight_band, classify_deck_position
+from utils.position_decoder import parse_vessel_slot, parse_yard_slot
+from utils.stowage_rules import generate_recommendation, classify_weight_band, classify_deck_position, predict_reshuffle_risk
 from utils.position_parser import block_label
 
+
+
+_CWIT_PROXIMITY = {
+    "1A": "CLOSE", "1C": "CLOSE",
+    "2B": "MID",   "2C": "MID",
+    "3D": "MID",
+    "4D": "FAR",   "5D": "FAR",
+}
+_PEB_PROXIMITY = {
+    "A": "CLOSE",
+    "C": "MID",   "D": "MID",
+    "F": "FAR",   "G": "FAR",  "H": "FAR",
+}
 
 def _normalize_column_name(name: str) -> str:
     import re
     name = str(name).strip().lower()
     name = re.sub(r"[^a-z0-9]+", "_", name)
     return re.sub(r"_+", "_", name).strip("_")
-
 
 def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
@@ -21,13 +33,11 @@ def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [_normalize_column_name(c) for c in df.columns]
     return df
 
-
 def _first_existing_value(row: pd.Series, candidates: List[str]) -> Any:
     for col in candidates:
         if col in row and pd.notna(row.get(col)) and str(row.get(col)).strip() != "":
             return row.get(col)
     return None
-
 
 def _safe_str(value: Any, default: str = "") -> str:
     if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -36,7 +46,6 @@ def _safe_str(value: Any, default: str = "") -> str:
     if text.lower() in {"nan", "none", "null"}:
         return default
     return text
-
 
 def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or "unit_id" not in df.columns:
@@ -52,7 +61,6 @@ def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
         df = df.sort_values(by=sort_cols, ascending=ascending, na_position="last")
     return df.drop_duplicates(subset=["unit_id"], keep="first").reset_index(drop=True)
 
-
 def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
     band = str(weight_band).strip().upper()
     if band == "HEAVY":
@@ -61,16 +69,7 @@ def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
         return "08" if loading_priority <= 7 else "10"
     return "04" if loading_priority <= 5 else "06"
 
-
 def _determine_historical_deck(position_text: str, weight_band: str) -> str:
-    """
-    Prefer the actual vessel slot tier from position data.
-    Falls back to weight-band heuristic only when no vessel position is parseable.
-
-    Vessel slot format: V-<visitId>-<BBRRTT>
-      Tier >= 80 => ABOVE_DECK (deck cargo / hatch cover)
-      Tier <  80 => BELOW_DECK (hold)
-    """
     if position_text:
         v_info = parse_vessel_slot(position_text)
         if v_info and v_info.get("decoded"):
@@ -78,6 +77,97 @@ def _determine_historical_deck(position_text: str, weight_band: str) -> str:
             if tier_str and str(tier_str).isdigit():
                 return "ABOVE_DECK" if int(tier_str) >= 80 else "BELOW_DECK"
     return classify_deck_position(weight_band)
+
+def _compute_crane_metrics(
+    vessel_id: str,
+    yard_id: Optional[str],
+) -> Optional[dict]:
+    history_df = load_from_db("history", vessel_id=vessel_id, yard_id=yard_id, full_load=True)
+    if history_df is None or history_df.empty:
+        return None
+
+    history_df = _normalize_dataframe_columns(history_df)
+    if "actual_outbound_carrier_visit_id" not in history_df.columns:
+        return None
+
+    visit_ids = list(history_df["actual_outbound_carrier_visit_id"].dropna().astype(str).unique())
+    if not visit_ids:
+        return None
+
+    crane_df = load_from_db("crane", vessel_id=visit_ids, yard_id=yard_id)
+    if crane_df is None or crane_df.empty:
+        return None
+
+    crane_df["time_completed"] = pd.to_datetime(crane_df["time_completed"], errors="coerce")
+
+    sort_col = "crane_che" if "crane_che" in crane_df.columns else "crane_id"
+    crane_df = crane_df.sort_values([sort_col, "carrier_visit", "time_completed"]).reset_index(drop=True)
+
+    total_moves = int(len(crane_df))
+    load_moves = int((crane_df["event_type"] == "UNIT_LOAD").sum())
+    discharge_moves = int((crane_df["event_type"] == "UNIT_DISCHARGE").sum())
+    restow_moves = int((crane_df["event_type"] == "UNIT_RESTOW").sum())
+    productive = load_moves + discharge_moves
+
+    reshuffle_rate = round(
+        (restow_moves / productive * 100) if productive > 0 else 0.0, 2
+    )
+
+    productive_df = crane_df[
+        crane_df["event_type"].isin(["UNIT_LOAD", "UNIT_DISCHARGE"])
+    ].copy()
+    productive_df["prev_event"] = productive_df.groupby(
+        [sort_col, "carrier_visit"]
+    )["event_type"].shift(1)
+
+    dual_mask = (
+        (productive_df["event_type"] == "UNIT_LOAD") &
+        (productive_df["prev_event"] == "UNIT_DISCHARGE")
+    ) | (
+        (productive_df["event_type"] == "UNIT_DISCHARGE") &
+        (productive_df["prev_event"] == "UNIT_LOAD")
+    )
+    dual_cycle_count = int(dual_mask.sum())
+    dual_cycle_rate = round(
+        (dual_cycle_count / productive * 100) if productive > 0 else 0.0, 2
+    )
+
+    crane_df["prev_time"] = crane_df.groupby(
+        [sort_col, "carrier_visit"]
+    )["time_completed"].shift(1)
+
+    crane_df["gap_mins"] = (
+        crane_df["time_completed"] - crane_df["prev_time"]
+    ).dt.total_seconds() / 60
+    avg_gap = round(float(crane_df["gap_mins"].dropna().median()), 2) if not crane_df["gap_mins"].dropna().empty else 0.0
+
+    restow_df = crane_df[crane_df["event_type"] == "UNIT_RESTOW"].copy()
+    restow_df["from_block"] = restow_df["from_position"].apply(
+        lambda p: parse_yard_slot(p).get("block") if parse_yard_slot(p) else None
+    )
+    block_counts = (
+        restow_df["from_block"].dropna().value_counts().head(10)
+    )
+    reshuffle_by_block = [
+        {
+            "block": blk,
+            "count": int(cnt),
+            "percentage": round(cnt / max(restow_moves, 1) * 100, 1),
+        }
+        for blk, cnt in block_counts.items()
+    ]
+
+    return {
+        "totalMoves": total_moves,
+        "loadMoves": load_moves,
+        "dischargeMoves": discharge_moves,
+        "restowMoves": restow_moves,
+        "reshuffleRate": reshuffle_rate,
+        "dualCycleCount": dual_cycle_count,
+        "dualCycleRate": dual_cycle_rate,
+        "avgMoveGapMinutes": avg_gap,
+        "reshuffleByBlock": reshuffle_by_block,
+    }
 
 
 def get_historical_stowage_analysis(
@@ -94,16 +184,56 @@ def get_historical_stowage_analysis(
     if "record_type" in df.columns:
         df = df[df["record_type"].astype(str).str.lower() == "history"].copy()
 
-    if visit_id and "actual_outbound_carrier_visit_id" in df.columns:
-        df = df[df["actual_outbound_carrier_visit_id"].astype(str) == str(visit_id)].copy()
-
     if "visit_state" in df.columns:
         df = df[df["visit_state"].notna()].copy()
 
     if df.empty:
         return _empty_history_response()
 
-    unique_df = _dedupe_latest_per_unit(df)
+    visits = []
+    if "actual_outbound_carrier_visit_id" in df.columns:
+        for vid, grp in df.groupby("actual_outbound_carrier_visit_id", dropna=True):
+            if pd.isna(vid):
+                continue
+            mct = None
+            if "move_complete_time" in grp.columns:
+                mct_val = pd.to_datetime(grp["move_complete_time"], errors="coerce").max()
+                if pd.notnull(mct_val):
+                    mct = mct_val.isoformat()
+            visits.append({
+                "visitId": str(vid),
+                "containerCount": (
+                    int(grp["unit_id"].nunique()) if "unit_id" in grp.columns else int(len(grp))
+                ),
+                "moveCompleteTime": mct,
+            })
+        visits.sort(key=lambda x: x["moveCompleteTime"] or "", reverse=True)
+
+    if visit_id and "actual_outbound_carrier_visit_id" in df.columns:
+        df = df[df["actual_outbound_carrier_visit_id"].astype(str) == str(visit_id)].copy()
+
+    if df.empty:
+        return _empty_history_response()
+
+    # When querying all history, dedupe by unit_id AND visit_id so containers that visited multiple times are counted for each visit.
+    if visit_id:
+        unique_df = _dedupe_latest_per_unit(df)
+    else:
+        if "actual_outbound_carrier_visit_id" in df.columns:
+            # Sort to keep latest event per visit for each unit
+            sort_cols = []
+            ascending = []
+            for col in ["move_complete_time", "updated_at", "created_at"]:
+                if col in df.columns:
+                    df[col] = pd.to_datetime(df[col], errors="coerce")
+                    sort_cols.append(col)
+                    ascending.append(False)
+            if sort_cols:
+                df = df.sort_values(by=sort_cols, ascending=ascending, na_position="last")
+            unique_df = df.drop_duplicates(subset=["unit_id", "actual_outbound_carrier_visit_id"], keep="first").reset_index(drop=True)
+        else:
+            unique_df = _dedupe_latest_per_unit(df)
+
     if unique_df.empty:
         return _empty_history_response()
 
@@ -128,7 +258,6 @@ def get_historical_stowage_analysis(
     light_count = int((unique_df["weight_band"] == "LIGHT").sum())
     medium_count = int((unique_df["weight_band"] == "MEDIUM").sum())
 
-    # --- Freight kind distribution ---
     freight_dist = []
     if "freight_kind" in unique_df.columns:
         counts = unique_df["freight_kind"].fillna("UNKNOWN").astype(str).value_counts()
@@ -139,7 +268,6 @@ def get_historical_stowage_analysis(
                 "percentage": round((count / max(total_containers, 1)) * 100, 1),
             })
 
-    # --- Container size distribution ---
     size_dist = []
     if "container_length" in unique_df.columns:
         counts = unique_df["container_length"].fillna("UNKNOWN").astype(str).value_counts()
@@ -150,7 +278,6 @@ def get_historical_stowage_analysis(
                 "percentage": round((count / max(total_containers, 1)) * 100, 1),
             })
 
-    # --- Special cargo ---
     reefer_c = 0
     haz_c = 0
     oog_c = 0
@@ -181,18 +308,37 @@ def get_historical_stowage_analysis(
         "oogCount": oog_c,
     }
 
-    # --- Discharge port grouping ---
     port_dist = []
     if "port_of_discharge" in unique_df.columns:
-        counts = unique_df["port_of_discharge"].fillna("unknownPort").astype(str).value_counts()
-        for port, count in counts.head(10).items():
+        # Create a normalized series for grouping to avoid duplicate unknownPort entries
+        safe_ports = unique_df["port_of_discharge"].astype(str).str.strip().str.lower()
+        safe_ports = safe_ports.replace(["none", "nan", "null", ""], "unknownPort")
+        safe_ports = unique_df["port_of_discharge"].where(safe_ports != "unknownPort", "unknownPort")
+        safe_ports = safe_ports.astype(str).str.strip().str.upper()
+        safe_ports = safe_ports.replace("UNKNOWNPORT", "unknownPort")
+
+        for port, group in unique_df.groupby(safe_ports):
+            count = len(group)
+            unit_ids = group["unit_id"].dropna().astype(str).tolist() if "unit_id" in group.columns else []
             port_dist.append({
-                "port": port,
+                "port": str(port),
                 "count": int(count),
                 "percentage": round((count / max(total_containers, 1)) * 100, 1),
+                "containerIds": unit_ids
             })
+        port_dist.sort(key=lambda x: x["count"], reverse=True)
+        port_dist = port_dist[:10]
+        
+    discharge_sequence = []
+    if "port_of_discharge" in unique_df.columns:
+        pod_counts_series = unique_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
+        for rank, (port_str, cnt) in enumerate(pod_counts_series.items(), start=1):
+            if port_str and port_str not in ("NAN", "NONE", ""):
+                discharge_sequence.append({
+                    "port": port_str,
+                    "dischargeOrder": rank
+                })
 
-    # --- Weight distribution above / below deck ---
     above_deck = []
     below_deck = []
     for deck_name, target_list in [("ABOVE_DECK", above_deck), ("BELOW_DECK", below_deck)]:
@@ -207,11 +353,6 @@ def get_historical_stowage_analysis(
                     "percentage": round((c / deck_total) * 100, 1),
                 })
 
-    # --- Equipment class distribution (REQ 6.2) ---
-    # Combines the normalised equipment_class column (e.g. CONTAINER, REEFER) with
-    # the human-readable equipment_type column (e.g. "20ft General", "40ft Hi-Cube General").
-    # equipment_class is preferred; equipment_type is the fallback so that the
-    # distribution is always populated even when one column is absent.
     equip_class_dist = []
     equip_col = None
     for candidate in ["equipment_class", "equipment_type"]:
@@ -221,7 +362,6 @@ def get_historical_stowage_analysis(
 
     if equip_col is not None:
         eq_series = unique_df[equip_col].fillna("UNKNOWN").astype(str).str.strip()
-        # When both columns exist, combine them as "CLASS | type" for richer labelling
         if "equipment_class" in unique_df.columns and "equipment_type" in unique_df.columns:
             eq_series = (
                 unique_df["equipment_class"].fillna("UNKNOWN").astype(str).str.strip()
@@ -237,31 +377,15 @@ def get_historical_stowage_analysis(
                 "percentage": round((count / max(total_containers, 1)) * 100, 1),
             })
 
-    # --- Historical visits ---
-    visits = []
-    if "actual_outbound_carrier_visit_id" in unique_df.columns:
-        for vid, grp in unique_df.groupby("actual_outbound_carrier_visit_id", dropna=True):
-            if pd.isna(vid):
-                continue
-            mct = None
-            if "move_complete_time" in grp.columns:
-                mct_val = pd.to_datetime(grp["move_complete_time"], errors="coerce").max()
-                if pd.notnull(mct_val):
-                    mct = mct_val.isoformat()
-            visits.append({
-                "visitId": str(vid),
-                "containerCount": (
-                    int(grp["unit_id"].nunique()) if "unit_id" in grp.columns else int(len(grp))
-                ),
-                "moveCompleteTime": mct,
-            })
-        visits.sort(key=lambda x: x["moveCompleteTime"] or "", reverse=True)
+
 
     above_deck_count = 0
     below_deck_count = 0
     if "historical_deck" in unique_df.columns:
         above_deck_count = int((unique_df["historical_deck"] == "ABOVE_DECK").sum())
         below_deck_count = int((unique_df["historical_deck"] == "BELOW_DECK").sum())
+
+    crane_metrics = _compute_crane_metrics(vessel_id, yard_id)
 
     return {
         "summary": {
@@ -280,16 +404,50 @@ def get_historical_stowage_analysis(
             "aboveDeck": above_deck,
             "belowDeck": below_deck,
         },
-        # NEW: equipment class distribution added for REQ 6.2
         "equipmentClassDistribution": equip_class_dist,
         "historicalVisits": visits,
+        "dischargeSequence": discharge_sequence,
+        "craneMetrics": crane_metrics,
     }
 
+def _generate_current_planning_insights(block_strategies, pod_groups, baseline_reshuffle, pod_conc, proj_reduction) -> list[str]:
+    insights = []
+    close_blocks = [b["block"] for b in block_strategies if b["berthProximity"] == "CLOSE"]
+    heavy_in_close = sum(b["heavyCount"] for b in block_strategies if b["berthProximity"] == "CLOSE")
+    if close_blocks:
+        insights.append(
+            f"{heavy_in_close} HEAVY containers are in berth-close blocks "
+            f"({', '.join(close_blocks)}) — confirm these are prioritized for first crane pick."
+        )
 
-def process_current_planning(
+    if baseline_reshuffle > 0:
+        insights.append(
+            f"Baseline reshuffle rate is {baseline_reshuffle:.1f}%. "
+            f"POD grouping at current concentration ({pod_conc*100:.1f}%) "
+            f"projects a {proj_reduction:.1f}% reduction."
+        )
+
+    insights.append(
+        f"Target dual cycle rate: 55%+. Group discharge-destination containers "
+        f"adjacent to incoming import positions within the same block to enable "
+        f"load-on-discharge-off sequencing."
+    )
+
+    for pg in pod_groups[:2]:
+        insights.append(
+            f"{pg['port']} ({pg['containerCount']} containers, discharge order #{pg['dischargeOrder']}): "
+            f"{pg['concentrationScore']*100:.0f}% currently in recommended blocks "
+            f"({', '.join(pg['recommendedBlocks'])}). "
+            f"{'No action needed.' if pg['concentrationScore'] > 0.6 else 'Consolidation recommended.'}"
+        )
+    return insights
+
+
+def process_current_planning_and_yard_strategy(
     vessel_id: str,
     yard_id: Optional[str],
     container_ids: List[str],
+    port_rotation: Optional[List[str]] = None,
 ) -> dict:
     if not container_ids:
         return _empty_planning_response(vessel_id, 0)
@@ -313,51 +471,48 @@ def process_current_planning(
 
     outbound_service = vessel_id
     visit_id = None
+    terminal = "PEB" if (yard_id and "PEB" in str(yard_id).upper()) else "CWIT"
 
-    if "outbound_service" in df.columns:
-        svc_vals = df["outbound_service"].dropna().astype(str).str.strip()
-        if not svc_vals.empty:
-            outbound_service = svc_vals.mode().iloc[0]
+    # Assign yard_block, weight_band, is_loaded
+    def resolve_yard_block(row):
+        visit_state = _safe_str(row.get("visit_state"), "")
+        category = _safe_str(row.get("category_id"), "")
+        is_loaded = visit_state == "3DEPARTED" or category == "EXPRT"
+        pos = _safe_str(row.get("ctr_from_position") if is_loaded else row.get("current_position"), "")
+        info = parse_yard_slot(pos)
+        return info.get("block") if info else None
 
-    if "actual_outbound_carrier_visit_id" in df.columns:
-        visit_vals = df["actual_outbound_carrier_visit_id"].dropna().astype(str).str.strip()
-        if not visit_vals.empty:
-            visit_id = visit_vals.mode().iloc[0]
+    df["yard_block"] = df.apply(resolve_yard_block, axis=1)
+    df["is_loaded"] = (df.get("visit_state", "") == "3DEPARTED") | (df.get("category_id", "") == "EXPRT")
+    df["is_in_yard"] = (df.get("visit_state", "") == "IN_YARD")
+    
+    w_col = next((c for c in ["unit_weight_in_kg", "verified_gross_mass_kg", "gross_mass_kg", "gross_weight_kg"] if c in df.columns), None)
+    l_col = next((c for c in ["container_length", "equipment_length"] if c in df.columns), None)
+    df["weight_band"] = df.apply(lambda r: classify_weight_band(r.get(w_col) if w_col else None, str(r.get(l_col,"")) if l_col else None), axis=1)
 
-    port_rotation_dict = {}
-    if "port_of_discharge" in df.columns:
-        ports = df["port_of_discharge"].dropna().astype(str).str.strip().str.upper()
-        for idx, port in enumerate(ports.value_counts().index.tolist(), start=1):
-            port_rotation_dict[port] = idx
+    # 1. Base Strategy Metrics
+    baseline_reshuffle_rate = 0.0
+    crane_metrics = _compute_crane_metrics(vessel_id, yard_id)
+    if crane_metrics:
+        baseline_reshuffle_rate = crane_metrics.get("reshuffleRate", 0.0)
 
+    # 2. Recommendations
     recommendations = []
-
     for _, row in df.iterrows():
         unit_id = _safe_str(row.get("unit_id"), "UNKNOWN")
-        weight_kg = _first_existing_value(
-            row,
-            ["unit_weight_in_kg", "verified_gross_mass_kg", "gross_mass_kg", "gross_weight_kg"],
-        )
-        length = _first_existing_value(row, ["container_length", "equipment_length"])
+        weight_kg = row.get(w_col) if w_col else None
+        length = row.get(l_col) if l_col else None
         weight_band = classify_weight_band(weight_kg, length)
 
         port = _safe_str(_first_existing_value(row, ["port_of_discharge"]), "")
-        eq_class = _safe_str(
-            _first_existing_value(row, ["equipment_class"]), "unknownEquipmentClass"
-        )
-        position_text = _safe_str(
-            _first_existing_value(
-                row,
-                ["current_position", "current_slot_position", "slot_position", "yard_position"],
-            ),
-            "",
-        )
-
-        current_slot_position = _safe_str(
-            row.get("current_slot_position"), position_text or "UNKNOWN"
-        )
+        eq_class = _safe_str(_first_existing_value(row, ["equipment_class"]), "unknownEquipmentClass")
         
-        current_yard_block = _safe_str(row.get("current_yard_block"), "")
+        is_loaded = row.get("is_loaded", False)
+        pos_candidates = ["ctr_from_position", "current_position"] if is_loaded else ["current_position", "current_slot_position", "slot_position", "yard_position"]
+        position_text = _safe_str(_first_existing_value(row, pos_candidates), "")
+        current_slot_position = _safe_str(row.get("current_slot_position"), position_text or "UNKNOWN")
+        
+        current_yard_block = _safe_str(row.get("yard_block"), "")
         if not current_yard_block and current_slot_position != "UNKNOWN":
             from utils.position_parser import parse_position
             parsed_pos = parse_position(current_slot_position)
@@ -365,10 +520,9 @@ def process_current_planning(
         if not current_yard_block:
             current_yard_block = "UNKNOWN"
 
-        actual_visit = _safe_str(
-            _first_existing_value(row, ["actual_outbound_carrier_visit_id"]), None
-        )
-        outbound_svc = _safe_str(_first_existing_value(row, ["outbound_service"]), None)
+        # Current unassigned containers shouldn't show arbitrary old visit IDs
+        actual_visit = None
+        outbound_svc = vessel_id
 
         rec = generate_recommendation(
             unit_id=unit_id,
@@ -377,7 +531,7 @@ def process_current_planning(
             equipment_class=eq_class,
             yard_block=current_yard_block,
             yard_slot=current_slot_position,
-            port_rotation_dict=port_rotation_dict,
+            port_rotation_dict={},
         )
 
         rec["recommendedTier"] = _derive_recommended_tier(weight_band, rec["loadingPriority"])
@@ -391,27 +545,209 @@ def process_current_planning(
 
         recommendations.append(rec)
 
-    # Calculate Port of Discharge grouping for the current planning recommendations
+    # 3. Discharge Port Grouping
     port_counts = {}
-    total_recs = len(recommendations)
+    port_ids = {}
     for rec in recommendations:
         port = rec.get("portOfDischarge") or "UNKNOWN"
         port_counts[port] = port_counts.get(port, 0) + 1
+        port_ids.setdefault(port, []).append(rec["unitId"])
 
     discharge_port_grouping = []
-    # Sort ports by count descending
     sorted_ports = sorted(port_counts.items(), key=lambda x: x[1], reverse=True)
     for port, count in sorted_ports:
         discharge_port_grouping.append({
             "port": port,
             "count": count,
-            "percentage": round((count / max(total_recs, 1)) * 100, 1)
+            "percentage": round((count / max(resolved_count, 1)) * 100, 1),
+            "containerIds": port_ids.get(port, [])
         })
+        
+    rotation_msg = ""
+    rotation = []
+    
+    if port_rotation and len(port_rotation) > 0:
+        # 1. UI Drag-and-Drop (The Planner's Choice Override)
+        rotation = port_rotation
+        rotation_msg = "Discharge sequence manually overridden by user."
+    else:
+        # 2. Historical Prediction (Self-Learning from DB)
+        try:
+            history_df = load_from_db("history", vessel_id=vessel_id)
+            if history_df is not None and not history_df.empty and "port_of_discharge" in history_df.columns:
+                hist_counts = history_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
+                rotation = [p for p in hist_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
+                if rotation:
+                    rotation_msg = f"Discharge sequence predicted from {len(history_df)} historical container records."
+        except Exception:
+            pass
+    
+    discharge_sequence = []
+    rank_map = {}
+    current_rank = 1
+    
+    # First, assign ranks based on the explicit rotation dictionary
+    for port in rotation:
+        port_str = port.upper()
+        # Only assign rank if this port actually exists in the current upload
+        if port_str in [p.upper() for p in port_counts.keys()] and port_str not in rank_map:
+            discharge_sequence.append({
+                "port": port_str,
+                "dischargeOrder": current_rank
+            })
+            rank_map[port_str] = current_rank
+            current_rank += 1
+            
+    # Then, assign ranks to any remaining ports (or if no rotation is defined) based on their volume
+    for port, count in sorted_ports:
+        port_str = port.upper()
+        if port_str and port_str != "UNKNOWN" and port_str not in rank_map:
+            discharge_sequence.append({
+                "port": port_str,
+                "dischargeOrder": current_rank
+            })
+            rank_map[port_str] = current_rank
+            current_rank += 1
+
+    # Sort recommendations by discharge order and attach the order directly to the recommendation
+    recommendations.sort(key=lambda r: rank_map.get(str(r.get("portOfDischarge")).upper(), 999))
+    
+    for r in recommendations:
+        port_upper = str(r.get("portOfDischarge")).upper()
+        if port_upper in rank_map:
+            r["dischargeOrder"] = rank_map[port_upper]
+        else:
+            r["dischargeOrder"] = None
+
+    # 4. Yard Block Summary
+    proximity_map = _PEB_PROXIMITY if terminal == "PEB" else _CWIT_PROXIMITY
+    block_strategies = []
+    
+    # Calculate pod concentration score globally
+    correct_count = 0
+    if "yard_block" in df.columns and "port_of_discharge" in df.columns:
+        block_dominant_pod = (
+            df.dropna(subset=["yard_block","port_of_discharge"])
+            .groupby("yard_block")["port_of_discharge"]
+            .agg(lambda s: s.value_counts().index[0])
+        ).to_dict()
+        for _, row in df.iterrows():
+            blk = row.get("yard_block")
+            pod = _safe_str(row.get("port_of_discharge"), "")
+            if blk and pod and block_dominant_pod.get(blk) == pod:
+                correct_count += 1
+    pod_concentration = round(correct_count / max(resolved_count, 1), 3)
+
+    for blk, grp in df.groupby("yard_block", dropna=True):
+        if str(blk) == "UNKNOWN": continue
+        prox = proximity_map.get(str(blk), "MID")
+        
+        discharge_port_groups = []
+        dominant_discharge_port = "UNKNOWN"
+        if "port_of_discharge" in grp.columns:
+            p_counts = grp["port_of_discharge"].dropna().value_counts()
+            if not p_counts.empty:
+                dominant_discharge_port = p_counts.index[0]
+                for p, c in p_counts.items():
+                    discharge_port_groups.append({"port": str(p), "count": int(c)})
+                    
+        loaded = int(grp["is_loaded"].sum()) if "is_loaded" in grp.columns else 0
+        in_yard = int(grp["is_in_yard"].sum()) if "is_in_yard" in grp.columns else 0
+        avg_w = round(float(grp[w_col].dropna().mean()), 1) if w_col and not grp[w_col].dropna().empty else 0.0
+
+        risks = []
+        pos_col = "current_position" if "current_position" in grp.columns else None
+        if pos_col:
+            for slot in grp[pos_col].dropna().head(50):
+                risks.append(predict_reshuffle_risk(str(blk), str(slot), "BELOW_DECK"))
+        modal_risk = max(set(risks), key=risks.count) if risks else "MEDIUM"
+        
+        unit_ids = grp["unit_id"].dropna().astype(str).tolist() if "unit_id" in grp.columns else []
+
+        block_strategies.append({
+            "block": str(blk),
+            "terminal": terminal,
+            "berthProximity": prox,
+            "containerCount": int(len(grp)),
+            "inYardCount": in_yard,
+            "loadedCount": loaded,
+            "heavyCount": int((grp["weight_band"] == "HEAVY").sum()),
+            "mediumCount": int((grp["weight_band"] == "MEDIUM").sum()),
+            "lightCount": int((grp["weight_band"] == "LIGHT").sum()),
+            "avgWeightKg": avg_w,
+            "dominantDischargePort": str(dominant_discharge_port),
+            "dischargePortGroups": discharge_port_groups,
+            "reshuffleRisk": modal_risk,
+            "containerIds": unit_ids
+        })
+    block_strategies.sort(key=lambda x: x["block"])
+
+    # 5. Discharge Port Strategy
+    discharge_strategies = []
+    close_blocks = [b for b, p in proximity_map.items() if p == "CLOSE"]
+    mid_blocks   = [b for b, p in proximity_map.items() if p == "MID"]
+    far_blocks   = [b for b, p in proximity_map.items() if p == "FAR"]
+    
+    ports_ranked = [p for p, _ in sorted_ports]
+
+    for rank, port in enumerate(ports_ranked, start=1):
+        grp = df[df["port_of_discharge"].astype(str) == port] if "port_of_discharge" in df.columns else pd.DataFrame()
+        if grp.empty: continue
+        
+        wb_counts = grp["weight_band"].value_counts()
+        dominant_wb = wb_counts.index[0] if not wb_counts.empty else "MEDIUM"
+        if dominant_wb == "HEAVY":
+            rec_blocks = close_blocks
+        elif dominant_wb == "LIGHT":
+            rec_blocks = far_blocks
+        else:
+            rec_blocks = mid_blocks
+
+        if "yard_block" in grp.columns:
+            in_rec = grp["yard_block"].isin(rec_blocks).sum()
+            current_conc = round(in_rec / max(len(grp), 1), 3)
+            current_blocks = grp["yard_block"].dropna().unique().tolist()
+        else:
+            current_conc = 0.0
+            current_blocks = []
+            
+        unit_ids = grp["unit_id"].dropna().astype(str).tolist() if "unit_id" in grp.columns else []
+
+        discharge_strategies.append({
+            "port": port,
+            "dischargeOrder": rank,
+            "containerCount": int(len(grp)),
+            "heavyCount": int((grp["weight_band"] == "HEAVY").sum()),
+            "mediumCount": int((grp["weight_band"] == "MEDIUM").sum()),
+            "lightCount": int((grp["weight_band"] == "LIGHT").sum()),
+            "inYardCount": int(grp["is_in_yard"].sum()) if "is_in_yard" in grp.columns else 0,
+            "loadedCount": int(grp["is_loaded"].sum()) if "is_loaded" in grp.columns else 0,
+            "currentBlocks": current_blocks,
+            "recommendedBlocks": sorted(rec_blocks),
+            "concentrationScore": current_conc,
+            "containerIds": unit_ids
+        })
+
+    # 6. Insights
+    projected_reshuffle_reduction = round(baseline_reshuffle_rate * pod_concentration, 2)
+    insights = _generate_current_planning_insights(
+        block_strategies, discharge_strategies, baseline_reshuffle_rate,
+        pod_concentration, projected_reshuffle_reduction
+    )
+    if rotation_msg:
+        insights.append(rotation_msg)
+
+    reshuffleStats = {
+        "baselineRate": baseline_reshuffle_rate,
+        "podConcentration": pod_concentration,
+        "projectedReduction": projected_reshuffle_reduction
+    }
 
     return {
         "vesselId": vessel_id,
         "outboundService": outbound_service or vessel_id,
         "visitId": visit_id,
+        "terminal": terminal,
         "summary": {
             "totalRequested": int(len(cleaned_ids)),
             "resolvedCount": resolved_count,
@@ -419,6 +755,11 @@ def process_current_planning(
         },
         "recommendations": recommendations,
         "dischargePortGrouping": discharge_port_grouping,
+        "yardBlockSummary": block_strategies,
+        "dischargePortStrategy": discharge_strategies,
+        "reshuffleStats": reshuffleStats,
+        "dischargeSequence": discharge_sequence,
+        "strategyInsights": insights,
     }
 
 
@@ -434,17 +775,18 @@ def _empty_history_response() -> dict:
         },
         "dischargePortGrouping": [],
         "weightDistribution": {"aboveDeck": [], "belowDeck": []},
-        # NEW: always include empty list so callers get a consistent shape
         "equipmentClassDistribution": [],
         "historicalVisits": [],
+        "dischargeSequence": [],
+        "craneMetrics": None,
     }
-
 
 def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
     return {
         "vesselId": vessel_id,
         "outboundService": vessel_id,
         "visitId": None,
+        "terminal": "CWIT",
         "summary": {
             "totalRequested": total_requested,
             "resolvedCount": 0,
@@ -452,4 +794,9 @@ def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
         },
         "recommendations": [],
         "dischargePortGrouping": [],
+        "yardBlockSummary": [],
+        "dischargePortStrategy": [],
+        "reshuffleStats": {},
+        "dischargeSequence": [],
+        "strategyInsights": [],
     }

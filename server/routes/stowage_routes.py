@@ -14,7 +14,7 @@ from schemas.stowage import (
 )
 from services.stowage_service import (
     get_historical_stowage_analysis,
-    process_current_planning,
+    process_current_planning_and_yard_strategy,
 )
 from services.stowage_visualizer_service import get_stowage_visualization
 from utils.stowage_parser import parse_upload_request
@@ -69,10 +69,11 @@ async def current_planning(
         if not container_ids:
             raise HTTPException(status_code=400, detail="No valid container IDs were provided")
 
-        return process_current_planning(
+        return process_current_planning_and_yard_strategy(
             vessel_id=vessel_id,
             yard_id=yard_id,
             container_ids=container_ids,
+            port_rotation=req_data.get("port_rotation")
         )
 
     except HTTPException:
@@ -80,6 +81,7 @@ async def current_planning(
     except Exception as e:
         logger.error("Error in current_planning: %s", e)
         raise HTTPException(status_code=500, detail="Failed to process current stowage plan")
+
 
 
 @router.post("/visualization", response_model=StowageVisualizationResponse)

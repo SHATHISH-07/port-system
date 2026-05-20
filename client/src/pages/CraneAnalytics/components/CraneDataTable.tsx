@@ -25,24 +25,23 @@ interface CraneDataTableProps {
 
 const thSx = (theme: Theme) => ({
   fontWeight: 800,
-  fontSize: "0.68rem",
-  letterSpacing: "0.06em",
-  textTransform: "uppercase" as const,
-  color: "text.primary",
-  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
-  py: 0.75,
-  px: 1.5,
-  bgcolor: theme.palette.mode === "light"
-    ? alpha(theme.palette.grey[100], 0.96)
-    : alpha(theme.palette.background.default, 0.92),
+  fontSize: "0.8rem",
+  color: "text.secondary",
+  borderBottom: `2px solid`,
+  borderColor: 'divider',
+  py: 1.5,
+  px: 2,
+  bgcolor: "transparent",
   whiteSpace: "nowrap" as const,
+  textAlign: "center" as const,
 });
 
 const tdSx = (theme: Theme) => ({
-  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.05)}`,
-  py: 0.75,
-  px: 1.5,
-  fontSize: "0.75rem",
+  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+  py: 1.25,
+  px: 2,
+  fontSize: "0.8rem",
+  textAlign: "center" as const,
 });
 
 export default function CraneDataTable({
@@ -94,7 +93,7 @@ export default function CraneDataTable({
                 <>
                   <TableCell sx={thSx(theme)}>Visit ID</TableCell>
                   <TableCell sx={thSx(theme)}>Terminal</TableCell>
-                  <TableCell align="right" sx={thSx(theme)}>
+                  <TableCell sx={thSx(theme)}>
                     Moves
                   </TableCell>
                   <TableCell sx={thSx(theme)}>Cranes Used</TableCell>
@@ -103,17 +102,14 @@ export default function CraneDataTable({
                 <>
                   <TableCell sx={thSx(theme)}>Asset ID</TableCell>
                   <TableCell sx={thSx(theme)}>Terminal</TableCell>
-                  <TableCell align="right" sx={thSx(theme)}>
+                  <TableCell sx={thSx(theme)}>
                     Total Moves
                   </TableCell>
-                  <TableCell align="right" sx={thSx(theme)}>
+                  <TableCell sx={thSx(theme)}>
                     MPH
                   </TableCell>
-                  <TableCell align="right" sx={thSx(theme)}>
+                  <TableCell sx={thSx(theme)}>
                     Cycle (min)
-                  </TableCell>
-                  <TableCell align="right" sx={thSx(theme)}>
-                    Rating
                   </TableCell>
                 </>
               )}
@@ -126,26 +122,14 @@ export default function CraneDataTable({
                   key={v.visit_id}
                   hover
                   sx={{
-                    bgcolor:
-                      index % 2 === 0
-                        ? theme.palette.mode === "light"
-                          ? alpha(theme.palette.grey[50], 0.9)
-                          : alpha(theme.palette.action.hover, 0.18)
-                        : "transparent",
                     "&:last-child td": { border: 0 },
-                    "&:hover": {
-                      bgcolor:
-                        theme.palette.mode === "light"
-                          ? alpha(theme.palette.primary.main, 0.05)
-                          : alpha(theme.palette.action.hover, 0.28),
-                    },
+                    "&:hover": { bgcolor: "action.hover" },
                   }}
                 >
                   <TableCell
                     sx={{
                       ...tdSx(theme),
-                      fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.72rem",
+                      fontSize: "0.8rem",
                       fontWeight: 700,
                     }}
                   >
@@ -155,12 +139,10 @@ export default function CraneDataTable({
                     <TerminalBadge id={v.yard_id} />
                   </TableCell>
                   <TableCell
-                    align="right"
                     sx={{
                       ...tdSx(theme),
                       fontWeight: 800,
-                      fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.75rem",
+                      fontSize: "0.8rem",
                     }}
                   >
                     {v.total_moves.toLocaleString()}
@@ -187,7 +169,6 @@ export default function CraneDataTable({
                         >
                           <Typography
                             sx={{
-                              fontFamily: "'DM Mono', monospace",
                               fontSize: "0.55rem",
                               fontWeight: 700,
                               color:
@@ -212,26 +193,14 @@ export default function CraneDataTable({
                   onClick={() => onCraneSelect(s.crane_id)}
                   sx={{
                     cursor: "pointer",
-                    bgcolor:
-                      index % 2 === 0
-                        ? theme.palette.mode === "light"
-                          ? alpha(theme.palette.grey[50], 0.9)
-                          : alpha(theme.palette.action.hover, 0.18)
-                        : "transparent",
                     "&:last-child td": { border: 0 },
-                    "&:hover": {
-                      bgcolor:
-                        theme.palette.mode === "light"
-                          ? alpha(theme.palette.primary.main, 0.05)
-                          : alpha(theme.palette.action.hover, 0.28),
-                    },
+                    "&:hover": { bgcolor: "action.hover" },
                   }}
                 >
                   <TableCell
                     sx={{
                       ...tdSx(theme),
-                      fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.72rem",
+                      fontSize: "0.8rem",
                       fontWeight: 700,
                     }}
                   >
@@ -241,41 +210,32 @@ export default function CraneDataTable({
                     <TerminalBadge id={s.yard_id} />
                   </TableCell>
                   <TableCell
-                    align="right"
                     sx={{
                       ...tdSx(theme),
                       fontWeight: 800,
-                      fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.75rem",
+                      fontSize: "0.8rem",
                     }}
                   >
                     {s.total_moves.toLocaleString()}
                   </TableCell>
                   <TableCell
-                    align="right"
                     sx={{
                       ...tdSx(theme),
                       fontWeight: 800,
-                      fontFamily: "'DM Mono', monospace",
-                      fontSize: "0.75rem",
+                      fontSize: "0.8rem",
                       color: "primary.main",
                     }}
                   >
                     {s.moves_per_hour.toFixed(1)}
                   </TableCell>
                   <TableCell
-                    align="right"
                     sx={{
                       ...tdSx(theme),
-                      fontFamily: "'DM Mono', monospace",
                       fontWeight: 700,
-                      fontSize: "0.72rem",
+                      fontSize: "0.8rem",
                     }}
                   >
                     {s.avg_cycle_minutes?.toFixed(1) ?? "—"}
-                  </TableCell>
-                  <TableCell align="right" sx={tdSx(theme)}>
-                    <RatingChip rating={s.productivity_rating} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -295,7 +255,6 @@ export default function CraneDataTable({
             ".MuiTablePagination-toolbar": { minHeight: 40, px: 2 },
             ".MuiTablePagination-displayedRows": {
               fontSize: "0.65rem",
-              fontFamily: "'DM Mono', monospace",
             },
             ".MuiTablePagination-actions button": { color: "text.secondary", p: 0.5 },
           }}

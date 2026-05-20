@@ -54,6 +54,9 @@ async def parse_upload_request(request: Request) -> dict:
         yard_id = clean_text(body.get("yardId"))
         visit_id = clean_text(body.get("visitId"))
         container_ids = coerce_container_ids(body.get("containerIds"))
+        port_rotation = body.get("portRotation")
+        if isinstance(port_rotation, str):
+            port_rotation = [p.strip() for p in port_rotation.split(",") if p.strip()]
     else:
         form = await request.form()
         vessel_id = clean_text(form.get("vesselId"))
@@ -62,6 +65,12 @@ async def parse_upload_request(request: Request) -> dict:
 
         if "containerIds" in form:
             container_ids = coerce_container_ids(form.get("containerIds"))
+            
+        port_rotation = None
+        if "portRotation" in form:
+            val = form.get("portRotation")
+            if val:
+                port_rotation = [p.strip() for p in str(val).split(",") if p.strip()]
 
         upload = form.get("file")
         if upload is not None and getattr(upload, "filename", None):
@@ -77,4 +86,5 @@ async def parse_upload_request(request: Request) -> dict:
         "visit_id": visit_id,
         "container_ids": container_ids,
         "filename": filename,
+        "port_rotation": port_rotation,
     }

@@ -60,7 +60,6 @@ export default function EmptyState() {
           color: "text.disabled",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
-          fontFamily: "'DM Mono', monospace",
         }}
       >
         No Data Selected

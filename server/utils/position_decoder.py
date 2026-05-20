@@ -71,6 +71,26 @@ def parse_yard_slot(slot_str: str) -> Optional[Dict[str, Any]]:
 
     block = _extract_yard_block(raw_slot)
 
+    decoded_coords = {}
+    if "CWIT" in yard_area.upper():
+        m = re.match(r"^(\d+)([A-Z]+)(\d+)([A-Z])\.(\d+)$", raw_slot.upper())
+        if m:
+            decoded_coords = {
+                "zone": m.group(1),
+                "block_letter": m.group(2),
+                "yard_row": int(m.group(3)),
+                "yard_col": m.group(4),
+                "yard_tier": int(m.group(5)),
+            }
+    else:
+        m = re.match(r"^([A-Z]+)(\d+)([A-Z]+)(\d+)$", raw_slot.upper())
+        if m:
+            decoded_coords = {
+                "yard_row": int(m.group(2)),
+                "yard_col": m.group(3),
+                "yard_tier": int(m.group(4)),
+            }
+
     return {
         "type": "YARD",
         "terminal": yard_area,
@@ -78,6 +98,7 @@ def parse_yard_slot(slot_str: str) -> Optional[Dict[str, Any]]:
         "block": block,
         "slot": raw_slot,
         "rawSlot": raw_slot,
+        "decoded_coords": decoded_coords,
     }
 
 
