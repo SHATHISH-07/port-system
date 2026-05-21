@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Box, Card, Typography, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TablePagination, Collapse, IconButton, alpha, useTheme, TextField, InputAdornment,
-  CircularProgress
+  CircularProgress, Paper
 } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -11,6 +11,7 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import RouteIcon from '@mui/icons-material/Route';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { api } from '../../../api/api';
+import MetricCard from '../../StayTimeAnalysis/components/MetricCard';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -52,7 +53,7 @@ const StatusChip = ({ label, theme }: any) => {
   );
 };
 
-function CompactRow({ step, index, theme }: any) {
+function CompactRow({ step, theme }: any) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -159,7 +160,7 @@ const SortablePort = ({ id, index }: { id: string, index: number }) => {
       }}>
         {index + 1}
       </Box>
-      <Typography variant="body2" fontWeight={800} color="text.primary" sx={{ letterSpacing: 0.5, flex: 1 }}>
+      <Typography variant="body2" color="text.primary" sx={{ fontWeight: 800, letterSpacing: 0.5, flex: 1 }}>
         {id}
       </Typography>
     </div>
@@ -260,14 +261,92 @@ export default function CurrentPlanningTab({ vesselId, yardId, globalFile, globa
   ];
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, p: 1 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, p: 1, animation: 'fadeIn 0.6s ease-out forwards', '@keyframes fadeIn': { from: { opacity: 0, transform: 'translateY(20px)' }, to: { opacity: 1, transform: 'translateY(0)' } } }}>
+
+      {/* Hero Section */}
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2.5,
+              borderRadius: 3,
+              border: '1px solid',
+              borderColor: alpha(theme.palette.primary.main, 0.15),
+              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.5)} 100%)`,
+              backdropFilter: 'blur(10px)',
+              position: 'relative',
+              overflow: 'hidden',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+              <Box sx={{ mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
+                  <Typography sx={{ fontWeight: 900, fontSize: '1.5rem', color: 'text.primary' }}>
+                    {vesselId}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Total Planned Moves
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                  <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '2.5rem', md: '3.5rem' }, lineHeight: 1 }}>
+                    {recs.length}
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.5 }}>
+                    units
+                  </Typography>
+                </Box>
+                <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'text.secondary', fontWeight: 500 }}>
+                  Based on AI optimization engine.
+                </Typography>
+              </Box>
+            </Box>
+            <Box
+              sx={{
+                position: 'absolute',
+                right: -30,
+                bottom: -30,
+                width: 180,
+                height: 180,
+                borderRadius: '50%',
+                background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.15)} 0%, transparent 70%)`,
+                zIndex: 0,
+              }}
+            />
+          </Paper>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Grid container spacing={2} sx={{ height: '100%' }}>
+            <Grid size={{ xs: 6 }}>
+              <MetricCard title="Above Deck" value={deckCounts.ABOVE_DECK} subtitle="Stowed units" accent="primary" />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <MetricCard title="Below Deck" value={deckCounts.BELOW_DECK} subtitle="Stowed units" accent="default" />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <MetricCard title="Heavy" value={weightCounts.HEAVY} subtitle="Low stow needed" accent="warning" />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <MetricCard title="High Risk" value={riskCounts.HIGH} subtitle="Reshuffle risk" accent="error" />
+            </Grid>
+          </Grid>
+        </Grid>
+      </Grid>
 
       {/* ROW 1: Three Charts */}
       <Grid container spacing={3}>
         {/* Deck Distribution */}
         <Grid size={{ xs: 12, md: 4 }}>
           <Card {...cardStyles} sx={{ ...cardStyles.sx, p: 2.5, height: 260, position: 'relative' }}>
-            <Typography variant="overline" fontWeight={800} color="text.secondary" letterSpacing={1}>DECK DISTRIBUTION</Typography>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 1 }}>DECK DISTRIBUTION</Typography>
             <Box sx={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.05)} 0%, transparent 70%)` }} />
             <ResponsiveContainer width="100%" height="90%">
               <PieChart>
@@ -284,7 +363,7 @@ export default function CurrentPlanningTab({ vesselId, yardId, globalFile, globa
         {/* Reshuffle Risk */}
         <Grid size={{ xs: 12, md: 4 }}>
           <Card {...cardStyles} sx={{ ...cardStyles.sx, p: 2.5, height: 260, position: 'relative' }}>
-            <Typography variant="overline" fontWeight={800} color="text.secondary" letterSpacing={1}>RESHUFFLE RISK</Typography>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 1 }}>RESHUFFLE RISK</Typography>
             <Box sx={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.05)} 0%, transparent 70%)` }} />
             <ResponsiveContainer width="100%" height="90%">
               <PieChart>
@@ -301,12 +380,12 @@ export default function CurrentPlanningTab({ vesselId, yardId, globalFile, globa
         {/* Weight Bands */}
         <Grid size={{ xs: 12, md: 4 }}>
           <Card {...cardStyles} sx={{ ...cardStyles.sx, p: 2.5, height: 260, position: 'relative' }}>
-            <Typography variant="overline" fontWeight={800} color="text.secondary" letterSpacing={1}>WEIGHT BANDS</Typography>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 1 }}>WEIGHT BANDS</Typography>
             <Box sx={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.05)} 0%, transparent 70%)` }} />
             <ResponsiveContainer width="100%" height="90%">
               <BarChart data={weightBar} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={alpha(theme.palette.divider, 0.5)} />
-                <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} fontWeight={600} stroke={theme.palette.text.secondary} />
+                <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} tick={{ fontWeight: 600 }} stroke={theme.palette.text.secondary} />
                 <YAxis fontSize={10} tickLine={false} axisLine={false} stroke={theme.palette.text.secondary} />
                 <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.palette.divider}`, backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, fontSize: '0.75rem', fontWeight: 600 }} cursor={{ fill: alpha(theme.palette.text.primary, 0.03) }} />
                 <Bar dataKey="Count" radius={[4, 4, 0, 0]} maxBarSize={40}>
@@ -318,69 +397,97 @@ export default function CurrentPlanningTab({ vesselId, yardId, globalFile, globa
         </Grid>
       </Grid>
 
-      {/* ROW 2: Route Sequence and Yard Strategies */}
-      <Grid container spacing={3}>
+      {/* ROW 2: Optimization Engine Insights (Unique Unified Layout) */}
+      <Box sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', md: 'row' },
+        gap: 4,
+        position: 'relative',
+        overflow: 'hidden',
+        p: { xs: 3, md: 5 },
+        borderRadius: 4,
+        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.03)} 0%, ${alpha(theme.palette.background.paper, 0.8)} 100%)`,
+        border: '1px solid',
+        borderColor: alpha(theme.palette.primary.main, 0.1),
+        boxShadow: `inset 0 2px 20px ${alpha('#000', 0.02)}`
+      }}>
+        {/* Decorative background glow */}
+        <Box sx={{ position: 'absolute', top: -150, right: -100, width: 400, height: 400, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(theme.palette.info.main, 0.08)} 0%, transparent 70%)`, zIndex: 0 }} />
+
         {/* Drag-and-Drop Route Sequence */}
         {portRotation && portRotation.length > 0 && (
-          <Grid size={{ xs: 12, md: 5 }}>
-            <Card {...cardStyles} sx={{ ...cardStyles.sx, p: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}` }}>
-                <Box>
-                  <Typography variant="overline" fontWeight={800} color="text.secondary" letterSpacing={1} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <RouteIcon fontSize="small" color="primary" /> Route Sequence
-                  </Typography>
-                </Box>
-                {loading && <CircularProgress size={16} />}
+          <Box sx={{ flex: 1, zIndex: 1, display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box>
+                <Typography sx={{ fontWeight: 900, fontSize: '1.2rem', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <RouteIcon color="primary" /> Route Execution Plan
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mt: 0.5, display: 'block' }}>Drag the port nodes to optimize the discharge sequence</Typography>
               </Box>
+              {loading && <CircularProgress size={20} />}
+            </Box>
 
-              <Box sx={{
-                flex: 1, p: 2, bgcolor: alpha(theme.palette.background.default, 0.5),
-                overflowY: 'visible',
-                '&::-webkit-scrollbar': { width: 6 },
-                '&::-webkit-scrollbar-thumb': { bgcolor: alpha(theme.palette.primary.main, 0.2), borderRadius: 3 }
-              }}>
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={portRotation} strategy={verticalListSortingStrategy}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                      {portRotation.map((portId, idx) => (
-                        <SortablePort key={portId} id={portId} index={idx} />
-                      ))}
-                    </Box>
-                  </SortableContext>
-                </DndContext>
-              </Box>
-            </Card>
-          </Grid>
+            <Box sx={{ flex: 1 }}>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={portRotation} strategy={verticalListSortingStrategy}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {portRotation.map((portId, idx) => (
+                      <SortablePort key={portId} id={portId} index={idx} />
+                    ))}
+                  </Box>
+                </SortableContext>
+              </DndContext>
+            </Box>
+          </Box>
         )}
+
+        {/* Vertical Divider for Desktop */}
+        <Box sx={{ display: { xs: 'none', md: 'block' }, width: '1px', bgcolor: alpha(theme.palette.divider, 0.8), my: 2, zIndex: 1 }} />
 
         {/* Yard Loading Strategy */}
         {optimizedData.strategyInsights && optimizedData.strategyInsights.length > 0 && (
-          <Grid size={{ xs: 12, md: portRotation && portRotation.length > 0 ? 7 : 12 }}>
-            <Card {...cardStyles} sx={{ ...cardStyles.sx, p: 3, height: '100%', bgcolor: alpha(theme.palette.info.main, 0.04), borderColor: alpha(theme.palette.info.main, 0.2) }}>
-              <Typography variant="overline" color="info.main" fontWeight={800} letterSpacing={1} sx={{ display: 'block', mb: 2 }}>
-                Yard Loading Strategy
+          <Box sx={{ flex: 1.2, zIndex: 1 }}>
+            <Box sx={{ mb: 3 }}>
+              <Typography sx={{ fontWeight: 900, fontSize: '1.2rem', letterSpacing: '-0.02em', color: 'info.main' }}>
+                AI Yard Intelligence
               </Typography>
-              <Grid container spacing={2}>
-                {optimizedData.strategyInsights.map((insight: string, idx: number) => (
-                  <Grid size={{ xs: 12, md: 6 }} key={idx}>
-                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'info.main', mt: 0.75, flexShrink: 0 }} />
-                      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.85rem', lineHeight: 1.6 }}>
-                        {insight}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-            </Card>
-          </Grid>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mt: 0.5, display: 'block' }}>
+                Algorithmic insights for container retrieval
+              </Typography>
+            </Box>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {optimizedData.strategyInsights.map((insight: string, idx: number) => (
+                <Box key={idx} sx={{ 
+                  display: 'flex', 
+                  gap: 2, 
+                  alignItems: 'flex-start', 
+                  p: 2.5, 
+                  borderRadius: 3, 
+                  bgcolor: alpha(theme.palette.background.paper, 0.6), 
+                  border: '1px solid', 
+                  borderColor: alpha(theme.palette.info.main, 0.15),
+                  backdropFilter: 'blur(10px)',
+                  transition: 'transform 0.2s',
+                  '&:hover': { transform: 'translateX(4px)', borderColor: alpha(theme.palette.info.main, 0.3) }
+                }}>
+                  <Box sx={{ width: 28, height: 28, borderRadius: 1.5, bgcolor: alpha(theme.palette.info.main, 0.1), color: 'info.main', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 900, fontSize: '0.8rem' }}>
+                    {idx + 1}
+                  </Box>
+                  <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 600, fontSize: '0.85rem', lineHeight: 1.6 }}>
+                    {insight}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
         )}
-      </Grid>
+      </Box>
 
       {/* ROW 3: Sequence Data Table */}
       <Card {...cardStyles}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderBottom: '1px solid', borderColor: 'divider', bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
-          <Typography variant="overline" fontWeight={800} color="primary" letterSpacing={1}>Load Sequence Operations</Typography>
+          <Typography variant="overline" color="primary" sx={{ fontWeight: 800, letterSpacing: 1 }}>Load Sequence Operations</Typography>
           <TextField
             size="small"
             placeholder="Search Unit ID..."
@@ -417,7 +524,7 @@ export default function CurrentPlanningTab({ vesselId, yardId, globalFile, globa
             </TableHead>
             <TableBody>
               {paginatedRecs.map((step: any, idx: number) => (
-                <CompactRow key={step.unitId} step={step} index={idx} theme={theme} />
+                <CompactRow key={step.unitId} step={step} theme={theme} />
               ))}
             </TableBody>
           </Table>

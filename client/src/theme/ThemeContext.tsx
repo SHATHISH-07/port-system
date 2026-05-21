@@ -36,7 +36,7 @@ function buildTheme(mode: PaletteMode) {
     palette: {
       mode,
       background: {
-        default: isDark ? "#202020" : "#f8fafc",
+        default: isDark ? "#0f0f0f" : "#ffffff",
         paper:   isDark ? "#252525" : "#ffffff",
       },
       primary: {
@@ -51,9 +51,12 @@ function buildTheme(mode: PaletteMode) {
       error:     { main: isDark ? "#f87171" : "#dc2626" },
       info:      { main: isDark ? "#38bdf8" : "#4285f4" },
       text: {
-        primary:   isDark ? "#f0f2f5" : "#111827",
-        secondary: isDark ? "#9299a4" : "#4b5563",
-        disabled:  isDark ? "#4b5563" : "#6b7280",
+        primary:   isDark ? "#ffffff" : "#111827",
+        secondary: isDark ? "rgba(255, 255, 255, 0.7)" : "#4b5563",
+        disabled:  isDark ? "rgba(255, 255, 255, 0.3)" : "#6b7280",
+      },
+      action: {
+        active: isDark ? "#ffffff" : "rgba(0, 0, 0, 0.54)",
       },
       divider: isDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.12)",
     },

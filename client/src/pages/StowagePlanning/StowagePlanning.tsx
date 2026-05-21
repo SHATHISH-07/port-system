@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { Box, Alert, useTheme, alpha, Typography } from '@mui/material';
+import { Box, Alert, Typography } from '@mui/material';
 import HistoryAnalysisTab from './components/HistoryAnalysisTab';
 import CurrentPlanningTab from './components/CurrentPlanningTab';
 import StowageHeader from './components/StowageHeader';
 
 export default function StowagePlanning() {
-  const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
 
   const [vesselId, setVesselId] = useState('');

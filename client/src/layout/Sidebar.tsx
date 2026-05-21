@@ -9,9 +9,8 @@ import {
   Collapse,
 } from "@mui/material";
 import {
-  ViewModuleRounded,
   HistoryOutlined,
-  MenuRounded,
+  ViewSidebarOutlined,
   AssignmentOutlined,
   LogoutOutlined,
   ExpandLess,
@@ -20,11 +19,12 @@ import {
   LightModeOutlined,
   PrecisionManufacturingOutlined,
   SettingsOutlined,
-  GridViewRounded,
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useColorMode } from "../theme/ThemeContext";
+import WhatshotIcon from '@mui/icons-material/Whatshot';
+import WidgetsOutlinedIcon from '@mui/icons-material/WidgetsOutlined';
 
 const OPEN = 250;
 const CLOSED = 54;
@@ -43,17 +43,17 @@ const USER_ITEMS: {
     {
       path: "/heatmap",
       label: "Port Heatmap",
-      icon: ViewModuleRounded,
+      icon: WhatshotIcon,
+    },
+    {
+      path: "/stowage-planning",
+      label: "Stowage Planning",
+      icon: WidgetsOutlinedIcon,
     },
     {
       path: "/crane-analytics",
       label: "Crane Analytics",
       icon: PrecisionManufacturingOutlined,
-    },
-    {
-      path: "/stowage-planning",
-      label: "Stowage Planning",
-      icon: GridViewRounded,
     },
     { path: "/requests", label: "Requests", icon: AssignmentOutlined },
   ];
@@ -77,18 +77,12 @@ export default function Sidebar() {
   const isDark = mode === "dark";
 
   // Hardened Color Palette for better Light Mode visibility
-  const textColor = isDark ? "rgba(255,255,255,0.7)" : "#475569";
-  const textActiveColor = isDark ? "#ffffff" : "#0f172a";
-  const menuIconColor = isDark ? "rgba(255,255,255,0.5)" : "#64748b";
-  const menuIconHover = isDark
-    ? "rgba(255,255,255,0.06)"
-    : "rgba(15,23,42,0.05)";
-  const menuIconActive = isDark
-    ? "rgba(255,255,255,0.1)"
-    : "rgba(15,23,42,0.08)";
-  const menuIconHoverActive = isDark
-    ? "rgba(255,255,255,0.14)"
-    : "rgba(15,23,42,0.12)";
+  const textColor = isDark ? "#ffffff" : "#000000";
+  const textActiveColor = isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)";
+  const menuIconColor = isDark ? "#ffffff" : "#000000";
+  const menuIconHover = "transparent";
+  const menuIconActive = "transparent";
+  const menuIconHoverActive = "transparent";
 
   const renderNavItems = (
     items: {
@@ -115,11 +109,11 @@ export default function Sidebar() {
               display: "flex",
               alignItems: "center",
               gap: 1.2,
-              height: isSubItem ? 30 : 38,
+              height: isSubItem ? 30 : (open ? 38 : 34),
               px: open ? (isSubItem ? 4 : 1.5) : 0,
               mx: open ? 1.5 : "auto",
-              width: open ? "auto" : 38,
-              mb: 0.25,
+              width: open ? "auto" : 34,
+              mb: open ? 0.25 : 0.5,
               borderRadius: "8px",
               textDecoration: "none",
               justifyContent: open ? "flex-start" : "center",
@@ -130,6 +124,7 @@ export default function Sidebar() {
                 bgcolor: active ? menuIconHoverActive : menuIconHover,
                 transform: open ? "translateX(2px)" : "none",
                 color: textActiveColor,
+                textDecoration: "none",
               },
             }}
           >
@@ -181,12 +176,7 @@ export default function Sidebar() {
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
-        bgcolor: theme.palette.background.paper,
-        borderRight: "1px solid",
-        borderColor: isDark ? "grey.800" : "grey.200",
-        boxShadow: isDark
-          ? "4px 0 24px rgba(0,0,0,0.3)"
-          : "4px 0 24px rgba(0,0,0,0.03)",
+        bgcolor: theme.palette.background.default,
         transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
         overflow: "hidden",
         position: "sticky",
@@ -198,8 +188,8 @@ export default function Sidebar() {
       <Box
         sx={{
           display: "flex",
-          flexDirection: open ? "row" : "column",
-          alignItems: open ? "center" : "center",
+          flexDirection: "row",
+          alignItems: "center",
           justifyContent: open ? "space-between" : "center",
           p: open ? "16px 20px" : "12px 16px",
           pt: open ? 2.5 : 2,
@@ -208,58 +198,75 @@ export default function Sidebar() {
           mb: 0.5,
         }}
       >
-        {open && (
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 0.15,
-            }}
-          >
-            <Typography
+        {open ? (
+          <>
+            <Box
               sx={{
-                fontSize: "0.85rem",
-                fontWeight: 700,
-                color: textActiveColor,
-                lineHeight: 1.2,
-                letterSpacing: "0.02em",
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
               }}
             >
-              Deck Optimiser
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: "0.6rem",
-                fontWeight: 700,
-                color: textColor,
-                textTransform: "uppercase",
-                mt: 0.25,
-                letterSpacing: "0.04em",
-              }}
-            >
-              {user?.role || "User"}
-            </Typography>
-          </Box>
-        )}
+              <Box sx={{ width: 26, height: 26, bgcolor: isDark ? '#e0e0e0' : '#333333', borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} />
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                    color: "primary",
+                    lineHeight: 1.2,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  Deck Optimiser
+                </Typography>
+              </Box>
+            </Box>
 
-        <Tooltip
-          title={open ? "Collapse sidebar" : "Expand sidebar"}
-          placement="right"
-        >
-          <IconButton
-            onClick={() => setOpen((v) => !v)}
-            size="small"
-            sx={{
-              width: 32,
-              height: 32,
-              flexShrink: 0,
-              color: menuIconColor,
-              "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
-            }}
-          >
-            <MenuRounded sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Tooltip>
+            <Tooltip title="Collapse sidebar" placement="right">
+              <IconButton
+                onClick={() => setOpen(false)}
+                size="small"
+                sx={{
+                  width: 32,
+                  height: 32,
+                  flexShrink: 0,
+                  color: menuIconColor,
+                  "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
+                }}
+              >
+                <ViewSidebarOutlined sx={{ fontSize: 20 }} />
+              </IconButton>
+            </Tooltip>
+          </>
+        ) : (
+          <Tooltip title="Expand sidebar" placement="right">
+            <Box
+              onClick={() => setOpen(true)}
+              sx={{
+                width: 34,
+                height: 34,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '8px',
+                "&:hover": { bgcolor: menuIconHover },
+                "& .menu-icon": { display: "none" },
+                "&:hover .logo-icon": { display: "none" },
+                "&:hover .menu-icon": { display: "block", color: textActiveColor }
+              }}
+            >
+              <Box className="logo-icon" sx={{ width: 26, height: 26, bgcolor: isDark ? '#e0e0e0' : '#333333', borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
+              <ViewSidebarOutlined className="menu-icon" sx={{ fontSize: 20, color: menuIconColor }} />
+            </Box>
+          </Tooltip>
+        )}
       </Box>
 
       {/* ─── Navigation Items ─── */}
@@ -285,12 +292,12 @@ export default function Sidebar() {
                 display: "flex",
                 alignItems: "center",
                 gap: 1.2,
-                height: 38,
+                height: open ? 38 : 34,
                 px: open ? 1.5 : 0,
                 mx: open ? 1.5 : "auto",
-                width: open ? "auto" : 38,
-                mt: 1.5,
-                mb: 0.25,
+                width: open ? "auto" : 34,
+                mt: open ? 1.5 : 0.5,
+                mb: open ? 0.25 : 0.5,
                 borderRadius: "8px",
                 cursor: "pointer",
                 justifyContent: open ? "flex-start" : "center",
@@ -340,7 +347,7 @@ export default function Sidebar() {
           pb: 2,
           display: "flex",
           flexDirection: "column",
-          gap: 0.75,
+          gap: open ? 0.75 : 0.1,
           alignItems: open ? "stretch" : "center",
           width: "100%",
         }}
@@ -353,7 +360,7 @@ export default function Sidebar() {
               sx={{
                 justifyContent: "flex-start",
                 height: 38,
-                color: textColor,
+                color: isDark ? "#ffffff" : "#000000",
                 fontSize: "12.5px",
                 px: 1.5,
                 borderRadius: "8px",
@@ -372,16 +379,14 @@ export default function Sidebar() {
               sx={{
                 justifyContent: "flex-start",
                 height: 38,
-                color: textColor,
+                color: isDark ? "#ffffff" : "#000000",
                 fontSize: "12.5px",
                 px: 1.5,
                 borderRadius: "8px",
                 textTransform: "none",
                 "&:hover": {
-                  bgcolor: isDark
-                    ? "rgba(255,70,70,0.1)"
-                    : "rgba(255,0,0,0.05)",
-                  color: isDark ? "#ff6b6b" : "#d32f2f",
+                  bgcolor: "transparent",
+                  color: textActiveColor,
                 },
               }}
             >
@@ -398,11 +403,11 @@ export default function Sidebar() {
               <IconButton
                 onClick={toggleColorMode}
                 sx={{
-                  width: 36,
-                  height: 36,
+                  width: 32,
+                  height: 32,
                   flexShrink: 0,
                   borderRadius: "8px",
-                  color: textColor,
+                  color: isDark ? "#ffffff" : "#000000",
                   "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
                 }}
               >
@@ -418,16 +423,14 @@ export default function Sidebar() {
               <IconButton
                 onClick={logout}
                 sx={{
-                  width: 36,
-                  height: 36,
+                  width: 32,
+                  height: 32,
                   flexShrink: 0,
                   borderRadius: "8px",
-                  color: textColor,
+                  color: isDark ? "#ffffff" : "#000000",
                   "&:hover": {
-                    bgcolor: isDark
-                      ? "rgba(255,70,70,0.1)"
-                      : "rgba(255,0,0,0.05)",
-                    color: isDark ? "#ff6b6b" : "#d32f2f",
+                    bgcolor: "transparent",
+                    color: textActiveColor,
                   },
                 }}
               >

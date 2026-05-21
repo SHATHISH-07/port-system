@@ -87,7 +87,7 @@ export default function StowageHeader({
               color: 'text.primary',
             }}
           >
-            Vessel Stowage Planning & Hub
+            Stowage and Yard Planning
           </Box>
         </Box>
 
