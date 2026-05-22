@@ -281,7 +281,7 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
         dominant_pod = max(b["pod_counts"], key=b["pod_counts"].get) if b["pod_counts"] else None
         modal_risk = max(set(b["reshuffle_risks"]), key=b["reshuffle_risks"].count) if b["reshuffle_risks"] else "MEDIUM"
         pod_groups = [
-            {"pod": p, "count": c}
+            {"port": p, "count": c}
             for p, c in sorted(b["pod_counts"].items(), key=lambda x: -x[1])
         ]
         total_in_block = b["loaded"] + b["in_yard"]
@@ -321,6 +321,7 @@ def get_stowage_visualization(
     yard_id: Optional[str] = None,
     visit_id: Optional[str] = None,
     container_ids: Optional[List[str]] = None,
+    port_rotation: Optional[List[str]] = None,
 ) -> dict:
     mode = "HISTORICAL" if visit_id else "CURRENT"
     df = pd.DataFrame()
@@ -365,11 +366,39 @@ def get_stowage_visualization(
             },
         }
 
-    port_rotation_dict: dict = {}
+    rotation = []
+    if port_rotation and len(port_rotation) > 0:
+        rotation = port_rotation
+    else:
+        try:
+            history_df = load_from_db("history", vessel_id=vessel_id)
+            if history_df is not None and not history_df.empty and "port_of_discharge" in history_df.columns:
+                hist_counts = history_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
+                rotation = [p for p in hist_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
+        except Exception:
+            pass
+
+    discharge_sequence = []
+    rank_map = {}
+    current_rank = 1
+    
+    # 1. Assign ranks from rotation list
+    for p in rotation:
+        if p not in rank_map:
+            rank_map[p] = current_rank
+            discharge_sequence.append({"port": p, "dischargeOrder": current_rank})
+            current_rank += 1
+            
+    # 2. Append any ports in the current dataframe that aren't in rotation
     if "port_of_discharge" in df.columns:
-        ports = df["port_of_discharge"].dropna().astype(str).str.strip().str.upper()
-        for idx, port in enumerate(ports.value_counts().index.tolist(), start=1):
-            port_rotation_dict[port] = idx
+        df_ports = df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts().index.tolist()
+        for p in df_ports:
+            if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT") and p not in rank_map:
+                rank_map[p] = current_rank
+                discharge_sequence.append({"port": p, "dischargeOrder": current_rank})
+                current_rank += 1
+
+    port_rotation_dict = rank_map
 
     groups = _build_map_groups(df, port_rotation_dict)
     
@@ -387,4 +416,5 @@ def get_stowage_visualization(
             "totalContainers": len(container_ids) if container_ids else resolved_count,
             "resolvedCount": resolved_count,
         },
+        "dischargeSequence": discharge_sequence,
     }

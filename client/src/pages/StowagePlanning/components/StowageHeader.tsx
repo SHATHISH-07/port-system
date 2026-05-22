@@ -15,7 +15,6 @@ import SearchIcon from '@mui/icons-material/Search';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import ConstructionIcon from '@mui/icons-material/Construction';
-import GridOnIcon from '@mui/icons-material/GridOn';
 
 interface StowageHeaderProps {
   vesselId: string;
@@ -267,7 +266,7 @@ export default function StowageHeader({
               whiteSpace: 'nowrap',
             }}
           >
-            {activeTab === 0 ? 'Sync Stowage' : (activeTab === 1 ? 'Run Optimizer' : 'Visualize Deck')}
+            {activeTab === 0 ? 'Sync Stowage' : 'Run Optimizer'}
           </Button>
         </Box>
 
@@ -328,10 +327,6 @@ export default function StowageHeader({
             <ToggleButton value={1}>
               <ConstructionIcon sx={{ fontSize: 16 }} />
               Planning & Ingestion
-            </ToggleButton>
-            <ToggleButton value={2}>
-              <GridOnIcon sx={{ fontSize: 16 }} />
-              Visualization
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>

@@ -279,3 +279,4 @@ class StowageVisualizationResponse(BaseModel):
     map: UnifiedMap                         # keep existing for compatibility
     yardGrid: Optional[YardGrid] = None     # NEW
     summary: VisualizationSummary
+    dischargeSequence: List[DischargeSequenceEntry] = Field(default_factory=list)

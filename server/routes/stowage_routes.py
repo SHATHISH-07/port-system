@@ -123,6 +123,7 @@ async def stowage_visualization(
             yard_id=yard_id,
             visit_id=visit_id,
             container_ids=container_ids,
+            port_rotation=req_data.get("port_rotation")
         )
 
     except HTTPException:
