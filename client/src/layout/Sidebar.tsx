@@ -200,7 +200,7 @@ export default function Sidebar() {
                 gap: 1.5,
               }}
             >
-              <Box sx={{ width: 26, height: 26, bgcolor: isDark ? '#e0e0e0' : '#333333', borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} />
+              <Box sx={{ width: 26, height: 26, bgcolor: isDark ? '#ffffff' : '#000000', borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} />
               <Box
                 sx={{
                   display: "flex",
@@ -255,7 +255,7 @@ export default function Sidebar() {
                 "&:hover .menu-icon": { display: "block", color: textActiveColor }
               }}
             >
-              <Box className="logo-icon" sx={{ width: 26, height: 26, bgcolor: isDark ? '#e0e0e0' : '#333333', borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
+              <Box className="logo-icon" sx={{ width: 26, height: 26, bgcolor: isDark ? '#ffffff' : '#000000', borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
               <ViewSidebarOutlined className="menu-icon" sx={{ fontSize: 20, color: menuIconColor }} />
             </Box>
           </Tooltip>
