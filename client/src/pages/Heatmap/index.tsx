@@ -19,7 +19,7 @@ import {
 } from "@mui/material";
 import {
   FullscreenRounded,
-  UploadFileRounded,
+  UploadFileOutlined,
   ClearRounded,
   SearchRounded,
   CloseRounded,
@@ -335,8 +335,10 @@ export default function OperationalDashboard() {
     <Box
       ref={wrapperRef}
       sx={{
-        width: "100%",
-        height: "100%",
+        width: "calc(100% - 32px)",
+        height: "calc(100% - 32px)",
+        m: 2,
+        borderRadius: 2,
         position: "relative",
         overflow: "hidden",
         bgcolor: "background.default",
@@ -381,9 +383,9 @@ export default function OperationalDashboard() {
           top: 16,
           left: 16,
           zIndex: 10,
-          backdropFilter: "blur(20px)",
-          bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.8 : 0.9),
-          borderRadius: 3,
+          backdropFilter: "none",
+          bgcolor: "background.paper",
+          borderRadius: 1,
           overflow: "hidden",
           transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           width: inputsOpen ? 260 : "auto",
@@ -408,18 +410,18 @@ export default function OperationalDashboard() {
         ) : (
           <Box sx={{ p: 1.8 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
-              <Typography sx={{ fontSize: "0.6rem", fontWeight: 900, color: "text.secondary", letterSpacing: 1.2, textTransform: "uppercase" }}>
-                Command Parameters
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Heatmap Analysis
               </Typography>
               <IconButton size="small" onClick={() => setInputsOpen(false)} sx={{ mr: -0.5 }}>
                 <CloseRounded sx={{ fontSize: 16 }} />
               </IconButton>
             </Box>
             <Stack spacing={1.2}>
-              <TextField size="small" fullWidth label="Vessel ID" value={vesselInput} onChange={(e) => setVesselInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
-              <TextField size="small" fullWidth label="Yard ID (Optional)" value={yardInput} onChange={(e) => setYardInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
+              <TextField size="small" fullWidth label="Vessel ID" value={vesselInput} onChange={(e) => setVesselInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36 } }} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
+              <TextField size="small" fullWidth label="Yard ID (Optional)" value={yardInput} onChange={(e) => setYardInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36 } }} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
               <Box>
-                <Button fullWidth component="label" variant="outlined" startIcon={<UploadFileRounded sx={{ fontSize: 16 }} />} sx={{ fontSize: '0.75rem', py: 0.6, fontWeight: 700, textTransform: "none", justifyContent: "flex-start", color: 'text.primary', borderColor: 'divider' }}>
+                <Button fullWidth component="label" variant="outlined" startIcon={<UploadFileOutlined sx={{ fontSize: 16 }} />} sx={{ borderRadius: 2, fontSize: '0.75rem', py: 0.6, fontWeight: 500, textTransform: "none", justifyContent: "flex-start", color: 'text.primary', borderColor: 'divider' }}>
                   <Typography noWrap sx={{ fontSize: '0.75rem', maxWidth: 180 }}>
                     {containerFile ? containerFile.name : "Upload Container List"}
                   </Typography>
@@ -431,8 +433,8 @@ export default function OperationalDashboard() {
                   </Button>
                 )}
               </Box>
-              <Button variant="contained" fullWidth onClick={load} disabled={loading} sx={{ fontWeight: 800, py: 1, fontSize: '0.8rem' }}>
-                {loading ? "Analyzing..." : "Execute Analysis"}
+              <Button variant="contained" fullWidth onClick={load} disabled={loading} sx={{ borderRadius: 2, fontWeight: 800, py: 1, fontSize: '0.8rem' }}>
+                {loading ? "Analyzing..." : "Analyze"}
               </Button>
             </Stack>
           </Box>
@@ -447,8 +449,8 @@ export default function OperationalDashboard() {
             top: 16,
             right: 16,
             zIndex: 10,
-            backdropFilter: "blur(20px)",
-            bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.8 : 0.9),
+            backdropFilter: "none",
+            bgcolor: "background.paper",
             borderRadius: 3,
             px: 1.5,
             py: 0.8,
@@ -517,8 +519,8 @@ export default function OperationalDashboard() {
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 10,
-          backdropFilter: "blur(20px)",
-          bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.8 : 0.9),
+          backdropFilter: "none",
+          bgcolor: "background.paper",
           borderRadius: 8,
           p: 0.4,
           border: "1px solid",

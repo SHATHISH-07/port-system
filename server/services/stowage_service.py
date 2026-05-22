@@ -81,21 +81,32 @@ def _determine_historical_deck(position_text: str, weight_band: str) -> str:
 def _compute_crane_metrics(
     vessel_id: str,
     yard_id: Optional[str],
+    visit_id: Optional[str] = None,
 ) -> Optional[dict]:
-    history_df = load_from_db("history", vessel_id=vessel_id, yard_id=yard_id, full_load=True)
-    if history_df is None or history_df.empty:
-        return None
+    if visit_id:
+        # Fast path: query crane data directly for this specific visit only
+        visit_ids = [str(visit_id)]
+    else:
+        # General path: derive all visit IDs from history
+        history_df = load_from_db("history", vessel_id=vessel_id, yard_id=yard_id, full_load=True)
+        if history_df is None or history_df.empty:
+            return None
+        history_df = _normalize_dataframe_columns(history_df)
+        if "actual_outbound_carrier_visit_id" not in history_df.columns:
+            return None
+        visit_ids = list(history_df["actual_outbound_carrier_visit_id"].dropna().astype(str).unique())
 
-    history_df = _normalize_dataframe_columns(history_df)
-    if "actual_outbound_carrier_visit_id" not in history_df.columns:
-        return None
-
-    visit_ids = list(history_df["actual_outbound_carrier_visit_id"].dropna().astype(str).unique())
     if not visit_ids:
         return None
 
     crane_df = load_from_db("crane", vessel_id=visit_ids, yard_id=yard_id)
     if crane_df is None or crane_df.empty:
+        return None
+
+    # Safety net: ensure we only have rows for the requested visit(s)
+    if "carrier_visit" in crane_df.columns:
+        crane_df = crane_df[crane_df["carrier_visit"].astype(str).isin([str(v) for v in visit_ids])].copy()
+    if crane_df.empty:
         return None
 
     crane_df["time_completed"] = pd.to_datetime(crane_df["time_completed"], errors="coerce")
@@ -385,7 +396,7 @@ def get_historical_stowage_analysis(
         above_deck_count = int((unique_df["historical_deck"] == "ABOVE_DECK").sum())
         below_deck_count = int((unique_df["historical_deck"] == "BELOW_DECK").sum())
 
-    crane_metrics = _compute_crane_metrics(vessel_id, yard_id)
+    crane_metrics = _compute_crane_metrics(vessel_id, yard_id, visit_id=visit_id)
 
     return {
         "summary": {

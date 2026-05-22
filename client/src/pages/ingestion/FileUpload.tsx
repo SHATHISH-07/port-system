@@ -56,21 +56,22 @@ export default function FileUpload({
       onDrop={handleDrop}
       onClick={() => inputRef.current?.click()}
       sx={{
-        border: "1.5px dashed",
+        border: "2px dashed",
         borderColor: dragActive
           ? "primary.main"
-          : isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.15)",
-        borderRadius: 2,
-        p: { xs: 3, md: 4 },
+          : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+        borderRadius: 4,
+        p: { xs: 4, md: 5 },
         textAlign: "center",
         backgroundColor: dragActive
-          ? isDark ? "rgba(110,168,254,0.05)" : "rgba(26,115,232,0.03)"
-          : "transparent",
-        transition: "all 180ms ease",
+          ? isDark ? "rgba(110,168,254,0.08)" : "rgba(26,115,232,0.04)"
+          : isDark ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)",
+        transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
         cursor: "pointer",
         "&:hover": {
-          borderColor: "primary.main",
-          backgroundColor: isDark ? "rgba(110,168,254,0.04)" : "rgba(26,115,232,0.02)",
+          borderColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)",
+          backgroundColor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
+          transform: "translateY(-1px)",
         },
       }}
     >
@@ -83,32 +84,34 @@ export default function FileUpload({
       />
 
       {selectedFile ? (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-          <InsertDriveFileOutlined sx={{ fontSize: 36, color: "primary.main" }} />
-          <Typography sx={{ fontWeight: 600, color: "text.primary", fontSize: "0.875rem" }}>
-            {selectedFile.name}
-          </Typography>
-          <Typography variant="caption" sx={{ color: "text.secondary" }}>
-            {(selectedFile.size / 1024).toFixed(1)} KB
-          </Typography>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+          <InsertDriveFileOutlined sx={{ fontSize: 48, color: "primary.main" }} />
+          <Box>
+            <Typography sx={{ fontWeight: 700, color: "text.primary", fontSize: "0.95rem" }}>
+              {selectedFile.name}
+            </Typography>
+            <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.8rem" }}>
+              {(selectedFile.size / 1024).toFixed(1)} KB
+            </Typography>
+          </Box>
           <Button
             size="small"
-            variant="outlined"
+            color="error"
             onClick={clearFile}
-            sx={{ mt: 0.5, fontSize: "0.75rem" }}
+            sx={{ mt: 1, fontSize: "0.75rem", textTransform: "none", fontWeight: 600, borderRadius: 2 }}
           >
-            Remove
+            Remove File
           </Button>
         </Box>
       ) : (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
           <CloudUploadOutlined
-            sx={{ fontSize: 36, color: "text.disabled", mb: 0.5 }}
+            sx={{ fontSize: 48, color: "text.disabled", mb: 1 }}
           />
-          <Typography sx={{ fontWeight: 500, color: "text.primary", fontSize: "0.875rem" }}>
+          <Typography sx={{ fontWeight: 600, color: "text.primary", fontSize: "1rem" }}>
             {label}
           </Typography>
-          <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.8rem" }}>
             Drag & drop or click to browse &mdash; {acceptedTypes.toUpperCase()} only
           </Typography>
         </Box>

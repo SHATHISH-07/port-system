@@ -18,7 +18,6 @@ const Login = lazy(() => import("./pages/auth/Login"));
 const Requests = lazy(() => import("./pages/user/Requests"));
 const UserManagement = lazy(() => import("./pages/user/UserManagement"));
 const SystemLogs = lazy(() => import("./pages/user/SystemLogs"));
-const CraneAnalytics = lazy(() => import("./pages/CraneAnalytics/CraneAnalytics"));
 const StowagePlanning = lazy(() => import("./pages/StowagePlanning/StowagePlanning"));
 
 function PageLoader() {
@@ -82,11 +81,7 @@ export default function App() {
                 />
                 <Route
                   path="/crane-analytics"
-                  element={
-                    <ProtectedRoute>
-                      <CraneAnalytics />
-                    </ProtectedRoute>
-                  }
+                  element={<Navigate to="/stay-analysis" />}
                 />
                 <Route
                   path="/stowage-planning"

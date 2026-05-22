@@ -226,7 +226,18 @@ export default function CurrentPlanningTab({ vesselId, yardId, globalFile, globa
     if (trigger > 0) executeOptimization();
   }, [trigger]);
 
-  if (!optimizedData && !loading && !error) return null;
+  if (!optimizedData && !loading && !error) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pt: { xs: 10, md: 20 }, textAlign: 'center', opacity: 0.8 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+          Ready to Optimize
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 380 }}>
+          Enter a Vessel ID and upload a container list above, then click <strong>Analyze</strong> to generate a stowage plan.
+        </Typography>
+      </Box>
+    );
+  }
   if (loading && !optimizedData) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}><CircularProgress size={40} thickness={4} /></Box>;
   if (error) return <Typography color="error" sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.error.main, 0.1), borderRadius: 2 }}>{error}</Typography>;
 
@@ -523,7 +534,7 @@ export default function CurrentPlanningTab({ vesselId, yardId, globalFile, globa
               </TableRow>
             </TableHead>
             <TableBody>
-              {paginatedRecs.map((step: any, idx: number) => (
+              {paginatedRecs.map((step: any) => (
                 <CompactRow key={step.unitId} step={step} theme={theme} />
               ))}
             </TableBody>

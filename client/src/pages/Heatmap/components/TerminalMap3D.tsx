@@ -226,8 +226,8 @@ class TerminalScene {
     this.animate();
   }
 
-  setTheme(mode: 'light' | 'dark') {
-    this.isDark = mode === 'dark';
+  setTheme(_mode: 'light' | 'dark') {
+    this.isDark = false;
     const skyColor = this.isDark ? 0x060c14 : 0x8ab4f8;
     this.renderer.setClearColor(skyColor, 1);
     if (this.scene.fog) { (this.scene.fog as THREE.FogExp2).color.setHex(skyColor); }
@@ -892,7 +892,7 @@ class TerminalScene {
     [200, 400, 600].forEach(cy => this.buildSTSCrane(EDGE_E, cy, -90));
   }
 
-  buildShip(id: string, svgX: number, svgY: number, rotDeg: number, name: string, isTarget: boolean, visitId?: string) {
+  buildShip(id: string, svgX: number, svgY: number, rotDeg: number, name: string, isTarget: boolean) {
     const g = new THREE.Group();
     const pos = to3D(svgX, svgY);
     const L = SHIP_LEN, W = SHIP_WID, DR = SHIP_DRAFT;
@@ -1139,7 +1139,7 @@ class TerminalScene {
     BERTHS.forEach(b => {
       const isTarget = b.id === targetBerthId;
       if (isTarget) {
-        this.buildShip(b.id, b.x, b.y, b.rot, data.vessel || "ACTIVE VESSEL", true, data.visit_id);
+        this.buildShip(b.id, b.x, b.y, b.rot, data.vessel || "ACTIVE VESSEL", true);
       }
     });
   }

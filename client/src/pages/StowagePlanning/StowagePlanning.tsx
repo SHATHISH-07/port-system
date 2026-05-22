@@ -51,12 +51,10 @@ export default function StowagePlanning() {
   return (
     <Box
       sx={{
-        height: '100%',
         width: '100%',
         bgcolor: 'background.default',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
       }}
     >
       <StowageHeader
@@ -84,8 +82,6 @@ export default function StowagePlanning() {
 
       <Box
         sx={{
-          flex: 1,
-          overflowY: 'auto',
           p: 3,
           display: 'flex',
           flexDirection: 'column',

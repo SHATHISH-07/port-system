@@ -11,13 +11,11 @@ import {
 import {
   HistoryOutlined,
   ViewSidebarOutlined,
-  AssignmentOutlined,
   LogoutOutlined,
   ExpandLess,
   ExpandMore,
   DarkModeOutlined,
   LightModeOutlined,
-  PrecisionManufacturingOutlined,
   SettingsOutlined,
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
@@ -50,15 +48,10 @@ const USER_ITEMS: {
       label: "Stowage Planning",
       icon: WidgetsOutlinedIcon,
     },
-    {
-      path: "/crane-analytics",
-      label: "Crane Analytics",
-      icon: PrecisionManufacturingOutlined,
-    },
-    { path: "/requests", label: "Requests", icon: AssignmentOutlined },
   ];
 
 const ADMIN_ITEMS = [
+  { path: "/requests", label: "Requests" },
   { path: "/ingest", label: "Data Ingestion" },
   { path: "/train-model", label: "Train Model" },
   { path: "/user-management", label: "User Management" },

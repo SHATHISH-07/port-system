@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Button, TextField, Typography, Paper, Alert } from "@mui/material";
+import { Box, Button, TextField, Typography, Alert, useTheme, Paper, Container } from "@mui/material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { api } from "../../api/api";
@@ -13,10 +13,12 @@ const Login: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { login } = useAuth();
+    const theme = useTheme();
+    const isDark = theme.palette.mode === "dark";
 
     const from = location.state?.from?.pathname || "/";
 
-    const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError("");
         setLoading(true);
@@ -42,10 +44,7 @@ const Login: React.FC = () => {
             navigate(from, { replace: true });
         } catch (err: unknown) {
             const e = err as { response?: { data?: { detail?: string } } };
-
-            setError(
-                e?.response?.data?.detail || "Invalid username or password",
-            );
+            setError(e?.response?.data?.detail || "Invalid username or password");
         } finally {
             setLoading(false);
         }
@@ -56,108 +55,94 @@ const Login: React.FC = () => {
             sx={{
                 minHeight: "100vh",
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "background.default",
-                p: 2,
+                bgcolor: "background.default",
+                py: 4,
             }}
         >
-            <Paper
-                elevation={0}
-                sx={{
-                    p: 3,
-                    width: "100%",
-                    maxWidth: 320,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    borderRadius: 2.5,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    boxShadow: "0 4px 18px rgba(0,0,0,0.04)",
-                }}
-            >
-                <Typography
-                    component="h1"
-                    variant="h6"
+            <Container maxWidth="xs">
+                {/* Header */}
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 4 }}>
+                    <Typography variant="h5" sx={{ fontWeight: 700, color: "text.primary", letterSpacing: "-0.01em" }}>
+                        Sign in to Deck Optimizer
+                    </Typography>
+                </Box>
+
+                {/* Login Card */}
+                <Paper
+                    elevation={isDark ? 0 : 1}
                     sx={{
-                        mb: 2.5,
-                        fontWeight: 700,
-                        letterSpacing: "-0.02em",
-                        color: "text.primary",
+                        p: { xs: 3, sm: 4 },
+                        borderRadius: 2.5,
+                        bgcolor: "background.paper",
+                        border: "1px solid",
+                        borderColor: "divider",
+                        boxShadow: isDark ? "none" : "0 4px 20px rgba(0,0,0,0.04)"
                     }}
                 >
-                    Terminal Optimizer
-                </Typography>
+                    {error && (
+                        <Alert severity="error" sx={{ mb: 3, borderRadius: 1.5 }}>
+                            {error}
+                        </Alert>
+                    )}
 
-                {error && (
-                    <Alert
-                        severity="error"
-                        sx={{
-                            width: "100%",
-                            mb: 2,
-                            borderRadius: 2,
-                            py: 0.3,
-                        }}
-                    >
-                        {error}
-                    </Alert>
-                )}
+                    <Box component="form" onSubmit={handleSubmit}>
+                        {/* Username */}
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: "text.primary" }}>
+                            Username
+                        </Typography>
+                        <TextField
+                            required
+                            fullWidth
+                            id="username"
+                            name="username"
+                            autoComplete="username"
+                            autoFocus
+                            size="small"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            sx={{ mb: 3 }}
+                        />
 
-                <Box
-                    component="form"
-                    onSubmit={handleSubmit}
-                    sx={{ width: "100%" }}
-                >
-                    <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        id="username"
-                        label="Username"
-                        name="username"
-                        autoComplete="username"
-                        autoFocus
-                        size="small"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        sx={{ mb: 1.5 }}
-                    />
+                        {/* Password */}
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: "text.primary" }}>
+                            Password
+                        </Typography>
+                        <TextField
+                            required
+                            fullWidth
+                            name="password"
+                            type="password"
+                            id="password"
+                            autoComplete="current-password"
+                            size="small"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            sx={{ mb: 4 }}
+                        />
 
-                    <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        name="password"
-                        label="Password"
-                        type="password"
-                        id="password"
-                        autoComplete="current-password"
-                        size="small"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        sx={{ mb: 2.5 }}
-                    />
-
-                    <Button
-                        type="submit"
-                        fullWidth
-                        variant="contained"
-                        disabled={loading}
-                        disableElevation
-                        sx={{
-                            py: 0.9,
-                            borderRadius: 1.8,
-                            fontWeight: 600,
-                            textTransform: "none",
-                            fontSize: "0.92rem",
-                            minHeight: 38,
-                        }}
-                    >
-                        {loading ? "Authenticating..." : "Sign In"}
-                    </Button>
-                </Box>
-            </Paper>
+                        {/* Submit Button */}
+                        <Button
+                            type="submit"
+                            fullWidth
+                            variant="contained"
+                            disabled={loading}
+                            disableElevation
+                            sx={{
+                                py: 1.2,
+                                fontWeight: 600,
+                                textTransform: "none",
+                                fontSize: "0.95rem",
+                                borderRadius: 1.5,
+                            }}
+                        >
+                            {loading ? "Signing in..." : "Sign in"}
+                        </Button>
+                    </Box>
+                </Paper>
+            </Container>
         </Box>
     );
 };

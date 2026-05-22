@@ -10,7 +10,9 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const isLoginPage = location.pathname === "/login";
-  const isFullScreenPage = location.pathname === "/heatmap";
+
+  // Pages that manage their own layout/scrolling internally
+  const isSelfContainedPage = ["/heatmap"].includes(location.pathname);
 
   if (isLoginPage) {
     return <>{children}</>;
@@ -28,17 +30,17 @@ export default function Layout({ children }: LayoutProps) {
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          overflow: isFullScreenPage ? "hidden" : "auto",
+          overflow: isSelfContainedPage ? "hidden" : "auto",
           minWidth: 0,
-          p: isFullScreenPage ? 0 : { xs: "20px 16px", md: "32px 40px" },
+          p: isSelfContainedPage ? 0 : { xs: "20px 16px", md: "32px 40px" },
         }}
       >
         <Box
           sx={{
             width: "100%",
-            maxWidth: isFullScreenPage ? "none" : 2000,
-            mx: isFullScreenPage ? 0 : "auto",
-            height: isFullScreenPage ? "100%" : "auto",
+            maxWidth: isSelfContainedPage ? "none" : 1350,
+            mx: isSelfContainedPage ? 0 : "auto",
+            height: isSelfContainedPage ? "100%" : "auto",
           }}
         >
           {children}

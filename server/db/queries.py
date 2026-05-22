@@ -452,6 +452,7 @@ def load_from_db(
         "history":       "container_operations",
         "current":       "container_operations",
         "vessel_visits": "vessel_visits",
+        "crane":         "crane_operations",
     }
     new_suffix = new_suffix_map.get(dataset_type)
 
@@ -464,6 +465,8 @@ def load_from_db(
                 return _load_current_from_ops(engine, new_tables, vessel_id, settings)
             if dataset_type == "vessel_visits":
                 return _load_vessel_visits(engine, new_tables, vessel_id, settings)
+            if dataset_type == "crane":
+                return _load_crane_ops(engine, new_tables, vessel_id, full_load, settings)
 
     # No legacy fallback — unified tables only
     return pd.DataFrame()

@@ -364,7 +364,7 @@ function HeatmapPlaceholder() {
   const emptyBlock = { count: 0, intensity: 0, concentration: "Low" as const, cells: [], hazardous: 0, reefer: 0, oog: 0 };
 
   // High-tech blueprint background
-  const bgColor = isDark ? "#060b14" : "#f1f5f9";
+  const bgColor = isDark ? "#121212" : "#f1f5f9";
   const gridColor = isDark ? alpha("#ffffff", 0.03) : alpha("#000000", 0.04);
 
   return (
@@ -380,7 +380,7 @@ function HeatmapPlaceholder() {
       }}
     >
       <TransformWrapper initialScale={0.72} minScale={0.4} maxScale={3} centerOnInit wheel={{ step: 0.002 }} panning={{ disabled: false }}>
-        {({ resetTransform }) => (
+        {() => (
           <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
             <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 1200, p: 4, gap: 5, opacity: 0.5 }}>
@@ -424,7 +424,7 @@ export default function HeatmapView({ data, loading, targetBerthId }: { data?: V
   const isDark = theme.palette.mode === "dark";
 
   // Tech canvas background
-  const bgColor = isDark ? "#060b14" : "#f4f7fb";
+  const bgColor = isDark ? "#121212" : "#f4f7fb";
   const gridColor = isDark ? alpha("#ffffff", 0.04) : alpha("#000000", 0.05);
 
   if (loading || !data) return <HeatmapPlaceholder />;

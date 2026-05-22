@@ -60,11 +60,7 @@ export default function StowageHeader({
         py: 2.5,
         bgcolor: alpha(theme.palette.background.default, 0.9),
         backdropFilter: 'blur(25px)',
-        borderBottom: `1px solid ${theme.palette.divider}`,
         borderRadius: 0,
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000,
       }}
     >
       <Box
@@ -116,8 +112,8 @@ export default function StowageHeader({
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
                 bgcolor: 'background.paper',
-                height: 40,
-                fontSize: '0.85rem',
+                height: 36,
+                fontSize: '0.8rem',
                 '& fieldset': { borderColor: alpha(theme.palette.divider, 0.8) },
                 '&:hover fieldset': { borderColor: theme.palette.primary.main },
               },
@@ -143,7 +139,7 @@ export default function StowageHeader({
             sx={{
               flex: { xs: '1 1 48%', sm: '1 1 120px', lg: 0.8 },
               minWidth: 100,
-              '& .MuiOutlinedInput-root': { borderRadius: 2, height: 40, fontSize: '0.85rem' },
+              '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
             }}
           />
 
@@ -158,7 +154,7 @@ export default function StowageHeader({
               sx={{
                 flex: { xs: '1 1 48%', sm: '1 1 140px', lg: 0.8 },
                 minWidth: 120,
-                '& .MuiOutlinedInput-root': { borderRadius: 2, height: 40, fontSize: '0.85rem' },
+                '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
               }}
             />
           )}

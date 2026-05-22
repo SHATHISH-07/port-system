@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Box, Typography, Button, LinearProgress,
   Alert, Snackbar, Divider, Collapse, Checkbox, FormGroup,
   FormControlLabel, useTheme
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { UploadFileOutlined } from "@mui/icons-material";
 import { api } from "../../api/api";
 import TrainingStatusCard from "./TrainingStatusCard";
 import ConfigPanel from "./ConfigPanel";
+import FileUpload from "../ingestion/FileUpload";
 
 export default function TrainModel() {
   const theme = useTheme();
@@ -17,8 +17,6 @@ export default function TrainModel() {
   const [dataSource, setDataSource] = useState<"db" | "file">("db");
   const [file, setFile] = useState<File | null>(null);
   const [updateDb, setUpdateDb] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Training state ──────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false);
@@ -40,22 +38,6 @@ export default function TrainModel() {
   useEffect(() => {
     api.get("/model/status").then((r) => setStatus(r.data?.training || null)).catch(() => { });
   }, []);
-
-  // ── File handling ───────────────────────────────────────────────────────────
-  const handleFile = (f: File) => {
-    if (!f.name.endsWith(".csv")) {
-      showToast("Only CSV files are accepted.", "error");
-      return;
-    }
-    setFile(f);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) handleFile(f);
-  };
 
   // ── Submit training ─────────────────────────────────────────────────────────
   const handleTrain = async () => {
@@ -113,7 +95,6 @@ export default function TrainModel() {
           px: { xs: 2, md: 4 },
           py: 2.5,
           bgcolor: "transparent",
-          borderBottom: `1px solid ${theme.palette.divider}`,
         }}
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
@@ -189,12 +170,9 @@ export default function TrainModel() {
           scrollBehavior: 'smooth',
         }}
       >
-        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1, maxWidth: 800, mx: "auto" }}>
+        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1, width: "100%", maxWidth: 800, mx: "auto" }}>
           {/* Hero Header */}
           <Box sx={{ mb: 2 }}>
-            <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.1em', fontSize: '0.7rem' }}>
-              Machine Learning Retraining
-            </Typography>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
               <Typography sx={{ fontWeight: 800, fontSize: '1.25rem' }}>
                 {dataSource === "db" ? "Database Source" : "File Upload Source"}
@@ -208,68 +186,23 @@ export default function TrainModel() {
           {/* Config card */}
           <Box
             sx={{
-              bgcolor: "background.paper",
+              bgcolor: "transparent",
               border: "1px solid",
               borderColor: "divider",
               borderRadius: 3,
               mb: 2,
               overflow: "hidden",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.02)",
+
             }}
           >
             {/* File dropzone (Only active when dataSource is file) */}
             <Collapse in={dataSource === "file"}>
               <Box sx={{ p: 2.5, pb: 1.5 }}>
-                <Box
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={handleDrop}
-                  onClick={() => fileRef.current?.click()}
-                  sx={{
-                    border: `2px dashed ${isDragging
-                      ? (theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8")
-                      : theme.palette.divider}`,
-                    borderRadius: 2,
-                    p: 2.5,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    textAlign: "center",
-                    gap: 1.2,
-                    cursor: "pointer",
-                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                    bgcolor: isDragging
-                      ? (theme.palette.mode === "dark" ? "rgba(96,165,250,0.08)" : "rgba(26,115,232,0.06)")
-                      : "background.default",
-                    "&:hover": {
-                      borderColor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
-                      bgcolor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.02)",
-                      transform: "scale(1.002)",
-                    },
-                  }}
-                >
-                  <input ref={fileRef} type="file" accept=".csv" hidden
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-                  <UploadFileOutlined sx={{ color: "text.disabled", fontSize: 24, mb: 0.5 }} />
-                  <Box sx={{ maxWidth: 280 }}>
-                    {file ? (
-                      <>
-                        <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary" }}>{file.name}</Typography>
-                        <Typography variant="caption" sx={{ color: "text.disabled", mt: 0.5, display: "block" }}>{(file.size / 1024).toFixed(1)} KB — click to change</Typography>
-                      </>
-                    ) : (
-                      <>
-                        <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 600, fontSize: "0.8rem" }}>
-                          Drop a CSV here or click to browse
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.5, fontSize: "0.65rem" }}>
-                          Requires headers matching standard vessel stay schemas
-                        </Typography>
-                      </>
-                    )}
-                  </Box>
-                </Box>
+                <FileUpload
+                  onFileSelect={(f) => setFile(f)}
+                  acceptedTypes=".csv"
+                  label="Upload custom training dataset"
+                />
 
                 {/* Save to DB checkbox */}
                 <FormGroup sx={{ mt: 1.5, ml: 0.5 }}>
@@ -294,7 +227,7 @@ export default function TrainModel() {
             <Divider sx={{ borderColor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
 
             {/* Actions */}
-            <Box sx={{ px: 2.5, py: 1.5, display: "flex", justifyContent: "flex-end", bgcolor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.01)" : "rgba(0,0,0,0.005)" }}>
+            <Box sx={{ px: 2.5, py: 1.5, display: "flex", justifyContent: "flex-end", bgcolor: "transparent" }}>
               <Button
                 variant="contained"
                 disableElevation

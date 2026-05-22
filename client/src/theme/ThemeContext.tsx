@@ -15,7 +15,7 @@ interface ColorModeContextType {
 // eslint-disable-next-line react-refresh/only-export-components
 export const ColorModeContext = createContext<ColorModeContextType>({
   mode: "dark",
-  toggleColorMode: () => {},
+  toggleColorMode: () => { },
 });
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -36,24 +36,24 @@ function buildTheme(mode: PaletteMode) {
     palette: {
       mode,
       background: {
-        default: isDark ? "#0f0f0f" : "#ffffff",
-        paper:   isDark ? "#252525" : "#ffffff",
+        default: isDark ? "#121212" : "#ffffff",
+        paper: isDark ? "#212121" : "#ffffff",
       },
       primary: {
-        main:         isDark ? "#60a5fa" : "#1a73e8",
-        light:        isDark ? "#93c5fd" : "#4285f4",
-        dark:         isDark ? "#3b82f6" : "#1557b0",
+        main: isDark ? "#93c5fd" : "#1a73e8",
+        light: isDark ? "#93c5fd" : "#4285f4",
+        dark: isDark ? "#3b82f6" : "#1557b0",
         contrastText: "#ffffff",
       },
       secondary: { main: isDark ? "#a78bfa" : "#e8f0fe" },
-      success:   { main: isDark ? "#34d399" : "#059669" },
-      warning:   { main: isDark ? "#fbbf24" : "#d97706" },
-      error:     { main: isDark ? "#f87171" : "#dc2626" },
-      info:      { main: isDark ? "#38bdf8" : "#4285f4" },
+      success: { main: isDark ? "#34d399" : "#059669" },
+      warning: { main: isDark ? "#fbbf24" : "#d97706" },
+      error: { main: isDark ? "#f87171" : "#dc2626" },
+      info: { main: isDark ? "#38bdf8" : "#4285f4" },
       text: {
-        primary:   isDark ? "#ffffff" : "#111827",
+        primary: isDark ? "#ffffff" : "#111827",
         secondary: isDark ? "rgba(255, 255, 255, 0.7)" : "#4b5563",
-        disabled:  isDark ? "rgba(255, 255, 255, 0.3)" : "#6b7280",
+        disabled: isDark ? "rgba(255, 255, 255, 0.3)" : "#6b7280",
       },
       action: {
         active: isDark ? "#ffffff" : "rgba(0, 0, 0, 0.54)",
@@ -65,9 +65,9 @@ function buildTheme(mode: PaletteMode) {
       h1: { fontWeight: 700, letterSpacing: "-0.5px" },
       h2: { fontWeight: 700, letterSpacing: "-0.3px" },
       h3: { fontWeight: 700, letterSpacing: "-0.2px" },
-      h4: { fontWeight: 700, fontSize: "1.5rem",   letterSpacing: "-0.2px" },
-      h5: { fontWeight: 600, fontSize: "1.25rem",  letterSpacing: "-0.15px" },
-      h6: { fontWeight: 600, fontSize: "1rem",     letterSpacing: "-0.1px" },
+      h4: { fontWeight: 700, fontSize: "1.5rem", letterSpacing: "-0.2px" },
+      h5: { fontWeight: 600, fontSize: "1.25rem", letterSpacing: "-0.15px" },
+      h6: { fontWeight: 600, fontSize: "1rem", letterSpacing: "-0.1px" },
       subtitle1: { fontWeight: 500, fontSize: "0.9375rem", lineHeight: 1.5 },
       subtitle2: { fontWeight: 500, fontSize: "0.8125rem", lineHeight: 1.4 },
       body1: { fontSize: "0.9375rem", lineHeight: 1.65 },
@@ -192,7 +192,7 @@ function buildTheme(mode: PaletteMode) {
         styleOverrides: {
           root: ({ theme }: { theme: typeof baseTheme }) => ({
             backgroundColor: theme.palette.mode === "dark"
-              ? "rgba(255,255,255,0.04)"
+              ? "#222021"
               : "rgba(15,23,42,0.03)",
             borderRadius: 8,
             fontSize: "0.9375rem",
@@ -435,9 +435,9 @@ function buildTheme(mode: PaletteMode) {
         styleOverrides: {
           root: { borderRadius: 10, fontWeight: 500 },
           filledSuccess: { backgroundColor: "#059669" },
-          filledError:   { backgroundColor: "#dc2626" },
+          filledError: { backgroundColor: "#dc2626" },
           filledWarning: { backgroundColor: "#d97706" },
-          filledInfo:    { backgroundColor: "#0284c7" },
+          filledInfo: { backgroundColor: "#0284c7" },
         },
       },
     },

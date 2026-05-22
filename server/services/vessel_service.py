@@ -134,17 +134,9 @@ def _fetch_crane_counts_batch(visit_ids: list[str]) -> dict[str, int]:
     return {vid: 0 for vid in visit_ids}
 
 
-def _fetch_assigned_crane_count(visit_id: str) -> int:
-    """
-    Fetch the number of distinct cranes assigned to a visit directly from the DB.
-    """
+def _fetch_crane_stats_for_visit(visit_id: str, container_count: int) -> dict:
     crane_df = _fetch_crane_for_visit(visit_id)
-    if crane_df.empty:
-        return 0
-    valid = crane_df[crane_df["exclude"] != "Yes"] if "exclude" in crane_df.columns else crane_df
-    if valid.empty or "crane_id" not in valid.columns:
-        return 0
-    return int(valid["crane_id"].nunique())
+    return _compute_crane_stats(crane_df, container_count)
 
 
 def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
@@ -287,8 +279,7 @@ def _visit_details(visit_groups: dict) -> dict:
             if "port_of_discharge" in vdf.columns else {}
         )
 
-        # Fetch assigned crane count from DB for this visit
-        assigned_cranes = _fetch_assigned_crane_count(str(visit_id))
+        crane_stats = _fetch_crane_stats_for_visit(str(visit_id), total_units)
 
         out[str(visit_id)] = {
             "stay_hours":            stay_hours,
@@ -302,9 +293,10 @@ def _visit_details(visit_groups: dict) -> dict:
             "total_units":           total_units,
             "restow_count":          restow_count,
             "avg_weight_kg":         avg_weight_kg,
-            "freight_kind_breakdown": freight_breakdown,
             "port_of_discharge_top5": pod_top5,
-            "assigned_cranes":       assigned_cranes,
+            "assigned_cranes":       int(crane_stats.get("_crane_count", 0)),
+            "cranes_assigned":       eval(crane_stats.get("_crane_ids", "[]")),
+            "crane_mph":             float(crane_stats.get("_crane_mphc", 0.0)),
         }
 
     return out
@@ -1092,10 +1084,12 @@ def analyze_vessel_dashboard(
             "move_end":               details.get("move_end"),
             "total_units":            details.get("total_units", 0),
             "restow_count":           details.get("restow_count", 0),
-            "avg_weight_kg":          details.get("avg_weight_kg", 0.0),
-            "freight_kind_breakdown": details.get("freight_kind_breakdown", {}),
-            "port_of_discharge_top5": details.get("port_of_discharge_top5", {}),
+            "avg_weight_kg":          details.get("avg_weight_kg", 0),
+            "port_of_discharge_top5": details.get("port_of_discharge_top5", []),
             "assigned_cranes":        details.get("assigned_cranes", 0),
+            "cranes_assigned":        details.get("cranes_assigned", []),
+            "crane_mph":              details.get("crane_mph", 0.0),
+            "crane_mpm":              round(60.0 / details.get("crane_mph"), 1) if details.get("crane_mph") > 0 else 0.0,
         }
 
     merged_stays = [v["stay_hours"] for v in merged_visits.values() if v.get("stay_hours", 0) > 0]
