@@ -17,12 +17,13 @@ import {
   DarkModeOutlined,
   LightModeOutlined,
   SettingsOutlined,
+  AssignmentOutlined,
 } from "@mui/icons-material";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useColorMode } from "../theme/ThemeContext";
-import WhatshotIcon from '@mui/icons-material/Whatshot';
-import WidgetsOutlinedIcon from '@mui/icons-material/WidgetsOutlined';
+import WhatshotIcon from "@mui/icons-material/Whatshot";
+import WidgetsOutlinedIcon from "@mui/icons-material/WidgetsOutlined";
 
 const OPEN = 250;
 const CLOSED = 54;
@@ -33,22 +34,28 @@ const USER_ITEMS: {
   icon?: React.ElementType;
   userOnly?: boolean;
 }[] = [
-    {
-      path: "/stay-analysis",
-      label: "Stay Time Analysis",
-      icon: HistoryOutlined,
-    },
-    {
-      path: "/heatmap",
-      label: "Port Heatmap",
-      icon: WhatshotIcon,
-    },
-    {
-      path: "/stowage-planning",
-      label: "Stowage Planning",
-      icon: WidgetsOutlinedIcon,
-    },
-  ];
+  {
+    path: "/stay-analysis",
+    label: "Stay Time Analysis",
+    icon: HistoryOutlined,
+  },
+  {
+    path: "/heatmap",
+    label: "Port Heatmap",
+    icon: WhatshotIcon,
+  },
+  {
+    path: "/stowage-planning",
+    label: "Stowage Planning",
+    icon: WidgetsOutlinedIcon,
+  },
+  {
+    path: "/requests",
+    label: "Request",
+    icon: AssignmentOutlined,
+    userOnly: true,
+  },
+];
 
 const ADMIN_ITEMS = [
   { path: "/requests", label: "Requests" },
@@ -71,7 +78,9 @@ export default function Sidebar() {
 
   // Hardened Color Palette for better Light Mode visibility
   const textColor = isDark ? "#ffffff" : "#000000";
-  const textActiveColor = isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)";
+  const textActiveColor = isDark
+    ? "rgba(255,255,255,0.65)"
+    : "rgba(0,0,0,0.65)";
   const menuIconColor = isDark ? "#ffffff" : "#000000";
   const menuIconHover = "transparent";
   const menuIconActive = "transparent";
@@ -102,7 +111,7 @@ export default function Sidebar() {
               display: "flex",
               alignItems: "center",
               gap: 1.2,
-              height: isSubItem ? 30 : (open ? 38 : 34),
+              height: isSubItem ? 30 : open ? 38 : 34,
               px: open ? (isSubItem ? 4 : 1.5) : 0,
               mx: open ? 1.5 : "auto",
               width: open ? "auto" : 34,
@@ -200,7 +209,18 @@ export default function Sidebar() {
                 gap: 1.5,
               }}
             >
-              <Box sx={{ width: 30, height: 30, bgcolor: isDark ? '#ffffff' : '#000000', borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} />
+              <Box
+                sx={{
+                  width: 30,
+                  height: 30,
+                  bgcolor: isDark ? "#ffffff" : "#000000",
+                  borderRadius: 1.5,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              />
               <Box
                 sx={{
                   display: "flex",
@@ -244,19 +264,36 @@ export default function Sidebar() {
               sx={{
                 width: 34,
                 height: 34,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '8px',
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "8px",
                 "&:hover": { bgcolor: menuIconHover },
                 "& .menu-icon": { display: "none" },
                 "&:hover .logo-icon": { display: "none" },
-                "&:hover .menu-icon": { display: "block", color: textActiveColor }
+                "&:hover .menu-icon": {
+                  display: "block",
+                  color: textActiveColor,
+                },
               }}
             >
-              <Box className="logo-icon" sx={{ width: 30, height: 30, bgcolor: isDark ? '#ffffff' : '#000000', borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
-              <ViewSidebarOutlined className="menu-icon" sx={{ fontSize: 24, color: menuIconColor }} />
+              <Box
+                className="logo-icon"
+                sx={{
+                  width: 30,
+                  height: 30,
+                  bgcolor: isDark ? "#ffffff" : "#000000",
+                  borderRadius: 1.5,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              />
+              <ViewSidebarOutlined
+                className="menu-icon"
+                sx={{ fontSize: 24, color: menuIconColor }}
+              />
             </Box>
           </Tooltip>
         )}
@@ -349,7 +386,13 @@ export default function Sidebar() {
           <>
             <Button
               onClick={toggleColorMode}
-              startIcon={isDark ? <LightModeOutlined sx={{ fontSize: 21 }} /> : <DarkModeOutlined sx={{ fontSize: 21 }} />}
+              startIcon={
+                isDark ? (
+                  <LightModeOutlined sx={{ fontSize: 21 }} />
+                ) : (
+                  <DarkModeOutlined sx={{ fontSize: 21 }} />
+                )
+              }
               sx={{
                 justifyContent: "flex-start",
                 height: 38,
