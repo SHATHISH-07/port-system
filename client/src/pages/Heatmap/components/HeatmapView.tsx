@@ -508,17 +508,17 @@ export default function HeatmapView({ data, loading, targetBerthId }: { data?: V
                   borderRadius: 2,
                 }}
               >
-                <Typography sx={{ fontSize: "0.55rem", color: isDark ? "#94a3b8" : "#64748b", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", mr: 1 }}>
-                  Density Legend
+                <Typography sx={{ fontSize: "0.5rem", color: "text.secondary", fontWeight: 800, letterSpacing: "0.5px", textTransform: "uppercase", mr: 0.5 }}>
+                  Concentration
                 </Typography>
                 {[
-                  { c: getConcColor(theme).High.main, l: "High" },
-                  { c: getConcColor(theme).Medium.main, l: "Medium" },
-                  { c: getConcColor(theme).Low.main, l: "Low" },
+                  { c: "#ff0000", l: "High" },
+                  { c: "#ffaa00", l: "Medium" },
+                  { c: "#00ff00", l: "Low" },
                 ].map(({ c, l }) => (
-                  <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                    <Box sx={{ width: 8, height: 8, bgcolor: c, borderRadius: "50%", boxShadow: `0 0 8px ${c}` }} />
-                    <Typography sx={{ fontSize: "0.65rem", color: "text.primary", fontWeight: 600 }}>{l}</Typography>
+                  <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Box sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }} />
+                    <Typography sx={{ fontSize: "0.6rem", color: "text.secondary", fontWeight: 500 }}>{l}</Typography>
                   </Box>
                 ))}
               </Box>

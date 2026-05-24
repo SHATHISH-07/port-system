@@ -130,14 +130,25 @@ def _compute_crane_metrics(
     productive_df["prev_event"] = productive_df.groupby(
         [sort_col, "carrier_visit"]
     )["event_type"].shift(1)
+    
+    productive_df["prev_time"] = productive_df.groupby(
+        [sort_col, "carrier_visit"]
+    )["time_completed"].shift(1)
+    
+    productive_df["gap_mins"] = (
+        productive_df["time_completed"] - productive_df["prev_time"]
+    ).dt.total_seconds() / 60
 
     dual_mask = (
-        (productive_df["event_type"] == "UNIT_LOAD") &
-        (productive_df["prev_event"] == "UNIT_DISCHARGE")
-    ) | (
-        (productive_df["event_type"] == "UNIT_DISCHARGE") &
-        (productive_df["prev_event"] == "UNIT_LOAD")
-    )
+        (
+            (productive_df["event_type"] == "UNIT_LOAD") &
+            (productive_df["prev_event"] == "UNIT_DISCHARGE")
+        ) | (
+            (productive_df["event_type"] == "UNIT_DISCHARGE") &
+            (productive_df["prev_event"] == "UNIT_LOAD")
+        )
+    ) & (productive_df["gap_mins"] <= 15)
+    
     dual_cycle_count = int(dual_mask.sum())
     dual_cycle_rate = round(
         (dual_cycle_count / productive * 100) if productive > 0 else 0.0, 2
@@ -421,36 +432,45 @@ def get_historical_stowage_analysis(
         "craneMetrics": crane_metrics,
     }
 
-def _generate_current_planning_insights(block_strategies, pod_groups, baseline_reshuffle, pod_conc, proj_reduction) -> list[str]:
+def _generate_current_planning_insights(block_strategies, pod_groups, baseline_reshuffle, pod_conc, proj_reduction, crane_metrics=None) -> list[str]:
     insights = []
+    
+    # 1. Heavy containers close to berth
     close_blocks = [b["block"] for b in block_strategies if b["berthProximity"] == "CLOSE"]
     heavy_in_close = sum(b["heavyCount"] for b in block_strategies if b["berthProximity"] == "CLOSE")
     if close_blocks:
         insights.append(
-            f"{heavy_in_close} HEAVY containers are in berth-close blocks "
-            f"({', '.join(close_blocks)}) — confirm these are prioritized for first crane pick."
+            f"Yard Strategy: Heavy containers positioned close to berth. Detected {heavy_in_close} HEAVY units assigned to berth-close blocks ({', '.join(close_blocks)})."
         )
 
+    # 2. Light containers upper stack
+    light_count = sum(b.get("lightCount", 0) for b in block_strategies)
+    if light_count > 0:
+        insights.append(f"Yard Strategy: {light_count} LIGHT containers prioritized for upper stack loading.")
+
+    # 3. Group by discharge
+    num_ports = len(pod_groups)
+    if num_ports > 0:
+        insights.append(f"Yard Strategy: Containers grouped by discharge sequence into {num_ports} sequential zones to streamline crane operations.")
+
+    # 4. Reduce reshuffle & Expected Results
+    insights.append(
+        f"Yard Strategy: Reduce reshuffle requirement. Current POD grouping concentration is {pod_conc*100:.1f}%."
+    )
     if baseline_reshuffle > 0:
         insights.append(
-            f"Baseline reshuffle rate is {baseline_reshuffle:.1f}%. "
-            f"POD grouping at current concentration ({pod_conc*100:.1f}%) "
-            f"projects a {proj_reduction:.1f}% reduction."
+            f"Expected Result: Lower reshuffle % (projected {proj_reduction:.1f}% reduction from {baseline_reshuffle:.1f}% baseline)."
         )
 
-    insights.append(
-        f"Target dual cycle rate: 55%+. Group discharge-destination containers "
-        f"adjacent to incoming import positions within the same block to enable "
-        f"load-on-discharge-off sequencing."
-    )
-
-    for pg in pod_groups[:2]:
-        insights.append(
-            f"{pg['port']} ({pg['containerCount']} containers, discharge order #{pg['dischargeOrder']}): "
-            f"{pg['concentrationScore']*100:.0f}% currently in recommended blocks "
-            f"({', '.join(pg['recommendedBlocks'])}). "
-            f"{'No action needed.' if pg['concentrationScore'] > 0.6 else 'Consolidation recommended.'}"
-        )
+    # 5. Dual Cycle and Gap
+    if crane_metrics:
+        dual_rate = crane_metrics.get("dualCycleRate", 0.0)
+        gap_mins = crane_metrics.get("avgMoveGapMinutes", 0.0)
+        if dual_rate > 0:
+            insights.append(f"Expected Result: Better dual cycle (historical baseline is {dual_rate}%).")
+        if gap_mins > 0:
+            insights.append(f"Expected Result: Faster crane execution (aiming to reduce {gap_mins} min avg move gap).")
+    
     return insights
 
 
@@ -631,7 +651,44 @@ def process_current_planning_and_yard_strategy(
             r["dischargeOrder"] = None
 
     # 4. Yard Block Summary
-    proximity_map = _PEB_PROXIMITY if terminal == "PEB" else _CWIT_PROXIMITY
+    from services.heatmap_service import _deterministic_layout, get_vessel_heatmap
+    from db.queries import load_from_db
+    import logging
+    
+    unique_blocks = df["yard_block"].dropna().unique().tolist()
+    if "UNKNOWN" in unique_blocks:
+        unique_blocks.remove("UNKNOWN")
+        
+    proximity_map = {}
+    if unique_blocks:
+        # Fallback local calculation
+        block_scores = {}
+        for blk, grp in df[df["yard_block"] != "UNKNOWN"].groupby("yard_block"):
+            count = len(grp)
+            heavy = (grp["weight_band"] == "HEAVY").sum()
+            block_scores[blk] = count + (heavy * 2)
+            
+        max_block = max(block_scores, key=block_scores.get) if block_scores else unique_blocks[0]
+        layout = _deterministic_layout(unique_blocks)
+        
+
+        max_pos = layout.get(max_block, {"x": 0, "y": 0})
+        
+        distances = {}
+        for blk in unique_blocks:
+            pos = layout.get(blk, {"x": 0, "y": 0})
+            distances[blk] = abs(pos["x"] - max_pos["x"]) + abs(pos["y"] - max_pos["y"])
+            
+        if distances:
+            min_dist = min(distances.values())
+            for blk, dist in distances.items():
+                if dist == min_dist:
+                    proximity_map[blk] = "CLOSE"
+                elif dist <= min_dist + 1:
+                    proximity_map[blk] = "MID"
+                else:
+                    proximity_map[blk] = "FAR"
+
     block_strategies = []
     
     # Calculate pod concentration score globally
@@ -743,7 +800,7 @@ def process_current_planning_and_yard_strategy(
     projected_reshuffle_reduction = round(baseline_reshuffle_rate * pod_concentration, 2)
     insights = _generate_current_planning_insights(
         block_strategies, discharge_strategies, baseline_reshuffle_rate,
-        pod_concentration, projected_reshuffle_reduction
+        pod_concentration, projected_reshuffle_reduction, crane_metrics
     )
     if rotation_msg:
         insights.append(rotation_msg)

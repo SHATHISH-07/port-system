@@ -58,7 +58,38 @@ function SectionWrapper({ title, children, isAltColor = false }: { title: string
 // Sub-panels
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ExecutionPanel({ op, rules }: { op: any; rules: string[] }) {
+interface OpData {
+  total_operations?: number;
+  effective_mph_used?: number;
+  load_discharge_ratio?: number;
+}
+
+interface TopVisitData {
+  stay_hours?: number;
+  predicted_stay_hours?: number;
+  loaded?: number;
+  discharged?: number;
+  hazardous?: number;
+  reefer?: number;
+  oog?: number;
+  total_units?: number;
+}
+
+interface DelayData {
+  impact?: string;
+  factor?: string;
+  reason?: string;
+}
+
+interface ProfileData {
+  operational_predictions?: { operational_rules_applied?: string[] } & OpData;
+  top_visit_stats?: TopVisitData;
+  delay_analysis?: DelayData[];
+  actual?: { avg_hours?: number };
+  predicted?: { avg_hours?: number; visits?: number };
+}
+
+function ExecutionPanel({ op, rules }: { op: OpData; rules: string[] }) {
   const theme = useTheme();
   const totalOps = op?.total_operations ?? '-';
   const effectiveMph = op?.effective_mph_used ?? null;
@@ -100,7 +131,7 @@ function ExecutionPanel({ op, rules }: { op: any; rules: string[] }) {
   );
 }
 
-function TopVisitPanel({ topVisit, actualAvg, predictedAvg, predictedVisits, delays }: { topVisit: any; actualAvg: any; predictedAvg: any; predictedVisits: any; delays: any[] }) {
+function TopVisitPanel({ topVisit, actualAvg, predictedAvg, predictedVisits, delays }: { topVisit: TopVisitData; actualAvg: number | null; predictedAvg: number | null; predictedVisits: number | string | null; delays: DelayData[] }) {
   return (
     <SectionWrapper title="Top Visit Snapshot" isAltColor>
       <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75, mt: 1, mb: 1.5 }}>
@@ -115,7 +146,6 @@ function TopVisitPanel({ topVisit, actualAvg, predictedAvg, predictedVisits, del
         <Grid size={{ xs: 6 }}><MetricTile label="Hazardous" value={topVisit.hazardous ?? '-'} accent="error" /></Grid>
         <Grid size={{ xs: 6 }}><MetricTile label="Reefer" value={topVisit.reefer ?? '-'} accent="info" /></Grid>
         <Grid size={{ xs: 6 }}><MetricTile label="OOG" value={topVisit.oog ?? '-'} accent="warning" /></Grid>
-        <Grid size={{ xs: 6 }}><MetricTile label="Total Units" value={topVisit.total_units ?? '-'} accent="primary" /></Grid>
         <Grid size={{ xs: 6 }}><MetricTile label="Actual Avg Stay" value={`${formatNumber(actualAvg)}h`} accent="success" /></Grid>
         <Grid size={{ xs: 6 }}><MetricTile label="Predicted Avg Stay" value={`${formatNumber(predictedAvg)}h`} accent="warning" /></Grid>
       </Grid>
@@ -146,7 +176,7 @@ function TopVisitPanel({ topVisit, actualAvg, predictedAvg, predictedVisits, del
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function OperationalProfile({ data }: { data: any }) {
+export default function OperationalProfile({ data }: { data: ProfileData }) {
   const theme = useTheme();
 
   // Safely extract data

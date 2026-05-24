@@ -369,16 +369,41 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
                           stroke={isHover ? "#fcd34d" : isMax ? "#ef4444" : isRec ? "#38bdf8" : isDark ? "#334155" : "#cbd5e1"}
                           strokeWidth={isHover || isMax ? 2.5 : isRec ? 2 : 1} rx="3"
                         />
-                        {[0, 1, 2, 3, 4, 5].map((row) => (
-                          <g key={row}>
-                            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((col) => (
-                              <rect
-                                key={col} x={z.x + 6 + col * 17} y={z.y + 8 + row * 17} width="14" height="14"
-                                fill={isDark ? "#0b0e14" : "#e8edf5"} stroke={isDark ? "#1e2433" : "#dde3ec"} strokeWidth="0.5" rx="1" opacity={0.8}
-                              />
-                            ))}
-                          </g>
-                        ))}
+                        {(() => {
+                          const maxCols = 4;
+                          const maxRows = 7;
+                          const loadedCount = isHot ? Math.min(block!.count, maxCols * maxRows) : 0;
+                          
+                          const cells = [];
+                          for (let row = 0; row < maxRows; row++) {
+                            for (let col = 0; col < maxCols; col++) {
+                              const index = row * maxCols + col;
+                              const isLoaded = index < loadedCount;
+                              
+                              const cx = z.x + 6 + col * 38;
+                              const cy = z.y + 8 + row * 15;
+                              
+                              if (isLoaded) {
+                                // Red and Blue containers
+                                const colors = ["#991b1b", "#1d4ed8"];
+                                const fillC = colors[(row * maxCols + col) % 2];
+                                cells.push(
+                                  <g key={`${row}-${col}`}>
+                                    <rect x={cx} y={cy} width="34" height="11" fill={fillC} stroke="#0f172a" strokeWidth="0.5" rx="1" opacity="0.95" />
+                                    <line x1={cx + 4} y1={cy} x2={cx + 4} y2={cy + 11} stroke="#ffffff" strokeOpacity="0.2" strokeWidth="0.5" />
+                                    <line x1={cx + 30} y1={cy} x2={cx + 30} y2={cy + 11} stroke="#ffffff" strokeOpacity="0.2" strokeWidth="0.5" />
+                                  </g>
+                                );
+                              } else {
+                                // Empty slots
+                                cells.push(
+                                  <rect key={`${row}-${col}`} x={cx} y={cy} width="34" height="11" fill={isDark ? "#0b0e14" : "#e8edf5"} stroke={isDark ? "#1e2433" : "#dde3ec"} strokeWidth="0.5" rx="1" opacity="0.6" />
+                                );
+                              }
+                            }
+                          }
+                          return cells;
+                        })()}
                         <rect
                           x={z.x + 4} y={z.y + 4} width={36} height={16} rx="3"
                           fill={isMax ? "rgba(239,68,68,0.95)" : isRec ? "rgba(14,165,233,0.9)" : isDark ? "rgba(30,36,51,0.95)" : "rgba(241,245,249,0.95)"}

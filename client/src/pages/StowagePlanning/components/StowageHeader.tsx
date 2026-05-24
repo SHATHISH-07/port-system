@@ -24,7 +24,7 @@ interface StowageHeaderProps {
   visitId: string;
   setVisitId: (val: string) => void;
   activeTab: number;
-  handleTabChange: (e: any, next: number) => void;
+  handleTabChange: (e: React.SyntheticEvent, next: number) => void;
   globalFile: File | null;
   setGlobalFile: (file: File | null) => void;
   globalContainerText: string;

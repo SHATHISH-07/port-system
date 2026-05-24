@@ -9,14 +9,38 @@ function formatNumber(value?: number, digits = 1) {
   return Number(value).toFixed(digits);
 }
 
-export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: any) {
+interface HistoryAnalysisTabProps {
+  vesselId: string;
+  yardId?: string;
+  visitId?: string;
+  trigger?: number;
+}
+
+interface HistoryData {
+  summary?: Record<string, number>;
+  specialCargoSummary?: Record<string, number>;
+  containerSizeDistribution?: Array<{ containerSize: string; count: number }>;
+  dischargePortGrouping?: Array<{ port: string; count: number }>;
+  equipmentClassDistribution?: Array<{ equipmentClass: string; count: number }>;
+  historicalVisits?: Array<{ visitId: string; containerCount: number; moveCompleteTime: string }>;
+  craneMetrics?: Record<string, number>;
+  weightDistribution?: {
+    aboveDeck?: Array<{ band: string; count: number }>;
+    belowDeck?: Array<{ band: string; count: number }>;
+  };
+}
+
+export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: HistoryAnalysisTabProps) {
   const theme = useTheme();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<HistoryData | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!vesselId) return setData(null);
     const fetchHistory = async () => {
+      if (!vesselId) {
+        setData(null);
+        return;
+      }
       setLoading(true);
       try {
         const response = await api.get('/stowage/history/analysis', { params: { vesselId, yardId, visitId } });
@@ -53,14 +77,14 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: any) {
 
   const { summary = {}, specialCargoSummary = {}, containerSizeDistribution = [], dischargePortGrouping = [], equipmentClassDistribution = [], historicalVisits = [], craneMetrics } = data;
 
-  const portBarData = dischargePortGrouping.slice(0, 5).map((i: any) => ({ name: i.port, Containers: i.count }));
-  const sizePieData = containerSizeDistribution.map((i: any) => ({ name: i.containerSize === 'BASIC20' ? '20ft (Standard)' : '40ft (Hi-Cube)', value: i.count }));
-  const equipmentBarData = equipmentClassDistribution.map((i: any) => ({ name: i.equipmentClass.replace('CONTAINER | ', ''), Count: i.count }));
+  const portBarData = dischargePortGrouping.slice(0, 5).map((i: { port: string; count: number }) => ({ name: i.port, Containers: i.count }));
+  const sizePieData = containerSizeDistribution.map((i: { containerSize: string; count: number }) => ({ name: i.containerSize === 'BASIC20' ? '20ft (Standard)' : '40ft (Hi-Cube)', value: i.count }));
+  const equipmentBarData = equipmentClassDistribution.map((i: { equipmentClass: string; count: number }) => ({ name: i.equipmentClass.replace('CONTAINER | ', ''), Count: i.count }));
 
   const wDist = data.weightDistribution || { aboveDeck: [], belowDeck: [] };
   const deckWeightData = [
-    { name: 'Above', Light: wDist.aboveDeck?.find((x: any) => x.band === 'LIGHT')?.count || 0, Medium: wDist.aboveDeck?.find((x: any) => x.band === 'MEDIUM')?.count || 0, Heavy: wDist.aboveDeck?.find((x: any) => x.band === 'HEAVY')?.count || 0 },
-    { name: 'Below', Light: wDist.belowDeck?.find((x: any) => x.band === 'LIGHT')?.count || 0, Medium: wDist.belowDeck?.find((x: any) => x.band === 'MEDIUM')?.count || 0, Heavy: wDist.belowDeck?.find((x: any) => x.band === 'HEAVY')?.count || 0 },
+    { name: 'Above', Light: wDist.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: wDist.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: wDist.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
+    { name: 'Below', Light: wDist.belowDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: wDist.belowDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: wDist.belowDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
   ];
 
   return (
@@ -152,7 +176,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: any) {
             <Box sx={{ mt: 1, height: '85%', overflowY: 'auto' }}>
               <Table size="small">
                 <TableBody>
-                  {portBarData.map((row: any) => (
+                  {portBarData.map((row: { name: string; Containers: number }) => (
                     <TableRow key={row.name} sx={{ '& td': { borderBottom: '1px solid', borderColor: 'divider', py: 1.5, px: 0 } }}>
                       <TableCell sx={{ fontSize: '0.8rem', fontWeight: 700 }}>{row.name}</TableCell>
                       <TableCell align="right" sx={{ fontSize: '0.8rem' }}>{row.Containers}</TableCell>
@@ -236,9 +260,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: any) {
               {[
                 { label: 'Load Moves', value: craneMetrics.loadMoves ?? '-', color: theme.palette.primary.main },
                 { label: 'Discharge Moves', value: craneMetrics.dischargeMoves ?? '-', color: theme.palette.info.main },
-                { label: 'Restow Moves', value: craneMetrics.restowMoves ?? '-', color: theme.palette.warning.main },
-                { label: 'Dual Cycle Rate', value: `${formatNumber(craneMetrics.dualCycleRate)}%`, color: theme.palette.success.main },
-                { label: 'Avg Move Gap', value: `${formatNumber(craneMetrics.avgMoveGapMinutes)} min`, color: theme.palette.text.primary },
+                { label: 'Reshuffle Moves', value: craneMetrics.restowMoves ?? '-', color: theme.palette.warning.main },
               ].map((kpi) => (
                 <Grid key={kpi.label} size={{ xs: 6, sm: 4, md: 'auto' }} sx={{ flex: { md: 1 } }}>
                   <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, bgcolor: 'background.default' }}>
@@ -298,7 +320,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: any) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {historicalVisits.map((visit: any, index: number) => (
+                {historicalVisits.map((visit: { visitId: string; containerCount: number; moveCompleteTime: string }, index: number) => (
                   <TableRow key={visit.visitId} hover sx={{ bgcolor: index % 2 === 0 ? 'transparent' : alpha(theme.palette.action.hover, 0.18) }}>
                     <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.8rem', px: 2.5 }}>{visit.visitId}</TableCell>
                     <TableCell align="center" sx={{ fontSize: '0.8rem' }}>{formatNumber(visit.containerCount, 0)}</TableCell>
