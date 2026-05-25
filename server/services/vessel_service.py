@@ -1146,11 +1146,15 @@ def analyze_vessel_dashboard(
     merged_stays = [v["stay_hours"] for v in merged_visits.values() if v.get("stay_hours", 0) > 0]
     merged_avg_hours = round(sum(merged_stays) / len(merged_stays), 2) if merged_stays else 0.0
 
+    merged_restows = [v.get("restow_count", 0) for v in merged_visits.values()]
+    merged_avg_restows = round(sum(merged_restows) / len(merged_restows), 1) if merged_restows else 0.0
+
     actual = {
         "visits":    merged_visits,
         "avg_hours": merged_avg_hours if merged_avg_hours > 0 else actual_raw.get("avg_hours"),
         "max_hours": max(merged_stays) if merged_stays else actual_raw.get("max_hours"),
         "min_hours": min(merged_stays) if merged_stays else actual_raw.get("min_hours"),
+        "avg_restows": merged_avg_restows,
     }
 
     # ── Pick busiest visit ───────────────────────────────────────────────────

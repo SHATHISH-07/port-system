@@ -48,65 +48,7 @@ const COLORS = {
   },
 };
 
-const RiskBadge = ({ risk }: { risk?: string }) => {
-  const r = (risk ?? "").toLowerCase();
 
-  let config = {
-    label: "Low Risk",
-    color: COLORS.success,
-    bg: alpha(COLORS.success, 0.1),
-  };
-  if (r.includes("high")) {
-    config = {
-      label: "High Risk",
-      color: COLORS.error,
-      bg: alpha(COLORS.error, 0.1),
-    };
-  } else if (r.includes("medium")) {
-    config = {
-      label: "Med Risk",
-      color: COLORS.warning,
-      bg: alpha(COLORS.warning, 0.1),
-    };
-  }
-
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 1,
-        px: 1.5,
-        py: 0.5,
-        borderRadius: "20px",
-        bgcolor: config.bg,
-        border: "1px solid",
-        borderColor: alpha(config.color, 0.2),
-      }}
-    >
-      <Box
-        sx={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          bgcolor: config.color,
-          boxShadow: `0 0 8px ${config.color}`,
-        }}
-      />
-      <Typography
-        sx={{
-          fontSize: "0.7rem",
-          fontWeight: 800,
-          color: config.color,
-          textTransform: "uppercase",
-          letterSpacing: "0.5px",
-        }}
-      >
-        {config.label}
-      </Typography>
-    </Box>
-  );
-};
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
@@ -182,7 +124,6 @@ export default function BerthRecommendation({
               >
                 Priority Selection
               </Typography>
-              <RiskBadge risk={primary?.congestion_risk} />
             </Box>
             <Typography
               sx={{
@@ -287,7 +228,6 @@ export default function BerthRecommendation({
                     >
                       #{idx + 2}
                     </Box>
-                    <RiskBadge risk={b.congestion_risk} />
                   </Box>
                   <Typography sx={{ fontWeight: 900, fontSize: "1.1rem", mb: 0.5, fontFamily: "'Outfit', sans-serif" }}>
                     {b.berth}

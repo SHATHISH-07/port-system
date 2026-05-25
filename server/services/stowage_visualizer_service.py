@@ -67,6 +67,8 @@ def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
 
 def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
     map_groups: dict = {}
+    from utils.stowage_rules import TierAllocator
+    tier_allocator = TierAllocator()
 
     for _, row in df.iterrows():
         unit_id = _safe_str(row.get("unit_id"), "UNKNOWN")
@@ -145,7 +147,7 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
             port_rotation_dict=port_rotation_dict,
         )
 
-        rec_tier = _derive_recommended_tier(weight_band, rec["loadingPriority"])
+        rec_tier = tier_allocator.get_next_tier(port if port else "UNKNOWN", rec["recommendedDeck"])
 
         group_key = port if port else "UNKNOWN"
         group_type = "dischargePort"

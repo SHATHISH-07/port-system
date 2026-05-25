@@ -28,6 +28,10 @@ interface HistoryData {
     aboveDeck?: Array<{ band: string; count: number }>;
     belowDeck?: Array<{ band: string; count: number }>;
   };
+  craneMetrics?: {
+    restowMoves: number;
+    reshuffleRate: number;
+  };
 }
 
 export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: HistoryAnalysisTabProps) {
@@ -75,16 +79,22 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
 
   if (!data) return null;
 
-  const { summary = {}, specialCargoSummary = {}, containerSizeDistribution = [], dischargePortGrouping = [], equipmentClassDistribution = [], historicalVisits = [] } = data;
+  const summary = data?.summary || {};
+  const specialCargoSummary = data?.specialCargoSummary || {};
+  const containerSizeDistribution = data?.containerSizeDistribution || [];
+  const dischargePortGrouping = data?.dischargePortGrouping || [];
+  const equipmentClassDistribution = data?.equipmentClassDistribution || [];
+  const historicalVisits = data?.historicalVisits || [];
+  const weightDistribution = data?.weightDistribution || { aboveDeck: [], belowDeck: [] };
+  const craneMetrics = data?.craneMetrics;
 
   const portBarData = dischargePortGrouping.slice(0, 5).map((i: { port: string; count: number }) => ({ name: i.port, Containers: i.count }));
   const sizePieData = containerSizeDistribution.map((i: { containerSize: string; count: number }) => ({ name: i.containerSize === 'BASIC20' ? '20ft (Standard)' : '40ft (Hi-Cube)', value: i.count }));
   const equipmentBarData = equipmentClassDistribution.map((i: { equipmentClass: string; count: number }) => ({ name: i.equipmentClass.replace('CONTAINER | ', ''), Count: i.count }));
 
-  const wDist = data.weightDistribution || { aboveDeck: [], belowDeck: [] };
   const deckWeightData = [
-    { name: 'Above', Light: wDist.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: wDist.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: wDist.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
-    { name: 'Below', Light: wDist.belowDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: wDist.belowDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: wDist.belowDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
+    { name: 'Above', Light: weightDistribution.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: weightDistribution.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: weightDistribution.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
+    { name: 'Below', Light: weightDistribution.belowDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: weightDistribution.belowDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: weightDistribution.belowDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
   ];
 
   return (
@@ -163,6 +173,9 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
             </Grid>
             <Grid size={{ xs: 6 }}>
               <MetricCard title="Hazmat" value={specialCargoSummary.hazardousCount || 0} subtitle="Segregation req." accent="error" />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <MetricCard title="Avg Restows" value={craneMetrics ? Math.round(craneMetrics.restowMoves / Math.max(1, historicalVisits.length)) : 0} subtitle="Per visit" accent="warning" />
             </Grid>
           </Grid>
         </Grid>

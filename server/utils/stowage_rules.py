@@ -34,6 +34,32 @@ def classify_weight_band(weight_kg: Optional[float], container_length: Optional[
         return "LIGHT"
 
 
+class TierAllocator:
+    """Stateful allocator to simulate physical ship stacking instead of assigning T06 to everything."""
+    def __init__(self):
+        # Maps (port, deck) -> current_tier_integer
+        self.counters = {}
+
+    def get_next_tier(self, port: str, deck: str) -> str:
+        key = (port, deck)
+        if deck == "ABOVE_DECK":
+            # Start at 82, go up by 2, reset to 82 after 92
+            curr = self.counters.get(key, 80)
+            next_tier = curr + 2
+            if next_tier > 92:
+                next_tier = 82
+            self.counters[key] = next_tier
+            return f"{next_tier:02d}"
+        else:
+            # Start at 02, go up by 2, reset to 02 after 16
+            curr = self.counters.get(key, 0)
+            next_tier = curr + 2
+            if next_tier > 16:
+                next_tier = 2
+            self.counters[key] = next_tier
+            return f"{next_tier:02d}"
+
+
 def classify_deck_position(weight_band: str) -> str:
     """
     HEAVY  => BELOW_DECK

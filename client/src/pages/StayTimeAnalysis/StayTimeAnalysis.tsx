@@ -354,6 +354,12 @@ export default function StayTimeAnalysis() {
                         subtitle="Analyzed visits"
                         accent="primary"
                       />
+                      <MetricCard
+                        title="Average Restows"
+                        value={formatNumber(analysisData?.actual?.avg_restows ?? 0, 0)}
+                        subtitle="Historical average per visit"
+                        accent="warning"
+                      />
                     </Stack>
                   </Grid>
                 </Grid>

@@ -408,6 +408,8 @@ def get_historical_stowage_analysis(
         above_deck_count = int((unique_df["historical_deck"] == "ABOVE_DECK").sum())
         below_deck_count = int((unique_df["historical_deck"] == "BELOW_DECK").sum())
 
+    crane_metrics = _compute_crane_metrics(vessel_id, yard_id, visit_id)
+
     return {
         "summary": {
             "totalContainers": total_containers,
@@ -428,6 +430,7 @@ def get_historical_stowage_analysis(
         "equipmentClassDistribution": equip_class_dist,
         "historicalVisits": visits,
         "dischargeSequence": discharge_sequence,
+        "craneMetrics": crane_metrics,
     }
 
 def _generate_current_planning_insights(block_strategies, pod_groups, baseline_reshuffle, pod_conc, proj_reduction, crane_metrics=None) -> list[str]:
@@ -575,6 +578,9 @@ def process_current_planning_and_yard_strategy(
 
     # 2. Recommendations
     recommendations = []
+    from utils.stowage_rules import TierAllocator
+    tier_allocator = TierAllocator()
+    
     for _, row in df.iterrows():
         unit_id = _safe_str(row.get("unit_id"), "UNKNOWN")
         weight_kg = row.get(w_col) if w_col else None
@@ -610,7 +616,7 @@ def process_current_planning_and_yard_strategy(
             port_rotation_dict=rank_map,
         )
 
-        rec["recommendedTier"] = _derive_recommended_tier(weight_band, rec["loadingPriority"])
+        rec["recommendedTier"] = tier_allocator.get_next_tier(port if port else "UNKNOWN", rec["recommendedDeck"])
         rec["actualOutboundCarrierVisitId"] = actual_visit
         rec["outboundService"] = outbound_svc
         rec["equipmentClass"] = eq_class
