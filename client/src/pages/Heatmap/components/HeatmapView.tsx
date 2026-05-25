@@ -6,23 +6,26 @@ import type { BlockData, VesselHeatmapViewData } from "../../../types/heatmap";
 
 // ── UI Configuration ─────────────────────────────────────────────────────────
 
-const getConcColor = (theme: Theme) => ({
-  High: {
-    main: theme.palette.mode === "dark" ? "#ef4444" : "#dc2626",
-    light: theme.palette.mode === "dark" ? "#fca5a5" : "#fee2e2",
-    glow: alpha(theme.palette.mode === "dark" ? "#ef4444" : "#dc2626", 0.25),
-  },
-  Medium: {
-    main: theme.palette.mode === "dark" ? "#f97316" : "#ea580c",
-    light: theme.palette.mode === "dark" ? "#fdba74" : "#ffedd5",
-    glow: alpha(theme.palette.mode === "dark" ? "#f97316" : "#ea580c", 0.25),
-  },
-  Low: {
-    main: theme.palette.mode === "dark" ? "#10b981" : "#059669",
-    light: theme.palette.mode === "dark" ? "#6ee7b7" : "#d1fae5",
-    glow: alpha(theme.palette.mode === "dark" ? "#10b981" : "#059669", 0.25),
-  },
-});
+const getConcColor = (theme: Theme) => {
+  const isDark = theme.palette.mode === "dark";
+  return {
+    High: {
+      main: isDark ? "#ef4444" : "#dc2626",
+      light: isDark ? "#fca5a5" : "#fee2e2",
+      glow: alpha(isDark ? "#ef4444" : "#dc2626", 0.25),
+    },
+    Medium: {
+      main: isDark ? "#f97316" : "#ea580c",
+      light: isDark ? "#fdba74" : "#ffedd5",
+      glow: alpha(isDark ? "#f97316" : "#ea580c", 0.25),
+    },
+    Low: {
+      main: isDark ? "#10b981" : "#059669",
+      light: isDark ? "#6ee7b7" : "#d1fae5",
+      glow: alpha(isDark ? "#10b981" : "#059669", 0.25),
+    },
+  };
+};
 
 const ROW_LABELS: Record<number, string> = {
   0: "ROW A — FAR ZONE",
@@ -40,7 +43,7 @@ function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockDa
   const colors = getConcColor(theme);
   const cc = colors[block.concentration || "Low"];
   const pct = Math.round((block.intensity || 0) * 100);
-  const isDark = theme.palette.mode === "dark";
+  const isDark = true;
   const isEmpty = block.count === 0;
 
   // Empty state styling (Wireframe look)
@@ -48,7 +51,7 @@ function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockDa
     return (
       <Box
         sx={{
-          bgcolor: isDark ? alpha("#ffffff", 0.01) : alpha("#000000", 0.01),
+          bgcolor: isDark ? "#1e293b" : "#e2e8f0",
           border: `1px dashed ${isDark ? alpha("#ffffff", 0.1) : alpha("#000000", 0.15)}`,
           borderRadius: 2,
           p: 2,
@@ -81,7 +84,7 @@ function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockDa
   return (
     <Box
       sx={{
-        bgcolor: isDark ? alpha("#111827", 0.7) : alpha("#ffffff", 0.8),
+        bgcolor: isDark ? alpha("#161b24", 0.9) : alpha("#ffffff", 0.9),
         backdropFilter: "blur(12px)",
         border: `1px solid ${isMax ? theme.palette.primary.main : isDark ? alpha("#ffffff", 0.08) : alpha("#000000", 0.08)}`,
         boxShadow: isMax
@@ -138,7 +141,7 @@ function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockDa
       {/* Header */}
       <Box sx={{ position: "absolute", top: 14, left: 16, display: "flex", alignItems: "center", gap: 1 }}>
         <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: cc.main, boxShadow: `0 0 8px ${cc.main}` }} />
-        <Typography sx={{ fontSize: "0.65rem", fontWeight: 700, color: isDark ? "#94a3b8" : "#64748b", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+        <Typography sx={{ fontSize: "0.65rem", fontWeight: 700, color: isDark ? "#ffffff" : "#475569", letterSpacing: "0.1em", textTransform: "uppercase" }}>
           Block {blockId}
         </Typography>
       </Box>
@@ -156,9 +159,9 @@ function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockDa
           }}
         >
           {pct}
-          <span style={{ fontSize: "1.5rem", color: isDark ? "#64748b" : "#94a3b8", marginLeft: "2px" }}>%</span>
+          <span style={{ fontSize: "1.5rem", color: isDark ? "#ffffff" : "#475569", marginLeft: "2px" }}>%</span>
         </Typography>
-        <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: isDark ? "#94a3b8" : "#64748b", mt: 0.5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: isDark ? "#ffffff" : "#475569", mt: 0.5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
           {block.count} Units
         </Typography>
       </Box>
@@ -217,7 +220,7 @@ function BerthCard({ id, label, isTarget, vesselName, isDark }: { id: string; la
           width: w,
           height: h,
           border: `1px dashed ${isDark ? alpha("#94a3b8", 0.2) : alpha("#64748b", 0.3)}`,
-          bgcolor: isDark ? alpha("#0f172a", 0.3) : alpha("#f8fafc", 0.5),
+          bgcolor: isDark ? "#1e293b" : "#e2e8f0",
           backdropFilter: "blur(4px)",
           borderRadius: 2,
           display: "flex",
@@ -228,7 +231,7 @@ function BerthCard({ id, label, isTarget, vesselName, isDark }: { id: string; la
           transition: "all 0.3s ease",
         }}
       >
-        <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: isDark ? "#64748b" : "#94a3b8", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+        <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: isDark ? "#ffffff" : "#475569", letterSpacing: "0.15em", textTransform: "uppercase" }}>
           {label}
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
@@ -330,7 +333,7 @@ function BerthCard({ id, label, isTarget, vesselName, isDark }: { id: string; la
 
         {/* Info Overlay */}
         <Box sx={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", p: 2, pointerEvents: "none" }}>
-          <Typography sx={{ fontSize: "0.7rem", fontWeight: 800, color: primary, letterSpacing: "0.1em", textTransform: "uppercase", mt: !isHorizontal ? 3 : 0 }}>
+          <Typography sx={{ fontSize: "0.7rem", fontWeight: 800, color: isDark ? "#ffffff" : primary, letterSpacing: "0.1em", textTransform: "uppercase", mt: !isHorizontal ? 3 : 0 }}>
             {label}
           </Typography>
           <Typography
@@ -392,7 +395,7 @@ function HeatmapPlaceholder() {
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {[0, 1, 2].map((rowIdx) => (
                       <Box key={rowIdx} sx={{ position: "relative" }}>
-                        <Typography sx={{ position: "absolute", right: 0, top: -28, fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#334155" : "#cbd5e1", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+                        <Typography sx={{ position: "absolute", right: 0, top: -28, fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#94a3b8" : "#64748b", letterSpacing: "0.15em", textTransform: "uppercase" }}>
                           {ROW_LABELS[rowIdx]}
                         </Typography>
                         <Box sx={{ display: "flex", justifyContent: "center", gap: 4 }}>
@@ -500,8 +503,8 @@ export default function HeatmapView({ data, loading, targetBerthId }: { data?: V
                   alignItems: "center",
                   gap: 2,
                   px: 2,
-                  py: 1.2,
-                  bgcolor: isDark ? alpha("#0f172a", 0.75) : alpha("#ffffff", 0.85),
+                  py: 0.6,
+                  bgcolor: isDark ? "rgba(18, 22, 31, 0.9)" : "rgba(255, 255, 255, 0.9)",
                   backdropFilter: "blur(12px)",
                   border: `1px solid ${isDark ? alpha("#ffffff", 0.1) : alpha("#000", 0.08)}`,
                   boxShadow: `0 8px 24px ${alpha("#000", 0.15)}`,
@@ -540,7 +543,7 @@ export default function HeatmapView({ data, loading, targetBerthId }: { data?: V
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", alignItems: "center" }}>
                     {chunkedRows.map((rowBlockIds, rowIdx) => (
                       <Box key={rowIdx} sx={{ position: "relative", width: "100%", maxWidth: 900 }}>
-                        <Typography sx={{ position: "absolute", left: -40, top: "50%", transform: "translateY(-50%) rotate(-90deg)", fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#475569" : "#94a3b8", letterSpacing: "0.2em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                        <Typography sx={{ position: "absolute", left: -40, top: "50%", transform: "translateY(-50%) rotate(-90deg)", fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#94a3b8" : "#64748b", letterSpacing: "0.2em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
                           {ROW_LABELS[rowIdx]}
                         </Typography>
                         <Box sx={{ display: "flex", justifyContent: "center", gap: 4 }}>

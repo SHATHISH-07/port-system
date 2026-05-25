@@ -373,16 +373,16 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
                           const maxCols = 4;
                           const maxRows = 7;
                           const loadedCount = isHot ? Math.min(block!.count, maxCols * maxRows) : 0;
-                          
+
                           const cells = [];
                           for (let row = 0; row < maxRows; row++) {
                             for (let col = 0; col < maxCols; col++) {
                               const index = row * maxCols + col;
                               const isLoaded = index < loadedCount;
-                              
+
                               const cx = z.x + 6 + col * 38;
                               const cy = z.y + 8 + row * 15;
-                              
+
                               if (isLoaded) {
                                 // Red and Blue containers
                                 const colors = ["#991b1b", "#1d4ed8"];
@@ -439,7 +439,7 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
                   <g
                     filter="url(#heatglow)"
                     style={{ mixBlendMode: isDark ? "screen" : "normal", pointerEvents: "none" }}
-                    opacity={isDark ? 0.9 : 0.7}
+                    opacity={isDark ? 0.9 : 0.8}
                   >
                     {getZones(data.layout)
                       .map((z: ZoneData) => {
