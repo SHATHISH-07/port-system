@@ -10,7 +10,6 @@ import {
   Paper,
   Stack,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
 
 import MetricCard from './components/MetricCard';
 import StayTimeForm from './components/StayTimeForm';
@@ -61,10 +60,10 @@ function DelayAnalysisPanel({ delays }: { delays: any[] }) {
         boxShadow: '0 6px 24px rgba(0,0,0,0.03)',
       }}
     >
-      <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.25 }}>
         Delay Analysis
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
         Signals detected from move timing and restow activity
       </Typography>
 
@@ -104,7 +103,7 @@ function DelayAnalysisPanel({ delays }: { delays: any[] }) {
               }}
             />
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="body2" sx={{ fontWeight: 800, lineHeight: 1.35 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.35 }}>
                 {delay.factor}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.55 }}>
@@ -120,6 +119,8 @@ function DelayAnalysisPanel({ delays }: { delays: any[] }) {
 
 export default function StayTimeAnalysis() {
   const theme = useTheme();
+
+  // Stay Time state
   const [loading, setLoading] = useState(false);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +128,7 @@ export default function StayTimeAnalysis() {
   const [loaded, setLoaded] = useState('');
   const [discharged, setDischarged] = useState('');
 
-  const handleAnalyze = async (e?: React.FormEvent) => {
+  const handleAnalyze = async (e?: React.SubmitEvent<HTMLFormElement>) => {
     if (e) e.preventDefault();
 
     const trimmedVesselId = vesselId.trim();
@@ -170,7 +171,7 @@ export default function StayTimeAnalysis() {
 
       if (data?.error) {
         setError(data.error);
-        setAnalysisData(null);
+        setAnalysisData(data);
       } else {
         setAnalysisData(data);
       }
@@ -186,247 +187,213 @@ export default function StayTimeAnalysis() {
   const predictedAvg = analysisData?.predicted?.avg_hours ?? 0;
   const visitsCount = Object.keys(analysisData?.actual?.visits || {}).length;
   const delayAnalysis = Array.isArray(analysisData?.delay_analysis) ? analysisData.delay_analysis : [];
-  const isLoaded = !!analysisData && !loading;
+  const isStayLoaded = !!analysisData && !analysisData.error && !loading;
 
   return (
     <Box
       sx={{
-        minHeight: '100vh',
         bgcolor: 'background.default',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
       }}
     >
       {/* Top Header Control Bar */}
       <Box
         sx={{
           px: { xs: 2.5, md: 4 },
-          py: 2.5,
+          py: 2,
           bgcolor: alpha(theme.palette.background.default, 0.9),
           backdropFilter: 'blur(25px)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 1100,
-          borderBottom: `1px solid ${theme.palette.divider}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1.5,
         }}
       >
-        <StayTimeForm
-          value={vesselId}
-          onChange={setVesselId}
-          loaded={loaded}
-          onLoadedChange={setLoaded}
-          discharged={discharged}
-          onDischargedChange={setDischarged}
-          onSubmit={handleAnalyze}
-          loading={loading}
-        />
+        {/* Top Header Control Bar - Stay Time */}
+        <Box sx={{ mb: 1 }}>
+          <StayTimeForm
+            value={vesselId}
+            onChange={setVesselId}
+            loaded={loaded}
+            onLoadedChange={setLoaded}
+            discharged={discharged}
+            onDischargedChange={setDischarged}
+            onSubmit={handleAnalyze}
+            loading={loading}
+          />
+        </Box>
+
       </Box>
 
-      {error && (
+      {(error) && (
         <Box sx={{ px: { xs: 2.5, md: 4 }, mt: 2 }}>
-          <Alert
-            severity="error"
-            variant="filled"
-            onClose={() => setError(null)}
-            sx={{
-              borderRadius: 2,
-              bgcolor: theme.palette.error.main,
-              boxShadow: `0 4px 16px ${alpha(theme.palette.error.main, 0.15)}`,
-            }}
-          >
+          <Alert severity="error" variant="filled" onClose={() => setError(null)} sx={{ borderRadius: 2, bgcolor: theme.palette.error.main }}>
             {error}
           </Alert>
         </Box>
       )}
 
       {/* Main Content Area */}
-      <Box
-        sx={{
-          flex: 1,
-          overflowY: 'auto',
-          scrollBehavior: 'smooth',
-        }}
-      >
+      <Box sx={{ flex: 1 }}>
+        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, display: 'flex', flexDirection: 'column', gap: 6 }}>
 
-        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1 }}>
-          {!isLoaded && !loading && (
-            <Box
-              sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                textAlign: 'center',
-                opacity: 0.8,
-              }}
-            >
+          {/* Stay Time Section */}
+          <Box>
+            {isStayLoaded ? (
               <Box
                 sx={{
-                  width: 90,
-                  height: 90,
-                  borderRadius: '50%',
-                  bgcolor: alpha(theme.palette.primary.main, 0.05),
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 2,
+                  flexDirection: 'column',
+                  gap: 3,
+                  animation: 'fadeIn 0.6s ease-out forwards',
+                  '@keyframes fadeIn': {
+                    from: { opacity: 0, transform: 'translateY(20px)' },
+                    to: { opacity: 1, transform: 'translateY(0)' },
+                  },
                 }}
               >
-                <SearchIcon sx={{ fontSize: 36, color: 'primary.main', opacity: 0.5 }} />
-              </Box>
-              <Typography variant="h6" sx={{ fontWeight: 800, mb: 0.5 }}>
-                Ready for Analysis
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 350 }}>
-                Enter a Vessel ID or Service code above to generate operational insights.
-              </Typography>
-            </Box>
-          )}
-
-          {loading && (
-            <Box
-              sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <CircularProgress
-                size={40}
-                thickness={4.5}
-                sx={{
-                  mb: 2,
-                  color: theme.palette.primary.main,
-                  '& .MuiCircularProgress-circle': { strokeLinecap: 'round' },
-                }}
-              />
-              <Typography variant="body1" sx={{ fontWeight: 700, mb: 0.5 }}>
-                Synthesizing Data
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Calculating variance, crane intensity, and bottleneck risks...
-              </Typography>
-            </Box>
-          )}
-
-          {isLoaded && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 3,
-                animation: 'fadeIn 0.6s ease-out forwards',
-                '@keyframes fadeIn': {
-                  from: { opacity: 0, transform: 'translateY(20px)' },
-                  to: { opacity: 1, transform: 'translateY(0)' },
-                },
-              }}
-            >
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 7 }}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2.5,
-                      borderRadius: 3,
-                      border: '1px solid',
-                      borderColor: alpha(theme.palette.primary.main, 0.15),
-                      background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.5)} 100%)`,
-                      backdropFilter: 'blur(10px)',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-                      {/* Hero Header inside predicted stay time card */}
-                      <Box sx={{ mb: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
-                          <Typography sx={{ fontWeight: 900, fontSize: '1.5rem', color: 'text.primary' }}>
-                            {analysisData?.vessel_service || vesselId}
-                          </Typography>
-                        </Box>
-                      </Box>
-
-                      {/* Predicted Stay Time Info */}
-                      <Box>
-                        <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          Predicted Port Stay
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                          <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '2.5rem', md: '3.5rem' }, lineHeight: 1 }}>
-                            {formatNumber(predictedAvg)}
-                          </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.5 }}>
-                            hours
-                          </Typography>
-                        </Box>
-                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'text.secondary', fontWeight: 500 }}>
-                          Based on {visitsCount} historical visits.
-                        </Typography>
-                      </Box>
-                    </Box>
-                    <Box
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <Paper
+                      elevation={0}
                       sx={{
-                        position: 'absolute',
-                        right: -30,
-                        bottom: -30,
-                        width: 180,
-                        height: 180,
-                        borderRadius: '50%',
-                        background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.15)} 0%, transparent 70%)`,
-                        zIndex: 0,
+                        p: 2.5,
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: alpha(theme.palette.primary.main, 0.15),
+                        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.5)} 100%)`,
+                        backdropFilter: 'blur(10px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
                       }}
+                    >
+                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                        <Box sx={{ mb: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
+                            <Typography sx={{ fontWeight: 800, fontSize: '1.25rem', color: 'text.primary' }}>
+                              {analysisData?.vessel_service || vesselId}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Predicted Port Stay
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                            <Typography sx={{ fontWeight: 800, letterSpacing: '-0.02em', fontSize: { xs: '2rem', md: '2.5rem' }, lineHeight: 1 }}>
+                              {formatNumber(predictedAvg)}
+                            </Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.secondary', opacity: 0.6 }}>
+                              hours
+                            </Typography>
+                          </Box>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              mt: 1,
+                              display: 'block',
+                              color: 'text.secondary',
+                              fontWeight: 500,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {loaded || discharged ? (
+                              <>
+                                Predicted using{' '}
+                                <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                  {loaded || 0}
+                                </Box>{' '}
+                                load moves and{' '}
+                                <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                  {discharged || 0}
+                                </Box>{' '}
+                                discharge moves.
+                              </>
+                            ) : (
+                              <>
+                                Based on{' '}
+                                <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                  {visitsCount}
+                                </Box>{' '}
+                                historical visits.
+                              </>
+                            )}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          right: -30,
+                          bottom: -30,
+                          width: 180,
+                          height: 180,
+                          borderRadius: '50%',
+                          background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.15)} 0%, transparent 70%)`,
+                          zIndex: 0,
+                        }}
+                      />
+                    </Paper>
+                  </Grid>
+
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <Stack spacing={2} sx={{ height: '100%', justifyContent: 'space-between' }}>
+                      <MetricCard
+                        title="Historical Baseline"
+                        value={`${formatNumber(actualAvg)}h`}
+                        subtitle="Typical stay duration"
+                        accent="default"
+                      />
+                      <MetricCard
+                        title="History Coverage"
+                        value={formatNumber(visitsCount, 0)}
+                        subtitle="Analyzed visits"
+                        accent="primary"
+                      />
+                    </Stack>
+                  </Grid>
+                </Grid>
+
+                <Grid container spacing={2.5}>
+                  <Grid size={{ xs: 12 }}>
+                    <StayTimeTrendChart visits={analysisData?.actual?.visits || {}} avgHours={actualAvg} />
+                  </Grid>
+
+                  <Grid size={{ xs: 12 }}>
+                    <DelayAnalysisPanel delays={delayAnalysis} />
+                  </Grid>
+
+                  <Grid size={{ xs: 12 }}>
+                    <HistoryAnalysisTable
+                      actualVisits={analysisData?.actual?.visits || {}}
+                      assignments={analysisData?.crane_assignment || []}
                     />
-                  </Paper>
+                  </Grid>
                 </Grid>
+              </Box>
+            ) : (
+              !isStayLoaded && !loading && (
+                <Box sx={{ textAlign: 'center', mt: '12rem', opacity: 0.8 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    Ready for Stay Time Analysis
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Enter a Vessel ID or Service code above to generate operational insights.
+                  </Typography>
+                </Box>
+              )
+            )}
+            {loading && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+                <CircularProgress size={40} thickness={4.5} />
+              </Box>
+            )}
+          </Box>
 
-                <Grid size={{ xs: 12, md: 5 }}>
-                  <Stack spacing={2} sx={{ height: '100%', justifyContent: 'space-between' }}>
-                    <MetricCard
-                      title="Historical Baseline"
-                      value={`${formatNumber(actualAvg)}h`}
-                      subtitle="Typical stay duration"
-                      accent="default"
-                    />
-                    <MetricCard
-                      title="History Coverage"
-                      value={formatNumber(visitsCount, 0)}
-                      subtitle="Analyzed visits"
-                      accent="primary"
-                    />
-                  </Stack>
-                </Grid>
-              </Grid>
-
-              <Grid container spacing={2.5}>
-                <Grid size={{ xs: 12 }}>
-                  <StayTimeTrendChart visits={analysisData?.actual?.visits || {}} avgHours={actualAvg} />
-                </Grid>
-
-                <Grid size={{ xs: 12 }}>
-                  <DelayAnalysisPanel delays={delayAnalysis} />
-                </Grid>
-
-                <Grid size={{ xs: 12 }}>
-                  <HistoryAnalysisTable
-                    actualVisits={analysisData?.actual?.visits || {}}
-                    assignments={analysisData?.crane_assignment || []}
-                    avgStay={actualAvg}
-                    predictedStay={predictedAvg}
-                    vesselService={analysisData?.vessel_service || vesselId}
-                  />
-                </Grid>
-              </Grid>
-            </Box>
-          )}
         </Box>
       </Box>
     </Box>

@@ -281,7 +281,7 @@ export default function StayTimeTrendChart({
                             <ResponsiveContainer width="100%" height={400}>
                                 <ComposedChart
                                     data={trendData}
-                                    margin={{ top: 8, right: 24, left: 8, bottom: 32 }}
+                                    margin={{ top: 8, right: 24, left: 8, bottom: 40 }}
                                 >
                                     <defs>
                                         <linearGradient id="stayFill" x1="0" y1="0" x2="0" y2="1">
@@ -310,18 +310,23 @@ export default function StayTimeTrendChart({
                                         axisLine={{ stroke: alpha(theme.palette.divider, 0.4) }}
                                         tick={{
                                             fill: theme.palette.text.secondary,
-                                            fontSize: 11,
+                                            fontSize: 10,
                                             fontWeight: 600,
                                         }}
-                                        dy={8}
+                                        angle={-45}
+                                        textAnchor="end"
+                                        height={60}
+                                        dx={-4}
+                                        dy={4}
                                         label={{
                                             value: 'Visit ID',
                                             position: 'insideBottom',
-                                            offset: -18,
+                                            offset: -10,
                                             fill: theme.palette.text.secondary,
                                             fontSize: 11,
                                             fontWeight: 700,
                                         }}
+                                        tickFormatter={(val) => String(val).length > 14 ? String(val).substring(0, 14) + '...' : val}
                                     />
 
                                     {/* Left Y-axis: Stay Hours */}

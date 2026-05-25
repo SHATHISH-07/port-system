@@ -134,17 +134,42 @@ def _fetch_crane_counts_batch(visit_ids: list[str]) -> dict[str, int]:
     return {vid: 0 for vid in visit_ids}
 
 
-def _fetch_assigned_crane_count(visit_id: str) -> int:
-    """
-    Fetch the number of distinct cranes assigned to a visit directly from the DB.
-    """
+def _fetch_crane_stats_for_visit(visit_id: str, container_count: int) -> dict:
     crane_df = _fetch_crane_for_visit(visit_id)
-    if crane_df.empty:
-        return 0
-    valid = crane_df[crane_df["exclude"] != "Yes"] if "exclude" in crane_df.columns else crane_df
-    if valid.empty or "crane_id" not in valid.columns:
-        return 0
-    return int(valid["crane_id"].nunique())
+    return _compute_crane_stats(crane_df, container_count)
+
+
+def _fetch_crane_stats_batch(visit_groups: dict) -> dict:
+    visit_ids = list(visit_groups.keys())
+    if not visit_ids:
+        return {}
+    from db.queries import load_from_db
+    try:
+        df = load_from_db("crane", vessel_id=visit_ids)
+        if not df.empty:
+            df = df.rename(columns={
+                "time_completed": "crane_time",
+                "from_position":  "crane_from",
+                "to_position":    "crane_to",
+                "move_kind":      "crane_move_kind",
+            })
+            df["crane_time"] = pd.to_datetime(df["crane_time"], errors="coerce")
+    except Exception as exc:
+        logger.warning("batch crane fetch failed: %s", exc)
+        df = pd.DataFrame()
+
+    out = {}
+    crane_by_visit = {}
+    if not df.empty and "carrier_visit" in df.columns:
+        crane_by_visit = dict(tuple(df.groupby("carrier_visit")))
+
+    for vid, vdf in visit_groups.items():
+        container_count = int(vdf["unit_id"].nunique()) if "unit_id" in vdf.columns else len(vdf)
+        crane_df = crane_by_visit.get(vid, pd.DataFrame())
+        out[vid] = _compute_crane_stats(crane_df, container_count)
+        
+    return out
+
 
 
 def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
@@ -228,6 +253,7 @@ def _enrich_group(group: pd.DataFrame, visit_id: str) -> pd.DataFrame:
 
 def _visit_details(visit_groups: dict) -> dict:
     out: dict = {}
+    batch_crane_stats = _fetch_crane_stats_batch(visit_groups)
     for visit_id, vdf in visit_groups.items():
         if vdf is None or vdf.empty:
             continue
@@ -251,15 +277,26 @@ def _visit_details(visit_groups: dict) -> dict:
                         stay_hours = round((times.max() - times.min()).total_seconds() / 3600, 2)
                     break
 
-        loads = discharges = restow_count = 0
-        for _, row in vdf.iterrows():
-            mt, _ = _extract_move_side(row)
-            if mt == "LOAD":
-                loads += 1
-            elif mt == "DISCHARGE":
-                discharges += 1
-            elif mt in ("SHIFT", "RESTOW"):
-                restow_count += 1
+        # Fast vectorized move counting
+        f_str = vdf.get("ctr_from_position", vdf.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+        t_str = vdf.get("ctr_to_position", vdf.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+        
+        f_is_v = f_str.str.startswith("V-")
+        t_is_v = t_str.str.startswith("V-")
+        f_is_y = (f_str != "") & (~f_is_v)
+        t_is_y = (t_str != "") & (~t_is_v)
+        
+        loads = int((f_is_y & t_is_v).sum())
+        discharges = int((f_is_v & t_is_y).sum())
+        restow_count = int(((f_is_y & t_is_y) | (f_is_v & t_is_v)).sum())
+        
+        move_kind = vdf.get("crane_move_kind", vdf.get("move_kind", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+        unknowns = ~( (f_is_y & t_is_v) | (f_is_v & t_is_y) | ((f_is_y & t_is_y) | (f_is_v & t_is_v)) )
+        
+        if unknowns.any():
+            loads += int((unknowns & (move_kind == "LOAD")).sum())
+            discharges += int((unknowns & (move_kind == "DISCHARGE")).sum())
+            restow_count += int((unknowns & move_kind.isin(["SHIFT", "RESTOW"])).sum())
 
         total_units = int(vdf["unit_id"].nunique()) if "unit_id" in vdf.columns else len(vdf)
         w_col = (
@@ -287,8 +324,7 @@ def _visit_details(visit_groups: dict) -> dict:
             if "port_of_discharge" in vdf.columns else {}
         )
 
-        # Fetch assigned crane count from DB for this visit
-        assigned_cranes = _fetch_assigned_crane_count(str(visit_id))
+        crane_stats = batch_crane_stats.get(str(visit_id)) or _compute_crane_stats(pd.DataFrame(), total_units)
 
         out[str(visit_id)] = {
             "stay_hours":            stay_hours,
@@ -299,12 +335,12 @@ def _visit_details(visit_groups: dict) -> dict:
             "discharged_containers": discharges,
             "move_start":            str(move_start) if move_start is not None else None,
             "move_end":              str(move_end) if move_end is not None else None,
-            "total_units":           total_units,
             "restow_count":          restow_count,
             "avg_weight_kg":         avg_weight_kg,
-            "freight_kind_breakdown": freight_breakdown,
             "port_of_discharge_top5": pod_top5,
-            "assigned_cranes":       assigned_cranes,
+            "assigned_cranes":       int(crane_stats.get("_crane_count", 0)),
+            "cranes_assigned":       eval(crane_stats.get("_crane_ids", "[]")),
+            "crane_mph":             float(crane_stats.get("_crane_mphc", 0.0)),
         }
 
     return out
@@ -364,11 +400,20 @@ def _calculate_delay_analysis(visit_df) -> list:
                     "reason": f"Detected {len(long_gaps)} move-completion gaps exceeding 60 mins.",
                 })
 
-    restow_count = 0
-    for _, row in visit_df.iterrows():
-        mt, _ = _extract_move_side(row)
-        if mt in ("SHIFT", "RESTOW"):
-            restow_count += 1
+    # Fast vectorised restow count
+    f_str = visit_df.get("ctr_from_position", visit_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    t_str = visit_df.get("ctr_to_position", visit_df.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    
+    f_is_v = f_str.str.startswith("V-")
+    t_is_v = t_str.str.startswith("V-")
+    f_is_y = (f_str != "") & (~f_is_v)
+    t_is_y = (t_str != "") & (~t_is_v)
+    
+    restow_count = int(((f_is_y & t_is_y) | (f_is_v & t_is_v)).sum())
+    move_kind = visit_df.get("crane_move_kind", visit_df.get("move_kind", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    unknowns = ~( (f_is_y & t_is_v) | (f_is_v & t_is_y) | ((f_is_y & t_is_y) | (f_is_v & t_is_v)) )
+    if unknowns.any():
+        restow_count += int((unknowns & move_kind.isin(["SHIFT", "RESTOW"])).sum())
 
     if restow_count > 20:
         causes.append({
@@ -953,12 +998,6 @@ def analyze_vessel_dashboard(
         baseline_vessel = baseline_vessel[
             baseline_vessel["outbound_service"].astype(str).str.strip().str.upper() == search_key
         ].copy()
-        
-        # ── OPTIMIZATION: Limit baseline to last 20 visits for speed ──────────
-        v_ids = baseline_vessel["actual_outbound_carrier_visit_id"].unique()
-        if len(v_ids) > 20:
-            last_20 = sorted(v_ids, reverse=True)[:20]
-            baseline_vessel = baseline_vessel[baseline_vessel["actual_outbound_carrier_visit_id"].isin(last_20)].copy()
 
     baseline_prepared: dict = {}
     if not baseline_vessel.empty:
@@ -1090,12 +1129,13 @@ def analyze_vessel_dashboard(
             "discharged_containers":  details.get("discharged_containers", 0),
             "move_start":             details.get("move_start"),
             "move_end":               details.get("move_end"),
-            "total_units":            details.get("total_units", 0),
             "restow_count":           details.get("restow_count", 0),
-            "avg_weight_kg":          details.get("avg_weight_kg", 0.0),
-            "freight_kind_breakdown": details.get("freight_kind_breakdown", {}),
-            "port_of_discharge_top5": details.get("port_of_discharge_top5", {}),
+            "avg_weight_kg":          details.get("avg_weight_kg", 0),
+            "port_of_discharge_top5": details.get("port_of_discharge_top5", []),
             "assigned_cranes":        details.get("assigned_cranes", 0),
+            "cranes_assigned":        details.get("cranes_assigned", []),
+            "crane_mph":              details.get("crane_mph", 0.0),
+            "crane_mpm":              round(60.0 / details.get("crane_mph"), 1) if details.get("crane_mph") > 0 else 0.0,
         }
 
     merged_stays = [v["stay_hours"] for v in merged_visits.values() if v.get("stay_hours", 0) > 0]
@@ -1113,14 +1153,7 @@ def analyze_vessel_dashboard(
     for vid, vdf in visit_groups.items():
         if vdf is None or vdf.empty:
             continue
-        score = (
-            len(vdf) if is_current_mode
-            else sum(
-                1 for _, row in vdf.iterrows()
-                if _extract_move_side(row)[0] in ("LOAD", "DISCHARGE")
-            )
-        )
-        visit_scores.append((vid, score))
+        visit_scores.append((vid, len(vdf)))
 
     if not visit_scores:
         return {"error": "No valid visit data found", "vessel": vessel_service}
@@ -1133,13 +1166,23 @@ def analyze_vessel_dashboard(
         return {"error": "Top visit has no usable rows", "vessel": vessel_service}
 
     # ── Count loads / discharges ─────────────────────────────────────────────
-    total_loaded = total_discharged = 0
-    for _, row in visit_df.iterrows():
-        mt, _ = _extract_move_side(row)
-        if mt == "LOAD":
-            total_loaded += 1
-        elif mt == "DISCHARGE":
-            total_discharged += 1
+    f_str = visit_df.get("ctr_from_position", visit_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    t_str = visit_df.get("ctr_to_position", visit_df.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    
+    f_is_v = f_str.str.startswith("V-")
+    t_is_v = t_str.str.startswith("V-")
+    f_is_y = (f_str != "") & (~f_is_v)
+    t_is_y = (t_str != "") & (~t_is_v)
+    
+    total_loaded = int((f_is_y & t_is_v).sum())
+    total_discharged = int((f_is_v & t_is_y).sum())
+    
+    move_kind = visit_df.get("crane_move_kind", visit_df.get("move_kind", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    unknowns = ~( (f_is_y & t_is_v) | (f_is_v & t_is_y) | ((f_is_y & t_is_y) | (f_is_v & t_is_v)) )
+    
+    if unknowns.any():
+        total_loaded += int((unknowns & (move_kind == "LOAD")).sum())
+        total_discharged += int((unknowns & (move_kind == "DISCHARGE")).sum())
 
     hazardous = int(visit_df["hazardous_flag"].apply(_is_yes).sum()) if "hazardous_flag" in visit_df.columns else 0
     reefer = int(visit_df["reefer"].apply(_is_yes).sum()) if "reefer" in visit_df.columns else 0

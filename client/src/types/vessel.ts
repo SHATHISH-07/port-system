@@ -32,6 +32,9 @@ export interface VesselVisit {
   avg_weight_kg?: number;
   freight_kind_breakdown?: Record<string, number>;
   port_of_discharge_top5?: Record<string, number>;
+  cranes_assigned?: string[];
+  crane_mph?: number;
+  crane_mpm?: number;
   [key: string]: unknown;
 }
 
@@ -196,12 +199,7 @@ export interface VesselAnalysisData {
     reason: string;
   }>;
 
-  crane_analytics?: {
-    active_cranes: number;
-    crane_details: IndividualCraneStat[];
-    conflicts: CraneConflict[];
-    total_moves: number;
-  };
+  crane_performance?: CranePerformanceResponse;
 
   berth_recommendation?: {
     rank?: number;
@@ -293,88 +291,15 @@ export interface VesselAnalysisData {
   error?: string;
 }
 
-export interface CraneStats {
-  crane_id: string;
-
-  total_moves: number;
-  moves_per_hour: number;
-
-  productivity_rating: string;
-
-  avg_cycle_minutes: number;
-  restow_ratio: number;
-
-  yard_id?: string;
-  primary_visit?: string;
-}
-
-export interface VisitCraneAllocation {
+export interface HistoricalCraneAllocation {
   visit_id: string;
-
-  crane_count: number;
   total_moves: number;
-
-  cranes_used: string[];
-
+  cranes_assigned: string[];
+  overall_mph: number;
   yard_id?: string;
-}
-
-export interface HourlyProductivity {
-  hour: string;
-  moves: number;
-}
-
-export interface CraneMove {
-  id: string;
-
-  crane_id: string | null;
-  unit_id: string | null;
-
-  carrier_visit: string | null;
-
-  move_kind: string | null;
-
-  from_position: string | null;
-  to_position: string | null;
-
-  time_completed: string | null;
-
-  line_op: string | null;
 }
 
 export interface CranePerformanceResponse {
-  summary: {
-    total_moves: number;
-    effective_moves: number;
-    anomaly_rate: number;
-    active_cranes: number;
-    unique_visits_served: number;
-  };
-
-  crane_stats: CraneStats[];
-
-  visit_crane_allocation: VisitCraneAllocation[];
-
-  hourly_trend?: Array<{
-    timestamp: string;
-    count: number;
-  }>;
-
-  yard_stats?: Array<{
-    terminal_name: string;
-
-    total_system_moves: number;
-    active_cranes_count: number;
-
-    unique_vessel_visits: number;
-
-    gross_terminal_mph: number;
-    avg_crane_productivity: number;
-  }>;
-
-  move_kind_distribution?: Record<string, number>;
-
-  moves: CraneMove[];
-
+  historical_crane_allocations?: HistoricalCraneAllocation[];
   error?: string;
 }

@@ -146,7 +146,6 @@ class Settings:
         "hazard_count",
         "oog_count",
         "service_hash",
-        "move_span_hours",
         "restow_intensity",
         "block_concentration",
         "reefer_equipment_ratio",

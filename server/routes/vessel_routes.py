@@ -76,14 +76,14 @@ async def get_vessel_analysis(
             )
             if "error" not in hist_result:
                 return hist_result
-
             # Surface suggestions cleanly rather than exposing internal keys
             suggestions = result.get("suggestions", [])
-            return {
+            err_result = {
                 "error":       result.get("error", "Vessel not found"),
                 "vessel":      vessel_id,
                 "suggestions": suggestions,
             }
+            return err_result
 
         return result
 

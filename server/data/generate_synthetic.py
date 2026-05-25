@@ -37,11 +37,12 @@ BLOCK_OCCUPANCY  = 0.70  # fraction of slots that can hold a container
 SLOTS_PER_BLOCK  = int(BLOCK_CAPACITY * BLOCK_OCCUPANCY)   # ≈ 280 usable slots
 
 # ── Stay time bounds (hours) ──────────────────────────────────────────────────
-# Low-volume visits  (load+discharge ≤ LOW_VOLUME_MAX*2) → 20 h
-# High-volume visits (load+discharge ≥ HIGH_VOL_THRESHOLD) → 80 h
-STAY_MIN_HOURS        = 20.0
+# Vessel stay is controlled by load/discharge volume and crane count.
+# The final move-completion span for a visit is clamped to 40–80 hours.
+STAY_MIN_HOURS        = 40.0
 STAY_MAX_HOURS        = 80.0
-HIGH_VOL_THRESHOLD    = MAX_HISTORY_CONTAINERS_PER_VISIT  # 500 containers → full range
+LOW_PRODUCTIVITY_THRESHOLD  = LOW_VOLUME_MAX * 2          # ~100 productive moves
+HIGH_PRODUCTIVITY_THRESHOLD = MAX_HISTORY_CONTAINERS_PER_VISIT  # 500 productive moves
 
 OUTPUT_DIR = Path(".")
 BASE_OUTPUT_CONTAINER_FILE = "synthetic_container_dataset.csv"
@@ -229,22 +230,37 @@ def assign_cranes(total_containers: int) -> List[str]:
     return random.sample(CRANES, min(crane_count, len(CRANES)))
 
 
-def estimate_stay_hours(load_count: int, discharge_count: int) -> float:
+def estimate_stay_hours(load_count: int, discharge_count: int, crane_count: int) -> float:
     """
-    Map productive move count (load + discharge) linearly onto [20 h, 80 h].
+    Estimate a visit stay duration from:
+      - load count
+      - discharge count
+      - crane count
 
-    Low  end: LOW_VOLUME_MAX * 2 ≈ 100 productive moves → ~20 h
-    High end: HIGH_VOL_THRESHOLD productive moves       → ~80 h
-
-    A small ±jitter (±1 h) is added so consecutive visits aren't identical.
+    The move-completion span is always clamped to 40–80 hours.
+    More moves lengthen the stay; more cranes shorten it slightly.
     """
-    productive  = load_count + discharge_count
-    lo_moves    = LOW_VOLUME_MAX * 2          # ~100
-    hi_moves    = HIGH_VOL_THRESHOLD          # 500
+    productive = load_count + discharge_count
 
-    t = max(0.0, min(1.0, (productive - lo_moves) / max(1, hi_moves - lo_moves)))
-    base_hours  = STAY_MIN_HOURS + t * (STAY_MAX_HOURS - STAY_MIN_HOURS)
-    jitter      = random.uniform(-1.0, 1.0)
+    volume_t = max(
+        0.0,
+        min(
+            1.0,
+            (productive - LOW_PRODUCTIVITY_THRESHOLD)
+            / max(1, HIGH_PRODUCTIVITY_THRESHOLD - LOW_PRODUCTIVITY_THRESHOLD),
+        ),
+    )
+
+    # Volume-only baseline mapped to 40–80 hours.
+    volume_hours = STAY_MIN_HOURS + volume_t * (STAY_MAX_HOURS - STAY_MIN_HOURS)
+
+    # Crane effect: fewer cranes => longer stay, more cranes => shorter stay.
+    crane_effect = 1.0 - (max(1, crane_count) - 3) * 0.05
+    crane_effect = max(0.88, min(1.10, crane_effect))
+
+    base_hours = volume_hours * crane_effect
+    jitter = random.uniform(-1.0, 1.0)
+
     return round(max(STAY_MIN_HOURS, min(STAY_MAX_HOURS, base_hours + jitter)), 2)
 
 
@@ -252,84 +268,80 @@ def estimate_stay_hours(load_count: int, discharge_count: int) -> float:
 def build_event_times(start: datetime, stay_hours: float,
                       count: int, crane_count: int) -> List[datetime]:
     """
-    Build a realistic move-completion sequence.
+    Build a move-completion sequence for a single visit.
 
-    The generator does two things:
-      1. spreads moves across several active batches;
-      2. keeps the full first-to-last move span close to the intended stay.
-
-    That makes the downstream stay calculation see a proper multi-hour visit
-    instead of a dense sub-hour burst.
+    The timestamps are monotonic and span most of the stay window so the
+    first and last move completion times define the visit sequence.
     """
     if count <= 0:
         return []
 
+    # Keep the first move near the start and the last move near the end.
+    lead_in_hours = min(1.5, max(0.25, stay_hours * 0.05))
+    tail_out_hours = min(1.5, max(0.25, stay_hours * 0.05))
+
+    window_start = start + timedelta(hours=lead_in_hours)
+    window_end = start + timedelta(hours=stay_hours - tail_out_hours)
+
+    if window_end <= window_start:
+        window_end = window_start + timedelta(minutes=30)
+
     if count == 1:
-        # Single event: place it in the middle of the visit window.
-        offset = stay_hours * random.uniform(0.35, 0.60)
-        return [start + timedelta(hours=offset)]
+        return [window_start + (window_end - window_start) / 2]
 
-    stay_sec = stay_hours * 3600.0
+    span_seconds = max(60.0, (window_end - window_start).total_seconds())
 
-    # The actual move span should cover most of the stay window.
-    span_hours = max(6.0, min(stay_hours * random.uniform(0.80, 0.95), stay_hours - 0.25))
-    span_sec   = span_hours * 3600.0
+    # Crane productivity affects how tightly moves are packed.
+    target_mph = random.uniform(CRANE_ACTIVE_MPH_MIN, CRANE_ACTIVE_MPH_MAX)
+    combined_mph = max(1.0, crane_count * target_mph)
+    cycle_seconds = max(20.0, 3600.0 / combined_mph)
 
-    target_mph    = random.uniform(CRANE_ACTIVE_MPH_MIN, CRANE_ACTIVE_MPH_MAX)
-    combined_mph   = max(1.0, crane_count * target_mph)
-    cycle_seconds  = max(20.0, 3600.0 / combined_mph)  # seconds per move
-
-    # Use multiple batches so the timestamps do not collapse into one tight block.
-    batch_target = max(2, int(round(stay_hours / 4.0)))
-    batch_limit  = max(2, int(count / 18) + 1)
-    num_batches  = min(6, batch_target, batch_limit, count)
-    num_batches  = max(2, num_batches)
+    # Spread the full visit into a few batches to avoid one dense cluster.
+    batch_target = max(2, int(round(stay_hours / 12.0)))
+    batch_limit = max(2, int(count / 18) + 1)
+    num_batches = min(6, batch_target, batch_limit, count)
+    num_batches = max(2, num_batches)
 
     batch_sizes = _split_evenly(count, num_batches)
 
-    # Each batch gets a short active window, then there is a gap before the next.
+    # Allocate batch windows and gaps inside the span.
     batch_active_windows: List[float] = []
     for size in batch_sizes:
-        active_window = max(
-            size * cycle_seconds,
-            random.uniform(25 * 60.0, 70 * 60.0),
+        batch_active_windows.append(
+            max(size * cycle_seconds, random.uniform(20 * 60.0, 70 * 60.0))
         )
-        batch_active_windows.append(active_window)
 
     total_active = sum(batch_active_windows)
-    if total_active > span_sec * 0.70:
-        scale = (span_sec * 0.70) / max(total_active, 1.0)
+    if total_active > span_seconds * 0.72:
+        scale = (span_seconds * 0.72) / max(total_active, 1.0)
         batch_active_windows = [max(20 * 60.0, w * scale) for w in batch_active_windows]
         total_active = sum(batch_active_windows)
 
     gap_count = max(0, num_batches - 1)
-    gap_budget = max(span_sec - total_active, gap_count * 25 * 60.0)
+    gap_budget = max(0.0, span_seconds - total_active)
 
     gap_windows: List[float] = []
     if gap_count > 0:
-        base_gap = gap_budget / gap_count
+        base_gap = gap_budget / gap_count if gap_count else 0.0
         for _ in range(gap_count):
-            gap_windows.append(max(20 * 60.0, base_gap * random.uniform(0.85, 1.20)))
+            gap_windows.append(max(15 * 60.0, base_gap * random.uniform(0.85, 1.20)))
         gap_total = sum(gap_windows)
-        if gap_total > 0:
+        if gap_total > 0 and gap_budget > 0:
             scale = gap_budget / gap_total
             gap_windows = [g * scale for g in gap_windows]
 
-    # Start a little after arrival; end a little before departure.
-    start_offset = max(20 * 60.0, stay_sec * random.uniform(0.08, 0.15))
-    first_time = start + timedelta(seconds=start_offset)
-
     times: List[datetime] = []
-    cursor = first_time
+    cursor = window_start
 
     for batch_idx, batch_moves in enumerate(batch_sizes):
         batch_window = batch_active_windows[batch_idx]
+
         if batch_moves == 1:
-            times.append(cursor + timedelta(seconds=batch_window / 2))
+            times.append(cursor + timedelta(seconds=batch_window / 2.0))
         else:
             step = batch_window / max(batch_moves - 1, 1)
             for move_idx in range(batch_moves):
-                jitter = random.uniform(-6.0, 6.0)
+                jitter = random.uniform(-8.0, 8.0)
                 ts = cursor + timedelta(seconds=(move_idx * step) + jitter)
                 times.append(ts)
 
@@ -339,27 +351,20 @@ def build_event_times(start: datetime, stay_hours: float,
 
     times.sort()
 
-    # Enforce strict monotonicity.
+    # Strictly monotonic timestamps.
     for i in range(1, len(times)):
         if times[i] <= times[i - 1]:
             times[i] = times[i - 1] + timedelta(seconds=random.randint(15, 45))
 
-    # Keep the full sequence inside the planned stay window.
-    end_window = start + timedelta(hours=stay_hours) - timedelta(minutes=5)
-    if times and times[-1] > end_window:
-        first_t = times[0]
-        last_t  = times[-1]
-        span    = (last_t - first_t).total_seconds()
-        window  = (end_window - first_t).total_seconds()
-        if span > 0 and window > 0:
-            scale = window / span
-            times = [
-                first_t + timedelta(seconds=(t - first_t).total_seconds() * scale)
-                for t in times
-            ]
-            for i in range(1, len(times)):
-                if times[i] <= times[i - 1]:
-                    times[i] = times[i - 1] + timedelta(seconds=random.randint(15, 45))
+    # Final clamp inside the planned stay window.
+    times = [max(window_start, min(window_end, t)) for t in times]
+
+    # If clamping caused ties, nudge them forward again.
+    for i in range(1, len(times)):
+        if times[i] <= times[i - 1]:
+            times[i] = times[i - 1] + timedelta(seconds=random.randint(15, 45))
+            if times[i] > window_end:
+                times[i] = window_end
 
     return times
 
@@ -553,12 +558,12 @@ def generate_terminal_data(terminal: dict):
         )
         total_ops = load_count + discharge_count + restow_count
 
-        # ── Stay time: 20 h (low volume) → 80 h (high volume) ────────────────
-        stay_hours = estimate_stay_hours(load_count, discharge_count)
-
+        # ── Stay time: 40 h (low volume) → 80 h (high volume) ────────────────
         cranes_assigned = assign_cranes(total_rows)
-        event_times     = build_event_times(
-            visit["visit_start"] + timedelta(hours=0.5),   # 30-min pilot/mooring offset
+        stay_hours = estimate_stay_hours(load_count, discharge_count, len(cranes_assigned))
+
+        event_times = build_event_times(
+            visit["visit_start"],
             stay_hours,
             total_ops,
             len(cranes_assigned),

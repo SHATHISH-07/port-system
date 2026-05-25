@@ -6,9 +6,17 @@ from utils.position_parser import (
     block_label,
     parse_position,
 )
+from utils.stowage_rules import classify_weight_band
 from services.vessel_service import _extract_move_side, _is_yes
 
 logger = logging.getLogger("port_system")
+
+def _first_existing_value(row: dict, candidates: list[str]) -> any:
+    for col in candidates:
+        if col in row and pd.notna(row.get(col)) and str(row.get(col)).strip() != "":
+            return row.get(col)
+    return None
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -103,10 +111,10 @@ def get_vessel_heatmap(df: pd.DataFrame, vessel_id: str) -> dict:
 
     # Aggregate by block
     blocks_data: dict = defaultdict(lambda: {
-        "count": 0, "hazardous": 0, "reefer": 0, "oog": 0,
+        "count": 0, "hazardous": 0, "reefer": 0, "oog": 0, "heavy": 0,
         "load_moves": 0, "discharge_moves": 0, "cells": {},
     })
-    summary = {"hazardous": 0, "reefer": 0, "oog": 0}
+    summary = {"hazardous": 0, "reefer": 0, "oog": 0, "heavy": 0}
 
     for _, row in visit_df.iterrows():
         row = dict(row)
@@ -148,6 +156,12 @@ def get_vessel_heatmap(df: pd.DataFrame, vessel_id: str) -> dict:
             b_data["oog"] += 1
             summary["oog"] += 1
 
+        w = _first_existing_value(row, ["unit_weight_in_kg", "verified_gross_mass_kg", "gross_mass_kg", "gross_weight_kg"])
+        l = _first_existing_value(row, ["container_length", "equipment_length"])
+        if classify_weight_band(w, l) == "HEAVY":
+            b_data["heavy"] += 1
+            summary["heavy"] += 1
+
     if not blocks_data:
         return {"error": "No yard positions found for this visit", "vessel": vessel_id}
 
@@ -183,14 +197,21 @@ def get_vessel_heatmap(df: pd.DataFrame, vessel_id: str) -> dict:
     relevant_blocks = list(final_blocks.keys())
     layout          = _deterministic_layout(relevant_blocks)
 
-    max_block = max(final_blocks, key=lambda k: final_blocks[k]["count"])
+    max_block = max(
+        final_blocks, 
+        key=lambda k: final_blocks[k]["count"] + (final_blocks[k].get("heavy", 0) * 2)
+    )
+
+    terminals = [val.get("terminal") for _, info in blocks_data.items() for val in info.get("cells", {}).values() if val.get("terminal")]
+    dominant_term = max(set(terminals), key=terminals.count) if terminals else "PEB"
 
     return {
         "vessel":             vessel_id_str,
         "visit_id":           str(top_visit_id),
-        "recommended_berth":  max_block,
+        "recommended_berth":  f"Near {dominant_term}-{max_block}",
         "berth_recommendation_reason": (
-            f"Highest container volume ({final_blocks[max_block]['count']} units)."
+            f"Optimal score based on volume ({final_blocks[max_block]['count']} units) "
+            f"and heavy containers ({final_blocks[max_block].get('heavy', 0)})."
         ),
         "max_block":     max_block,
         "summary":       summary,

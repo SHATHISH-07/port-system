@@ -43,17 +43,17 @@ export default function TrainingStatusCard({ onRetry }: Props) {
   }, [statusData.status]);
 
   const chipColor = {
-    idle:      "default",
-    training:  "warning",
+    idle: "default",
+    training: "warning",
     completed: "success",
-    error:     "error",
+    error: "error",
   }[statusData.status] as "default" | "warning" | "success" | "error";
 
   const chipIcon = {
-    idle:      <InfoOutlined sx={{ fontSize: "16px !important" }} />,
-    training:  <CircularProgress size={12} color="inherit" />,
+    idle: <InfoOutlined sx={{ fontSize: "16px !important" }} />,
+    training: <CircularProgress size={12} color="inherit" />,
     completed: <CheckCircleOutlined sx={{ fontSize: "16px !important" }} />,
-    error:     <ErrorOutlined sx={{ fontSize: "16px !important" }} />,
+    error: <ErrorOutlined sx={{ fontSize: "16px !important" }} />,
   }[statusData.status];
 
   const hasMetadata = statusData.records_count || statusData.data_source || statusData.training_type;

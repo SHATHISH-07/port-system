@@ -403,6 +403,16 @@ def init_training_metadata_schema(engine) -> None:
 # Load helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _resolve_terminal(yard_id: str | None) -> str:
+    if yard_id:
+        y = str(yard_id).upper()
+        if "PEB" in y:
+            return "PEB"
+        if "CWIT" in y:
+            return "CWIT"
+    return "CWIT"
+
+
 def load_from_db(
     dataset_type: str,
     vessel_id: str = None,
@@ -417,12 +427,32 @@ def load_from_db(
     engine = get_engine()
     dataset_type = (dataset_type or "").strip().lower()
 
+    if dataset_type == "crane":
+        crane_tables = _discover_tables(engine, "crane_operations", yard_id)
+        if crane_tables:
+            df = _load_crane_ops(
+                engine, crane_tables, vessel_id, full_load, settings,
+                days=days, crane_id=crane_id, columns=columns,
+            )
+            if not df.empty:
+                if "exclude" in df.columns:
+                    df = df[df["exclude"].astype(str).str.strip() != "Yes"].copy()
+                if "time_completed" in df.columns:
+                    df["time_completed"] = pd.to_datetime(
+                        df["time_completed"], errors="coerce"
+                    )
+                sort_cols = [c for c in ["crane_id", "carrier_visit", "time_completed"] if c in df.columns]
+                if sort_cols:
+                    df = df.sort_values(sort_cols).reset_index(drop=True)
+            return df
+        return pd.DataFrame()
+
     # ── Try new unified tables first ─────────────────────────────────────────
     new_suffix_map = {
         "history":       "container_operations",
         "current":       "container_operations",
-        "crane":         "crane_operations",
         "vessel_visits": "vessel_visits",
+        "crane":         "crane_operations",
     }
     new_suffix = new_suffix_map.get(dataset_type)
 
@@ -433,10 +463,10 @@ def load_from_db(
                 return _load_container_ops(engine, new_tables, vessel_id, full_load, settings, record_type="history")
             if dataset_type == "current":
                 return _load_current_from_ops(engine, new_tables, vessel_id, settings)
-            if dataset_type == "crane":
-                return _load_crane_ops(engine, new_tables, vessel_id, full_load, settings, days=days, crane_id=crane_id, columns=columns)
             if dataset_type == "vessel_visits":
                 return _load_vessel_visits(engine, new_tables, vessel_id, settings)
+            if dataset_type == "crane":
+                return _load_crane_ops(engine, new_tables, vessel_id, full_load, settings)
 
     # No legacy fallback — unified tables only
     return pd.DataFrame()
