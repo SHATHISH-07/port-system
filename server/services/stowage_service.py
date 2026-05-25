@@ -519,6 +519,54 @@ def process_current_planning_and_yard_strategy(
     l_col = next((c for c in ["container_length", "equipment_length"] if c in df.columns), None)
     df["weight_band"] = df.apply(lambda r: classify_weight_band(r.get(w_col) if w_col else None, str(r.get(l_col,"")) if l_col else None), axis=1)
 
+    # 0. Pre-calculate Port Sequence (rank_map) so we can apply LIFO logic during recommendation generation
+    temp_counts = df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts() if "port_of_discharge" in df.columns else {}
+    rotation = port_rotation if (port_rotation and len(port_rotation) > 0) else []
+    
+    if rotation:
+        try:
+            from db.queries import update_vessel_schedule
+            from db.connection import get_engine
+            # If the user explicitly passed a rotation from UI "Apply Changes", permanently save it!
+            update_vessel_schedule(get_engine(), str(vessel_id).strip().upper(), rotation)
+        except Exception:
+            pass
+    
+    if not rotation:
+        try:
+            from db.queries import get_vessel_schedule
+            from db.connection import get_engine
+            db_schedule = get_vessel_schedule(get_engine(), str(vessel_id).strip().upper())
+            if db_schedule:
+                rotation = db_schedule
+        except Exception:
+            pass
+
+        # Fallback to historical guessing if DB schedule is empty
+        if not rotation:
+            try:
+                from db.queries import load_from_db
+                history_df = load_from_db("history", vessel_id=vessel_id)
+                if history_df is not None and not history_df.empty and "port_of_discharge" in history_df.columns:
+                    hist_counts = history_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
+                    rotation = [p for p in hist_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
+            except Exception:
+                rotation = [p for p in temp_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
+
+    rank_map = {}
+    current_rank = 1
+    for port in rotation:
+        port_str = port.upper()
+        if port_str in temp_counts.index and port_str not in rank_map:
+            rank_map[port_str] = current_rank
+            current_rank += 1
+            
+    for port in temp_counts.index:
+        port_str = port.upper()
+        if port_str and port_str != "UNKNOWN" and port_str not in rank_map:
+            rank_map[port_str] = current_rank
+            current_rank += 1
+
     # 1. Base Strategy Metrics
     baseline_reshuffle_rate = 0.0
     crane_metrics = _compute_crane_metrics(vessel_id, yard_id)
@@ -559,7 +607,7 @@ def process_current_planning_and_yard_strategy(
             equipment_class=eq_class,
             yard_block=current_yard_block,
             yard_slot=current_slot_position,
-            port_rotation_dict={},
+            port_rotation_dict=rank_map,
         )
 
         rec["recommendedTier"] = _derive_recommended_tier(weight_band, rec["loadingPriority"])
@@ -591,51 +639,18 @@ def process_current_planning_and_yard_strategy(
             "containerIds": port_ids.get(port, [])
         })
         
-    rotation_msg = ""
-    rotation = []
-    
-    if port_rotation and len(port_rotation) > 0:
-        # 1. UI Drag-and-Drop (The Planner's Choice Override)
-        rotation = port_rotation
-        rotation_msg = "Discharge sequence manually overridden by user."
-    else:
-        # 2. Historical Prediction (Self-Learning from DB)
-        try:
-            history_df = load_from_db("history", vessel_id=vessel_id)
-            if history_df is not None and not history_df.empty and "port_of_discharge" in history_df.columns:
-                hist_counts = history_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
-                rotation = [p for p in hist_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
-                if rotation:
-                    rotation_msg = f"Discharge sequence predicted from {len(history_df)} historical container records."
-        except Exception:
-            pass
+    rotation_msg = "Discharge sequence built using Master Vessel Schedule and historical fallbacks." if not port_rotation else "Discharge sequence manually overridden by user."
     
     discharge_sequence = []
-    rank_map = {}
-    current_rank = 1
-    
-    # First, assign ranks based on the explicit rotation dictionary
-    for port in rotation:
-        port_str = port.upper()
-        # Only assign rank if this port actually exists in the current upload
-        if port_str in [p.upper() for p in port_counts.keys()] and port_str not in rank_map:
+    # rank_map is already built at the top!
+    # Just need to format it for the UI response
+    sorted_ranks = sorted(rank_map.items(), key=lambda x: x[1])
+    for port_str, rank in sorted_ranks:
+        if port_str in [p.upper() for p in port_counts.keys()]:
             discharge_sequence.append({
                 "port": port_str,
-                "dischargeOrder": current_rank
+                "dischargeOrder": rank
             })
-            rank_map[port_str] = current_rank
-            current_rank += 1
-            
-    # Then, assign ranks to any remaining ports (or if no rotation is defined) based on their volume
-    for port, count in sorted_ports:
-        port_str = port.upper()
-        if port_str and port_str != "UNKNOWN" and port_str not in rank_map:
-            discharge_sequence.append({
-                "port": port_str,
-                "dischargeOrder": current_rank
-            })
-            rank_map[port_str] = current_rank
-            current_rank += 1
 
     # Sort recommendations by discharge order and attach the order directly to the recommendation
     recommendations.sort(key=lambda r: rank_map.get(str(r.get("portOfDischarge")).upper(), 999))

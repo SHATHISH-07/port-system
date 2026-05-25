@@ -107,17 +107,18 @@ def predict_reshuffle_risk(
         score += 5
 
     if yard_slot:
-        slot_text = str(yard_slot).strip()
-        digits = "".join(ch for ch in slot_text if ch.isdigit())
-
-        if digits:
-            last_digit = int(digits[-1])
-            if last_digit <= 2:
-                score += 35
-            elif last_digit <= 4:
-                score += 15
-            else:
-                score -= 5
+        from utils.position_parser import parse_position
+        info = parse_position(str(yard_slot))
+        if info and info.get("is_yard") and info.get("tier"):
+            tier_val = str(info.get("tier"))
+            if tier_val.isdigit():
+                last_digit = int(tier_val)
+                if last_digit <= 2:
+                    score += 35
+                elif last_digit <= 4:
+                    score += 15
+                else:
+                    score -= 5
 
     if _is_early_block(yard_block):
         score += 10

@@ -670,3 +670,39 @@ def _load_vessel_visits(
     return pd.concat(dfs, ignore_index=True)
 
 
+def get_vessel_schedule(engine, vessel_id: str) -> list[str]:
+    """Fetch the exact chronological route sequence from the vessel_schedules table."""
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT port_of_discharge 
+                    FROM vessel_schedules 
+                    WHERE vessel_id = :v_id 
+                    ORDER BY sequence_order ASC
+                """),
+                {"v_id": vessel_id}
+            ).fetchall()
+            return [r[0] for r in rows]
+    except Exception as e:
+        logger.error("Failed to load vessel schedule for %s: %s", vessel_id, e)
+        return []
+
+def update_vessel_schedule(engine, vessel_id: str, port_rotation: list[str]) -> None:
+    """Save a manually applied port sequence to the master vessel_schedules table."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM vessel_schedules WHERE vessel_id = :v_id"),
+                {"v_id": vessel_id}
+            )
+            for i, port in enumerate(port_rotation, start=1):
+                conn.execute(
+                    text("""
+                        INSERT INTO vessel_schedules (vessel_id, port_of_discharge, sequence_order) 
+                        VALUES (:v_id, :port, :seq)
+                    """),
+                    {"v_id": vessel_id, "port": port.upper().strip(), "seq": i}
+                )
+    except Exception as e:
+        logger.error("Failed to save vessel schedule for %s: %s", vessel_id, e)
