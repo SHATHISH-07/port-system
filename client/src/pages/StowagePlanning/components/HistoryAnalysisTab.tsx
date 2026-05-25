@@ -23,7 +23,7 @@ interface HistoryData {
   dischargePortGrouping?: Array<{ port: string; count: number }>;
   equipmentClassDistribution?: Array<{ equipmentClass: string; count: number }>;
   historicalVisits?: Array<{ visitId: string; containerCount: number; moveCompleteTime: string }>;
-  craneMetrics?: Record<string, number>;
+
   weightDistribution?: {
     aboveDeck?: Array<{ band: string; count: number }>;
     belowDeck?: Array<{ band: string; count: number }>;
@@ -75,7 +75,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
 
   if (!data) return null;
 
-  const { summary = {}, specialCargoSummary = {}, containerSizeDistribution = [], dischargePortGrouping = [], equipmentClassDistribution = [], historicalVisits = [], craneMetrics } = data;
+  const { summary = {}, specialCargoSummary = {}, containerSizeDistribution = [], dischargePortGrouping = [], equipmentClassDistribution = [], historicalVisits = [] } = data;
 
   const portBarData = dischargePortGrouping.slice(0, 5).map((i: { port: string; count: number }) => ({ name: i.port, Containers: i.count }));
   const sizePieData = containerSizeDistribution.map((i: { containerSize: string; count: number }) => ({ name: i.containerSize === 'BASIC20' ? '20ft (Standard)' : '40ft (Hi-Cube)', value: i.count }));
@@ -244,87 +244,34 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
         </Grid>
       </Grid>
 
-      {/* Crane Performance Metrics */}
-      {craneMetrics && (
-        <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, mt: 1 }}>
-          <Box sx={{ px: 2.5, py: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>Crane Operational Performance</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {visitId ? `Move breakdown for visit ${visitId}` : 'Historical move breakdown and efficiency metrics'}
-            </Typography>
-          </Box>
 
-          {/* KPI Row */}
-          <Box sx={{ px: 2.5, pt: 2, pb: visitId ? 2 : 0 }}>
-            <Grid container spacing={1.5}>
-              {[
-                { label: 'Load Moves', value: craneMetrics.loadMoves ?? '-', color: theme.palette.primary.main },
-                { label: 'Discharge Moves', value: craneMetrics.dischargeMoves ?? '-', color: theme.palette.info.main },
-                { label: 'Reshuffle Moves', value: craneMetrics.restowMoves ?? '-', color: theme.palette.warning.main },
-              ].map((kpi) => (
-                <Grid key={kpi.label} size={{ xs: 6, sm: 4, md: 'auto' }} sx={{ flex: { md: 1 } }}>
-                  <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, bgcolor: 'background.default' }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '0.65rem' }}>
-                      {kpi.label}
-                    </Typography>
-                    <Typography sx={{ fontWeight: 800, color: kpi.color, mt: 0.25, fontSize: '1rem' }}>
-                      {kpi.value}
-                    </Typography>
-                  </Box>
-                </Grid>
-              ))}
-            </Grid>
-          </Box>
-
-          {/* Bar chart — always shown, data is visit-scoped when visitId is set */}
-          <Box sx={{ p: 2, height: 180 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[
-                { name: 'Load Moves', value: craneMetrics.loadMoves, fill: theme.palette.primary.main },
-                { name: 'Discharge Moves', value: craneMetrics.dischargeMoves, fill: theme.palette.info.main },
-                { name: 'Restow (Reshuffle)', value: craneMetrics.restowMoves, fill: theme.palette.warning.main },
-              ]} layout="vertical" margin={{ top: 0, right: 10, left: 20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.palette.divider} />
-                <XAxis type="number" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis dataKey="name" type="category" fontSize={11} width={120} tickLine={false} axisLine={false} tick={{ fontWeight: 600 }} />
-                <Tooltip cursor={{ fill: alpha(theme.palette.primary.main, 0.05) }} contentStyle={{ fontSize: '0.75rem', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', color: '#000' }} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                  {[
-                    { fill: theme.palette.primary.main },
-                    { fill: theme.palette.info.main },
-                    { fill: theme.palette.warning.main },
-                  ].map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Box>
-        </Card>
-      )}
 
       {/* Historical Logs — hidden when scoped to a single visit */}
       {!visitId && (
-        <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, mt: 1, boxShadow: `0 4px 16px ${alpha('#000', 0.02)}` }}>
-          <Box sx={{ px: 2.5, py: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>Visit History</Typography>
-            <Typography variant="caption" color="text.secondary">Past occurrences and stowage volumes</Typography>
+        <Box sx={{ mt: 3, mb: 1 }}>
+          <Box sx={{ mb: 2 }}>
+            <Typography sx={{ fontWeight: 900, fontSize: '1.2rem', letterSpacing: '-0.02em' }}>Visit History</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mt: 0.5, display: "block" }}>
+              Past occurrences and stowage volumes
+            </Typography>
           </Box>
-          <TableContainer>
-            <Table size="small">
-              <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+          <TableContainer component={Paper} elevation={theme.palette.mode === 'dark' ? 0 : 2} sx={{ maxHeight: 300, borderRadius: 3, border: `1px solid ${theme.palette.divider}`, overflowY: "auto", bgcolor: theme.palette.mode === 'dark' ? alpha("#000", 0.4) : alpha("#fff", 0.7), backdropFilter: "blur(12px)" }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
                 <TableRow>
-                  <TableCell align="center" sx={{ fontWeight: 800, fontSize: '0.75rem', py: 1.5, px: 2.5 }}>Visit ID</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 800, fontSize: '0.75rem', py: 1.5 }}>Containers Stowed</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 800, fontSize: '0.75rem', py: 1.5 }}>Operation Time</TableCell>
+                  <TableCell align="left" sx={{ bgcolor: 'background.paper', fontWeight: 700, fontSize: '0.75rem', py: 1.5, px: 3 }}>Visit ID</TableCell>
+                  <TableCell align="center" sx={{ bgcolor: 'background.paper', fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>Containers Stowed</TableCell>
+                  <TableCell align="right" sx={{ bgcolor: 'background.paper', fontWeight: 700, fontSize: '0.75rem', py: 1.5, px: 3 }}>Operation Time</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {historicalVisits.map((visit: { visitId: string; containerCount: number; moveCompleteTime: string }, index: number) => (
+                {historicalVisits.map((visit: { visitId: string; containerCount: number; moveCompleteTime: string | null }, index: number) => (
                   <TableRow key={visit.visitId} hover sx={{ bgcolor: index % 2 === 0 ? 'transparent' : alpha(theme.palette.action.hover, 0.18) }}>
-                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.8rem', px: 2.5 }}>{visit.visitId}</TableCell>
-                    <TableCell align="center" sx={{ fontSize: '0.8rem' }}>{formatNumber(visit.containerCount, 0)}</TableCell>
-                    <TableCell align="center" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>{new Date(visit.moveCompleteTime).toLocaleString()}</TableCell>
+                    <TableCell align="left" sx={{ fontWeight: 700, fontSize: '0.8rem', px: 3, fontFamily: "'Inter', monospace", color: 'primary.main' }}>{visit.visitId}</TableCell>
+                    <TableCell align="center" sx={{ fontSize: '0.8rem', fontWeight: 600 }}>{formatNumber(visit.containerCount, 0)}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: '0.8rem', color: 'text.secondary', px: 3 }}>
+                      {visit.moveCompleteTime ? new Date(visit.moveCompleteTime).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {historicalVisits.length === 0 && (
@@ -337,7 +284,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
               </TableBody>
             </Table>
           </TableContainer>
-        </Card>
+        </Box>
       )}
     </Box>
   );

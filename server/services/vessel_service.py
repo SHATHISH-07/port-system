@@ -747,20 +747,25 @@ def get_yard_heatmap_data(
             "oog_count": data["oog"],
             "density_pct": round(data["density"] / max(max_density, 1), 4),
             "avg_stack_height": round(avg_h, 1),
-            "containers": [
-                {
-                    "unit_id": u.get("unit_id"),
-                    "position": u.get("current_position") or u.get("ctr_to_position"),
-                    "freight_kind": u.get("freight_kind"),
-                    "outbound_service": u.get("outbound_service"),
-                    "category": u.get("category_id"),
-                    "hazardous": _is_yes(u.get("hazardous_flag")),
-                    "reefer": _is_yes(u.get("reefer")),
-                    "oog": _is_yes(u.get("oog_unit")),
-                }
-                for u in data["unit_rows"]
-            ],
+            "containers": []
         })
+
+        for u in data["unit_rows"]:
+            c_pos = u.get("current_position") or u.get("ctr_to_position")
+            p_info = parse_position(c_pos)
+            block_list[-1]["containers"].append({
+                "unit_id": u.get("unit_id"),
+                "position": c_pos,
+                "bay": p_info.get("bay") if p_info else "-",
+                "row": p_info.get("row") if p_info else "-",
+                "tier": p_info.get("tier") if p_info else "-",
+                "freight_kind": u.get("freight_kind"),
+                "outbound_service": u.get("outbound_service"),
+                "category": u.get("category_id"),
+                "hazardous": _is_yes(u.get("hazardous_flag")),
+                "reefer": _is_yes(u.get("reefer")),
+                "oog": _is_yes(u.get("oog_unit")),
+            })
 
     summary = {
         "total_containers": sum(b["total_containers"] for b in block_list),

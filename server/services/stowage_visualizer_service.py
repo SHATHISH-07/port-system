@@ -4,7 +4,8 @@ from typing import Any, List, Optional
 
 from db.queries import load_from_db
 from utils.current_container_lookup import lookup_containers_by_ids
-from utils.position_decoder import parse_yard_slot, parse_vessel_slot
+from utils.position_decoder import parse_vessel_slot
+from utils.position_parser import parse_position
 from utils.stowage_rules import generate_recommendation, classify_weight_band, classify_deck_position, predict_reshuffle_risk
 from services.stowage_service import _CWIT_PROXIMITY, _PEB_PROXIMITY
 
@@ -105,14 +106,13 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
         # Decode yard slot
         yard_block = "UNKNOWN"
         yard_row = yard_col = yard_tier = yard_slot_raw = None
-        yard_info = parse_yard_slot(yard_pos_str)
-        if yard_info:
+        yard_info = parse_position(yard_pos_str)
+        if yard_info and yard_info.get("is_yard"):
             yard_block = yard_info.get("block", "UNKNOWN")
-            yard_slot_raw = yard_info.get("slot")
-            coords = yard_info.get("decoded_coords", {})
-            yard_row = coords.get("yard_row")
-            yard_col = coords.get("yard_col")
-            yard_tier = coords.get("yard_tier")
+            yard_slot_raw = yard_info.get("raw")
+            yard_row = yard_info.get("bay")
+            yard_col = yard_info.get("row")
+            yard_tier = yard_info.get("tier")
 
         # Decode vessel slot
         vessel_bay = vessel_row_n = vessel_tier = vessel_deck = vessel_visit_id = None
@@ -232,14 +232,20 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
         yard_pos = _safe_str(
             row.get("ctr_from_position") if is_loaded else row.get("current_position"), ""
         )
-        yard_info = parse_yard_slot(yard_pos)
-        if not yard_info:
+        yard_info = parse_position(yard_pos)
+        if not yard_info or not yard_info.get("is_yard"):
             continue
         
         blk = yard_info.get("block", "UNKNOWN")
-        coords = yard_info.get("decoded_coords", {})
-        col = coords.get("yard_col")
-        tier = coords.get("yard_tier", 1)
+        col = yard_info.get("row")
+        
+        tier = 1
+        try:
+            tier_val = yard_info.get("tier")
+            if tier_val and str(tier_val).isdigit():
+                tier = int(tier_val)
+        except Exception:
+            pass
         
         w_val = _first_existing_value(
             row, ["unit_weight_in_kg","verified_gross_mass_kg","gross_mass_kg"]
@@ -251,8 +257,8 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
         if blk not in blocks:
             blocks[blk] = {
                 "blockId": blk,
-                "zone": coords.get("zone"),
-                "blockLetter": coords.get("block_letter", blk),
+                "zone": "",
+                "blockLetter": blk,
                 "terminal": terminal,
                 "berthProximity": proximity_map.get(blk, "MID"),
                 "cols": set(),
