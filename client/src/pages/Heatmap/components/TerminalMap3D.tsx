@@ -2005,7 +2005,7 @@ class TerminalScene {
               i,
               new THREE.Color(
                 REALISTIC_CONTAINERS[
-                  Math.floor(Math.random() * REALISTIC_CONTAINERS.length)
+                Math.floor(Math.random() * REALISTIC_CONTAINERS.length)
                 ],
               ),
             );
@@ -2065,7 +2065,7 @@ class TerminalScene {
     heatGroups.forEach(({ id, cx, cz, bw, bd }) => {
       const isHigh = highCountIds.includes(id);
       const isMed = mediumIds.includes(id);
-      const col = isHigh ? "#ff0000" : isMed ? "#ff8800" : "#00ff00";
+      const col = isHigh ? "#c30010" : isMed ? "#fe6a03" : "#008000";
       const spread = isHigh ? 2.6 : isMed ? 2.2 : 1.6;
       const peakOp = isHigh ? 1.0 : isMed ? 0.85 : 0.75;
 
@@ -2181,7 +2181,7 @@ class TerminalScene {
         pos.setZ(
           i,
           Math.sin(u * 1.2 + t * 1.8) * 0.06 +
-            Math.cos(v * 1.4 + t * 1.1) * 0.04,
+          Math.cos(v * 1.4 + t * 1.1) * 0.04,
         );
       }
       pos.needsUpdate = true;

@@ -478,6 +478,11 @@ export default function StowageVisualizationTab({
   );
 
   const groups: VisualizationGroup[] = visualizationData?.map?.groups || [];
+  const sortedGroups = [...groups].sort((a, b) => {
+    const idxA = (portRotation || []).indexOf(a.groupId);
+    const idxB = (portRotation || []).indexOf(b.groupId);
+    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+  });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -893,7 +898,7 @@ export default function StowageVisualizationTab({
                     },
                   }}
                 >
-                  {groups.map((group: VisualizationGroup) => (
+                  {sortedGroups.map((group: VisualizationGroup) => (
                     <BayColumn
                       key={group.groupId}
                       group={group}

@@ -14,7 +14,7 @@ interface ColorModeContextType {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const ColorModeContext = createContext<ColorModeContextType>({
-  mode: "dark",
+  mode: "light",
   toggleColorMode: () => { },
 });
 
@@ -446,7 +446,7 @@ function buildTheme(mode: PaletteMode) {
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 export function ThemeContextProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode] = useState<PaletteMode>("dark");
+  const [mode, setMode] = useState<PaletteMode>("light");
 
   const colorMode = useMemo(
     () => ({

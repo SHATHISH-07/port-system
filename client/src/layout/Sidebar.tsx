@@ -133,7 +133,7 @@ export default function Sidebar() {
             {Icon ? (
               <Icon
                 sx={{
-                  fontSize: 22,
+                  fontSize: 20,
                   flexShrink: 0,
                   color: "inherit",
                   transition: "color 150ms",
@@ -142,7 +142,7 @@ export default function Sidebar() {
             ) : (
               !open && (
                 <Typography
-                  sx={{ fontSize: 13, fontWeight: 700, color: "inherit" }}
+                  sx={{ fontSize: 12, fontWeight: 700, color: "inherit" }}
                 >
                   {label.charAt(0)}
                 </Typography>
@@ -152,7 +152,7 @@ export default function Sidebar() {
             {open && (
               <Typography
                 sx={{
-                  fontSize: isSubItem ? 13 : 14.5,
+                  fontSize: isSubItem ? 12 : 13.5,
                   fontWeight: active ? 600 : 500,
                   color: "inherit",
                   whiteSpace: "nowrap",
@@ -229,7 +229,7 @@ export default function Sidebar() {
               >
                 <Typography
                   sx={{
-                    fontSize: "0.95rem",
+                    fontSize: "0.85rem",
                     fontWeight: 700,
                     color: "primary",
                     lineHeight: 1.2,
@@ -253,7 +253,7 @@ export default function Sidebar() {
                   "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
                 }}
               >
-                <ViewSidebarOutlined sx={{ fontSize: 24 }} />
+                <ViewSidebarOutlined sx={{ fontSize: 20 }} />
               </IconButton>
             </Tooltip>
           </>
@@ -292,7 +292,7 @@ export default function Sidebar() {
               />
               <ViewSidebarOutlined
                 className="menu-icon"
-                sx={{ fontSize: 24, color: menuIconColor }}
+                sx={{ fontSize: 20, color: menuIconColor }}
               />
             </Box>
           </Tooltip>
@@ -337,13 +337,13 @@ export default function Sidebar() {
                 "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
               }}
             >
-              <SettingsOutlined sx={{ fontSize: 22, color: "inherit" }} />
+              <SettingsOutlined sx={{ fontSize: 20, color: "inherit" }} />
               {open && (
                 <>
                   <Typography
                     sx={{
                       flex: 1,
-                      fontSize: 14.5,
+                      fontSize: 13.5,
                       fontWeight: 600,
                       color: "inherit",
                     }}
@@ -351,9 +351,9 @@ export default function Sidebar() {
                     Operations
                   </Typography>
                   {adminOpen ? (
-                    <ExpandLess sx={{ fontSize: 21 }} />
+                    <ExpandLess sx={{ fontSize: 20 }} />
                   ) : (
-                    <ExpandMore sx={{ fontSize: 21 }} />
+                    <ExpandMore sx={{ fontSize: 20 }} />
                   )}
                 </>
               )}
@@ -388,16 +388,16 @@ export default function Sidebar() {
               onClick={toggleColorMode}
               startIcon={
                 isDark ? (
-                  <LightModeOutlined sx={{ fontSize: 21 }} />
+                  <LightModeOutlined sx={{ fontSize: 20 }} />
                 ) : (
-                  <DarkModeOutlined sx={{ fontSize: 21 }} />
+                  <DarkModeOutlined sx={{ fontSize: 20 }} />
                 )
               }
               sx={{
                 justifyContent: "flex-start",
                 height: 38,
                 color: isDark ? "#ffffff" : "#000000",
-                fontSize: "14.5px",
+                fontSize: "13.5px",
                 px: 1.5,
                 borderRadius: "8px",
                 textTransform: "none",
@@ -411,12 +411,12 @@ export default function Sidebar() {
 
             <Button
               onClick={logout}
-              startIcon={<LogoutOutlined sx={{ fontSize: 21 }} />}
+              startIcon={<LogoutOutlined sx={{ fontSize: 20 }} />}
               sx={{
                 justifyContent: "flex-start",
                 height: 38,
                 color: isDark ? "#ffffff" : "#000000",
-                fontSize: "14.5px",
+                fontSize: "13.5px",
                 px: 1.5,
                 borderRadius: "8px",
                 textTransform: "none",
@@ -448,9 +448,9 @@ export default function Sidebar() {
                 }}
               >
                 {isDark ? (
-                  <LightModeOutlined sx={{ fontSize: 21 }} />
+                  <LightModeOutlined sx={{ fontSize: 20 }} />
                 ) : (
-                  <DarkModeOutlined sx={{ fontSize: 21 }} />
+                  <DarkModeOutlined sx={{ fontSize: 20 }} />
                 )}
               </IconButton>
             </Tooltip>
@@ -470,7 +470,7 @@ export default function Sidebar() {
                   },
                 }}
               >
-                <LogoutOutlined sx={{ fontSize: 21 }} />
+                <LogoutOutlined sx={{ fontSize: 20 }} />
               </IconButton>
             </Tooltip>
           </>

@@ -349,8 +349,8 @@ export default function CurrentPlanningTab({
         (portRotation.length > 0
           ? portRotation
           : optimizedData.dischargeSequence.map(
-              (seq: { port: string }) => seq.port,
-            ));
+            (seq: { port: string }) => seq.port,
+          ));
 
       const formData = new FormData();
       if (globalFile) formData.append("file", globalFile);
@@ -631,9 +631,9 @@ export default function CurrentPlanningTab({
             </Grid>
             <Grid size={{ xs: 6 }}>
               <MetricCard
-                title="Heavy"
-                value={weightCounts.HEAVY}
-                subtitle="Low stow needed"
+                title="Heavy / Medium"
+                value={`${weightCounts.HEAVY} / ${weightCounts.MEDIUM}`}
+                subtitle="Container breakdown"
                 accent="warning"
               />
             </Grid>

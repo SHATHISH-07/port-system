@@ -82,7 +82,10 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
   const layoutObj: Record<string, { x: number; y: number }> = {};
 
   const activeBlockIds = [...newData.blocks].map((b) => b.block_id).filter(Boolean);
-  const paddingCandidates = ["CWIT-3A", "CWIT-3B", "PEB-5B", "PEB-4A", "PEB-4B", "PEB-5A"];
+  const isPEB = newData.yard_id?.toUpperCase().includes("PEB") || activeBlockIds.some(id => id.toUpperCase().includes("PEB"));
+  const paddingCandidates = isPEB 
+    ? ["PEB-3A", "PEB-3B", "PEB-5B", "PEB-4A", "PEB-4B", "PEB-5A"]
+    : ["CWIT-3A", "CWIT-3B", "CWIT-5B", "CWIT-4A", "CWIT-4B", "CWIT-5A"];
   const emptyBlockIds: string[] = [];
 
   for (const candidate of paddingCandidates) {
@@ -93,7 +96,7 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
 
   let genIdx = 1;
   while (emptyBlockIds.length < 3) {
-    const candidate = `EXT-${genIdx++}`;
+    const candidate = `${isPEB ? 'PEB' : 'CWIT'}-EXT-${genIdx++}`;
     if (!activeBlockIds.includes(candidate) && !emptyBlockIds.includes(candidate)) {
       emptyBlockIds.push(candidate);
     }
