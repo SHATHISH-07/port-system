@@ -34,30 +34,45 @@ def classify_weight_band(weight_kg: Optional[float], container_length: Optional[
         return "LIGHT"
 
 
-class TierAllocator:
-    """Stateful allocator to simulate physical ship stacking instead of assigning T06 to everything."""
+class PositionAllocator:
+    """Stateful allocator to simulate physical ship stacking with distinct Bays, Rows, and Tiers per Port."""
     def __init__(self):
-        # Maps (port, deck) -> current_tier_integer
+        self.port_bay_map = {}
+        self.next_available_bay = 1
         self.counters = {}
 
-    def get_next_tier(self, port: str, deck: str) -> str:
+    def get_next_position(self, port: str, deck: str):
+        if port not in self.port_bay_map:
+            self.port_bay_map[port] = f"{self.next_available_bay:02d}"
+            self.next_available_bay += 2
+            
+        bay = self.port_bay_map[port]
         key = (port, deck)
+        
+        if key not in self.counters:
+            if deck == "ABOVE_DECK":
+                self.counters[key] = {"row": 0, "tier": 80} # Start at 82
+            else:
+                self.counters[key] = {"row": 0, "tier": 0}  # Start at 02
+                
+        state = self.counters[key]
+        next_tier = state["tier"] + 2
+        
         if deck == "ABOVE_DECK":
-            # Start at 82, go up by 2, reset to 82 after 92
-            curr = self.counters.get(key, 80)
-            next_tier = curr + 2
             if next_tier > 92:
                 next_tier = 82
-            self.counters[key] = next_tier
-            return f"{next_tier:02d}"
+                state["row"] += 1
         else:
-            # Start at 02, go up by 2, reset to 02 after 16
-            curr = self.counters.get(key, 0)
-            next_tier = curr + 2
             if next_tier > 16:
                 next_tier = 2
-            self.counters[key] = next_tier
-            return f"{next_tier:02d}"
+                state["row"] += 1
+                
+        state["tier"] = next_tier
+        
+        row_str = f"{state['row']:02d}"
+        tier_str = f"{next_tier:02d}"
+        
+        return bay, row_str, tier_str
 
 
 def classify_deck_position(weight_band: str) -> str:

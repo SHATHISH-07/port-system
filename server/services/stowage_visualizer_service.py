@@ -67,8 +67,9 @@ def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
 
 def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
     map_groups: dict = {}
-    from utils.stowage_rules import TierAllocator
-    tier_allocator = TierAllocator()
+    from utils.stowage_rules import classify_deck_position, classify_weight_band, PositionAllocator
+    
+    position_allocator = PositionAllocator()
 
     for _, row in df.iterrows():
         unit_id = _safe_str(row.get("unit_id"), "UNKNOWN")
@@ -147,7 +148,7 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
             port_rotation_dict=port_rotation_dict,
         )
 
-        rec_tier = tier_allocator.get_next_tier(port if port else "UNKNOWN", rec["recommendedDeck"])
+        rec_bay, rec_row, rec_tier = position_allocator.get_next_position(port if port else "UNKNOWN", rec["recommendedDeck"])
 
         group_key = port if port else "UNKNOWN"
         group_type = "dischargePort"
@@ -194,11 +195,13 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
                 "currentSlotPosition": yard_slot_raw,
                 "recommendedDeck": rec["recommendedDeck"],
                 "recommendedTier": rec_tier,
-                "parsedBay": str(vessel_bay) if vessel_bay is not None else None,
-                "parsedRow": str(vessel_row_n) if vessel_row_n is not None else None,
-                "parsedTier": str(vessel_tier) if vessel_tier is not None else None,
+                "recommendedBay": rec_bay,
+                "recommendedRow": rec_row,
+                "parsedBay": str(vessel_bay) if vessel_bay is not None else rec_bay,
+                "parsedRow": str(vessel_row_n) if vessel_row_n is not None else rec_row,
+                "parsedTier": str(vessel_tier) if vessel_tier is not None else rec_tier,
                 "parsedBlock": yard_block if yard_block != "UNKNOWN" else None,
-                "parsedDeck": vessel_deck,
+                "parsedDeck": vessel_deck if vessel_deck else rec["recommendedDeck"],
             }
         )
 

@@ -166,8 +166,8 @@ const ContainerCell = ({
           <Typography
             sx={{ fontSize: "0.65rem", display: "block", opacity: 0.75 }}
           >
-            {unit.recommendedDeck === "ABOVE_DECK" ? "▲ Above" : "▼ Below"} ·
-            Tier {unit.recommendedTier} · {unit.portOfDischarge}
+            {unit.parsedDeck === "ABOVE_DECK" ? "▲ Above" : unit.parsedDeck === "BELOW_DECK" ? "▼ Below" : (unit.recommendedDeck === "ABOVE_DECK" ? "▲ Above" : "▼ Below")} ·
+            {unit.parsedBay && unit.parsedRow ? ` B${unit.parsedBay} R${unit.parsedRow} T${unit.parsedTier}` : ` Tier ${unit.parsedTier || unit.recommendedTier}`} · {unit.portOfDischarge}
           </Typography>
           {isHazmat && (
             <Typography
@@ -283,10 +283,10 @@ const BayColumn = ({
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
   const above = (group.positions || []).filter(
-    (p: StepData) => p.recommendedDeck === "ABOVE_DECK",
+    (p: StepData) => p.parsedDeck === "ABOVE_DECK" || p.recommendedDeck === "ABOVE_DECK",
   );
   const below = (group.positions || []).filter(
-    (p: StepData) => p.recommendedDeck === "BELOW_DECK",
+    (p: StepData) => p.parsedDeck === "BELOW_DECK" || p.recommendedDeck === "BELOW_DECK",
   );
   const portColor = portColors[group.groupId] || theme.palette.primary.main;
   const hasHazmat = (group.positions || []).some((p: StepData) =>
@@ -295,9 +295,11 @@ const BayColumn = ({
 
   const sortByTier = (arr: StepData[]) =>
     [...arr].sort(
-      (a, b) =>
-        ((b.recommendedTier as number) ?? 0) -
-        ((a.recommendedTier as number) ?? 0),
+      (a, b) => {
+        const tierB = b.parsedTier ? parseInt(b.parsedTier, 10) : ((b.recommendedTier as number) ?? 0);
+        const tierA = a.parsedTier ? parseInt(a.parsedTier, 10) : ((a.recommendedTier as number) ?? 0);
+        return tierB - tierA;
+      }
     );
   const colWidth = Math.max(
     44,
@@ -357,8 +359,8 @@ const BayColumn = ({
           <ContainerCell
             key={i}
             unit={p}
-            color={portColors[p.portOfDischarge] || portColor}
-            isHazmat={hazmatIds.has(p.unitId)}
+            color={portColors[p.portOfDischarge as string] || portColor}
+            isHazmat={hazmatIds.has(p.unitId as string)}
             onHover={onHover}
           />
         ))}
@@ -416,8 +418,8 @@ const BayColumn = ({
           <ContainerCell
             key={i}
             unit={p}
-            color={portColors[p.portOfDischarge] || portColor}
-            isHazmat={hazmatIds.has(p.unitId)}
+            color={portColors[p.portOfDischarge as string] || portColor}
+            isHazmat={hazmatIds.has(p.unitId as string)}
             onHover={onHover}
           />
         ))}
@@ -1028,8 +1030,8 @@ export default function StowageVisualizationTab({
               px: 2,
               py: 1.25,
               background: isDark
-                ? `linear-gradient(135deg, ${alpha(portColorMap[hoveredContainer.portOfDischarge] || "#3b82f6", 0.2)} 0%, transparent 70%)`
-                : `linear-gradient(135deg, ${alpha(portColorMap[hoveredContainer.portOfDischarge] || "#3b82f6", 0.08)} 0%, transparent 70%)`,
+                ? `linear-gradient(135deg, ${alpha(portColorMap[hoveredContainer.portOfDischarge as string] || "#3b82f6", 0.2)} 0%, transparent 70%)`
+                : `linear-gradient(135deg, ${alpha(portColorMap[hoveredContainer.portOfDischarge as string] || "#3b82f6", 0.08)} 0%, transparent 70%)`,
               borderBottom: `1px solid ${isDark ? alpha("#fff", 0.07) : alpha("#000", 0.07)}`,
               display: "flex",
               justifyContent: "space-between",
@@ -1066,7 +1068,7 @@ export default function StowageVisualizationTab({
                 gap: 0.5,
               }}
             >
-              {hazmatIds.has(hoveredContainer.unitId) && (
+              {hazmatIds.has(hoveredContainer.unitId as string) && (
                 <Chip
                   icon={
                     <WarningAmberIcon sx={{ fontSize: "10px !important" }} />
@@ -1104,8 +1106,8 @@ export default function StowageVisualizationTab({
                   value: hoveredContainer.portOfDischarge,
                 },
                 {
-                  label: "Deck · Tier",
-                  value: `${hoveredContainer.recommendedDeck === "ABOVE_DECK" ? "Above" : "Below"} · T${hoveredContainer.recommendedTier}`,
+                  label: "Position",
+                  value: `${hoveredContainer.parsedDeck === "ABOVE_DECK" ? "Above" : hoveredContainer.parsedDeck === "BELOW_DECK" ? "Below" : hoveredContainer.recommendedDeck === "ABOVE_DECK" ? "Above" : "Below"} · ${hoveredContainer.parsedBay && hoveredContainer.parsedRow ? `B${hoveredContainer.parsedBay} R${hoveredContainer.parsedRow} T${hoveredContainer.parsedTier}` : `T${hoveredContainer.parsedTier || hoveredContainer.recommendedTier}`}`,
                 },
                 {
                   label: "Weight category",

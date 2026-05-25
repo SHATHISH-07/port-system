@@ -132,7 +132,7 @@ function CompactRow({ step, theme }: { step: StepData; theme: Theme }) {
           {step.portOfDischarge}
         </TableCell>
         <TableCell>
-          <StatusChip label={step.weightCategory} theme={theme} />
+          <StatusChip label={step.weightCategory || ""} theme={theme} />
         </TableCell>
         <TableCell
           sx={{ fontSize: "0.75rem", fontWeight: 500, color: "text.primary" }}
@@ -143,11 +143,15 @@ function CompactRow({ step, theme }: { step: StepData; theme: Theme }) {
             variant="caption"
             sx={{ fontWeight: 800, color: "text.secondary", ml: 0.5 }}
           >
-            T{step.recommendedTier}
+            {step.recommendedBay && step.recommendedRow ? (
+              `B${step.recommendedBay} R${step.recommendedRow} T${step.recommendedTier}`
+            ) : (
+              `T${step.recommendedTier}`
+            )}
           </Typography>
         </TableCell>
         <TableCell>
-          <StatusChip label={step.reshuffleRisk} theme={theme} />
+          <StatusChip label={step.reshuffleRisk || ""} theme={theme} />
         </TableCell>
         <TableCell
           align="right"

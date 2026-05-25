@@ -578,8 +578,8 @@ def process_current_planning_and_yard_strategy(
 
     # 2. Recommendations
     recommendations = []
-    from utils.stowage_rules import TierAllocator
-    tier_allocator = TierAllocator()
+    from utils.stowage_rules import PositionAllocator
+    position_allocator = PositionAllocator()
     
     for _, row in df.iterrows():
         unit_id = _safe_str(row.get("unit_id"), "UNKNOWN")
@@ -615,8 +615,10 @@ def process_current_planning_and_yard_strategy(
             yard_slot=current_slot_position,
             port_rotation_dict=rank_map,
         )
-
-        rec["recommendedTier"] = tier_allocator.get_next_tier(port if port else "UNKNOWN", rec["recommendedDeck"])
+        bay, row_str, tier_str = position_allocator.get_next_position(port if port else "UNKNOWN", rec["recommendedDeck"])
+        rec["recommendedBay"] = bay
+        rec["recommendedRow"] = row_str
+        rec["recommendedTier"] = tier_str
         rec["actualOutboundCarrierVisitId"] = actual_visit
         rec["outboundService"] = outbound_svc
         rec["equipmentClass"] = eq_class

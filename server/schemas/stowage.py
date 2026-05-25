@@ -129,6 +129,8 @@ class Recommendation(BaseModel):
     currentYardBlock: Optional[str] = None
     currentSlotPosition: Optional[str] = None
     recommendedDeck: str
+    recommendedBay: Optional[str] = None
+    recommendedRow: Optional[str] = None
     recommendedTier: Optional[str] = None
     loadingPriority: int
     reshuffleRisk: str
