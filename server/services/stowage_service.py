@@ -2,7 +2,8 @@ import pandas as pd
 from typing import Any, List, Optional
 from db.queries import load_from_db
 from utils.current_container_lookup import lookup_containers_by_ids
-from utils.position_decoder import parse_vessel_slot, parse_yard_slot
+from utils.position_decoder import parse_vessel_slot
+from utils.position_parser import parse_position
 from utils.stowage_rules import generate_recommendation, classify_weight_band, classify_deck_position, predict_reshuffle_risk
 from utils.position_parser import block_label
 
@@ -165,7 +166,7 @@ def _compute_crane_metrics(
 
     restow_df = crane_df[crane_df["event_type"] == "UNIT_RESTOW"].copy()
     restow_df["from_block"] = restow_df["from_position"].apply(
-        lambda p: parse_yard_slot(p).get("block") if parse_yard_slot(p) else None
+        lambda p: parse_position(p).get("block") if parse_position(p) and parse_position(p).get("is_yard") else None
     )
     block_counts = (
         restow_df["from_block"].dropna().value_counts().head(10)
@@ -407,8 +408,6 @@ def get_historical_stowage_analysis(
         above_deck_count = int((unique_df["historical_deck"] == "ABOVE_DECK").sum())
         below_deck_count = int((unique_df["historical_deck"] == "BELOW_DECK").sum())
 
-    crane_metrics = _compute_crane_metrics(vessel_id, yard_id, visit_id=visit_id)
-
     return {
         "summary": {
             "totalContainers": total_containers,
@@ -429,7 +428,6 @@ def get_historical_stowage_analysis(
         "equipmentClassDistribution": equip_class_dist,
         "historicalVisits": visits,
         "dischargeSequence": discharge_sequence,
-        "craneMetrics": crane_metrics,
     }
 
 def _generate_current_planning_insights(block_strategies, pod_groups, baseline_reshuffle, pod_conc, proj_reduction, crane_metrics=None) -> list[str]:
@@ -510,8 +508,8 @@ def process_current_planning_and_yard_strategy(
         category = _safe_str(row.get("category_id"), "")
         is_loaded = visit_state == "3DEPARTED" or category == "EXPRT"
         pos = _safe_str(row.get("ctr_from_position") if is_loaded else row.get("current_position"), "")
-        info = parse_yard_slot(pos)
-        return info.get("block") if info else None
+        info = parse_position(pos)
+        return info.get("block") if info and info.get("is_yard") else None
 
     df["yard_block"] = df.apply(resolve_yard_block, axis=1)
     df["is_loaded"] = (df.get("visit_state", "") == "3DEPARTED") | (df.get("category_id", "") == "EXPRT")
@@ -545,9 +543,8 @@ def process_current_planning_and_yard_strategy(
         
         current_yard_block = _safe_str(row.get("yard_block"), "")
         if not current_yard_block and current_slot_position != "UNKNOWN":
-            from utils.position_parser import parse_position
             parsed_pos = parse_position(current_slot_position)
-            current_yard_block = block_label(parsed_pos) or "UNKNOWN"
+            current_yard_block = parsed_pos.get("block") if parsed_pos else "UNKNOWN"
         if not current_yard_block:
             current_yard_block = "UNKNOWN"
 
@@ -846,7 +843,6 @@ def _empty_history_response() -> dict:
         "equipmentClassDistribution": [],
         "historicalVisits": [],
         "dischargeSequence": [],
-        "craneMetrics": None,
     }
 
 def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:

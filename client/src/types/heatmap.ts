@@ -9,6 +9,9 @@ export interface CellData {
 export interface ContainerData {
     unit_id: string;
     position: string;
+    bay?: string;
+    row?: string;
+    tier?: string;
     freight_kind: string;
     outbound_service: string;
     category: string;
