@@ -126,6 +126,9 @@ export default function StayTimeAnalysis() {
   const [vesselId, setVesselId] = useState('');
   const [loaded, setLoaded] = useState('');
   const [discharged, setDischarged] = useState('');
+  // Committed values — only updated when API call succeeds on Run
+  const [committedLoaded, setCommittedLoaded] = useState('');
+  const [committedDischarged, setCommittedDischarged] = useState('');
 
   const handleAnalyze = async (e?: React.SubmitEvent<HTMLFormElement>) => {
     if (e) e.preventDefault();
@@ -173,6 +176,9 @@ export default function StayTimeAnalysis() {
         setAnalysisData(data);
       } else {
         setAnalysisData(data);
+        // Commit the load/discharge values used for this successful run
+        setCommittedLoaded(loaded);
+        setCommittedDischarged(discharged);
       }
     } catch (err: any) {
       setError(extractApiError(err));
@@ -302,15 +308,15 @@ export default function StayTimeAnalysis() {
                               lineHeight: 1.5,
                             }}
                           >
-                            {loaded || discharged ? (
+                            {committedLoaded || committedDischarged ? (
                               <>
                                 Predicted using{' '}
                                 <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                                  {loaded || 0}
+                                  {committedLoaded || 0}
                                 </Box>{' '}
                                 load moves and{' '}
                                 <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                                  {discharged || 0}
+                                  {committedDischarged || 0}
                                 </Box>{' '}
                                 discharge moves.
                               </>

@@ -687,6 +687,50 @@ Worker responsibilities:
 
 ---
 
+# Deck Optimizer Framework Implementation Status
+
+Based on the `deck_optimizer_text.txt` operational specification, the following features have been implemented and tracked:
+
+## Fully Implemented Features
+
+*   **Berth Selection & Yard Cargo Distribution (Section 2.1 - 2.3)**
+    *   Dynamic extraction of loading container locations (Yard Block, Row, Bay, Tier).
+    *   Classification of containers by equipment class (Reefer, OOG, Hazmat) and weight class (Light, Medium, Heavy).
+    *   Interactive 3D Yard Heat Map visually highlighting block concentration (Red/High, Orange/Medium, Green/Low).
+*   **Port Stay Time Prediction (Section 3)**
+    *   Implementation of the precise mathematical formula: `Total Moves ÷ (Number of Cranes × Average Productivity)`.
+    *   Side-by-side comparison with historical ML-predicted baselines.
+*   **Berth Conflict & Crane Clash Analysis (Section 4)**
+    *   Dynamic multi-vessel overlap detection based on working time windows.
+    *   Identification and percentage breakdown of shared yard blocks.
+    *   Severity-based risk flagging (Low/Medium/High Risk) surfaced in the UI.
+*   **Historical Delay Root Cause Analysis (Section 5)**
+    *   Detection of Crane Idle Time (identifying operation gaps > 60 minutes).
+    *   Analysis of Poor Stacking Strategy (high reshuffle rates).
+    *   M-Cycle efficiency tracking (dual-cycle vs single-cycle ratio extraction).
+*   **Yard Preparation & Weight Distribution Strategy (Section 6)**
+    *   Stowage rule engine enforcing `HEAVY` containers below deck and `LIGHT` containers above deck.
+    *   Berth proximity matching (recommending Heavy containers to `CLOSE` yard blocks).
+    *   Dynamic Discharge Port Grouping powered by an OpenStreetMap Geocoding API that learns and tracks real-world port coordinates to calculate nearest-neighbor sequences.
+    *   ISO-compliant Bay/Row/Tier slot generation algorithms.
+
+## Features Pending Implementation (Future Scope)
+
+*   **Distance Impact Simulation (Section 2.4)**
+    *   *Requirement*: Calculate physical "Total Laden Travel Distance" and "Estimated Unladen Travel".
+    *   *Blocker*: Requires live integration with physical yard and berth coordinate telemetry mappings.
+*   **Advanced Conflict Checks (Section 4.3)**
+    *   *Requirement*: Detect internal corridor overlaps, crane rail overlap, and equipment demand conflicts.
+    *   *Blocker*: Awaiting granular terminal infrastructure layouts and active ITV telemetry tracking in the dataset.
+*   **ITV Arrival Delay & Congestion Analysis (Section 5.2 / 5.3)**
+    *   *Requirement*: Identify ITV congestion and arrival delays.
+    *   *Blocker*: Requires GPS/RFID telemetry logs from the Internal Terminal Vehicles (ITVs).
+*   **Dynamic Recalculation Based on ETA Accuracy (Section 7)**
+    *   *Requirement*: Real-time recalculation of the berth simulation if vessel ETA changes.
+    *   *Blocker*: Requires a live socket integration with Vessel Traffic Services (VTS) to stream live ETA updates.
+
+---
+
 # License
 
 Internal Enterprise Project — Proprietary

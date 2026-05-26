@@ -486,15 +486,12 @@ export default function CurrentPlanningTab({
     { name: "Medium", value: riskCounts.MEDIUM, c: theme.palette.warning.main },
     { name: "Low", value: riskCounts.LOW, c: theme.palette.success.main },
   ];
-  const weightBar = [
-    { name: "Heavy", Count: weightCounts.HEAVY, c: theme.palette.error.main },
-    {
-      name: "Medium",
-      Count: weightCounts.MEDIUM,
-      c: theme.palette.warning.main,
-    },
-    { name: "Light", Count: weightCounts.LIGHT, c: theme.palette.success.main },
-  ];
+
+  const equipDist = optimizedData?.equipmentClassDistribution || [];
+  const equipBar = equipDist.map((e: { equipmentClass: string; count: number }) => ({
+    name: e.equipmentClass || "Unknown",
+    Count: e.count,
+  }));
 
   return (
     <Box
@@ -747,48 +744,25 @@ export default function CurrentPlanningTab({
               color="text.secondary"
               sx={{ fontWeight: 800, letterSpacing: 1 }}
             >
-              WEIGHT BANDS
+              EQUIPMENT TYPES
             </Typography>
             <ResponsiveContainer width="100%" height="90%">
-              <BarChart
-                data={weightBar}
-                margin={{ top: 20, right: 10, left: -20, bottom: 0 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke={alpha(theme.palette.divider, 0.5)}
-                />
-                <XAxis
-                  dataKey="name"
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fontWeight: 600 }}
-                  stroke={theme.palette.text.secondary}
-                />
-                <YAxis
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
-                  stroke={theme.palette.text.secondary}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 8,
-                    border: `1px solid ${theme.palette.divider}`,
+              <BarChart layout="vertical" data={equipBar} margin={{ top: 20, right: 10, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={alpha(theme.palette.divider, 0.5)} />
+                <XAxis type="number" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis dataKey="name" type="category" fontSize={10} width={90} tickLine={false} axisLine={false} tick={{ fontWeight: 600 }} stroke={theme.palette.text.secondary} />
+                <Tooltip 
+                  cursor={{ fill: alpha(theme.palette.primary.main, 0.05) }} 
+                  contentStyle={{ 
+                    fontSize: '0.75rem', 
+                    borderRadius: '8px', 
+                    border: `1px solid ${theme.palette.divider}`, 
                     backgroundColor: theme.palette.background.paper,
-                    color: theme.palette.text.primary,
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                  cursor={{ fill: alpha(theme.palette.text.primary, 0.03) }}
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+                    color: theme.palette.text.primary 
+                  }} 
                 />
-                <Bar dataKey="Count" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                  {weightBar.map((e, i) => (
-                    <Cell key={i} fill={e.c} />
-                  ))}
-                </Bar>
+                <Bar dataKey="Count" fill={theme.palette.info.main} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Card>

@@ -43,4 +43,5 @@ export interface OptimizedData {
   recommendations: StepData[];
   strategyInsights: string[];
   dischargePortGrouping?: { port: string; count: number; percentage: number }[];
+  equipmentClassDistribution?: { equipmentClass: string; count: number; percentage: number }[];
 }

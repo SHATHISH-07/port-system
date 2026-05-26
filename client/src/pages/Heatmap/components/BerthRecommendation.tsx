@@ -22,10 +22,17 @@ export interface BerthAnalysis {
   reefer?: number;
 }
 
+export interface ConflictVesselDisplay {
+  vessel_service: string;
+  visit_id: string;
+  shared_blocks: string[];
+  overlap_hours: number;
+}
+
 export interface BerthConflict {
   berth: string;
   reason?: string;
-  conflict_with?: string[];
+  conflict_with?: ConflictVesselDisplay[];
 }
 
 interface BerthRecommendationProps {
@@ -290,12 +297,20 @@ export default function BerthRecommendation({
                 }}
               >
                 <Box sx={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "4px", bgcolor: COLORS.error }} />
-                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1, flexWrap: "wrap", gap: 0.5 }}>
                   <Typography sx={{ fontWeight: 900, fontSize: "0.9rem" }}>Berth {c.berth}</Typography>
-                  <Stack direction="row" spacing={0.5}>
+                  <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap" }}>
                     {c.conflict_with?.map((cw) => (
-                      <Box key={cw} sx={{ px: 0.75, py: 0.1, borderRadius: "4px", bgcolor: alpha(COLORS.error, 0.1), border: `1px solid ${alpha(COLORS.error, 0.15)}` }}>
-                        <Typography sx={{ fontSize: "0.6rem", fontWeight: 900, color: COLORS.error }}>{cw}</Typography>
+                      <Box
+                        key={cw.visit_id}
+                        sx={{ px: 0.75, py: 0.25, borderRadius: "4px", bgcolor: alpha(COLORS.error, 0.1), border: `1px solid ${alpha(COLORS.error, 0.15)}` }}
+                      >
+                        <Typography sx={{ fontSize: "0.6rem", fontWeight: 900, color: COLORS.error }}>
+                          {cw.vessel_service}
+                        </Typography>
+                        <Typography sx={{ fontSize: "0.55rem", fontWeight: 700, color: alpha(COLORS.error, 0.7) }}>
+                          {cw.overlap_hours}h overlap
+                        </Typography>
                       </Box>
                     ))}
                   </Stack>
