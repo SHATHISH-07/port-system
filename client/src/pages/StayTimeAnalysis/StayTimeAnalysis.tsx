@@ -11,7 +11,6 @@ import {
   Stack,
 } from '@mui/material';
 
-import MetricCard from './components/MetricCard';
 import StayTimeForm from './components/StayTimeForm';
 import HistoryAnalysisTable from './components/HistoryAnalysisTable';
 import StayTimeTrendChart from './components/StayTimeTrendChart';
@@ -253,48 +252,50 @@ export default function StayTimeAnalysis() {
                 }}
               >
                 <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, md: 6 }}>
+                  {/* Single Unified Stats Card */}
+                  <Grid size={{ xs: 12 }}>
                     <Paper
                       elevation={0}
                       sx={{
-                        p: 2.5,
-                        borderRadius: 3,
+                        p: { xs: 3, md: 5 },
+                        borderRadius: 4,
                         border: '1px solid',
                         borderColor: alpha(theme.palette.primary.main, 0.15),
-                        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.5)} 100%)`,
-                        backdropFilter: 'blur(10px)',
+                        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.background.paper, 0.7)} 100%)`,
+                        backdropFilter: 'blur(20px)',
                         position: 'relative',
                         overflow: 'hidden',
-                        height: '100%',
                         display: 'flex',
-                        flexDirection: 'column',
+                        flexDirection: { xs: 'column', md: 'row' },
+                        alignItems: { xs: 'flex-start', md: 'center' },
                         justifyContent: 'space-between',
+                        gap: 4,
+                        boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.05)}`
                       }}
                     >
-                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                      {/* Left Side: Main Predicted Stay */}
+                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: { md: '40%' } }}>
                         <Box sx={{ mb: 2 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
-                            <Typography sx={{ fontWeight: 800, fontSize: '1.25rem', color: 'text.primary' }}>
-                              {analysisData?.vessel_service || vesselId}
-                            </Typography>
-                          </Box>
+                          <Typography sx={{ fontWeight: 800, fontSize: '1.2rem', color: 'text.secondary', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                            {analysisData?.vessel_service || vesselId}
+                          </Typography>
                         </Box>
                         <Box>
-                          <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                             Predicted Port Stay
                           </Typography>
                           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                            <Typography sx={{ fontWeight: 800, letterSpacing: '-0.02em', fontSize: { xs: '2rem', md: '2.5rem' }, lineHeight: 1 }}>
+                            <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '3.5rem', md: '4.5rem' }, lineHeight: 1, color: 'text.primary' }}>
                               {formatNumber(predictedAvg)}
                             </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.secondary', opacity: 0.6 }}>
+                            <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.7 }}>
                               hours
                             </Typography>
                           </Box>
                           <Typography
-                            variant="caption"
+                            variant="body2"
                             sx={{
-                              mt: 1,
+                              mt: 2,
                               display: 'block',
                               color: 'text.secondary',
                               fontWeight: 500,
@@ -325,42 +326,65 @@ export default function StayTimeAnalysis() {
                           </Typography>
                         </Box>
                       </Box>
+
+                      {/* Divider for Desktop */}
+                      <Box sx={{ display: { xs: 'none', md: 'block' }, width: '1px', height: '120px', bgcolor: 'divider', zIndex: 1 }} />
+                      {/* Divider for Mobile */}
+                      <Box sx={{ display: { xs: 'block', md: 'none' }, height: '1px', width: '100%', bgcolor: 'divider', zIndex: 1 }} />
+
+                      {/* Right Side: Sub Metrics Grid */}
+                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexWrap: 'wrap', gap: { xs: 3, md: 5 }, flex: '1 1 auto', pt: { xs: 1, md: 0 } }}>
+                        <Box sx={{ flex: '1 1 calc(33% - 20px)', minWidth: '120px' }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Historical Baseline
+                          </Typography>
+                          <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'text.primary', mt: 0.5, lineHeight: 1 }}>
+                            {formatNumber(actualAvg)}<span style={{ fontSize: '1rem', opacity: 0.6, fontWeight: 700, marginLeft: '2px' }}>h</span>
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
+                            Typical stay duration
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 calc(33% - 20px)', minWidth: '120px' }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            History Coverage
+                          </Typography>
+                          <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'primary.main', mt: 0.5, lineHeight: 1 }}>
+                            {formatNumber(visitsCount, 0)}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
+                            Analyzed visits
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 calc(33% - 20px)', minWidth: '120px' }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Average Restows
+                          </Typography>
+                          <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'warning.main', mt: 0.5, lineHeight: 1 }}>
+                            {formatNumber(analysisData?.actual?.avg_restows ?? 0, 0)}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
+                            Per historic visit
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      {/* Background Decoration */}
                       <Box
                         sx={{
                           position: 'absolute',
-                          right: -30,
-                          bottom: -30,
-                          width: 180,
-                          height: 180,
+                          right: { xs: '-10%', md: '0%' },
+                          top: { xs: '-10%', md: '50%' },
+                          transform: { md: 'translateY(-50%)' },
+                          width: { xs: 200, md: 350 },
+                          height: { xs: 200, md: 350 },
                           borderRadius: '50%',
-                          background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.15)} 0%, transparent 70%)`,
+                          background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.08)} 0%, transparent 70%)`,
                           zIndex: 0,
+                          pointerEvents: 'none',
                         }}
                       />
                     </Paper>
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <Stack spacing={2} sx={{ height: '100%', justifyContent: 'space-between' }}>
-                      <MetricCard
-                        title="Historical Baseline"
-                        value={`${formatNumber(actualAvg)}h`}
-                        subtitle="Typical stay duration"
-                        accent="default"
-                      />
-                      <MetricCard
-                        title="History Coverage"
-                        value={formatNumber(visitsCount, 0)}
-                        subtitle="Analyzed visits"
-                        accent="primary"
-                      />
-                      <MetricCard
-                        title="Average Restows"
-                        value={formatNumber(analysisData?.actual?.avg_restows ?? 0, 0)}
-                        subtitle="Historical average per visit"
-                        accent="warning"
-                      />
-                    </Stack>
                   </Grid>
                 </Grid>
 

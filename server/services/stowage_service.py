@@ -854,8 +854,6 @@ def process_current_planning_and_yard_strategy(
         block_strategies, discharge_strategies, baseline_reshuffle_rate,
         pod_concentration, projected_reshuffle_reduction, crane_metrics
     )
-    if rotation_msg:
-        insights.append(rotation_msg)
 
     reshuffleStats = {
         "baselineRate": baseline_reshuffle_rate,
