@@ -30,6 +30,9 @@ _FORMATS: list[str] = [
 # function to parse datetime columns
 def parse_datetime(series: pd.Series | None, col_name: str = "unknown") -> pd.Series:
     # check if series is empty
+    """
+    Executes parse_datetime logic and processing.
+    """
     if series is None:
         return pd.Series(dtype="datetime64[ns]")
 
@@ -98,6 +101,9 @@ def parse_datetime(series: pd.Series | None, col_name: str = "unknown") -> pd.Se
 # function to convert datetime to JSON safe string
 def to_json_safe(obj) -> str | None:
     # if obj is None, return None
+    """
+    Executes to_json_safe logic and processing.
+    """
     if obj is None:
         return None
     # if obj is datetime or timestamp, convert to ISO string

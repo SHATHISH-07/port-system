@@ -10,20 +10,23 @@ from db.queries import _discover_tables
 
 logger = logging.getLogger("port_system")
 
-
 def _normalize_column_name(name: str) -> str:
+    """
+    Executes _normalize_column_name logic and processing.
+    """
     name = str(name).strip().lower()
     name = re.sub(r"[^a-z0-9]+", "_", name)
     return re.sub(r"_+", "_", name).strip("_")
 
-
 def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes _normalize_dataframe_columns logic and processing.
+    """
     if df.empty:
         return df
     df = df.copy()
     df.columns = [_normalize_column_name(c) for c in df.columns]
     return df
-
 
 def lookup_containers_by_ids(container_ids: List[str], yard_id: Optional[str] = None) -> pd.DataFrame:
     """

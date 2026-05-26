@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Box, Typography, Button, LinearProgress,
   Alert, Snackbar, Divider, Collapse, Checkbox, FormGroup,
-  FormControlLabel, useTheme
+  FormControlLabel, useTheme, Paper, Grid
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { api } from "../../api/api";
@@ -90,187 +90,153 @@ export default function TrainModel() {
       }}
     >
       {/* Top Header Control Bar */}
-      <Box
+      <Paper
+        elevation={0}
         sx={{
-          px: { xs: 2, md: 4 },
+          px: { xs: 2.5, md: 4 },
           py: 2.5,
-          bgcolor: "transparent",
+          bgcolor: alpha(theme.palette.background.default, 0.9),
+          backdropFilter: 'blur(25px)',
+          borderRadius: 0,
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
         }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
-          <Box sx={{ fontSize: '18px', fontWeight: 'bold' }}>
-            ML Model Training & Retraining Dashboard
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
-              gap: 2,
-              alignItems: 'center',
-            }}
-          >
-            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mr: 1, fontSize: '0.8rem' }}>
-              Select Data Ingest Source:
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 2, width: '100%' }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.5px', mb: 0.5 }}>
+              ML Model Training Pipeline
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <Button
-                variant={dataSource === "db" ? "contained" : "outlined"}
-                onClick={() => {
-                  if (loading || isTraining) return;
-                  setDataSource("db");
-                  setFile(null);
-                }}
-                disabled={loading || isTraining}
-                sx={{
-                  borderRadius: 2,
-                  fontWeight: 700,
-                  textTransform: "none",
-                  px: 2,
-                  py: 0.6,
-                  height: 32,
-                  fontSize: '0.75rem',
-                  boxShadow: dataSource === "db" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none",
-                }}
-              >
-                Use Database
-              </Button>
-              <Button
-                variant={dataSource === "file" ? "contained" : "outlined"}
-                onClick={() => {
-                  if (loading || isTraining) return;
-                  setDataSource("file");
-                }}
-                disabled={loading || isTraining}
-                sx={{
-                  borderRadius: 2,
-                  fontWeight: 700,
-                  textTransform: "none",
-                  px: 2,
-                  py: 0.6,
-                  height: 32,
-                  fontSize: '0.75rem',
-                  boxShadow: dataSource === "file" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none",
-                }}
-              >
-                Upload CSV File
-              </Button>
-            </Box>
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+              Configure and trigger model training runs using historical database records or uploaded datasets.
+            </Typography>
           </Box>
-          <Typography variant="caption" sx={{ color: 'text.secondary', px: 0.5, fontSize: '0.7rem' }}>
-            Configure and trigger model training runs using historical database records or an uploaded custom CSV dataset.
-          </Typography>
+          
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+            <Button
+              variant={dataSource === "db" ? "contained" : "outlined"}
+              onClick={() => {
+                if (loading || isTraining) return;
+                setDataSource("db");
+                setFile(null);
+              }}
+              disabled={loading || isTraining}
+              sx={{ borderRadius: 2, fontWeight: 700, textTransform: "none", py: 0.75, px: 2, boxShadow: dataSource === "db" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none" }}
+            >
+              Use Database
+            </Button>
+            <Button
+              variant={dataSource === "file" ? "contained" : "outlined"}
+              onClick={() => {
+                if (loading || isTraining) return;
+                setDataSource("file");
+              }}
+              disabled={loading || isTraining}
+              sx={{ borderRadius: 2, fontWeight: 700, textTransform: "none", py: 0.75, px: 2, boxShadow: dataSource === "file" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none" }}
+            >
+              Upload CSV File
+            </Button>
+          </Box>
         </Box>
-      </Box>
+      </Paper>
 
       {/* Main Content Area */}
-      <Box
-        sx={{
-          flex: 1,
-          overflowY: 'auto',
-          scrollBehavior: 'smooth',
-        }}
-      >
-        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1, width: "100%", maxWidth: 800, mx: "auto" }}>
-          {/* Hero Header */}
-          <Box sx={{ mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.25rem' }}>
-                {dataSource === "db" ? "Database Source" : "File Upload Source"}
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                Vessel Stay Predictor
-              </Typography>
-            </Box>
-          </Box>
+      <Box sx={{ flex: 1, overflowY: 'auto', scrollBehavior: 'smooth', p: { xs: 2, md: 3 } }}>
+        <Box sx={{ maxWidth: 1000, mx: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
 
-          {/* Config card */}
-          <Box
-            sx={{
-              bgcolor: "transparent",
-              border: "1px solid",
-              borderColor: "divider",
-              borderRadius: 3,
-              mb: 2,
-              overflow: "hidden",
-
-            }}
-          >
-            {/* File dropzone (Only active when dataSource is file) */}
-            <Collapse in={dataSource === "file"}>
-              <Box sx={{ p: 2.5, pb: 1.5 }}>
-                <FileUpload
-                  onFileSelect={(f) => setFile(f)}
-                  acceptedTypes=".csv"
-                  label="Upload custom training dataset"
-                />
-
-                {/* Save to DB checkbox */}
-                <FormGroup sx={{ mt: 1.5, ml: 0.5 }}>
-                  <FormControlLabel
-                    control={<Checkbox size="small" checked={updateDb} onChange={(e) => setUpdateDb(e.target.checked)} disabled={loading || isTraining} />}
-                    label={
-                      <Typography sx={{ color: "text.secondary", fontWeight: 500, fontSize: "0.75rem" }}>
-                        Also save this file to the history database
-                      </Typography>
-                    }
-                  />
-                </FormGroup>
-              </Box>
-              <Divider sx={{ borderColor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
-            </Collapse>
-
-            {/* Config panel */}
-            <Box sx={{ p: 2.5 }}>
-              <ConfigPanel />
-            </Box>
-
-            <Divider sx={{ borderColor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
-
-            {/* Actions */}
-            <Box sx={{ px: 2.5, py: 1.5, display: "flex", justifyContent: "flex-end", bgcolor: "transparent" }}>
-              <Button
-                variant="contained"
-                disableElevation
-                disabled={!canTrain}
-                onClick={() => handleTrain()}
+          {/* Main Training & Config Card */}
+          <Grid container spacing={2} sx={{ maxWidth: 750, mx: "auto", width: "100%" }}>
+            <Grid size={{ xs: 12 }}>
+              <Paper
+                elevation={0}
                 sx={{
-                  minWidth: 150,
-                  borderRadius: 2,
-                  textTransform: "none",
-                  fontWeight: 600,
-                  px: 2,
-                  py: 0.75,
-                  height: 36,
-                  fontSize: '0.8rem',
-                  boxShadow: theme.palette.mode === "dark"
-                    ? "0 4px 12px rgba(29, 78, 216, 0.2)"
-                    : "0 4px 12px rgba(29, 78, 216, 0.1)",
+                  borderRadius: 4,
+                  border: "1px solid",
+                  borderColor: alpha(theme.palette.primary.main, 0.15),
+                  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.03)} 0%, ${alpha(theme.palette.background.paper, 0.8)} 100%)`,
+                  backdropFilter: "blur(20px)",
+                  overflow: "hidden",
+                  boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.05)}`,
                 }}
               >
-                {loading ? "Starting Retrain…" : "Start Model Retrain"}
-              </Button>
-            </Box>
+                {/* File dropzone (Only active when dataSource is file) */}
+                <Collapse in={dataSource === "file"}>
+                  <Box sx={{ p: { xs: 3, md: 4 }, pb: 2 }}>
+                    <FileUpload
+                      onFileSelect={(f) => setFile(f)}
+                      acceptedTypes=".csv"
+                      label="Upload custom training dataset"
+                    />
 
-            {loading && <LinearProgress />}
-          </Box>
+                    {/* Save to DB checkbox */}
+                    <FormGroup sx={{ mt: 2, ml: 1 }}>
+                      <FormControlLabel
+                        control={<Checkbox size="small" checked={updateDb} onChange={(e) => setUpdateDb(e.target.checked)} disabled={loading || isTraining} sx={{ color: "primary.main" }} />}
+                        label={
+                          <Typography sx={{ color: "text.secondary", fontWeight: 600, fontSize: "0.85rem" }}>
+                            Also save this file to the history database
+                          </Typography>
+                        }
+                      />
+                    </FormGroup>
+                  </Box>
+                  <Divider sx={{ borderColor: alpha(theme.palette.divider, 0.5) }} />
+                </Collapse>
+
+                {/* Config panel */}
+                <Box sx={{ p: { xs: 3, md: 4 } }}>
+                  <ConfigPanel />
+                </Box>
+
+                {/* Actions */}
+                <Box sx={{ p: 3, display: "flex", justifyContent: "flex-end", bgcolor: alpha(theme.palette.background.default, 0.3) }}>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    disabled={!canTrain}
+                    onClick={() => handleTrain()}
+                    sx={{
+                      minWidth: 160,
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontWeight: 700,
+                      px: 3,
+                      py: 1,
+                      fontSize: '0.9rem',
+                    }}
+                  >
+                    {loading ? "Starting Retrain…" : "Start Model Retrain"}
+                  </Button>
+                </Box>
+
+                {loading && <LinearProgress sx={{ height: 4 }} />}
+              </Paper>
+            </Grid>
+          </Grid>
 
           {/* Training Status Card */}
           {(hasTriggered || (status && status.status !== "idle")) && (
-            <TrainingStatusCard onRetry={handleTrain} />
+            <Grid container spacing={2} sx={{ maxWidth: 750, mx: "auto", width: "100%" }}>
+              <Grid size={{ xs: 12 }}>
+                <TrainingStatusCard onRetry={handleTrain} />
+              </Grid>
+            </Grid>
           )}
 
-          <Snackbar
-            open={toast.open}
-            autoHideDuration={6000}
-            onClose={() => setToast((t) => ({ ...t, open: false }))}
-            anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-          >
-            <Alert severity={toast.severity} variant="filled" onClose={() => setToast((t) => ({ ...t, open: false }))}>
-              {toast.message}
-            </Alert>
-          </Snackbar>
         </Box>
       </Box>
+
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={6000}
+        onClose={() => setToast((t) => ({ ...t, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity={toast.severity} variant="filled" onClose={() => setToast((t) => ({ ...t, open: false }))} sx={{ borderRadius: 2.5, fontWeight: 600 }}>
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

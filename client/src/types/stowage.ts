@@ -3,7 +3,13 @@ export interface StepData {
   unitId?: string;
   actualOutboundCarrierVisitId?: string;
   recommendedDeck?: string;
+  recommendedBay?: string;
+  recommendedRow?: string;
   recommendedTier?: number;
+  parsedBay?: string;
+  parsedRow?: string;
+  parsedTier?: string;
+  parsedDeck?: string;
   reshuffleRisk?: string;
   weightCategory?: string;
   weightKg?: number;
@@ -37,4 +43,5 @@ export interface OptimizedData {
   recommendations: StepData[];
   strategyInsights: string[];
   dischargePortGrouping?: { port: string; count: number; percentage: number }[];
+  equipmentClassDistribution?: { equipmentClass: string; count: number; percentage: number }[];
 }

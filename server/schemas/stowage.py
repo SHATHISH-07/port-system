@@ -1,17 +1,12 @@
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 
-
 class CurrentPlanningRequest(BaseModel):
     vesselId: str
     yardId: Optional[str] = None
     containerIds: List[str] = Field(default_factory=list)
 
-
-# ---------------------------------------------------------------------------
 # History Analysis Schemas
-# ---------------------------------------------------------------------------
-
 class HistorySummary(BaseModel):
     totalContainers: int
     heavyCount: int
@@ -20,24 +15,20 @@ class HistorySummary(BaseModel):
     aboveDeckCount: int = 0
     belowDeckCount: int = 0
 
-
 class FreightKindDistribution(BaseModel):
     freightKind: str
     count: int
     percentage: float
-
 
 class ContainerSizeDistribution(BaseModel):
     containerSize: str
     count: int
     percentage: float
 
-
 class SpecialCargoSummary(BaseModel):
     reeferCount: int
     hazardousCount: int
     oogCount: int
-
 
 class DischargePortGrouping(BaseModel):
     port: str
@@ -45,17 +36,14 @@ class DischargePortGrouping(BaseModel):
     percentage: float
     containerIds: List[str] = Field(default_factory=list)
 
-
 class WeightBandDistribution(BaseModel):
     band: str
     count: int
     percentage: float
 
-
 class WeightDistribution(BaseModel):
     aboveDeck: List[WeightBandDistribution]
     belowDeck: List[WeightBandDistribution]
-
 
 # NEW – REQ 6.2: equipment class distribution
 class EquipmentClassDistribution(BaseModel):
@@ -63,21 +51,16 @@ class EquipmentClassDistribution(BaseModel):
     count: int
     percentage: float
 
-
 class HistoricalVisit(BaseModel):
     visitId: str
     containerCount: int
     moveCompleteTime: Optional[str] = None
 
-
 # --- Crane Metrics (for history/analysis response) ---
-
 class BlockReshuffleCount(BaseModel):
     block: str
     count: int
     percentage: float   # of total restow moves
-
-
 class CraneMetrics(BaseModel):
     totalMoves: int
     loadMoves: int
@@ -89,11 +72,9 @@ class CraneMetrics(BaseModel):
     avgMoveGapMinutes: float      # median gap between consecutive moves per crane
     reshuffleByBlock: List[BlockReshuffleCount]
 
-
 class DischargeSequenceEntry(BaseModel):
     port: str
     dischargeOrder: int
-
 
 class HistoryAnalysisResponse(BaseModel):
     summary: HistorySummary
@@ -108,16 +89,11 @@ class HistoryAnalysisResponse(BaseModel):
     dischargeSequence: List[DischargeSequenceEntry] = Field(default_factory=list)
     craneMetrics: Optional[CraneMetrics] = None   # None when crane data unavailable
 
-
-# ---------------------------------------------------------------------------
 # Current Planning Schemas
-# ---------------------------------------------------------------------------
-
 class PlanningSummary(BaseModel):
     totalRequested: int
     resolvedCount: int
     unresolvedCount: int
-
 
 class Recommendation(BaseModel):
     unitId: str
@@ -129,12 +105,13 @@ class Recommendation(BaseModel):
     currentYardBlock: Optional[str] = None
     currentSlotPosition: Optional[str] = None
     recommendedDeck: str
+    recommendedBay: Optional[str] = None
+    recommendedRow: Optional[str] = None
     recommendedTier: Optional[str] = None
     loadingPriority: int
     reshuffleRisk: str
     recommendedReason: str
     dischargeOrder: Optional[int] = None
-
 
 class DischargePortCount(BaseModel):
     port: str
@@ -184,11 +161,7 @@ class CurrentPlanningResponse(BaseModel):
     dischargeSequence: List[DischargeSequenceEntry] = Field(default_factory=list)
     strategyInsights: List[str]
 
-
-# ---------------------------------------------------------------------------
 # Visualization Schemas
-# ---------------------------------------------------------------------------
-
 class MapPosition(BaseModel):
     unitId: str
     status: str                             # "LOADED" | "IN_YARD"
@@ -228,25 +201,18 @@ class MapPosition(BaseModel):
     parsedBlock: Optional[str] = None
     parsedDeck: Optional[str] = None
 
-
 class MapGroup(BaseModel):
     groupId: str
     groupType: str
     containerCount: int
     positions: List[MapPosition]
 
-
 class UnifiedMap(BaseModel):
     groups: List[MapGroup]
-
 
 class VisualizationSummary(BaseModel):
     totalContainers: int
     resolvedCount: int
-
-
-
-
 
 class YardBlockSummary(BaseModel):
     blockId: str                    # e.g. "1A", "F"
@@ -264,12 +230,10 @@ class YardBlockSummary(BaseModel):
     weightProfile: dict             # {"HEAVY": N, "MEDIUM": N, "LIGHT": N}
     avgReshuffleRisk: str
 
-
 class YardGrid(BaseModel):
     blocks: List[YardBlockSummary]
     loadedTotal: int
     inYardTotal: int
-
 
 class StowageVisualizationResponse(BaseModel):
     mode: str  # "CURRENT" or "HISTORICAL"

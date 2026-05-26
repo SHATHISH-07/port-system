@@ -243,7 +243,10 @@ export default function Sidebar() {
 
             <Tooltip title="Collapse sidebar" placement="right">
               <IconButton
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setOpen(false);
+                  setAdminOpen(false);
+                }}
                 size="small"
                 sx={{
                   width: 32,

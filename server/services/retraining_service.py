@@ -2,21 +2,20 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-
+import threading
 from config import settings
 from db.training_metadata import (
     get_latest_training_metadata,
     save_training_metadata,
 )
 from models.training_status import training_status
+from db.queries import load_from_db
+from db.connection import get_engine
+from sqlalchemy import text
 
 logger = logging.getLogger("port_system")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Core background training task
-# ─────────────────────────────────────────────────────────────────────────────
-
 def background_train_and_update(df, config: dict = None) -> None:
     """
     Run model training synchronously (called from a background task).
@@ -83,10 +82,7 @@ def background_train_and_update(df, config: dict = None) -> None:
             logger.warning("[Retraining] Could not save failure metadata: %s", meta_exc)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Auto-retrain trigger  (called after each successful ingestion)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def check_and_trigger_retraining(background_tasks=None) -> None:
     """
     Compare the number of history rows ingested since the last training run
@@ -97,9 +93,6 @@ def check_and_trigger_retraining(background_tasks=None) -> None:
     ingestion context), the retrain runs inline in a thread-safe manner.
     """
     try:
-        from db.connection import get_engine
-        from sqlalchemy import text
-
         engine = get_engine()
 
         total_history_rows = 0
@@ -151,7 +144,6 @@ def check_and_trigger_retraining(background_tasks=None) -> None:
             training_type="auto",
         )
 
-        from db.queries import load_from_db
         df = load_from_db("history", full_load=True)
 
         if df.empty:
@@ -166,7 +158,7 @@ def check_and_trigger_retraining(background_tasks=None) -> None:
         else:
             # Sync path: run in a daemon thread so the ingestion response
             # is not blocked, but retrain still happens in the background.
-            import threading
+            
             t = threading.Thread(
                 target=background_train_and_update,
                 args=(df, config),
@@ -180,10 +172,7 @@ def check_and_trigger_retraining(background_tasks=None) -> None:
         logger.error("[Retraining] check_and_trigger_retraining error: %s", exc)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Scheduled nightly retrain  (called by APScheduler at 02:00)
-# ─────────────────────────────────────────────────────────────────────────────
-
 async def scheduled_retraining_job() -> None:
     """
     Nightly cron-style retrain.  Loads all history data and retrains if there
@@ -197,7 +186,6 @@ async def scheduled_retraining_job() -> None:
         return
 
     try:
-        from db.queries import load_from_db
         df = load_from_db("history", full_load=True)
 
         if df.empty:

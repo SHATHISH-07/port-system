@@ -7,6 +7,9 @@ from utils.file_parser import (
 )
 
 def clean_text(value: Any) -> Optional[str]:
+    """
+    Executes clean_text logic and processing.
+    """
     if value is None:
         return None
     text = str(value).strip()
@@ -15,6 +18,9 @@ def clean_text(value: Any) -> Optional[str]:
     return text
 
 def merge_unique(existing: list[str], new_items: Iterable[str]) -> list[str]:
+    """
+    Executes merge_unique logic and processing.
+    """
     seen = set(existing)
     merged = list(existing)
     for item in new_items:
@@ -25,6 +31,9 @@ def merge_unique(existing: list[str], new_items: Iterable[str]) -> list[str]:
     return merged
 
 def coerce_container_ids(value: Any) -> list[str]:
+    """
+    Executes coerce_container_ids logic and processing.
+    """
     if value is None:
         return []
     if isinstance(value, list):

@@ -7,7 +7,6 @@ import pandas as pd
 
 logger = logging.getLogger("port_system")
 
-
 def extract_container_ids_from_text(raw_text: str) -> list[str]:
     """
     Parse container IDs from:
@@ -38,7 +37,6 @@ def extract_container_ids_from_text(raw_text: str) -> list[str]:
             candidates.append(token)
 
     return list(dict.fromkeys(candidates))
-
 
 def extract_container_ids_from_file(file_bytes: bytes, filename: str) -> list[str]:
     """
@@ -80,8 +78,10 @@ def extract_container_ids_from_file(file_bytes: bytes, filename: str) -> list[st
 
     return list(dict.fromkeys([x for x in container_ids if x]))
 
-
 def _extract_from_dataframe(df: pd.DataFrame) -> list[str]:
+    """
+    Executes _extract_from_dataframe logic and processing.
+    """
     col_names = [str(c).lower().strip() for c in df.columns]
     target_col = None
 

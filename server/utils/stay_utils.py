@@ -9,17 +9,12 @@ from utils.datetime_utils import parse_datetime
 
 logger = logging.getLogger("port_system")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _safe_parse(df: pd.DataFrame, col: str) -> pd.Series:
     """Parse a datetime column if present; return NaT series otherwise."""
     if col in df.columns:
         return parse_datetime(df[col], col)
     return pd.Series([pd.NaT] * len(df), index=df.index, dtype="datetime64[ns]")
-
 
 def _is_history_df(df: pd.DataFrame) -> bool:
     """
@@ -49,11 +44,7 @@ def _is_history_df(df: pd.DataFrame) -> bool:
     # time_out is well-populated and no visit_state column present → treat as history
     return True
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # prepare_visit_data
-# ─────────────────────────────────────────────────────────────────────────────
-
 def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Normalise a visit DataFrame into a form ready for stay computation and
@@ -125,11 +116,7 @@ def prepare_visit_data(df: pd.DataFrame) -> pd.DataFrame:
 
     return df.sort_values("event_time").reset_index(drop=True)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # compute_visit_stay  (single visit)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def compute_visit_stay(df: pd.DataFrame) -> float | None:
     """
     Compute stay duration in hours for a single prepared visit DataFrame.
@@ -178,11 +165,7 @@ def compute_visit_stay(df: pd.DataFrame) -> float | None:
     # No departure info available → ML path
     return None
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # compute_vessel_stay  (all visits for a vessel/service)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def compute_vessel_stay(prepared_visits: dict) -> dict:
     """
     Compute stay statistics across all prepared visits for a vessel.

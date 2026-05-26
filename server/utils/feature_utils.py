@@ -5,23 +5,21 @@ from config import settings
 from utils.datetime_utils import parse_datetime
 from utils.position_parser import classify_move, parse_position, safe_get_pos
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Small helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _is_yes(val) -> bool:
+    """
+    Executes _is_yes logic and processing.
+    """
     return str(val).strip().upper() in ("YES", "Y", "TRUE", "1")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Feature engineering
-# ─────────────────────────────────────────────────────────────────────────────
-
 def create_features(df: pd.DataFrame) -> dict | None:
+    """
+    Executes create_features logic and processing.
+    """
     df = df.copy()
 
-    # ── Resolve event_time ───────────────────────────────────────────────────
+    #  Resolve event_time 
     if "event_time" not in df.columns:
         sources = ["move_complete_time", "time_in", "time_completed", "updated_at", "created_at"]
         event_time = pd.Series(
@@ -36,7 +34,7 @@ def create_features(df: pd.DataFrame) -> dict | None:
     if df.empty:
         return None
 
-    # ── Time span — from move_complete_time when available ───────────────────
+    #  Time span — from move_complete_time when available 
     move_span_hours = 0.1
     if "move_complete_time" in df.columns:
         mct = pd.to_datetime(df["move_complete_time"], errors="coerce").dropna()
@@ -54,7 +52,7 @@ def create_features(df: pd.DataFrame) -> dict | None:
         t_end   = df["event_time"].max()
         move_span_hours = max((t_end - t_start).total_seconds() / 3600, 0.1)
 
-    # ── Move classification ──────────────────────────────────────────────────
+    #  Move classification 
     loaded     = 0
     discharged = 0
     restows    = 0
@@ -92,7 +90,7 @@ def create_features(df: pd.DataFrame) -> dict | None:
 
     total_moves = loaded + discharged
 
-    # ── Fallback when NO moves could be classified ───────────────────────────
+    #  Fallback when NO moves could be classified 
     # Do NOT fabricate a 50/50 split — it corrupts load_ratio/discharge_ratio.
     # Keep total_moves at len(df) but leave loaded/discharged as-is (both 0).
     if total_moves == 0:
@@ -103,12 +101,12 @@ def create_features(df: pd.DataFrame) -> dict | None:
         int(df["unit_id"].nunique()) if "unit_id" in df.columns else max(total_moves, 1)
     )
 
-    # ── Efficiency / congestion ──────────────────────────────────────────────
+    #  Efficiency / congestion 
     restow_intensity    = (total_moves + restows) / max(container_count, 1)
     max_block           = max(blocks.values()) if blocks else 0
     block_concentration = max_block / max(total_moves, 1)
 
-    # ── Weight / special cargo ───────────────────────────────────────────────
+    #  Weight / special cargo 
     w_col = "unit_weight_in_kg"
     if w_col not in df.columns:
         w_col = "verified_gross_mass_kg" if "verified_gross_mass_kg" in df.columns else None
@@ -130,14 +128,14 @@ def create_features(df: pd.DataFrame) -> dict | None:
         int(df["oog_unit"].apply(_is_yes).sum())        if "oog_unit"        in df.columns else 0
     )
 
-    # ── Service hash ─────────────────────────────────────────────────────────
+    #  Service hash 
     svc = "unknown"
     if "outbound_service" in df.columns:
         vals = df["outbound_service"].dropna()
         svc  = str(vals.iloc[0]).strip() if not vals.empty else "unknown"
     service_hash = int(hashlib.md5(svc.encode()).hexdigest()[:6], 16)
 
-    # ── Container mix ────────────────────────────────────────────────────────
+    #  Container mix 
     reefer_equipment_ratio = float(
         df["equipment_type"].astype(str).str.contains("R", case=False).mean()
     ) if "equipment_type" in df.columns and not df["equipment_type"].isna().all() else 0.0

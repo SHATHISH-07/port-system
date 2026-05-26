@@ -1,6 +1,4 @@
-import re
 from typing import Any, Dict, Optional
-
 
 def parse_vessel_slot(slot_str: str) -> Optional[Dict[str, Any]]:
     """
@@ -38,4 +36,3 @@ def parse_vessel_slot(slot_str: str) -> Optional[Dict[str, Any]]:
         }
 
     return parsed
-

@@ -15,7 +15,7 @@ import {
 // Helpers & Reusable UI
 // ─────────────────────────────────────────────────────────────────────────────
 
-function formatNumber(value?: number, digits = 1) {
+function formatNumber(value?: number | null, digits = 1) {
   if (value === undefined || value === null || Number.isNaN(value)) return '-';
   return Number(value).toFixed(digits);
 }

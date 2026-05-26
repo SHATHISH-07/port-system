@@ -1,3 +1,5 @@
+from db.queries import get_vessel_schedule
+from db.queries import update_vessel_schedule
 import pandas as pd
 from typing import Any, List, Optional
 from db.queries import load_from_db
@@ -5,8 +7,8 @@ from utils.current_container_lookup import lookup_containers_by_ids
 from utils.position_decoder import parse_vessel_slot
 from utils.position_parser import parse_position
 from utils.stowage_rules import generate_recommendation, classify_weight_band, classify_deck_position, predict_reshuffle_risk
-from utils.position_parser import block_label
-
+from services.heatmap_service import _deterministic_layout
+from db.connection import get_engine
 
 
 _CWIT_PROXIMITY = {
@@ -22,12 +24,18 @@ _PEB_PROXIMITY = {
 }
 
 def _normalize_column_name(name: str) -> str:
+    """
+    Executes _normalize_column_name logic and processing.
+    """
     import re
     name = str(name).strip().lower()
     name = re.sub(r"[^a-z0-9]+", "_", name)
     return re.sub(r"_+", "_", name).strip("_")
 
 def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes _normalize_dataframe_columns logic and processing.
+    """
     if df.empty:
         return df
     df = df.copy()
@@ -35,12 +43,18 @@ def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def _first_existing_value(row: pd.Series, candidates: List[str]) -> Any:
+    """
+    Executes _first_existing_value logic and processing.
+    """
     for col in candidates:
         if col in row and pd.notna(row.get(col)) and str(row.get(col)).strip() != "":
             return row.get(col)
     return None
 
 def _safe_str(value: Any, default: str = "") -> str:
+    """
+    Executes _safe_str logic and processing.
+    """
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return default
     text = str(value).strip()
@@ -49,6 +63,9 @@ def _safe_str(value: Any, default: str = "") -> str:
     return text
 
 def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes _dedupe_latest_per_unit logic and processing.
+    """
     if df.empty or "unit_id" not in df.columns:
         return df
     sort_cols = []
@@ -63,6 +80,9 @@ def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop_duplicates(subset=["unit_id"], keep="first").reset_index(drop=True)
 
 def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
+    """
+    Executes _derive_recommended_tier logic and processing.
+    """
     band = str(weight_band).strip().upper()
     if band == "HEAVY":
         return "02"
@@ -71,6 +91,9 @@ def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
     return "04" if loading_priority <= 5 else "06"
 
 def _determine_historical_deck(position_text: str, weight_band: str) -> str:
+    """
+    Executes _determine_historical_deck logic and processing.
+    """
     if position_text:
         v_info = parse_vessel_slot(position_text)
         if v_info and v_info.get("decoded"):
@@ -84,6 +107,9 @@ def _compute_crane_metrics(
     yard_id: Optional[str],
     visit_id: Optional[str] = None,
 ) -> Optional[dict]:
+    """
+    Executes _compute_crane_metrics logic and processing.
+    """
     if visit_id:
         # Fast path: query crane data directly for this specific visit only
         visit_ids = [str(visit_id)]
@@ -198,6 +224,9 @@ def get_historical_stowage_analysis(
     yard_id: Optional[str] = None,
     visit_id: Optional[str] = None,
 ) -> dict:
+    """
+    Executes get_historical_stowage_analysis logic and processing.
+    """
     df = load_from_db("history", vessel_id=vessel_id, yard_id=yard_id, full_load=True)
     if df is None or df.empty:
         return _empty_history_response()
@@ -261,6 +290,9 @@ def get_historical_stowage_analysis(
         return _empty_history_response()
 
     def _resolve_attributes(row: pd.Series) -> pd.Series:
+        """
+        Executes _resolve_attributes logic and processing.
+        """
         w = _first_existing_value(
             row,
             ["unit_weight_in_kg", "verified_gross_mass_kg", "gross_mass_kg", "gross_weight_kg"],
@@ -408,6 +440,8 @@ def get_historical_stowage_analysis(
         above_deck_count = int((unique_df["historical_deck"] == "ABOVE_DECK").sum())
         below_deck_count = int((unique_df["historical_deck"] == "BELOW_DECK").sum())
 
+    crane_metrics = _compute_crane_metrics(vessel_id, yard_id, visit_id)
+
     return {
         "summary": {
             "totalContainers": total_containers,
@@ -428,9 +462,13 @@ def get_historical_stowage_analysis(
         "equipmentClassDistribution": equip_class_dist,
         "historicalVisits": visits,
         "dischargeSequence": discharge_sequence,
+        "craneMetrics": crane_metrics,
     }
 
 def _generate_current_planning_insights(block_strategies, pod_groups, baseline_reshuffle, pod_conc, proj_reduction, crane_metrics=None) -> list[str]:
+    """
+    Executes _generate_current_planning_insights logic and processing.
+    """
     insights = []
     
     # 1. Heavy containers close to berth
@@ -478,6 +516,9 @@ def process_current_planning_and_yard_strategy(
     container_ids: List[str],
     port_rotation: Optional[List[str]] = None,
 ) -> dict:
+    """
+    Executes process_current_planning_and_yard_strategy logic and processing.
+    """
     if not container_ids:
         return _empty_planning_response(vessel_id, 0)
 
@@ -504,6 +545,9 @@ def process_current_planning_and_yard_strategy(
 
     # Assign yard_block, weight_band, is_loaded
     def resolve_yard_block(row):
+        """
+        Executes resolve_yard_block logic and processing.
+        """
         visit_state = _safe_str(row.get("visit_state"), "")
         category = _safe_str(row.get("category_id"), "")
         is_loaded = visit_state == "3DEPARTED" or category == "EXPRT"
@@ -519,6 +563,49 @@ def process_current_planning_and_yard_strategy(
     l_col = next((c for c in ["container_length", "equipment_length"] if c in df.columns), None)
     df["weight_band"] = df.apply(lambda r: classify_weight_band(r.get(w_col) if w_col else None, str(r.get(l_col,"")) if l_col else None), axis=1)
 
+    # 0. Pre-calculate Port Sequence (rank_map) so we can apply LIFO logic during recommendation generation
+    temp_counts = df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts() if "port_of_discharge" in df.columns else {}
+    rotation = port_rotation if (port_rotation and len(port_rotation) > 0) else []
+    
+    if rotation:
+        try:
+            # If the user explicitly passed a rotation from UI "Apply Changes", permanently save it!
+            update_vessel_schedule(get_engine(), str(vessel_id).strip().upper(), rotation)
+        except Exception:
+            pass
+    
+    if not rotation:
+        try:
+            db_schedule = get_vessel_schedule(get_engine(), str(vessel_id).strip().upper())
+            if db_schedule:
+                rotation = db_schedule
+        except Exception:
+            pass
+
+        # Fallback to historical guessing if DB schedule is empty
+        if not rotation:
+            try:
+                history_df = load_from_db("history", vessel_id=vessel_id)
+                if history_df is not None and not history_df.empty and "port_of_discharge" in history_df.columns:
+                    hist_counts = history_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
+                    rotation = [p for p in hist_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
+            except Exception:
+                rotation = [p for p in temp_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
+
+    rank_map = {}
+    current_rank = 1
+    for port in rotation:
+        port_str = port.upper()
+        if port_str in temp_counts.index and port_str not in rank_map:
+            rank_map[port_str] = current_rank
+            current_rank += 1
+            
+    for port in temp_counts.index:
+        port_str = port.upper()
+        if port_str and port_str != "UNKNOWN" and port_str not in rank_map:
+            rank_map[port_str] = current_rank
+            current_rank += 1
+
     # 1. Base Strategy Metrics
     baseline_reshuffle_rate = 0.0
     crane_metrics = _compute_crane_metrics(vessel_id, yard_id)
@@ -527,6 +614,9 @@ def process_current_planning_and_yard_strategy(
 
     # 2. Recommendations
     recommendations = []
+    from utils.stowage_rules import PositionAllocator
+    position_allocator = PositionAllocator()
+    
     for _, row in df.iterrows():
         unit_id = _safe_str(row.get("unit_id"), "UNKNOWN")
         weight_kg = row.get(w_col) if w_col else None
@@ -559,10 +649,12 @@ def process_current_planning_and_yard_strategy(
             equipment_class=eq_class,
             yard_block=current_yard_block,
             yard_slot=current_slot_position,
-            port_rotation_dict={},
+            port_rotation_dict=rank_map,
         )
-
-        rec["recommendedTier"] = _derive_recommended_tier(weight_band, rec["loadingPriority"])
+        bay, row_str, tier_str = position_allocator.get_next_position(port if port else "UNKNOWN", rec["recommendedDeck"])
+        rec["recommendedBay"] = bay
+        rec["recommendedRow"] = row_str
+        rec["recommendedTier"] = tier_str
         rec["actualOutboundCarrierVisitId"] = actual_visit
         rec["outboundService"] = outbound_svc
         rec["equipmentClass"] = eq_class
@@ -591,51 +683,18 @@ def process_current_planning_and_yard_strategy(
             "containerIds": port_ids.get(port, [])
         })
         
-    rotation_msg = ""
-    rotation = []
-    
-    if port_rotation and len(port_rotation) > 0:
-        # 1. UI Drag-and-Drop (The Planner's Choice Override)
-        rotation = port_rotation
-        rotation_msg = "Discharge sequence manually overridden by user."
-    else:
-        # 2. Historical Prediction (Self-Learning from DB)
-        try:
-            history_df = load_from_db("history", vessel_id=vessel_id)
-            if history_df is not None and not history_df.empty and "port_of_discharge" in history_df.columns:
-                hist_counts = history_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
-                rotation = [p for p in hist_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
-                if rotation:
-                    rotation_msg = f"Discharge sequence predicted from {len(history_df)} historical container records."
-        except Exception:
-            pass
+    rotation_msg = "Discharge sequence built using Master Vessel Schedule and historical fallbacks." if not port_rotation else "Discharge sequence manually overridden by user."
     
     discharge_sequence = []
-    rank_map = {}
-    current_rank = 1
-    
-    # First, assign ranks based on the explicit rotation dictionary
-    for port in rotation:
-        port_str = port.upper()
-        # Only assign rank if this port actually exists in the current upload
-        if port_str in [p.upper() for p in port_counts.keys()] and port_str not in rank_map:
+    # rank_map is already built at the top!
+    # Just need to format it for the UI response
+    sorted_ranks = sorted(rank_map.items(), key=lambda x: x[1])
+    for port_str, rank in sorted_ranks:
+        if port_str in [p.upper() for p in port_counts.keys()]:
             discharge_sequence.append({
                 "port": port_str,
-                "dischargeOrder": current_rank
+                "dischargeOrder": rank
             })
-            rank_map[port_str] = current_rank
-            current_rank += 1
-            
-    # Then, assign ranks to any remaining ports (or if no rotation is defined) based on their volume
-    for port, count in sorted_ports:
-        port_str = port.upper()
-        if port_str and port_str != "UNKNOWN" and port_str not in rank_map:
-            discharge_sequence.append({
-                "port": port_str,
-                "dischargeOrder": current_rank
-            })
-            rank_map[port_str] = current_rank
-            current_rank += 1
 
     # Sort recommendations by discharge order and attach the order directly to the recommendation
     recommendations.sort(key=lambda r: rank_map.get(str(r.get("portOfDischarge")).upper(), 999))
@@ -648,10 +707,6 @@ def process_current_planning_and_yard_strategy(
             r["dischargeOrder"] = None
 
     # 4. Yard Block Summary
-    from services.heatmap_service import _deterministic_layout, get_vessel_heatmap
-    from db.queries import load_from_db
-    import logging
-    
     unique_blocks = df["yard_block"].dropna().unique().tolist()
     if "UNKNOWN" in unique_blocks:
         unique_blocks.remove("UNKNOWN")
@@ -799,8 +854,6 @@ def process_current_planning_and_yard_strategy(
         block_strategies, discharge_strategies, baseline_reshuffle_rate,
         pod_concentration, projected_reshuffle_reduction, crane_metrics
     )
-    if rotation_msg:
-        insights.append(rotation_msg)
 
     reshuffleStats = {
         "baselineRate": baseline_reshuffle_rate,
@@ -829,6 +882,9 @@ def process_current_planning_and_yard_strategy(
 
 
 def _empty_history_response() -> dict:
+    """
+    Executes _empty_history_response logic and processing.
+    """
     return {
         "summary": {"totalContainers": 0, "heavyCount": 0, "lightCount": 0, "mediumCount": 0, "aboveDeckCount": 0, "belowDeckCount": 0},
         "freightKindDistribution": [],
@@ -846,6 +902,9 @@ def _empty_history_response() -> dict:
     }
 
 def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
+    """
+    Executes _empty_planning_response logic and processing.
+    """
     return {
         "vesselId": vessel_id,
         "outboundService": vessel_id,

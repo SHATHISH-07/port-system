@@ -39,7 +39,6 @@ import {
   CartesianGrid,
 } from "recharts";
 import { api } from "../../../api/api";
-import MetricCard from "../../StayTimeAnalysis/components/MetricCard";
 import type {
   StepData,
   OptimizedData,
@@ -132,7 +131,7 @@ function CompactRow({ step, theme }: { step: StepData; theme: Theme }) {
           {step.portOfDischarge}
         </TableCell>
         <TableCell>
-          <StatusChip label={step.weightCategory} theme={theme} />
+          <StatusChip label={step.weightCategory || ""} theme={theme} />
         </TableCell>
         <TableCell
           sx={{ fontSize: "0.75rem", fontWeight: 500, color: "text.primary" }}
@@ -143,11 +142,15 @@ function CompactRow({ step, theme }: { step: StepData; theme: Theme }) {
             variant="caption"
             sx={{ fontWeight: 800, color: "text.secondary", ml: 0.5 }}
           >
-            T{step.recommendedTier}
+            {step.recommendedBay && step.recommendedRow ? (
+              `B${step.recommendedBay} R${step.recommendedRow} T${step.recommendedTier}`
+            ) : (
+              `T${step.recommendedTier}`
+            )}
           </Typography>
         </TableCell>
         <TableCell>
-          <StatusChip label={step.reshuffleRisk} theme={theme} />
+          <StatusChip label={step.reshuffleRisk || ""} theme={theme} />
         </TableCell>
         <TableCell
           align="right"
@@ -483,15 +486,12 @@ export default function CurrentPlanningTab({
     { name: "Medium", value: riskCounts.MEDIUM, c: theme.palette.warning.main },
     { name: "Low", value: riskCounts.LOW, c: theme.palette.success.main },
   ];
-  const weightBar = [
-    { name: "Heavy", Count: weightCounts.HEAVY, c: theme.palette.error.main },
-    {
-      name: "Medium",
-      Count: weightCounts.MEDIUM,
-      c: theme.palette.warning.main,
-    },
-    { name: "Light", Count: weightCounts.LIGHT, c: theme.palette.success.main },
-  ];
+
+  const equipDist = optimizedData?.equipmentClassDistribution || [];
+  const equipBar = equipDist.map((e: { equipmentClass: string; count: number }) => ({
+    name: e.equipmentClass || "Unknown",
+    Count: e.count,
+  }));
 
   return (
     <Box
@@ -507,145 +507,122 @@ export default function CurrentPlanningTab({
         },
       }}
     >
-      {/* Hero */}
+      {/* Hero - Single Unified Stats Card */}
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12 }}>
           <Paper
             elevation={0}
             sx={{
-              p: 2.5,
-              borderRadius: 3,
+              p: { xs: 3, md: 5 },
+              borderRadius: 4,
               border: "1px solid",
               borderColor: alpha(theme.palette.primary.main, 0.15),
-              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.5)} 100%)`,
-              backdropFilter: "blur(10px)",
+              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.background.paper, 0.7)} 100%)`,
+              backdropFilter: "blur(20px)",
               position: "relative",
               overflow: "hidden",
-              height: "100%",
               display: "flex",
-              flexDirection: "column",
+              flexDirection: { xs: "column", md: "row" },
+              alignItems: { xs: "flex-start", md: "center" },
               justifyContent: "space-between",
+              gap: 4,
+              boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.05)}`,
             }}
           >
-            <Box
-              sx={{
-                position: "relative",
-                zIndex: 1,
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                justifyContent: "space-between",
-              }}
-            >
+            {/* Left Side: Main Total Planned */}
+            <Box sx={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: "1 1 auto", minWidth: { md: "30%" } }}>
               <Box sx={{ mb: 2 }}>
-                <Typography
-                  sx={{
-                    fontWeight: 900,
-                    fontSize: "1.5rem",
-                    color: "text.primary",
-                  }}
-                >
+                <Typography sx={{ fontWeight: 800, fontSize: "1.2rem", color: "text.secondary", letterSpacing: "0.05em", textTransform: "uppercase" }}>
                   {vesselId}
                 </Typography>
               </Box>
               <Box>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontWeight: 800,
-                    color: "primary.main",
-                    mb: 0.5,
-                    display: "block",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
+                <Typography variant="caption" sx={{ fontWeight: 800, color: "primary.main", mb: 0.5, display: "block", textTransform: "uppercase", letterSpacing: "0.1em" }}>
                   Total Planned Moves
                 </Typography>
                 <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
-                  <Typography
-                    sx={{
-                      fontWeight: 900,
-                      letterSpacing: "-0.03em",
-                      fontSize: { xs: "2.5rem", md: "3.5rem" },
-                      lineHeight: 1,
-                    }}
-                  >
+                  <Typography sx={{ fontWeight: 900, letterSpacing: "-0.03em", fontSize: { xs: "3.5rem", md: "4.5rem" }, lineHeight: 1, color: "text.primary" }}>
                     {recs.length}
                   </Typography>
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontWeight: 700,
-                      color: "text.secondary",
-                      opacity: 0.5,
-                    }}
-                  >
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: "text.secondary", opacity: 0.7 }}>
                     units
                   </Typography>
                 </Box>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    mt: 1,
-                    display: "block",
-                    color: "text.secondary",
-                    fontWeight: 500,
-                  }}
-                >
+                <Typography variant="body2" sx={{ mt: 2, display: "block", color: "text.secondary", fontWeight: 500, lineHeight: 1.5 }}>
                   Based on AI optimization engine.
                 </Typography>
               </Box>
             </Box>
+
+            {/* Divider for Desktop */}
+            <Box sx={{ display: { xs: "none", md: "block" }, width: "1px", height: "140px", bgcolor: alpha(theme.palette.divider, 0.8), zIndex: 1 }} />
+            {/* Divider for Mobile */}
+            <Box sx={{ display: { xs: "block", md: "none" }, height: "1px", width: "100%", bgcolor: alpha(theme.palette.divider, 0.8), zIndex: 1 }} />
+
+            {/* Right Side: Sub Metrics Grid */}
+            <Box sx={{ position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(4, 1fr)" }, gap: { xs: 3, md: 5 }, flex: "1 1 auto", pt: { xs: 1, md: 0 } }}>
+              <Box>
+                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Above Deck
+                </Typography>
+                <Typography sx={{ fontSize: "2rem", fontWeight: 900, color: "primary.main", mt: 0.5, lineHeight: 1 }}>
+                  {deckCounts.ABOVE_DECK}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 1, fontWeight: 500 }}>
+                  Stowed units
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Below Deck
+                </Typography>
+                <Typography sx={{ fontSize: "2rem", fontWeight: 900, color: "text.primary", mt: 0.5, lineHeight: 1 }}>
+                  {deckCounts.BELOW_DECK}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 1, fontWeight: 500 }}>
+                  Stowed units
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Heavy / Med
+                </Typography>
+                <Typography sx={{ fontSize: "2rem", fontWeight: 900, color: "warning.main", mt: 0.5, lineHeight: 1 }}>
+                  {weightCounts.HEAVY}<span style={{ opacity: 0.5, fontSize: "1.2rem", margin: "0 2px" }}>/</span>{weightCounts.MEDIUM}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 1, fontWeight: 500 }}>
+                  Container breakdown
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  High Risk
+                </Typography>
+                <Typography sx={{ fontSize: "2rem", fontWeight: 900, color: "error.main", mt: 0.5, lineHeight: 1 }}>
+                  {riskCounts.HIGH}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 1, fontWeight: 500 }}>
+                  Reshuffle risk
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Background Decoration */}
             <Box
               sx={{
                 position: "absolute",
-                right: -30,
-                bottom: -30,
-                width: 180,
-                height: 180,
+                right: { xs: "-10%", md: "0%" },
+                top: { xs: "-10%", md: "50%" },
+                transform: { md: "translateY(-50%)" },
+                width: { xs: 200, md: 350 },
+                height: { xs: 200, md: 350 },
                 borderRadius: "50%",
-                background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.15)} 0%, transparent 70%)`,
+                background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.08)} 0%, transparent 70%)`,
                 zIndex: 0,
+                pointerEvents: "none",
               }}
             />
           </Paper>
-        </Grid>
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Grid container spacing={2} sx={{ height: "100%" }}>
-            <Grid size={{ xs: 6 }}>
-              <MetricCard
-                title="Above Deck"
-                value={deckCounts.ABOVE_DECK}
-                subtitle="Stowed units"
-                accent="primary"
-              />
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <MetricCard
-                title="Below Deck"
-                value={deckCounts.BELOW_DECK}
-                subtitle="Stowed units"
-                accent="default"
-              />
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <MetricCard
-                title="Heavy / Medium"
-                value={`${weightCounts.HEAVY} / ${weightCounts.MEDIUM}`}
-                subtitle="Container breakdown"
-                accent="warning"
-              />
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <MetricCard
-                title="High Risk"
-                value={riskCounts.HIGH}
-                subtitle="Reshuffle risk"
-                accent="error"
-              />
-            </Grid>
-          </Grid>
         </Grid>
       </Grid>
 
@@ -767,48 +744,25 @@ export default function CurrentPlanningTab({
               color="text.secondary"
               sx={{ fontWeight: 800, letterSpacing: 1 }}
             >
-              WEIGHT BANDS
+              EQUIPMENT TYPES
             </Typography>
             <ResponsiveContainer width="100%" height="90%">
-              <BarChart
-                data={weightBar}
-                margin={{ top: 20, right: 10, left: -20, bottom: 0 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke={alpha(theme.palette.divider, 0.5)}
-                />
-                <XAxis
-                  dataKey="name"
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fontWeight: 600 }}
-                  stroke={theme.palette.text.secondary}
-                />
-                <YAxis
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
-                  stroke={theme.palette.text.secondary}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 8,
-                    border: `1px solid ${theme.palette.divider}`,
+              <BarChart layout="vertical" data={equipBar} margin={{ top: 20, right: 10, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={alpha(theme.palette.divider, 0.5)} />
+                <XAxis type="number" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis dataKey="name" type="category" fontSize={10} width={90} tickLine={false} axisLine={false} tick={{ fontWeight: 600 }} stroke={theme.palette.text.secondary} />
+                <Tooltip 
+                  cursor={{ fill: alpha(theme.palette.primary.main, 0.05) }} 
+                  contentStyle={{ 
+                    fontSize: '0.75rem', 
+                    borderRadius: '8px', 
+                    border: `1px solid ${theme.palette.divider}`, 
                     backgroundColor: theme.palette.background.paper,
-                    color: theme.palette.text.primary,
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                  cursor={{ fill: alpha(theme.palette.text.primary, 0.03) }}
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+                    color: theme.palette.text.primary 
+                  }} 
                 />
-                <Bar dataKey="Count" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                  {weightBar.map((e, i) => (
-                    <Cell key={i} fill={e.c} />
-                  ))}
-                </Bar>
+                <Bar dataKey="Count" fill={theme.palette.info.main} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Card>

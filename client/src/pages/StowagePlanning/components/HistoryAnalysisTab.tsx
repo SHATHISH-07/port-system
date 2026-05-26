@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Box, Typography, Grid, Card, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress, useTheme, alpha, Paper } from '@mui/material';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { api } from '../../../api/api';
-import MetricCard from '../../StayTimeAnalysis/components/MetricCard';
 
 function formatNumber(value?: number, digits = 1) {
   if (value === undefined || value === null || Number.isNaN(value)) return '-';
@@ -27,6 +26,10 @@ interface HistoryData {
   weightDistribution?: {
     aboveDeck?: Array<{ band: string; count: number }>;
     belowDeck?: Array<{ band: string; count: number }>;
+  };
+  craneMetrics?: {
+    restowMoves: number;
+    reshuffleRate: number;
   };
 }
 
@@ -75,96 +78,167 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
 
   if (!data) return null;
 
-  const { summary = {}, specialCargoSummary = {}, containerSizeDistribution = [], dischargePortGrouping = [], equipmentClassDistribution = [], historicalVisits = [] } = data;
+  const summary = data?.summary || {};
+  const specialCargoSummary = data?.specialCargoSummary || {};
+  const containerSizeDistribution = data?.containerSizeDistribution || [];
+  const dischargePortGrouping = data?.dischargePortGrouping || [];
+  const equipmentClassDistribution = data?.equipmentClassDistribution || [];
+  const historicalVisits = data?.historicalVisits || [];
+  const weightDistribution = data?.weightDistribution || { aboveDeck: [], belowDeck: [] };
+  const craneMetrics = data?.craneMetrics;
 
   const portBarData = dischargePortGrouping.slice(0, 5).map((i: { port: string; count: number }) => ({ name: i.port, Containers: i.count }));
   const sizePieData = containerSizeDistribution.map((i: { containerSize: string; count: number }) => ({ name: i.containerSize === 'BASIC20' ? '20ft (Standard)' : '40ft (Hi-Cube)', value: i.count }));
   const equipmentBarData = equipmentClassDistribution.map((i: { equipmentClass: string; count: number }) => ({ name: i.equipmentClass.replace('CONTAINER | ', ''), Count: i.count }));
 
-  const wDist = data.weightDistribution || { aboveDeck: [], belowDeck: [] };
   const deckWeightData = [
-    { name: 'Above', Light: wDist.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: wDist.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: wDist.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
-    { name: 'Below', Light: wDist.belowDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: wDist.belowDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: wDist.belowDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
+    { name: 'Above', Light: weightDistribution.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: weightDistribution.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: weightDistribution.aboveDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
+    { name: 'Below', Light: weightDistribution.belowDeck?.find((x: { band: string; count: number }) => x.band === 'LIGHT')?.count || 0, Medium: weightDistribution.belowDeck?.find((x: { band: string; count: number }) => x.band === 'MEDIUM')?.count || 0, Heavy: weightDistribution.belowDeck?.find((x: { band: string; count: number }) => x.band === 'HEAVY')?.count || 0 },
   ];
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, animation: 'fadeIn 0.6s ease-out forwards', '@keyframes fadeIn': { from: { opacity: 0, transform: 'translateY(20px)' }, to: { opacity: 1, transform: 'translateY(0)' } } }}>
 
-      {/* Hero Section */}
+      {/* Hero Section - Single Unified Stats Card */}
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12 }}>
           <Paper
             elevation={0}
             sx={{
-              p: 2.5,
-              borderRadius: 3,
+              p: { xs: 3, md: 5 },
+              borderRadius: 4,
               border: '1px solid',
               borderColor: alpha(theme.palette.primary.main, 0.15),
-              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.5)} 100%)`,
-              backdropFilter: 'blur(10px)',
+              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.background.paper, 0.7)} 100%)`,
+              backdropFilter: 'blur(20px)',
               position: 'relative',
               overflow: 'hidden',
-              height: '100%',
               display: 'flex',
-              flexDirection: 'column',
+              flexDirection: { xs: 'column', md: 'row' },
+              alignItems: { xs: 'flex-start', md: 'center' },
               justifyContent: 'space-between',
+              gap: 4,
+              boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.05)}`
             }}
           >
-            <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            {/* Left Side: Main Total Stowed */}
+            <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: { md: '30%' } }}>
               <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
-                  <Typography sx={{ fontWeight: 900, fontSize: '1.5rem', color: 'text.primary' }}>
-                    {vesselId}
-                  </Typography>
-                </Box>
+                <Typography sx={{ fontWeight: 800, fontSize: '1.2rem', color: 'text.secondary', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  {vesselId}
+                </Typography>
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   Total Containers Stowed
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                  <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '2.5rem', md: '3.5rem' }, lineHeight: 1 }}>
+                  <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '3.5rem', md: '4.5rem' }, lineHeight: 1, color: 'text.primary' }}>
                     {formatNumber(summary.totalContainers || 0, 0)}
                   </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.5 }}>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.7 }}>
                     units
                   </Typography>
                 </Box>
-                <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'text.secondary', fontWeight: 500 }}>
-                  Based on {historicalVisits.length} historical visits.
+                <Typography
+                  variant="body2"
+                  sx={{
+                    mt: 2,
+                    display: 'block',
+                    color: 'text.secondary',
+                    fontWeight: 500,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Based on{' '}
+                  <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                    {historicalVisits.length}
+                  </Box>{' '}
+                  historical visits.
                 </Typography>
               </Box>
             </Box>
+
+            {/* Divider for Desktop */}
+            <Box sx={{ display: { xs: 'none', md: 'block' }, width: '1px', height: '140px', bgcolor: 'divider', zIndex: 1 }} />
+            {/* Divider for Mobile */}
+            <Box sx={{ display: { xs: 'block', md: 'none' }, height: '1px', width: '100%', bgcolor: 'divider', zIndex: 1 }} />
+
+            {/* Right Side: Sub Metrics Grid */}
+            <Box sx={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' }, gap: { xs: 3, md: 5 }, flex: '1 1 auto', pt: { xs: 1, md: 0 } }}>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Above Deck
+                </Typography>
+                <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'primary.main', mt: 0.5, lineHeight: 1 }}>
+                  {summary.aboveDeckCount || 0}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
+                  Stowed units
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Below Deck
+                </Typography>
+                <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'text.primary', mt: 0.5, lineHeight: 1 }}>
+                  {summary.belowDeckCount || 0}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
+                  Stowed units
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Heavy
+                </Typography>
+                <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'warning.main', mt: 0.5, lineHeight: 1 }}>
+                  {summary.heavyCount || 0}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
+                  Low stow needed
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Hazmat
+                </Typography>
+                <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'error.main', mt: 0.5, lineHeight: 1 }}>
+                  {specialCargoSummary.hazardousCount || 0}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
+                  Segregation req.
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Avg Restows
+                </Typography>
+                <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'warning.main', mt: 0.5, lineHeight: 1 }}>
+                  {craneMetrics ? Math.round(craneMetrics.restowMoves / Math.max(1, historicalVisits.length)) : 0}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
+                  Per visit
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Background Decoration */}
             <Box
               sx={{
                 position: 'absolute',
-                right: -30,
-                bottom: -30,
-                width: 180,
-                height: 180,
+                right: { xs: '-10%', md: '0%' },
+                top: { xs: '-10%', md: '50%' },
+                transform: { md: 'translateY(-50%)' },
+                width: { xs: 200, md: 350 },
+                height: { xs: 200, md: 350 },
                 borderRadius: '50%',
-                background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.15)} 0%, transparent 70%)`,
+                background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.08)} 0%, transparent 70%)`,
                 zIndex: 0,
+                pointerEvents: 'none',
               }}
             />
           </Paper>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Grid container spacing={2} sx={{ height: '100%' }}>
-            <Grid size={{ xs: 6 }}>
-              <MetricCard title="Above Deck" value={summary.aboveDeckCount || 0} subtitle="Stowed units" accent="primary" />
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <MetricCard title="Below Deck" value={summary.belowDeckCount || 0} subtitle="Stowed units" accent="default" />
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <MetricCard title="Heavy" value={summary.heavyCount || 0} subtitle="Low stow needed" accent="warning" />
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <MetricCard title="Hazmat" value={specialCargoSummary.hazardousCount || 0} subtitle="Segregation req." accent="error" />
-            </Grid>
-          </Grid>
         </Grid>
       </Grid>
 
@@ -248,43 +322,45 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
 
       {/* Historical Logs — hidden when scoped to a single visit */}
       {!visitId && (
-        <Box sx={{ mt: 3, mb: 1 }}>
-          <Box sx={{ mb: 2 }}>
-            <Typography sx={{ fontWeight: 900, fontSize: '1.2rem', letterSpacing: '-0.02em' }}>Visit History</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mt: 0.5, display: "block" }}>
-              Past occurrences and stowage volumes
-            </Typography>
+        <Paper elevation={0} sx={{ mt: 3, mb: 1, p: { xs: 2, md: 3 }, borderRadius: 4, border: '1px solid', borderColor: alpha(theme.palette.divider, 0.8), bgcolor: 'background.paper', boxShadow: `0 4px 20px ${alpha('#000', 0.03)}` }}>
+          <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box>
+              <Typography sx={{ fontWeight: 900, fontSize: '1.2rem', letterSpacing: '-0.02em', color: 'text.primary' }}>Visit History</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mt: 0.5, display: "block" }}>
+                Past occurrences and stowage volumes
+              </Typography>
+            </Box>
           </Box>
-          <TableContainer component={Paper} elevation={theme.palette.mode === 'dark' ? 0 : 2} sx={{ maxHeight: 300, borderRadius: 3, border: `1px solid ${theme.palette.divider}`, overflowY: "auto", bgcolor: theme.palette.mode === 'dark' ? alpha("#000", 0.4) : alpha("#fff", 0.7), backdropFilter: "blur(12px)" }}>
-            <Table size="small" stickyHeader>
+          <TableContainer sx={{ maxHeight: 400, borderRadius: 2, border: `1px solid ${alpha(theme.palette.divider, 0.5)}`, overflowY: "auto" }}>
+            <Table size="medium" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell align="left" sx={{ bgcolor: 'background.paper', fontWeight: 700, fontSize: '0.75rem', py: 1.5, px: 3 }}>Visit ID</TableCell>
-                  <TableCell align="center" sx={{ bgcolor: 'background.paper', fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>Containers Stowed</TableCell>
-                  <TableCell align="right" sx={{ bgcolor: 'background.paper', fontWeight: 700, fontSize: '0.75rem', py: 1.5, px: 3 }}>Operation Time</TableCell>
+                  <TableCell align="left" sx={{ bgcolor: alpha(theme.palette.background.default, 0.8), backdropFilter: 'blur(10px)', fontWeight: 800, fontSize: '0.75rem', py: 2, px: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Visit ID</TableCell>
+                  <TableCell align="center" sx={{ bgcolor: alpha(theme.palette.background.default, 0.8), backdropFilter: 'blur(10px)', fontWeight: 800, fontSize: '0.75rem', py: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Containers Stowed</TableCell>
+                  <TableCell align="right" sx={{ bgcolor: alpha(theme.palette.background.default, 0.8), backdropFilter: 'blur(10px)', fontWeight: 800, fontSize: '0.75rem', py: 2, px: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Operation Time</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {historicalVisits.map((visit: { visitId: string; containerCount: number; moveCompleteTime: string | null }, index: number) => (
-                  <TableRow key={visit.visitId} hover sx={{ bgcolor: index % 2 === 0 ? 'transparent' : alpha(theme.palette.action.hover, 0.18) }}>
-                    <TableCell align="left" sx={{ fontWeight: 700, fontSize: '0.8rem', px: 3, fontFamily: "'Inter', monospace", color: 'primary.main' }}>{visit.visitId}</TableCell>
-                    <TableCell align="center" sx={{ fontSize: '0.8rem', fontWeight: 600 }}>{formatNumber(visit.containerCount, 0)}</TableCell>
-                    <TableCell align="right" sx={{ fontSize: '0.8rem', color: 'text.secondary', px: 3 }}>
+                {historicalVisits.map((visit: { visitId: string; containerCount: number; moveCompleteTime: string | null }) => (
+                  <TableRow key={visit.visitId} hover sx={{ '& td': { borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}` }, '&:last-child td': { borderBottom: 'none' } }}>
+                    <TableCell align="left" sx={{ fontWeight: 700, fontSize: '0.85rem', px: 3, color: 'primary.main' }}>{visit.visitId}</TableCell>
+                    <TableCell align="center" sx={{ fontSize: '0.85rem', fontWeight: 800, color: 'text.primary' }}>{formatNumber(visit.containerCount, 0)}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: '0.85rem', color: 'text.secondary', px: 3, fontWeight: 500 }}>
                       {visit.moveCompleteTime ? new Date(visit.moveCompleteTime).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
                     </TableCell>
                   </TableRow>
                 ))}
                 {historicalVisits.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={3}>
-                      <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>No history visits found.</Box>
+                    <TableCell colSpan={3} sx={{ borderBottom: 'none' }}>
+                      <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>No history visits found.</Box>
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </TableContainer>
-        </Box>
+        </Paper>
       )}
     </Box>
   );
