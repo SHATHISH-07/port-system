@@ -13,24 +13,25 @@ import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile
 from sqlalchemy import MetaData, Table, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-
+from db.queries import ensure_yard_tables
 from auth.dependencies import require_admin
 from auth.utils import log_audit
 from db.connection import get_engine
 from services.retraining_service import check_and_trigger_retraining
 from utils.datetime_utils import parse_datetime
+from db.queries import load_from_db
 
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/ingest", tags=["Ingestion"])
 
 _CHUNK_SIZE = 5_000
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Column normalization
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _clean_col(s: str) -> str:
+    """
+    Executes _clean_col logic and processing.
+    """
     s = str(s).lower().strip()
     s = s.replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "")
     return re.sub(r"[^a-z0-9_]", "", s)
@@ -111,6 +112,9 @@ _MAPPING: dict[str, str] = {
 
 
 def _normalize(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes _normalize logic and processing.
+    """
     raw_names = [_clean_col(c) for c in df.columns]
     df = df.copy()
     df.columns = raw_names
@@ -130,15 +134,18 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Shared helpers  (single definitions — no duplicates below)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _utcnow_naive() -> datetime:
+    """
+    Executes _utcnow_naive logic and processing.
+    """
     return datetime.utcnow()
 
 
 def _safe_scalar(value):
+    """
+    Executes _safe_scalar logic and processing.
+    """
     try:
         if pd.isna(value):
             return None
@@ -161,6 +168,9 @@ def _safe_scalar(value):
 
 
 def _clean_row(row: dict) -> dict:
+    """
+    Executes _clean_row logic and processing.
+    """
     return {k: _safe_scalar(v) for k, v in row.items()}
 
 
@@ -173,6 +183,9 @@ def _prepare_records(df: pd.DataFrame) -> list[dict]:
 
 
 def _coerce_datetime_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """
+    Executes _coerce_datetime_columns logic and processing.
+    """
     df = df.copy()
     for col in columns:
         if col in df.columns:
@@ -188,6 +201,9 @@ def _coerce_datetime_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFra
 
 
 def _ensure_text_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """
+    Executes _ensure_text_columns logic and processing.
+    """
     df = df.copy()
     for col in columns:
         if col in df.columns:
@@ -212,6 +228,9 @@ def _ensure_current_position(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _fail(reason: str) -> dict:
+    """
+    Executes _fail logic and processing.
+    """
     return {
         "status":         "failed",
         "dataset_type":   "unknown",
@@ -223,14 +242,18 @@ def _fail(reason: str) -> dict:
 
 
 def _file_hash(content: bytes) -> str:
+    """
+    Executes _file_hash logic and processing.
+    """
     return hashlib.sha256(content).hexdigest()[:16]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Yard ID derivation  (single canonical implementation)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _safe_get_yard_from_position(value) -> Optional[str]:
+    """
+    Executes _safe_get_yard_from_position logic and processing.
+    """
     if value is None:
         return None
     try:
@@ -261,6 +284,9 @@ def _safe_get_yard_from_position(value) -> Optional[str]:
 
 def _derive_yard_id_from_row(row: pd.Series, dataset_type: str) -> Optional[str]:
     # 1. Explicit yard columns first
+    """
+    Executes _derive_yard_id_from_row logic and processing.
+    """
     for key in ("yard_id", "facility_id", "complex_id"):
         val = row.get(key)
         y = _safe_get_yard_from_position(val)
@@ -289,11 +315,12 @@ def _derive_yard_id_from_row(row: pd.Series, dataset_type: str) -> Optional[str]
     return None
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Dataset type detection
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _detect_type(df: pd.DataFrame, explicit: Optional[str]) -> Optional[str]:
+    """
+    Executes _detect_type logic and processing.
+    """
     if explicit and explicit.lower() in ("history", "crane", "current"):
         return explicit.lower()
 
@@ -322,9 +349,7 @@ def _detect_type(df: pd.DataFrame, explicit: Optional[str]) -> Optional[str]:
     return None
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Ingestion log helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _insert_ingestion_log(
     ingestion_id: str,
@@ -334,6 +359,9 @@ def _insert_ingestion_log(
     total_rows: int,
     uploaded_by: int,
 ) -> None:
+    """
+    Executes _insert_ingestion_log logic and processing.
+    """
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(
@@ -364,6 +392,9 @@ def _update_ingestion_log(
     rejected_count: int,
     error_summary: Optional[str],
 ) -> None:
+    """
+    Executes _update_ingestion_log logic and processing.
+    """
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(
@@ -387,9 +418,7 @@ def _update_ingestion_log(
         )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Upload endpoint
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/upload")
 async def upload_data(
@@ -398,6 +427,9 @@ async def upload_data(
     datasetType: Optional[str] = Query(None),
     admin: dict = Depends(require_admin),
 ):
+    """
+    Executes upload_data logic and processing.
+    """
     content = await file.read()
     file_name = file.filename or "upload"
     fhash = _file_hash(content)
@@ -490,9 +522,7 @@ async def upload_data(
     return result
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Synchronous ingestion processor
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _process_ingestion(
     ingestion_id: str,
@@ -502,8 +532,9 @@ def _process_ingestion(
     admin_id: int,
     background_tasks: BackgroundTasks = None,
 ):
-    from db.queries import ensure_yard_tables
-
+    """
+    Executes _process_ingestion logic and processing.
+    """
     engine = get_engine()
     accepted_count = 0
     rejected_count = 0
@@ -714,9 +745,7 @@ def _process_ingestion(
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Per-yard dispatch
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _insert_yard_data(
     engine,
@@ -726,6 +755,9 @@ def _insert_yard_data(
     ingestion_id: str,
     background_tasks=None,
 ) -> tuple[int, int, str]:
+    """
+    Executes _insert_yard_data logic and processing.
+    """
     accepted = 0
     rejected = 0
     error_str = ""
@@ -758,9 +790,7 @@ def _insert_yard_data(
     return accepted, rejected, error_str
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Unified container insert
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _insert_container_operations(
     engine,
@@ -769,6 +799,9 @@ def _insert_container_operations(
     ingestion_id: str,
     record_type: str = "history",
 ):
+    """
+    Executes _insert_container_operations logic and processing.
+    """
     tbl = f"{yard}_container_operations"
 
     cols = [
@@ -849,9 +882,7 @@ def _insert_container_operations(
 
     return accepted, len(df) - accepted, "; ".join(errors)
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Unified crane insert
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _insert_crane_operations(
     engine,
@@ -859,6 +890,9 @@ def _insert_crane_operations(
     df: pd.DataFrame,
     ingestion_id: str,
 ):
+    """
+    Executes _insert_crane_operations logic and processing.
+    """
     tbl = f"{yard}_crane_operations"
 
     cols = [
@@ -901,17 +935,13 @@ def _insert_crane_operations(
     return accepted, len(df) - accepted, "; ".join(errors)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Vessel visit summary update  (includes avg_mphc calculation)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _update_vessel_visits(engine, yard: str, df: pd.DataFrame, dataset_type: str):
     """
     Background summary update: refresh vessel_visits with aggregated metrics
     from the newly ingested data, including avg_mphc from crane productivity.
     """
-    from db.queries import load_from_db
-
     vv_tbl = f"{yard}_vessel_visits"
 
     visit_col = (

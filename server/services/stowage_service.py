@@ -1,3 +1,5 @@
+from db.queries import get_vessel_schedule
+from db.queries import update_vessel_schedule
 import pandas as pd
 from typing import Any, List, Optional
 from db.queries import load_from_db
@@ -5,8 +7,8 @@ from utils.current_container_lookup import lookup_containers_by_ids
 from utils.position_decoder import parse_vessel_slot
 from utils.position_parser import parse_position
 from utils.stowage_rules import generate_recommendation, classify_weight_band, classify_deck_position, predict_reshuffle_risk
-from utils.position_parser import block_label
-
+from services.heatmap_service import _deterministic_layout
+from db.connection import get_engine
 
 
 _CWIT_PROXIMITY = {
@@ -22,12 +24,18 @@ _PEB_PROXIMITY = {
 }
 
 def _normalize_column_name(name: str) -> str:
+    """
+    Executes _normalize_column_name logic and processing.
+    """
     import re
     name = str(name).strip().lower()
     name = re.sub(r"[^a-z0-9]+", "_", name)
     return re.sub(r"_+", "_", name).strip("_")
 
 def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes _normalize_dataframe_columns logic and processing.
+    """
     if df.empty:
         return df
     df = df.copy()
@@ -35,12 +43,18 @@ def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def _first_existing_value(row: pd.Series, candidates: List[str]) -> Any:
+    """
+    Executes _first_existing_value logic and processing.
+    """
     for col in candidates:
         if col in row and pd.notna(row.get(col)) and str(row.get(col)).strip() != "":
             return row.get(col)
     return None
 
 def _safe_str(value: Any, default: str = "") -> str:
+    """
+    Executes _safe_str logic and processing.
+    """
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return default
     text = str(value).strip()
@@ -49,6 +63,9 @@ def _safe_str(value: Any, default: str = "") -> str:
     return text
 
 def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes _dedupe_latest_per_unit logic and processing.
+    """
     if df.empty or "unit_id" not in df.columns:
         return df
     sort_cols = []
@@ -63,6 +80,9 @@ def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop_duplicates(subset=["unit_id"], keep="first").reset_index(drop=True)
 
 def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
+    """
+    Executes _derive_recommended_tier logic and processing.
+    """
     band = str(weight_band).strip().upper()
     if band == "HEAVY":
         return "02"
@@ -71,6 +91,9 @@ def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
     return "04" if loading_priority <= 5 else "06"
 
 def _determine_historical_deck(position_text: str, weight_band: str) -> str:
+    """
+    Executes _determine_historical_deck logic and processing.
+    """
     if position_text:
         v_info = parse_vessel_slot(position_text)
         if v_info and v_info.get("decoded"):
@@ -84,6 +107,9 @@ def _compute_crane_metrics(
     yard_id: Optional[str],
     visit_id: Optional[str] = None,
 ) -> Optional[dict]:
+    """
+    Executes _compute_crane_metrics logic and processing.
+    """
     if visit_id:
         # Fast path: query crane data directly for this specific visit only
         visit_ids = [str(visit_id)]
@@ -198,6 +224,9 @@ def get_historical_stowage_analysis(
     yard_id: Optional[str] = None,
     visit_id: Optional[str] = None,
 ) -> dict:
+    """
+    Executes get_historical_stowage_analysis logic and processing.
+    """
     df = load_from_db("history", vessel_id=vessel_id, yard_id=yard_id, full_load=True)
     if df is None or df.empty:
         return _empty_history_response()
@@ -261,6 +290,9 @@ def get_historical_stowage_analysis(
         return _empty_history_response()
 
     def _resolve_attributes(row: pd.Series) -> pd.Series:
+        """
+        Executes _resolve_attributes logic and processing.
+        """
         w = _first_existing_value(
             row,
             ["unit_weight_in_kg", "verified_gross_mass_kg", "gross_mass_kg", "gross_weight_kg"],
@@ -434,6 +466,9 @@ def get_historical_stowage_analysis(
     }
 
 def _generate_current_planning_insights(block_strategies, pod_groups, baseline_reshuffle, pod_conc, proj_reduction, crane_metrics=None) -> list[str]:
+    """
+    Executes _generate_current_planning_insights logic and processing.
+    """
     insights = []
     
     # 1. Heavy containers close to berth
@@ -481,6 +516,9 @@ def process_current_planning_and_yard_strategy(
     container_ids: List[str],
     port_rotation: Optional[List[str]] = None,
 ) -> dict:
+    """
+    Executes process_current_planning_and_yard_strategy logic and processing.
+    """
     if not container_ids:
         return _empty_planning_response(vessel_id, 0)
 
@@ -507,6 +545,9 @@ def process_current_planning_and_yard_strategy(
 
     # Assign yard_block, weight_band, is_loaded
     def resolve_yard_block(row):
+        """
+        Executes resolve_yard_block logic and processing.
+        """
         visit_state = _safe_str(row.get("visit_state"), "")
         category = _safe_str(row.get("category_id"), "")
         is_loaded = visit_state == "3DEPARTED" or category == "EXPRT"
@@ -528,8 +569,6 @@ def process_current_planning_and_yard_strategy(
     
     if rotation:
         try:
-            from db.queries import update_vessel_schedule
-            from db.connection import get_engine
             # If the user explicitly passed a rotation from UI "Apply Changes", permanently save it!
             update_vessel_schedule(get_engine(), str(vessel_id).strip().upper(), rotation)
         except Exception:
@@ -537,8 +576,6 @@ def process_current_planning_and_yard_strategy(
     
     if not rotation:
         try:
-            from db.queries import get_vessel_schedule
-            from db.connection import get_engine
             db_schedule = get_vessel_schedule(get_engine(), str(vessel_id).strip().upper())
             if db_schedule:
                 rotation = db_schedule
@@ -548,7 +585,6 @@ def process_current_planning_and_yard_strategy(
         # Fallback to historical guessing if DB schedule is empty
         if not rotation:
             try:
-                from db.queries import load_from_db
                 history_df = load_from_db("history", vessel_id=vessel_id)
                 if history_df is not None and not history_df.empty and "port_of_discharge" in history_df.columns:
                     hist_counts = history_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
@@ -671,10 +707,6 @@ def process_current_planning_and_yard_strategy(
             r["dischargeOrder"] = None
 
     # 4. Yard Block Summary
-    from services.heatmap_service import _deterministic_layout, get_vessel_heatmap
-    from db.queries import load_from_db
-    import logging
-    
     unique_blocks = df["yard_block"].dropna().unique().tolist()
     if "UNKNOWN" in unique_blocks:
         unique_blocks.remove("UNKNOWN")
@@ -852,6 +884,9 @@ def process_current_planning_and_yard_strategy(
 
 
 def _empty_history_response() -> dict:
+    """
+    Executes _empty_history_response logic and processing.
+    """
     return {
         "summary": {"totalContainers": 0, "heavyCount": 0, "lightCount": 0, "mediumCount": 0, "aboveDeckCount": 0, "belowDeckCount": 0},
         "freightKindDistribution": [],
@@ -869,6 +904,9 @@ def _empty_history_response() -> dict:
     }
 
 def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
+    """
+    Executes _empty_planning_response logic and processing.
+    """
     return {
         "vesselId": vessel_id,
         "outboundService": vessel_id,

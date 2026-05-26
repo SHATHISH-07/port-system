@@ -8,16 +8,25 @@ from sqlalchemy import text
 
 # bcrypt has a 72 byte limit for passwords, so we truncate the password to 72 bytes
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Executes verify_password logic and processing.
+    """
     pwd_bytes = plain_password.encode('utf-8')[:72]
     return bcrypt.checkpw(pwd_bytes, hashed_password.encode('utf-8'))
 
 # get_password_hash is a utility function that hashes a password
 def get_password_hash(password: str) -> str:
+    """
+    Executes get_password_hash logic and processing.
+    """
     pwd_bytes = password.encode('utf-8')[:72]
     return bcrypt.hashpw(pwd_bytes, bcrypt.gensalt()).decode('utf-8')
 
 # create_access_token is a utility function that creates a JWT access token
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Executes create_access_token logic and processing.
+    """
     to_encode = data.copy()
     # set the expiration time to the JWT_ACCESS_TOKEN_EXPIRE_MINUTES from the config
     if expires_delta:
@@ -32,6 +41,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 # decode_access_token is a utility function that decodes a JWT access token
 def decode_access_token(token: str) -> Optional[dict]:
+    """
+    Executes decode_access_token logic and processing.
+    """
     try:
         # decode the token
         decoded_token = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
@@ -43,8 +55,9 @@ def decode_access_token(token: str) -> Optional[dict]:
 
 # log_audit is a utility function that logs an audit event
 def log_audit(action: str, details: str, user_id: Optional[int] = None):
-    from db.connection import get_engine
-    from sqlalchemy import text
+    """
+    Executes log_audit logic and processing.
+    """
     try:
         # get the engine
         engine = get_engine()
@@ -61,6 +74,9 @@ def log_audit(action: str, details: str, user_id: Optional[int] = None):
 
 # authenticate_user is a utility function that authenticates a user
 def authenticate_user(username: str, password: str) -> Optional[dict]:
+    """
+    Executes authenticate_user logic and processing.
+    """
     engine = get_engine()
     # execute the select query
     with engine.connect() as conn:

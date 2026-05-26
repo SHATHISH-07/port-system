@@ -4,11 +4,17 @@ import time
 class TTLCache:
     # Initialize cache with a default TTL of 1 hour
     def __init__(self, ttl_seconds: int = 3600):
+        """
+        Executes __init__ logic and processing.
+        """
         self.ttl_seconds = ttl_seconds
         self._cache = {}
     
     # Get cached data
     def get(self, key: str):
+        """
+        Executes get logic and processing.
+        """
         if key in self._cache:
             entry = self._cache[key]
             if time.time() - entry["timestamp"] < self.ttl_seconds:
@@ -19,6 +25,9 @@ class TTLCache:
         return None
     # Add data to cache
     def set(self, key: str, value: any):
+        """
+        Executes set logic and processing.
+        """
         self._cache[key] = {
             "value": value,
             "timestamp": time.time()
@@ -26,10 +35,16 @@ class TTLCache:
     
     # Clear cache
     def clear(self):
+        """
+        Executes clear logic and processing.
+        """
         self._cache.clear()
     
     # Remove data from cache
     def remove(self, key: str):
+        """
+        Executes remove logic and processing.
+        """
         if key in self._cache:
             del self._cache[key]
 

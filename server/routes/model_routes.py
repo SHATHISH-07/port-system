@@ -7,23 +7,21 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import text
-
+import pandas as pd
+from io import BytesIO
 from auth.dependencies import require_admin
 from db.connection import get_engine
 from db.queries import load_from_db
 from db.training_metadata import get_latest_training_metadata, get_training_metadata_history
 from models.training_status import training_status
 from services.retraining_service import background_train_and_update
+from schemas.model import ModelStatusResponse, ModelTrainingResponse, ModelVersionsResponse, PromoteVersionResponse
 
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/model", tags=["ML Model"])
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # GET /model/status  — combined model status + training progress + active version
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/status")
+@router.get("/status", response_model=ModelStatusResponse)
 def get_model_status(admin: dict = Depends(require_admin)):
     """
     Unified model status endpoint. Returns:
@@ -78,11 +76,9 @@ def get_model_status(admin: dict = Depends(require_admin)):
     return result
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # POST /model/training  — trigger retraining
-# ─────────────────────────────────────────────────────────────────────────────
 
-@router.post("/training")
+@router.post("/training", response_model=ModelTrainingResponse)
 async def trigger_training(
     background_tasks: BackgroundTasks,
     data_source: str = Form("db"),
@@ -95,9 +91,6 @@ async def trigger_training(
     - data_source="db"   → loads all history from the database (default)
     - data_source="file" → trains from an uploaded CSV / Excel file
     """
-    import pandas as pd
-    from io import BytesIO
-
     # Guard: don't stack training runs
     if training_status.get().get("status") == "training":
         raise HTTPException(
@@ -147,11 +140,9 @@ async def trigger_training(
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # GET /model/versions  — list versions + training history + promote
-# ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/versions")
+@router.get("/versions", response_model=ModelVersionsResponse)
 def list_model_versions(
     limit: int = Query(50, alias="limit"),
     admin: dict = Depends(require_admin),
@@ -185,7 +176,7 @@ def list_model_versions(
     }
 
 
-@router.post("/versions/{version_id}/promote")
+@router.post("/versions/{version_id}/promote", response_model=PromoteVersionResponse)
 def promote_model_version(version_id: str, admin: dict = Depends(require_admin)):
     """
     Promote a specific model version to 'active', retiring the current one.

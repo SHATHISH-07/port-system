@@ -2,6 +2,9 @@ import logging
 from fastapi import APIRouter, Depends
 from auth.dependencies import require_admin
 from models.retraining_config import retraining_config
+from db.connection import get_engine
+from sqlalchemy import text
+from pydantic import BaseModel
 
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/config", tags=["Configuration"])
@@ -10,10 +13,11 @@ router = APIRouter(prefix="/config", tags=["Configuration"])
 @router.get("/retraining")
 # only admin can access this endpoint
 def get_retraining_config(admin: dict = Depends(require_admin)):
+    """
+    Executes get_retraining_config logic and processing.
+    """
     data = retraining_config.get()
     
-    from db.connection import get_engine
-    from sqlalchemy import text
     engine = get_engine()
     
     history_count = 0
@@ -43,8 +47,6 @@ def get_retraining_config(admin: dict = Depends(require_admin)):
 
     return data
 
-from pydantic import BaseModel
-
 class ConfigUpdate(BaseModel):
     retrain_threshold: int
 
@@ -52,6 +54,9 @@ class ConfigUpdate(BaseModel):
 @router.patch("/retraining")
 # only admin can access this endpoint
 def update_retraining_config(payload: ConfigUpdate, admin: dict = Depends(require_admin)):
+    """
+    Executes update_retraining_config logic and processing.
+    """
     logger.info(f"Updating retraining threshold to {payload.retrain_threshold}")
     new_config = retraining_config.update(threshold=payload.retrain_threshold)
     return {"config": new_config}

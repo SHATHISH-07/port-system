@@ -51,7 +51,7 @@ Machine learning ensemble models predict vessel stay duration based on:
 
 Provides:
 
-* Crane productivity analytics
+* Stowage planning analytics
 * Throughput KPIs
 * Yard congestion indicators
 * Vessel operational trends
@@ -73,15 +73,14 @@ Interactive visualization engine supporting:
 
 ---
 
-## Crane Analytics
+## Stowage Planning
 
-Dedicated crane intelligence module includes:
+Dedicated stowage intelligence module includes:
 
-* Terminal efficiency tracking
-* Crane productivity metrics
-* Asset deep dive analysis
-* Operational performance scoring
-* Historical crane trend analysis
+* Current planning visualization
+* Historical stowage analysis
+* Stowage optimization visualization
+* Container load planning
 
 ---
 
@@ -183,20 +182,24 @@ shathish-07-port-system/
 │   │   ├── auth/
 │   │   ├── layout/
 │   │   ├── pages/
-│   │   │   ├── CraneAnalytics/
 │   │   │   ├── Heatmap/
+│   │   │   ├── StayTimeAnalysis/
+│   │   │   ├── StowagePlanning/
+│   │   │   ├── auth/
 │   │   │   ├── ingestion/
 │   │   │   ├── ml/
-│   │   │   ├── StayTimeAnalysis/
 │   │   │   └── user/
 │   │   ├── theme/
 │   │   └── types/
 │
 ├── server/
 │   ├── auth/
+│   ├── config.py
 │   ├── db/
+│   ├── main.py
 │   ├── models/
 │   ├── routes/
+│   ├── schemas/
 │   ├── services/
 │   ├── utils/
 │   ├── worker/
@@ -243,20 +246,21 @@ Features:
 
 ---
 
-## Crane Analytics
+## Stowage Planning
 
 Files:
 
-* CraneAnalytics.tsx
-* GlobalKPIs.tsx
-* TerminalEfficiency.tsx
-* AssetDeepDive.tsx
+* StowagePlanning.tsx
+* CurrentPlanningTab.tsx
+* HistoryAnalysisTab.tsx
+* StowageVisualizationTab.tsx
+* StowageHeader.tsx
 
 Features:
 
-* Crane productivity scoring
-* Terminal throughput metrics
-* Operational asset analytics
+* Visualization of container load sequences
+* Historical stowage pattern analysis
+* 3D visualization of container stacks
 
 ---
 
@@ -277,7 +281,7 @@ Main route files:
 
 * auth_routes.py
 * vessel_routes.py
-* crane_routes.py
+* stowage_routes.py
 * ingest_routes.py
 * model_routes.py
 
@@ -292,6 +296,8 @@ Services:
 * vessel_service.py
 * heatmap_service.py
 * retraining_service.py
+* stowage_service.py
+* stowage_visualizer_service.py
 
 Responsibilities:
 
@@ -331,7 +337,7 @@ graph TB
     subgraph Frontend
         A1[React Dashboard]
         A2[Heatmap Engine]
-        A3[Crane Analytics]
+        A3[Stowage Planning]
         A4[Stay Time Analysis]
         A5[Admin Operations Center]
     end
@@ -339,7 +345,7 @@ graph TB
     subgraph API["FastAPI Backend"]
         B1[Auth Routes]
         B2[Vessel Routes]
-        B3[Crane Routes]
+        B3[Stowage Routes]
         B4[Ingestion Routes]
         B5[Model Routes]
         B6[System Routes]
@@ -554,7 +560,7 @@ graph TD
 
     B --> C[Heatmap]
     B --> D[Stay Time Analysis]
-    B --> E[Crane Analytics]
+    B --> E[Stowage Planning]
     B --> F[Data Ingestion]
     B --> G[ML Training]
     B --> H[User Management]
@@ -636,7 +642,7 @@ npm run dev
 | `/auth`    | Authentication    |
 | `/vessel`  | Vessel analytics  |
 | `/heatmap` | Yard congestion   |
-| `/crane`   | Crane analytics   |
+| `/stowage` | Stowage planning  |
 | `/ingest`  | Data ingestion    |
 | `/model`   | ML training       |
 | `/users`   | User management   |

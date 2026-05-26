@@ -32,7 +32,6 @@ from routes.system_routes import router as system_router
 from routes.stowage_routes import router as stowage_router
 from services.retraining_service import scheduled_retraining_job
 
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
@@ -42,11 +41,7 @@ logger = logging.getLogger("port_system")
 
 scheduler = AsyncIOScheduler()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Lifespan
-# ─────────────────────────────────────────────────────────────────────────────
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = get_engine()
@@ -99,36 +94,31 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("[Startup] Schema init failed: %s", e)
 
-    # Schedule nightly retrain at 02:00
-    scheduler.add_job(scheduled_retraining_job, "cron", hour=2, minute=0)
+    # Schedule nightly retrain
+    scheduler.add_job(scheduled_retraining_job, "cron", hour=settings.RETRAIN_CRON_HOUR, minute=settings.RETRAIN_CRON_MINUTE)
     scheduler.start()
-    logger.info("[Scheduler] APScheduler started — nightly retrain at 02:00")
+    logger.info(f"[Scheduler] APScheduler started — nightly retrain at {settings.RETRAIN_CRON_HOUR:02d}:{settings.RETRAIN_CRON_MINUTE:02d}")
 
     yield
 
     scheduler.shutdown()
     logger.info("[Shutdown] APScheduler stopped")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Application
-# ─────────────────────────────────────────────────────────────────────────────
-
 app = FastAPI(
-    title="PortSync API",
-    version="2.0.0",
+    title=settings.API_TITLE,
+    version=settings.API_VERSION,
     lifespan=lifespan,
 )
 
-# ── CORS ─────────────────────────────────────────────────────────────────────
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 _LOG_DIR = os.path.join(os.path.dirname(__file__), "response_logs")
 
@@ -191,8 +181,7 @@ async def write_global_response_log(request: Request, response_body: bytes, stat
     except Exception as e:
         logger.warning("Global response logging failed for %s: %s", request.url.path, e)
 
-
-# ── Request logging middleware ────────────────────────────────────────────────
+# Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.time()
@@ -228,8 +217,7 @@ async def log_requests(request: Request, call_next):
             content={"error": "Internal server error. Please try again later."},
         )
 
-
-# ── Routers ───────────────────────────────────────────────────────────────────
+# Routers
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(system_router)
@@ -239,9 +227,8 @@ app.include_router(config_router)
 app.include_router(vessel_router)
 app.include_router(stowage_router)
 
-
-# ── Health check ──────────────────────────────────────────────────────────────
+# Health check
 @app.get("/health", tags=["Health"])
 def health_check():
     """Simple liveness probe."""
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": settings.API_VERSION}

@@ -6,19 +6,23 @@ from db.queries import load_from_db
 from utils.current_container_lookup import lookup_containers_by_ids
 from utils.position_decoder import parse_vessel_slot
 from utils.position_parser import parse_position
-from utils.stowage_rules import generate_recommendation, classify_weight_band, classify_deck_position, predict_reshuffle_risk
+from utils.stowage_rules import generate_recommendation, classify_weight_band, predict_reshuffle_risk
 from services.stowage_service import _CWIT_PROXIMITY, _PEB_PROXIMITY
+from utils.stowage_rules import classify_weight_band, PositionAllocator
 
-# ---------------------------------------------------------------------------
 # Internal helpers
-# ---------------------------------------------------------------------------
-
 def _normalize_column_name(name: str) -> str:
+    """
+    Executes _normalize_column_name logic and processing.
+    """
     name = str(name).strip().lower()
     name = re.sub(r"[^a-z0-9]+", "_", name)
     return re.sub(r"_+", "_", name).strip("_")
 
 def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes _normalize_dataframe_columns logic and processing.
+    """
     if df.empty:
         return df
     df = df.copy()
@@ -26,6 +30,9 @@ def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def _safe_str(value: Any, default: str = "") -> str:
+    """
+    Executes _safe_str logic and processing.
+    """
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return default
     text = str(value).strip()
@@ -34,12 +41,18 @@ def _safe_str(value: Any, default: str = "") -> str:
     return text
 
 def _first_existing_value(row: pd.Series, candidates: List[str]) -> Any:
+    """
+    Executes _first_existing_value logic and processing.
+    """
     for col in candidates:
         if col in row and pd.notna(row.get(col)) and str(row.get(col)).strip() != "":
             return row.get(col)
     return None
 
 def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes _dedupe_latest_per_unit logic and processing.
+    """
     if df.empty or "unit_id" not in df.columns:
         return df
     sort_cols = []
@@ -54,6 +67,9 @@ def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop_duplicates(subset=["unit_id"], keep="first").reset_index(drop=True)
 
 def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
+    """
+    Executes _derive_recommended_tier logic and processing.
+    """
     band = str(weight_band).strip().upper()
     if band == "HEAVY":
         return "02"
@@ -61,13 +77,12 @@ def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
         return "08" if loading_priority <= 7 else "10"
     return "04" if loading_priority <= 5 else "06"
 
-# ---------------------------------------------------------------------------
 # Map group builder
-# ---------------------------------------------------------------------------
-
 def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
+    """
+    Executes _build_map_groups logic and processing.
+    """
     map_groups: dict = {}
-    from utils.stowage_rules import classify_deck_position, classify_weight_band, PositionAllocator
     
     position_allocator = PositionAllocator()
 
@@ -226,6 +241,9 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
 
 
 def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
+    """
+    Executes _build_yard_grid logic and processing.
+    """
     proximity_map = _PEB_PROXIMITY if terminal == "PEB" else _CWIT_PROXIMITY
     
     blocks = {}
@@ -322,11 +340,7 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
         "inYardTotal": in_yard_total,
     }
 
-
-# ---------------------------------------------------------------------------
 # Public entry point
-# ---------------------------------------------------------------------------
-
 def get_stowage_visualization(
     vessel_id: str,
     yard_id: Optional[str] = None,
@@ -334,6 +348,9 @@ def get_stowage_visualization(
     container_ids: Optional[List[str]] = None,
     port_rotation: Optional[List[str]] = None,
 ) -> dict:
+    """
+    Executes get_stowage_visualization logic and processing.
+    """
     mode = "HISTORICAL" if visit_id else "CURRENT"
     df = pd.DataFrame()
     resolved_count = 0

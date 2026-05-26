@@ -1,6 +1,5 @@
 from typing import Optional
 
-
 def classify_weight_band(weight_kg: Optional[float], container_length: Optional[str] = None) -> str:
     """
     Classify weight into LIGHT, MEDIUM, HEAVY.

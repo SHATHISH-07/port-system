@@ -1,5 +1,6 @@
 from typing import Dict, Optional
-
+import re
+from utils.position_parser import parse_position
 
 def classify_weight_band(weight_kg: Optional[float], container_length: Optional[str] = None) -> str:
     """
@@ -33,15 +34,20 @@ def classify_weight_band(weight_kg: Optional[float], container_length: Optional[
     except (TypeError, ValueError):
         return "LIGHT"
 
-
 class PositionAllocator:
     """Stateful allocator to simulate physical ship stacking with distinct Bays, Rows, and Tiers per Port."""
     def __init__(self):
+        """
+        Executes __init__ logic and processing.
+        """
         self.port_bay_map = {}
         self.next_available_bay = 1
         self.counters = {}
 
     def get_next_position(self, port: str, deck: str):
+        """
+        Executes get_next_position logic and processing.
+        """
         if port not in self.port_bay_map:
             self.port_bay_map[port] = f"{self.next_available_bay:02d}"
             self.next_available_bay += 2
@@ -74,7 +80,6 @@ class PositionAllocator:
         
         return bay, row_str, tier_str
 
-
 def classify_deck_position(weight_band: str) -> str:
     """
     HEAVY  => BELOW_DECK
@@ -87,7 +92,6 @@ def classify_deck_position(weight_band: str) -> str:
     if band == "LIGHT":
         return "ABOVE_DECK"
     return "BELOW_DECK"
-
 
 def _is_early_block(yard_block: Optional[str]) -> bool:
     """
@@ -113,13 +117,11 @@ def _is_early_block(yard_block: Optional[str]) -> bool:
 
     # CWIT-style: numeric zone prefix + letter ('1A', '2B', '3A', etc.)
     # Extract the trailing letter component after the leading digits.
-    import re
     m = re.match(r"^\d+([A-Z]+)$", block)
     if m and m.group(1) in {"A", "B"}:
         return True
 
     return False
-
 
 def predict_reshuffle_risk(
     yard_block: Optional[str],
@@ -148,7 +150,6 @@ def predict_reshuffle_risk(
         score += 5
 
     if yard_slot:
-        from utils.position_parser import parse_position
         info = parse_position(str(yard_slot))
         if info and info.get("is_yard") and info.get("tier"):
             tier_val = str(info.get("tier"))
@@ -171,7 +172,6 @@ def predict_reshuffle_risk(
     if score > 30:
         return "MEDIUM"
     return "LOW"
-
 
 def generate_recommendation(
     unit_id: str,

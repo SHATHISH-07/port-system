@@ -20,15 +20,17 @@ from models.training_status import training_status
 from utils.feature_utils import create_features
 from utils.datetime_utils import parse_datetime
 
+from db.connection import get_engine
+from sqlalchemy import text
+from db.connection import get_engine
+from sqlalchemy import text
+import json as _json
+
 logger = logging.getLogger("port_system")
 
 _cached_model_bundle = None
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _safe_parse(df: pd.DataFrame, col: str) -> pd.Series:
     """Parse a datetime column if present; return NaT series otherwise."""
     if col in df.columns:
@@ -148,6 +150,9 @@ def _heuristic_span_from_metrics(
 
 
 def _build_ensemble() -> VotingRegressor:
+    """
+    Executes _build_ensemble logic and processing.
+    """
     ridge = Pipeline([
         ("scaler", StandardScaler()),
         ("ridge", Ridge(alpha=10.0)),
@@ -179,6 +184,9 @@ def _build_feature_row(
     visit_df: pd.DataFrame,
     feature_template: dict = None,
 ) -> Optional[dict]:
+    """
+    Executes _build_feature_row logic and processing.
+    """
     features = create_features(visit_df)
     if features is None:
         return None
@@ -191,9 +199,7 @@ def _build_feature_row(
     return features
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Training
-# ─────────────────────────────────────────────────────────────────────────────
 
 def train_stay_model(df: pd.DataFrame, config: dict = None):
     """
@@ -307,10 +313,6 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
     beats (or ties) the current champion.
     """
     try:
-        from db.connection import get_engine
-        from sqlalchemy import text
-        import json as _json
-
         _engine = get_engine()
         _now = datetime.now(timezone.utc)
 
@@ -447,11 +449,12 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
         logger.warning("[ML] Could not record model version (non-fatal): %s", _ve)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Model loading  (cached)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def load_stay_model():
+    """
+    Executes load_stay_model logic and processing.
+    """
     global _cached_model_bundle
     if _cached_model_bundle is not None:
         return _cached_model_bundle
@@ -468,8 +471,6 @@ def load_stay_model():
     # ── Fallback to DB if disk load failed or file missing ──────────────────
     if bundle is None:
         try:
-            from db.connection import get_engine
-            from sqlalchemy import text
             engine = get_engine()
             with engine.connect() as conn:
                 row = conn.execute(text("""
@@ -495,9 +496,7 @@ def load_stay_model():
     return _cached_model_bundle
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Single-visit prediction
-# ─────────────────────────────────────────────────────────────────────────────
 
 def predict_visit_stay_duration(
     df: pd.DataFrame,
@@ -578,9 +577,7 @@ def predict_visit_stay_duration(
     return round(float(max(float(settings.TRAIN_MIN_HOURS), pred)), 2)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Multi-visit vessel prediction
-# ─────────────────────────────────────────────────────────────────────────────
 
 def predict_vessel_stay_duration(
     prepared_visits: dict,
@@ -650,9 +647,7 @@ def predict_vessel_stay_duration(
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Manual/metric-based prediction  (no DataFrame required)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def predict_stay_duration_from_metrics(
     loaded: int,

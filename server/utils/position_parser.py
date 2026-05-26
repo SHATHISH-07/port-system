@@ -8,6 +8,9 @@ _BLOCK_RE = re.compile(r"^([A-Z]?\d{2,3})", re.IGNORECASE)
 # NaN-safe helpers
 def _safe_str(value) -> str | None:
     # return a clean string or None for null-like values (including NaN).
+    """
+    Executes _safe_str logic and processing.
+    """
     if value is None:
         return None
     # pandas NaN check
@@ -41,6 +44,9 @@ def get_yard_id(row: Any) -> str | None:
 # Safe row value accessor (NaN-proof)
 def _row_get(row: Any, key: str):
     # Handle None
+    """
+    Executes _row_get logic and processing.
+    """
     if row is None:
         return None
     # Handle dict-like rows (dict, pandas Series)
@@ -59,6 +65,9 @@ def _row_get(row: Any, key: str):
 def parse_position(raw) -> dict | None:
     # return a normalized dict for any position string.
     # return None for empty or unrecognised values.
+    """
+    Executes parse_position logic and processing.
+    """
     s = _safe_str(raw)
     if s is None:
         return None
@@ -279,11 +288,17 @@ def parse_position(raw) -> dict | None:
 
 # Convenience helpers
 def is_vessel_pos(pos) -> bool:
+    """
+    Executes is_vessel_pos logic and processing.
+    """
     p = parse_position(pos)
     return bool(p and p["is_vessel"])
 
 # check if the position is yard
 def is_yard_pos(pos) -> bool:
+    """
+    Executes is_yard_pos logic and processing.
+    """
     p = parse_position(pos)
     return bool(p and p["is_yard"])
 
@@ -293,6 +308,9 @@ def classify_move(from_pos, to_pos) -> str:
     # DISCHARGE : Vessel -> Yard
     # SHIFT     : Yard  -> Yard  |  Vessel -> Vessel
     # UNKNOWN   : missing / unrecognised positions
+    """
+    Executes classify_move logic and processing.
+    """
     f_p = parse_position(from_pos)
     t_p = parse_position(to_pos)
     # check if the positions are yard or vessel
@@ -316,6 +334,9 @@ def classify_move(from_pos, to_pos) -> str:
 def safe_get_pos(row: dict, *keys) -> str | None:
     # Return the first non-null value from a row using case-insensitive keys.
     # This is safe for pandas NaN and handles title-case / snake_case columns.
+    """
+    Executes safe_get_pos logic and processing.
+    """
     if row is None:
         return None
 
@@ -346,6 +367,9 @@ def safe_get_pos(row: dict, *keys) -> str | None:
 # block label
 def block_label(parsed: dict | None) -> str | None:
     # Return a display-ready block label like 'D08' or 'PEB-3A'.
+    """
+    Executes block_label logic and processing.
+    """
     if not parsed or not parsed.get("is_yard"):
         return None
     # get the terminal and block
