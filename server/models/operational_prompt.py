@@ -1,5 +1,3 @@
-# server/models/operational_prompt.py
-
 OPERATIONAL_RULES = """
 1. Safety First: Ensure crane separation of at least 1 bay for safety.
 2. Efficiency: Prioritize high-density blocks to minimize crane travel.

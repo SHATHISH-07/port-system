@@ -9,7 +9,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 # get_current_user is a dependency that validates the token and returns the user
 def get_current_user(token: str = Depends(oauth2_scheme)):
-    # raises 401 if the token is invalid or expired
+    """
+    Executes get_current_user logic and processing.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -47,7 +49,9 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
 # require_admin is a dependency that checks if the user is an admin
 def require_admin(current_user: dict = Depends(get_current_user)):
-    # raises 403 if the user is not an admin
+    """
+    Executes require_admin logic and processing.
+    """
     if current_user.get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

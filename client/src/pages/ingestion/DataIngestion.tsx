@@ -1,17 +1,18 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   Box, Typography, Button, LinearProgress,
-  Alert, Snackbar, Chip, useTheme, Card, CardContent,
-  Paper, CircularProgress,
+  Alert, Snackbar, Chip, useTheme,
+  Paper, Grid,
+  CircularProgress,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import {
-  UploadFileOutlined,
   CheckCircleOutlined,
   ErrorOutlined,
   HourglassEmptyOutlined,
 } from "@mui/icons-material";
 import { api } from "../../api/api";
+import FileUpload from "./FileUpload";
 
 type IngestType = "history" | "crane";
 
@@ -60,7 +61,6 @@ function StatusChip({ status }: { status: string }) {
 
 export default function DataIngestion() {
   const theme = useTheme();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [activeType, setActiveType] = useState<IngestType>("history");
   const [file, setFile] = useState<File | null>(null);
@@ -72,17 +72,6 @@ export default function DataIngestion() {
 
   const showToast = (message: string, severity: typeof toast.severity) =>
     setToast({ open: true, message, severity });
-
-  // ── File handling ──────────────────────────────────────────────────────────
-  const handleFile = (f: File) => {
-    const valid = [".csv", ".xlsx", ".xls"].some(ext => f.name.toLowerCase().endsWith(ext));
-    if (!valid) {
-      showToast("Only CSV or Excel files are accepted.", "error");
-      return;
-    }
-    setFile(f);
-    setStatusData(null);
-  };
 
   // ── Upload ─────────────────────────────────────────────────────────────────
   const handleIngest = async () => {
@@ -132,325 +121,215 @@ export default function DataIngestion() {
       }}
     >
       {/* Top Header Control Bar */}
-      <Box
+      <Paper
+        elevation={0}
         sx={{
-          px: { xs: 2, md: 4 },
+          px: { xs: 2.5, md: 4 },
           py: 2.5,
-          bgcolor: "transparent",
-          borderBottom: `1px solid ${theme.palette.divider}`,
+          bgcolor: alpha(theme.palette.background.default, 0.9),
+          backdropFilter: 'blur(25px)',
+          borderRadius: 0,
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
         }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
-          <Box sx={{ fontSize: '18px', fontWeight: 'bold' }}>
-            Data Ingestion & Integration
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
-              gap: 2,
-              alignItems: 'center',
-            }}
-          >
-            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mr: 1, fontSize: '0.8rem' }}>
-              Select Ingestion Target:
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 2, width: '100%' }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.5px', mb: 0.5 }}>
+              Data Ingestion & Integration
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <Button
-                variant={activeType === "history" ? "contained" : "outlined"}
-                onClick={() => {
-                  if (isLoading) return;
-                  setActiveType("history");
-                  setFile(null);
-                  setStatusData(null);
-                }}
-                disabled={isLoading}
-                sx={{
-                  borderRadius: 2,
-                  fontWeight: 700,
-                  textTransform: "none",
-                  px: 2,
-                  py: 0.6,
-                  height: 32,
-                  fontSize: '0.75rem',
-                  boxShadow: activeType === "history" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none",
-                }}
-              >
-                History Ingestion
-              </Button>
-              <Button
-                variant={activeType === "crane" ? "contained" : "outlined"}
-                onClick={() => {
-                  if (isLoading) return;
-                  setActiveType("crane");
-                  setFile(null);
-                  setStatusData(null);
-                }}
-                disabled={isLoading}
-                sx={{
-                  borderRadius: 2,
-                  fontWeight: 700,
-                  textTransform: "none",
-                  px: 2,
-                  py: 0.6,
-                  height: 32,
-                  fontSize: '0.75rem',
-                  boxShadow: activeType === "crane" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none",
-                }}
-              >
-                Crane Ingestion
-              </Button>
-            </Box>
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+              Upload raw dataset files to keep the history logs and crane operations updated.
+            </Typography>
           </Box>
-          <Typography variant="caption" sx={{ color: 'text.secondary', px: 0.5, fontSize: '0.7rem' }}>
-            Upload raw CSV or Excel dataset files to keep the history logs and crane operations database records fully updated.
-          </Typography>
+
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+            <Button
+              variant={activeType === "history" ? "contained" : "outlined"}
+              onClick={() => {
+                if (isLoading) return;
+                setActiveType("history");
+                setFile(null);
+                setStatusData(null);
+              }}
+              disabled={isLoading}
+              sx={{ borderRadius: 2, fontWeight: 700, textTransform: "none", py: 0.75, px: 2, boxShadow: activeType === "history" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none" }}
+            >
+              History Ingestion
+            </Button>
+            <Button
+              variant={activeType === "crane" ? "contained" : "outlined"}
+              onClick={() => {
+                if (isLoading) return;
+                setActiveType("crane");
+                setFile(null);
+                setStatusData(null);
+              }}
+              disabled={isLoading}
+              sx={{ borderRadius: 2, fontWeight: 700, textTransform: "none", py: 0.75, px: 2, boxShadow: activeType === "crane" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none" }}
+            >
+              Crane Ingestion
+            </Button>
+          </Box>
         </Box>
-      </Box>
+      </Paper>
 
       {/* Main Content Area */}
-      <Box
-        sx={{
-          flex: 1,
-          overflowY: 'auto',
-          scrollBehavior: 'smooth',
-        }}
-      >
-        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1, maxWidth: 800, mx: "auto" }}>
-          {/* Hero Header */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.1em', fontSize: '0.7rem' }}>
-              Operational Integration
+      <Box sx={{ flex: 1, overflowY: 'auto', scrollBehavior: 'smooth', p: { xs: 2, md: 3 } }}>
+        <Box sx={{ maxWidth: 1000, mx: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+
+          {/* Expected Headers Section */}
+          <Box sx={{ px: 1 }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: "text.secondary", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", mb: 1.5 }}>
+              Expected {activeType} dataset headers
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.25 }}>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.25rem' }}>
-                {activeType === "history" ? "History Ingestion" : "Crane Ingestion"}
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                Terminal Database Updater
-              </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {SCHEMAS[activeType].map((h) => (
+                <Chip
+                  key={h}
+                  label={h}
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    fontSize: "11px",
+                    borderRadius: 1.5,
+                    fontWeight: 600,
+                    borderColor: alpha(theme.palette.divider, 0.8),
+                    bgcolor: alpha(theme.palette.background.paper, 0.6),
+                    backdropFilter: "blur(10px)",
+                  }}
+                />
+              ))}
             </Box>
           </Box>
 
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 2.5,
-              borderRadius: 3,
-              textAlign: "center",
-              bgcolor: "background.paper",
-              border: "1px solid",
-              borderColor: "divider",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.02)"
-            }}
-          >
-            {/* Drop zone */}
-            <Box
-              onClick={() => !isLoading && fileRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const f = e.dataTransfer.files?.[0];
-                if (f) handleFile(f);
-              }}
-              sx={{
-                border: "2px dashed",
-                borderColor: file ? "primary.main" : theme.palette.divider,
-                borderRadius: 2,
-                p: 3,
-                cursor: isLoading ? "not-allowed" : "pointer",
-                bgcolor: file
-                  ? (theme.palette.mode === "dark" ? "rgba(96,165,250,0.02)" : "rgba(26,115,232,0.01)")
-                  : "transparent",
-                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                "&:hover": !isLoading
-                  ? {
-                    bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0, 0, 0, 0.01)",
-                    borderColor: theme.palette.mode === "dark" ? "#60a5fa" : "#1a73e8",
-                    transform: "scale(1.002)"
-                  }
-                  : {},
-              }}
-            >
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                hidden
-                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-              />
-              <UploadFileOutlined
-                sx={{ fontSize: 36, color: file ? "primary.main" : "text.disabled", mb: 1, transition: "all 0.3s" }}
-              />
-              {file ? (
-                <>
-                  <Typography variant="body1" sx={{ fontWeight: 700, color: "text.primary" }}>
-                    {file.name}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: "text.secondary", mt: 0.25, display: "block" }}>
-                    {(file.size / 1024).toFixed(1)} KB — click to choose a different file
-                  </Typography>
-                </>
-              ) : (
-                <>
-                  <Typography variant="body1" sx={{ fontWeight: 700, color: "text.primary" }}>
-                    Click or drag to upload {activeType === "history" ? "vessel stay history" : "crane operations"} data
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: "text.secondary", mt: 0.25, display: "block" }}>
-                    CSV and Excel formats supported — headers are automatically parsed.
-                  </Typography>
-                </>
-              )}
-            </Box>
-
-            {/* Schema hint + action */}
-            <Box
-              sx={{
-                mt: 2,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: 2,
-                flexWrap: "wrap",
-              }}
-            >
-              <Box sx={{ textAlign: "left", flex: 1, minWidth: 280 }}>
-                <Typography
-                  variant="caption"
-                  sx={{ fontWeight: 800, color: "text.secondary", display: "block", letterSpacing: "0.05em", mb: 0.75, fontSize: "0.68rem" }}
-                >
-                  EXPECTED HEADERS ({activeType.toUpperCase()}):
-                </Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                  {SCHEMAS[activeType].map((h) => (
-                    <Chip
-                      key={h}
-                      label={h}
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        fontSize: "9px",
-                        height: "20px",
-                        borderRadius: 1,
-                        bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.015)",
-                        borderColor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
-                        fontWeight: 500
-                      }}
-                    />
-                  ))}
-                </Box>
-              </Box>
-
-              <Button
-                variant="contained"
-                size="medium"
-                disableElevation
-                disabled={!file || isLoading}
-                onClick={handleIngest}
-                startIcon={
-                  uploading ? <CircularProgress size={14} color="inherit" /> : undefined
-                }
+          {/* Upload Area Card */}
+          <Grid container spacing={2} sx={{ maxWidth: 750, mx: "auto", width: "100%" }}>
+            <Grid size={{ xs: 12 }}>
+              <Paper
+                elevation={0}
                 sx={{
-                  px: 2.5,
-                  py: 0.75,
-                  borderRadius: 2,
-                  height: 36,
-                  fontSize: "0.8rem",
-                  alignSelf: "flex-end",
-                  whiteSpace: "nowrap",
-                  fontWeight: 600,
-                  textTransform: "none",
-                  boxShadow: theme.palette.mode === "dark"
-                    ? "0 4px 12px rgba(29, 78, 216, 0.2)"
-                    : "0 4px 12px rgba(29, 78, 216, 0.1)",
+                  borderRadius: 4,
+                  border: "1px solid",
+                  borderColor: alpha(theme.palette.primary.main, 0.15),
+                  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.03)} 0%, ${alpha(theme.palette.background.paper, 0.8)} 100%)`,
+                  backdropFilter: "blur(20px)",
+                  overflow: "hidden",
+                  boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.05)}`,
                 }}
               >
-                {uploading ? "Uploading & Processing…" : "Start Ingestion"}
-              </Button>
-            </Box>
-          </Paper>
-
-          {/* Progress bar shown while uploading */}
-          {uploading && (
-            <LinearProgress sx={{ mt: 1, height: 4, borderRadius: 2 }} />
-          )}
-
-          {/* ── Status result card ── */}
-          {statusData && (
-            <Card
-              sx={{
-                mt: 2,
-                borderRadius: 3,
-                border: "1px solid",
-                borderColor: "divider",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.02)",
-                bgcolor: "background.paper"
-              }}
-            >
-              <CardContent sx={{ p: "16px !important" }}>
-                {/* Summary row */}
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 2, mb: 2 }}>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
-                      STATUS
-                    </Typography>
-                    <StatusChip status={statusData.status} />
-                  </Box>
-
-                  <Box>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
-                      DATASET TYPE
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, textTransform: "uppercase", color: "text.primary", fontSize: "0.75rem" }}>
-                      {statusData.dataset_type}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ p: 1, borderRadius: 2, bgcolor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)", border: `1px solid ${theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"}` }}>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
-                      TOTAL ROWS
-                    </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 800, fontFamily: "monospace", color: "text.primary", fontSize: "0.9rem" }}>
-                      {(statusData.accepted_count + statusData.rejected_count).toLocaleString()}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ p: 1, borderRadius: 2, bgcolor: theme.palette.mode === "dark" ? "rgba(16,185,129,0.03)" : "rgba(16,185,129,0.02)", border: `1px solid ${theme.palette.mode === "dark" ? "rgba(16,185,129,0.1)" : "rgba(16,185,129,0.08)"}` }}>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
-                      ACCEPTED
-                    </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 800, color: "success.main", fontFamily: "monospace", fontSize: "0.9rem" }}>
-                      {statusData.accepted_count.toLocaleString()}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ p: 1, borderRadius: 2, bgcolor: statusData.rejected_count > 0 ? (theme.palette.mode === "dark" ? "rgba(239,68,68,0.03)" : "rgba(239,68,68,0.02)") : (theme.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)"), border: `1px solid ${statusData.rejected_count > 0 ? (theme.palette.mode === "dark" ? "rgba(239,68,68,0.1)" : "rgba(239,68,68,0.08)") : (theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)")}` }}>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, display: "block", mb: 0.25, fontSize: "0.68rem" }}>
-                      REJECTED
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        fontWeight: 800,
-                        color: statusData.rejected_count > 0 ? "error.main" : "text.secondary",
-                        fontFamily: "monospace",
-                        fontSize: "0.9rem"
-                      }}
-                    >
-                      {statusData.rejected_count.toLocaleString()}
-                    </Typography>
-                  </Box>
+                <Box sx={{ p: { xs: 3, md: 4 } }}>
+                  <FileUpload
+                    onFileSelect={(f) => {
+                      setFile(f);
+                      setStatusData(null);
+                    }}
+                    acceptedTypes=".csv,.xlsx,.xls"
+                    label={`Upload ${activeType === "history" ? "vessel stay history" : "crane operations"} dataset`}
+                  />
                 </Box>
 
-                {/* Errors */}
-                {statusData.errors && statusData.errors.length > 0 && (
-                  <Alert severity="error" variant="outlined" sx={{ borderRadius: 2 }}>
-                    {statusData.errors.join("; ")}
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
+                <Box sx={{ p: 3, display: "flex", justifyContent: "flex-end", bgcolor: alpha(theme.palette.background.default, 0.3) }}>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    disabled={!file || isLoading}
+                    onClick={handleIngest}
+                    startIcon={uploading ? <CircularProgress size={16} color="inherit" /> : undefined}
+                    sx={{
+                      minWidth: 160,
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontWeight: 700,
+                      px: 3,
+                      py: 1,
+                      fontSize: '0.9rem',
+                    }}
+                  >
+                    {uploading ? "Processing…" : "Start Ingestion"}
+                  </Button>
+                </Box>
+                {uploading && <LinearProgress sx={{ height: 4 }} />}
+              </Paper>
+            </Grid>
+          </Grid>
+
+
+          {/* Status Result Card */}
+          {statusData && (
+            <Grid container spacing={2} sx={{ maxWidth: 750, mx: "auto", width: "100%" }}>
+              <Grid size={{ xs: 12 }}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 4,
+                    border: "1px solid",
+                    borderColor: alpha(theme.palette.success.main, 0.3),
+                    background: `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.05)} 0%, ${alpha(theme.palette.background.paper, 0.9)} 100%)`,
+                    backdropFilter: "blur(20px)",
+                    overflow: "hidden",
+                    boxShadow: `0 8px 32px ${alpha(theme.palette.success.main, 0.05)}`,
+                  }}
+                >
+                  <Box sx={{ p: { xs: 3, md: 4 } }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(5, 1fr)" }, gap: 3, mb: 3 }}>
+                      <Box>
+                        <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800, display: "block", mb: 1, letterSpacing: "0.1em" }}>
+                          STATUS
+                        </Typography>
+                        <StatusChip status={statusData.status} />
+                      </Box>
+
+                      <Box>
+                        <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800, display: "block", mb: 1, letterSpacing: "0.1em" }}>
+                          DATASET
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 800, textTransform: "uppercase", color: "text.primary" }}>
+                          {statusData.dataset_type}
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ p: 2, borderRadius: 3, bgcolor: alpha(theme.palette.divider, 0.05), border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+                        <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800, display: "block", mb: 0.5, letterSpacing: "0.1em" }}>
+                          TOTAL ROWS
+                        </Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 900, fontFamily: "monospace", color: "text.primary" }}>
+                          {(statusData.accepted_count + statusData.rejected_count).toLocaleString()}
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ p: 2, borderRadius: 3, bgcolor: alpha(theme.palette.success.main, 0.1), border: `1px solid ${alpha(theme.palette.success.main, 0.2)}` }}>
+                        <Typography variant="caption" sx={{ color: "success.main", fontWeight: 800, display: "block", mb: 0.5, letterSpacing: "0.1em" }}>
+                          ACCEPTED
+                        </Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 900, color: "success.main", fontFamily: "monospace" }}>
+                          {statusData.accepted_count.toLocaleString()}
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ p: 2, borderRadius: 3, bgcolor: statusData.rejected_count > 0 ? alpha(theme.palette.error.main, 0.1) : alpha(theme.palette.divider, 0.05), border: `1px solid ${statusData.rejected_count > 0 ? alpha(theme.palette.error.main, 0.2) : alpha(theme.palette.divider, 0.1)}` }}>
+                        <Typography variant="caption" sx={{ color: statusData.rejected_count > 0 ? "error.main" : "text.secondary", fontWeight: 800, display: "block", mb: 0.5, letterSpacing: "0.1em" }}>
+                          REJECTED
+                        </Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 900, color: statusData.rejected_count > 0 ? "error.main" : "text.secondary", fontFamily: "monospace" }}>
+                          {statusData.rejected_count.toLocaleString()}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Errors */}
+                    {statusData.errors && statusData.errors.length > 0 && (
+                      <Alert severity="error" variant="outlined" sx={{ borderRadius: 2, fontWeight: 600 }}>
+                        {statusData.errors.join("; ")}
+                      </Alert>
+                    )}
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
           )}
+
         </Box>
       </Box>
 
@@ -463,7 +342,7 @@ export default function DataIngestion() {
         <Alert
           severity={toast.severity}
           variant="filled"
-          sx={{ width: "100%", borderRadius: 2.5 }}
+          sx={{ width: "100%", borderRadius: 2.5, fontWeight: 600 }}
           onClose={() => setToast((t) => ({ ...t, open: false }))}
         >
           {toast.message}

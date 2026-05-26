@@ -11,6 +11,9 @@ DEFAULT_CONFIG = {
 class TrainingStatus:
     # init training status
     def __init__(self):
+        """
+        Executes __init__ logic and processing.
+        """
         self._lock = threading.Lock()
         # Initialize training status
         self.data = {
@@ -24,6 +27,9 @@ class TrainingStatus:
     
     # method to set the training status
     def set(self, status, message="", records_count=0, data_source="", training_type="", config=None):
+        """
+        Executes set logic and processing.
+        """
         with self._lock:
             self.data["status"] = status
             self.data["message"] = message
@@ -38,11 +44,17 @@ class TrainingStatus:
     
     # method to get the training status
     def get(self):
+        """
+        Executes get logic and processing.
+        """
         with self._lock:
             return dict(self.data)
     
     # method to get the last training config
     def get_last_config(self) -> dict:
+        """
+        Executes get_last_config logic and processing.
+        """
         with self._lock:
             return dict(self.data.get("last_config", DEFAULT_CONFIG))
 

@@ -18,24 +18,25 @@ class UserCreate(BaseModel):
     password: str
     role: str = "user"
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # GET /users
-# ─────────────────────────────────────────────────────────────────────────────
 @router.get("")
 def get_users(admin: dict = Depends(require_admin)):
+    """
+    Executes get_users logic and processing.
+    """
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(text("SELECT id, username, role, is_active, created_at FROM users ORDER BY id ASC")).fetchall()
     return [dict(r._mapping) for r in result]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # POST /users
-# ─────────────────────────────────────────────────────────────────────────────
 @router.post("")
 def create_user(user: UserCreate, admin: dict = Depends(require_admin)):
     # check if role is valid
+    """
+    Executes create_user logic and processing.
+    """
     if user.role not in ["user", "admin"]:
         raise HTTPException(status_code=400, detail="Invalid role")
     
@@ -53,11 +54,12 @@ def create_user(user: UserCreate, admin: dict = Depends(require_admin)):
     return {"message": "User created successfully"}
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # PUT /users/{user_id}/toggle-active
-# ─────────────────────────────────────────────────────────────────────────────
 @router.put("/{user_id}/toggle-active")
 def toggle_user_active(user_id: int, admin: dict = Depends(require_admin)):
+    """
+    Executes toggle_user_active logic and processing.
+    """
     if user_id == admin["id"]:
         raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
     

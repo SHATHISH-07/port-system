@@ -14,15 +14,15 @@ router = APIRouter(tags=["System Administration"])
 
 
 class RequestCreate(BaseModel):
-    type: str # UPLOAD_REQUEST, RETRAIN_REQUEST, CONFIG_UPDATE_REQUEST
+    type: str 
     payload: Optional[str] = None
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # GET /audit-logs
-# ─────────────────────────────────────────────────────────────────────────────
 @router.get("/audit-logs")
 def get_audit_logs(admin: dict = Depends(require_admin)):
+    """
+    Executes get_audit_logs logic and processing.
+    """
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(text("""
@@ -34,11 +34,12 @@ def get_audit_logs(admin: dict = Depends(require_admin)):
     return [dict(r._mapping) for r in result]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # GET /requests
-# ─────────────────────────────────────────────────────────────────────────────
 @router.get("/requests")
 def get_requests(user: dict = Depends(get_current_user)):
+    """
+    Executes get_requests logic and processing.
+    """
     engine = get_engine()
     with engine.connect() as conn:
         if user["role"] == "admin":
@@ -58,11 +59,12 @@ def get_requests(user: dict = Depends(get_current_user)):
     return [dict(r._mapping) for r in result]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # POST /requests
-# ─────────────────────────────────────────────────────────────────────────────
 @router.post("/requests")
 def create_request(req: RequestCreate, user: dict = Depends(get_current_user)):
+    """
+    Executes create_request logic and processing.
+    """
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(

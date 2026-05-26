@@ -1,80 +1,97 @@
 import { Box, Typography, useTheme, alpha, IconButton, Tooltip } from "@mui/material";
-import {
-  StarRounded,
-  RestartAltRounded,
-} from "@mui/icons-material";
+import { StarRounded, RestartAltRounded, GpsFixedRounded } from "@mui/icons-material";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import type { Theme } from "@mui/material/styles";
 import type { BlockData, VesselHeatmapViewData } from "../../../types/heatmap";
 
-const getConcColor = (theme: Theme) => ({
-  High: {
-    fill: theme.palette.mode === "dark" ? "#f87171" : "#dc2626",
-    text: theme.palette.mode === "dark" ? "#fca5a5" : "#991b1b",
-    bg:
-      theme.palette.mode === "dark"
-        ? alpha("#dc2626", 0.15)
-        : alpha("#fee2e2", 0.6),
-  },
-  Medium: {
-    fill: theme.palette.mode === "dark" ? "#fb923c" : "#ea580c",
-    text: theme.palette.mode === "dark" ? "#fdba74" : "#9a3412",
-    bg:
-      theme.palette.mode === "dark"
-        ? alpha("#ea580c", 0.15)
-        : alpha("#ffedd5", 0.6),
-  },
-  Low: {
-    fill: theme.palette.mode === "dark" ? "#4ade80" : "#16a34a",
-    text: theme.palette.mode === "dark" ? "#86efac" : "#166534",
-    bg:
-      theme.palette.mode === "dark"
-        ? alpha("#16a34a", 0.15)
-        : alpha("#dcfce7", 0.6),
-  },
-});
+// ── UI Configuration ─────────────────────────────────────────────────────────
 
-const ROW_LABELS: Record<number, string> = {
-  0: "ROW A - FAR ZONE",
-  1: "ROW B - MID ZONE",
-  2: "ROW C - NEAR QUAY",
-  3: "ROW D - QUAY SIDE",
+const getConcColor = (theme: Theme) => {
+  const isDark = theme.palette.mode === "dark";
+  return {
+    High: {
+      main: isDark ? "#ef4444" : "#dc2626",
+      light: isDark ? "#fca5a5" : "#fee2e2",
+      glow: alpha(isDark ? "#ef4444" : "#dc2626", 0.25),
+    },
+    Medium: {
+      main: isDark ? "#f97316" : "#ea580c",
+      light: isDark ? "#fdba74" : "#ffedd5",
+      glow: alpha(isDark ? "#f97316" : "#ea580c", 0.25),
+    },
+    Low: {
+      main: isDark ? "#10b981" : "#059669",
+      light: isDark ? "#6ee7b7" : "#d1fae5",
+      glow: alpha(isDark ? "#10b981" : "#059669", 0.25),
+    },
+  };
 };
 
-function BlockTile({
-  blockId,
-  block,
-  isMax,
-}: {
-  blockId: string;
-  block?: BlockData;
-  isMax: boolean;
-}) {
+const ROW_LABELS: Record<number, string> = {
+  0: "ROW A — FAR ZONE",
+  1: "ROW B — MID ZONE",
+  2: "ROW C — NEAR QUAY",
+  3: "ROW D — QUAY SIDE",
+};
+
+// ── Sub-components ───────────────────────────────────────────────────────────
+
+function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockData; isMax: boolean }) {
   const theme = useTheme();
   if (!block) return null;
 
   const colors = getConcColor(theme);
   const cc = colors[block.concentration || "Low"];
   const pct = Math.round((block.intensity || 0) * 100);
-  const isDark = theme.palette.mode === "dark";
+  const isDark = true;
   const isEmpty = block.count === 0;
 
+  // Empty state styling (Wireframe look)
+  if (isEmpty) {
+    return (
+      <Box
+        sx={{
+          bgcolor: isDark ? "#1e293b" : "#e2e8f0",
+          border: `1px dashed ${isDark ? alpha("#ffffff", 0.1) : alpha("#000000", 0.15)}`,
+          borderRadius: 2,
+          p: 2,
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 140,
+          flex: "0 1 calc(33.333% - 16px)",
+          minWidth: 180,
+          maxWidth: 280,
+          transition: "all 0.2s ease",
+          "&:hover": {
+            bgcolor: isDark ? alpha("#ffffff", 0.03) : alpha("#000000", 0.03),
+          },
+        }}
+      >
+        <Typography sx={{ fontSize: "0.7rem", fontWeight: 700, color: "text.disabled", letterSpacing: "0.1em" }}>
+          BLOCK {blockId}
+        </Typography>
+        <Typography sx={{ fontSize: "0.65rem", color: "text.disabled", mt: 1, textTransform: "uppercase" }}>
+          No Containers
+        </Typography>
+      </Box>
+    );
+  }
+
+  // Active state styling
   return (
     <Box
       sx={{
-        bgcolor: isEmpty
-          ? (isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)")
-          : theme.palette.background.paper,
-        border: isMax
-          ? `2px solid ${theme.palette.primary.main}`
-          : `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+        bgcolor: isDark ? alpha("#161b24", 0.9) : alpha("#ffffff", 0.9),
+        backdropFilter: "blur(12px)",
+        border: `1px solid ${isMax ? theme.palette.primary.main : isDark ? alpha("#ffffff", 0.08) : alpha("#000000", 0.08)}`,
         boxShadow: isMax
-          ? isDark
-            ? `0 0 24px ${alpha(theme.palette.primary.main, 0.25)}`
-            : `0 8px 24px ${alpha(theme.palette.primary.main, 0.15)}`
-          : "none",
+          ? `0 0 0 1px ${theme.palette.primary.main}, 0 12px 24px ${alpha(theme.palette.primary.main, 0.2)}`
+          : `0 8px 16px ${alpha("#000", isDark ? 0.2 : 0.03)}`,
         borderRadius: 2,
-        p: 2,
+        p: 2.5,
         position: "relative",
         display: "flex",
         flexDirection: "column",
@@ -84,120 +101,127 @@ function BlockTile({
         flex: "0 1 calc(33.333% - 16px)",
         minWidth: 180,
         maxWidth: 280,
-        opacity: isEmpty ? 0.45 : 1,
-        transition: "transform 150ms",
-        zIndex: 2,
-        "&:hover": { transform: isEmpty ? "none" : "translateY(-2px)" },
+        overflow: "hidden",
+        transition: "transform 250ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 250ms",
+        "&:hover": {
+          transform: "translateY(-4px)",
+          boxShadow: isMax
+            ? `0 0 0 1px ${theme.palette.primary.main}, 0 16px 32px ${alpha(theme.palette.primary.main, 0.3)}`
+            : `0 12px 24px ${alpha("#000", isDark ? 0.3 : 0.06)}`,
+        },
       }}
     >
-      {isMax && (
-        <StarRounded
-          sx={{
-            position: "absolute",
-            top: 8,
-            right: 8,
-            color: theme.palette.primary.main,
-            fontSize: 20,
-          }}
-        />
-      )}
-      <Typography
-        sx={{
-          position: "absolute",
-          top: 12,
-          left: 14,
-          fontSize: "0.6875rem",
-          fontWeight: 600,
-          color: isEmpty
-            ? "text.disabled"
-            : isDark
-              ? theme.palette.primary.light
-              : theme.palette.primary.main,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-        }}
-      >
-        Block {blockId}
-      </Typography>
+      {/* Background ambient glow based on concentration */}
       <Box
         sx={{
-          mt: 1.5,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
+          position: "absolute",
+          top: "-50%",
+          left: "-50%",
+          width: "200%",
+          height: "200%",
+          background: `radial-gradient(circle at 50% 120%, ${cc.glow} 0%, transparent 60%)`,
+          pointerEvents: "none",
+          opacity: 0.6,
         }}
-      >
-        <Typography
-          sx={{
-            fontSize: "2.75rem",
-            fontWeight: 700,
-            color: isEmpty ? "text.disabled" : isDark ? "#ffffff" : theme.palette.text.primary,
-            lineHeight: 1,
-            fontFamily: "'Google Sans', Roboto, sans-serif",
-          }}
-        >
-          {pct}%
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: "0.75rem",
-            color: isDark ? theme.palette.text.secondary : "#64748b",
-            mt: 0.5,
-          }}
-        >
-          {block.count} Containers
+      />
+
+      {/* Max Highlight Accents */}
+      {isMax && (
+        <>
+          <Box sx={{ position: "absolute", top: 0, left: 0, width: 16, height: 16, borderTop: `2px solid ${theme.palette.primary.main}`, borderLeft: `2px solid ${theme.palette.primary.main}`, borderTopLeftRadius: 8 }} />
+          <Box sx={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, borderTop: `2px solid ${theme.palette.primary.main}`, borderRight: `2px solid ${theme.palette.primary.main}`, borderTopRightRadius: 8 }} />
+          <Box sx={{ position: "absolute", bottom: 0, left: 0, width: 16, height: 16, borderBottom: `2px solid ${theme.palette.primary.main}`, borderLeft: `2px solid ${theme.palette.primary.main}`, borderBottomLeftRadius: 8 }} />
+          <Box sx={{ position: "absolute", bottom: 0, right: 0, width: 16, height: 16, borderBottom: `2px solid ${theme.palette.primary.main}`, borderRight: `2px solid ${theme.palette.primary.main}`, borderBottomRightRadius: 8 }} />
+          <Tooltip title="Maximum Density Block">
+            <StarRounded sx={{ position: "absolute", top: 12, right: 12, color: theme.palette.primary.main, fontSize: 18, animation: "pulseOpacity 2s infinite" }} />
+          </Tooltip>
+        </>
+      )}
+
+      {/* Header */}
+      <Box sx={{ position: "absolute", top: 14, left: 16, display: "flex", alignItems: "center", gap: 1 }}>
+        <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: cc.main, boxShadow: `0 0 8px ${cc.main}` }} />
+        <Typography sx={{ fontSize: "0.65rem", fontWeight: 700, color: isDark ? "#ffffff" : "#475569", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          Block {blockId}
         </Typography>
       </Box>
+
+      {/* Main Stats */}
+      <Box sx={{ mt: 2, display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1 }}>
+        <Typography
+          sx={{
+            fontSize: "3rem",
+            fontWeight: 800,
+            color: isDark ? "#ffffff" : "#0f172a",
+            lineHeight: 1,
+            fontFamily: "'Roboto Mono', 'Google Sans', monospace",
+            letterSpacing: "-0.05em",
+          }}
+        >
+          {pct}
+          <span style={{ fontSize: "1.5rem", color: isDark ? "#ffffff" : "#475569", marginLeft: "2px" }}>%</span>
+        </Typography>
+        <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: isDark ? "#ffffff" : "#475569", mt: 0.5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          {block.count} Units
+        </Typography>
+      </Box>
+
+      {/* LED Progress Bar */}
       <Box
         sx={{
           position: "absolute",
           bottom: 16,
           width: "calc(100% - 32px)",
-          height: 4,
-          bgcolor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
-          borderRadius: 3,
+          height: 6,
+          bgcolor: isDark ? alpha("#ffffff", 0.05) : alpha("#000000", 0.05),
+          borderRadius: 4,
           overflow: "hidden",
+          boxShadow: "inset 0 1px 2px rgba(0,0,0,0.1)",
         }}
       >
-        {!isEmpty && (
-          <Box
-            sx={{
-              height: "100%",
-              width: `${Math.min(pct, 100)}%`,
-              bgcolor: cc.fill,
-              borderRadius: 3,
-              transition: "width 600ms ease",
-            }}
-          />
-        )}
+        <Box
+          sx={{
+            height: "100%",
+            width: `${Math.min(pct, 100)}%`,
+            bgcolor: cc.main,
+            borderRadius: 4,
+            transition: "width 800ms cubic-bezier(0.4, 0, 0.2, 1)",
+            boxShadow: `0 0 8px ${cc.main}`,
+            position: "relative",
+            overflow: "hidden",
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)",
+              transform: "translateX(-100%)",
+              animation: "shimmer 2s infinite",
+            },
+          }}
+        />
       </Box>
     </Box>
   );
 }
 
-function BerthCard({
-  id,
-  label,
-  isTarget,
-  vesselName,
-  isDark,
-}: {
-  id: string;
-  label: string;
-  isTarget: boolean;
-  vesselName?: string;
-  isDark: boolean;
-}) {
+function BerthCard({ id, label, isTarget, vesselName, isDark }: { id: string; label: string; isTarget: boolean; vesselName?: string; isDark: boolean }) {
   const isHorizontal = id.startsWith("T") || id.startsWith("B");
+  const w = isHorizontal ? 200 : 160;
+  const h = isHorizontal ? 100 : 200;
 
+  // Vacant State
   if (!isTarget) {
     return (
       <Box
         sx={{
-          width: isHorizontal ? 180 : 140,
-          height: isHorizontal ? 92 : 180,
-          border: `1px dashed ${isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"}`,
-          bgcolor: isDark ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)",
+          width: w,
+          height: h,
+          border: `1px dashed ${isDark ? alpha("#94a3b8", 0.2) : alpha("#64748b", 0.3)}`,
+          bgcolor: isDark ? "#1e293b" : "#e2e8f0",
+          backdropFilter: "blur(4px)",
           borderRadius: 2,
           display: "flex",
           flexDirection: "column",
@@ -207,35 +231,22 @@ function BerthCard({
           transition: "all 0.3s ease",
         }}
       >
-        <Typography
-          sx={{
-            fontSize: "0.75rem",
-            fontWeight: 800,
-            color: isDark ? "text.secondary" : "#64748b",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}
-        >
+        <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: isDark ? "#ffffff" : "#475569", letterSpacing: "0.15em", textTransform: "uppercase" }}>
           {label}
         </Typography>
-        <Typography
-          variant="caption"
-          sx={{
-            fontSize: "0.6rem",
-            color: "text.disabled",
-            mt: 0.5,
-            textTransform: "uppercase",
-            fontWeight: 700,
-          }}
-        >
-          Vacant
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+          <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: isDark ? "#334155" : "#cbd5e1" }} />
+          <Typography variant="caption" sx={{ fontSize: "0.6rem", color: isDark ? "#475569" : "#94a3b8", textTransform: "uppercase", fontWeight: 800 }}>
+            Standby
+          </Typography>
+        </Box>
       </Box>
     );
   }
 
-  const w = isHorizontal ? 180 : 140;
-  const h = isHorizontal ? 92 : 180;
+  // Active Target State
+  const primary = "#0ea5e9";
+  const bg = isDark ? "#0f172a" : "#ffffff";
 
   return (
     <Box
@@ -248,93 +259,93 @@ function BerthCard({
         alignItems: "center",
         justifyContent: "center",
         zIndex: 5,
-        transition: "all 0.3s ease",
+        transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
         transform: "scale(1.05)",
       }}
     >
+      {/* Radar Pulse Background */}
       <Box
         sx={{
           position: "absolute",
-          top: isHorizontal ? -12 : 6,
+          top: "50%",
+          left: "50%",
+          width: Math.max(w, h) * 1.5,
+          height: Math.max(w, h) * 1.5,
+          transform: "translate(-50%, -50%)",
+          borderRadius: "50%",
+          border: `1px solid ${primary}`,
+          opacity: 0,
+          animation: "radarPulse 3s infinite cubic-bezier(0.4, 0, 0.2, 1)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Target Badge */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: isHorizontal ? -14 : 10,
           left: "50%",
           transform: "translateX(-50%)",
-          bgcolor: "#10b981",
-          color: "#000",
-          fontSize: "0.55rem",
-          fontWeight: 950,
-          px: 1.25,
-          py: 0.2,
-          borderRadius: 0.5,
-          textTransform: "uppercase",
-          letterSpacing: 1.5,
-          whiteSpace: "nowrap",
-          boxShadow: "0 2px 8px rgba(16, 185, 129, 0.4)",
+          bgcolor: primary,
+          color: "#fff",
+          display: "flex",
+          alignItems: "center",
+          gap: 0.5,
+          px: 1.5,
+          py: 0.3,
+          borderRadius: 1,
+          boxShadow: `0 4px 12px ${alpha(primary, 0.4)}`,
           zIndex: 10,
         }}
       >
-        Optimal
+        <GpsFixedRounded sx={{ fontSize: 12 }} />
+        <Typography sx={{ fontSize: "0.55rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+          Target Berth
+        </Typography>
       </Box>
 
-      <Box
-        sx={{
-          width: "100%",
-          height: "100%",
-          position: "relative",
-          filter: `drop-shadow(0 0 12px ${alpha("#10b981", isDark ? 0.35 : 0.2)})`,
-        }}
-      >
+      {/* Ship Shape Vector */}
+      <Box sx={{ width: "100%", height: "100%", position: "relative", filter: `drop-shadow(0 8px 16px ${alpha(primary, isDark ? 0.3 : 0.2)})` }}>
         <svg width={w} height={h} style={{ display: "block" }}>
+          <defs>
+            <linearGradient id={`shipGrad-${id}`} x1="0%" y1="0%" x2={isHorizontal ? "100%" : "0%"} y2={isHorizontal ? "0%" : "100%"}>
+              <stop offset="0%" stopColor={bg} />
+              <stop offset="100%" stopColor={isDark ? "#1e293b" : "#f1f5f9"} />
+            </linearGradient>
+          </defs>
           {isHorizontal ? (
             <path
-              d="M 8,46 L 36,12 L 172,12 Q 178,12 178,18 L 178,74 Q 178,80 172,80 L 36,80 Z"
-              fill={isDark ? "#0f172a" : "#1e293b"}
-              stroke="#10b981"
-              strokeWidth={2.5}
+              d={`M 12,${h / 2} L 40,12 L ${w - 20},12 Q ${w - 10},12 ${w - 10},20 L ${w - 10},${h - 20} Q ${w - 10},${h - 12} ${w - 20},${h - 12} L 40,${h - 12} Z`}
+              fill={`url(#shipGrad-${id})`}
+              stroke={primary}
+              strokeWidth={2}
             />
           ) : (
             <path
-              d="M 70,172 L 12,144 L 12,18 Q 12,12 18,12 L 122,12 Q 128,12 128,18 L 128,144 Z"
-              fill={isDark ? "#0f172a" : "#1e293b"}
-              stroke="#10b981"
-              strokeWidth={2.5}
+              d={`M ${w / 2},${h - 12} L 12,${h - 40} L 12,20 Q 12,10 20,10 L ${w - 20},10 Q ${w - 10},10 ${w - 10},20 L ${w - 10},${h - 40} Z`}
+              fill={`url(#shipGrad-${id})`}
+              stroke={primary}
+              strokeWidth={2}
             />
           )}
         </svg>
 
-        <Box
-          sx={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            p: 2,
-            pr: isHorizontal ? 3 : 2,
-            pb: isHorizontal ? 2 : 4,
-            pointerEvents: "none",
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: "0.75rem",
-              fontWeight: 900,
-              color: "#10b981",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              mt: !isHorizontal ? 2 : 0,
-            }}
-          >
+        {/* Info Overlay */}
+        <Box sx={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", p: 2, pointerEvents: "none" }}>
+          <Typography sx={{ fontSize: "0.7rem", fontWeight: 800, color: isDark ? "#ffffff" : primary, letterSpacing: "0.1em", textTransform: "uppercase", mt: !isHorizontal ? 3 : 0 }}>
             {label}
           </Typography>
           <Typography
             sx={{
-              fontSize: "0.6875rem",
+              fontSize: "0.75rem",
               fontWeight: 800,
-              color: "#ffffff",
+              color: isDark ? "#ffffff" : "#0f172a",
               mt: 0.5,
               fontFamily: "'Roboto Mono', monospace",
-              maxWidth: "100%",
+              px: 2,
+              textAlign: "center",
+              width: "100%",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -342,52 +353,22 @@ function BerthCard({
           >
             {(vesselName || "ACTIVE VESSEL").toUpperCase()}
           </Typography>
-
-          <Box
-            sx={{
-              display: "flex",
-              gap: "4px",
-              justifyContent: "center",
-              mt: 1.5,
-            }}
-          >
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Box
-                key={i}
-                sx={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: "50%",
-                  bgcolor: "#10b981",
-                  animation: "pulse 2s infinite",
-                  "@keyframes pulse": {
-                    "0%": { opacity: 0.4 },
-                    "50%": { opacity: 1 },
-                    "100%": { opacity: 0.4 },
-                  },
-                }}
-              />
-            ))}
-          </Box>
         </Box>
       </Box>
     </Box>
   );
 }
 
+// ── Main Component ───────────────────────────────────────────────────────────
+
 function HeatmapPlaceholder() {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
+  const emptyBlock = { count: 0, intensity: 0, concentration: "Low" as const, cells: [], hazardous: 0, reefer: 0, oog: 0 };
 
-  const emptyBlock = {
-    count: 0,
-    intensity: 0,
-    concentration: "Low" as const,
-    cells: [],
-    hazardous: 0,
-    reefer: 0,
-    oog: 0,
-  };
+  // High-tech blueprint background
+  const bgColor = isDark ? "#121212" : "#f1f5f9";
+  const gridColor = isDark ? alpha("#ffffff", 0.03) : alpha("#000000", 0.04);
 
   return (
     <Box
@@ -396,154 +377,38 @@ function HeatmapPlaceholder() {
         height: "100%",
         position: "relative",
         overflow: "hidden",
+        bgcolor: bgColor,
+        backgroundImage: `radial-gradient(${gridColor} 1.5px, transparent 1.5px)`,
+        backgroundSize: "24px 24px",
       }}
     >
-      <TransformWrapper
-        initialScale={0.72}
-        minScale={0.4}
-        maxScale={3}
-        centerOnInit
-        wheel={{ step: 0.002 }}
-        panning={{ disabled: false }}
-      >
-        {({ resetTransform }) => (
+      <TransformWrapper initialScale={0.72} minScale={0.4} maxScale={3} centerOnInit wheel={{ step: 0.002 }} panning={{ disabled: false }}>
+        {() => (
           <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
-            {/* Unified zoom controls overlay */}
-            <Box sx={{ position: "absolute", top: 16, right: 16, zIndex: 100 }}>
-              <Tooltip title="Reset View">
-                <IconButton
-                  onClick={() => resetTransform()}
-                  sx={{
-                    bgcolor: "background.paper",
-                    border: "1px solid",
-                    borderColor: "divider",
-                    boxShadow: 3,
-                    "&:hover": { bgcolor: "action.hover" },
-                    p: 0.6,
-                    width: 28,
-                    height: 28,
-                  }}
-                  size="small"
-                >
-                  <RestartAltRounded fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-
-            {/* Legend floating overlay */}
-            <Box sx={{ position: "absolute", bottom: 16, left: 16, zIndex: 100 }}>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1.5,
-                  px: 1.2,
-                  py: 0.6,
-                  bgcolor: isDark
-                    ? "rgba(18, 22, 31, 0.9)"
-                    : "rgba(255, 255, 255, 0.9)",
-                  backdropFilter: "blur(4px)",
-                  border: "1px solid",
-                  borderColor: "divider",
-                  borderRadius: 1,
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: "0.5rem",
-                    color: "text.secondary",
-                    fontWeight: 800,
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    mr: 0.5,
-                  }}
-                >
-                  Concentration
-                </Typography>
-                {[
-                  { c: "#ff0000", l: "High" },
-                  { c: "#ffaa00", l: "Medium" },
-                  { c: "#00ff00", l: "Low" },
-                ].map(({ c, l }) => (
-                  <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <Box
-                      sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }}
-                    />
-                    <Typography
-                      sx={{
-                        fontSize: "0.6rem",
-                        color: "text.secondary",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {l}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-
             <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: 1200,
-                  p: 4,
-                  gap: 5,
-                  opacity: 0.6,
-                }}
-              >
-                {/* TOP BERTHS ROW */}
+              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 1200, p: 4, gap: 5, opacity: 0.5 }}>
                 <Box sx={{ display: "flex", justifyContent: "center", gap: 6 }}>
                   <BerthCard id="T1" label="BERTH T1" isTarget={false} isDark={isDark} />
                   <BerthCard id="T2" label="BERTH T2" isTarget={false} isDark={isDark} />
                 </Box>
-
-                {/* MIDDLE AREA: Yards + Right Berths */}
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 180px",
-                    gap: 4,
-                    alignItems: "center",
-                    width: "100%",
-                    maxWidth: 1100,
-                  }}
-                >
-                  {/* Blocks */}
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 180px", gap: 6, alignItems: "center", width: "100%", maxWidth: 1100 }}>
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {[0, 1, 2].map((rowIdx) => (
                       <Box key={rowIdx} sx={{ position: "relative" }}>
-                        <Typography sx={{ position: "absolute", right: 0, top: -32, fontSize: "0.6875rem", fontWeight: 700, color: "text.disabled", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-                          {ROW_LABELS[rowIdx] || `ROW ${rowIdx + 1} ZONE`}
+                        <Typography sx={{ position: "absolute", right: 0, top: -28, fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#94a3b8" : "#64748b", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+                          {ROW_LABELS[rowIdx]}
                         </Typography>
-                        <Box sx={{ display: "flex", justifyContent: "center", gap: 3 }}>
-                          {[1, 2, 3].map((i) => (
-                            <BlockTile key={i} blockId="--" block={emptyBlock} isMax={false} />
-                          ))}
+                        <Box sx={{ display: "flex", justifyContent: "center", gap: 4 }}>
+                          {[1, 2, 3].map((i) => <BlockTile key={i} blockId="--" block={emptyBlock} isMax={false} />)}
                         </Box>
                       </Box>
                     ))}
                   </Box>
-
-                  {/* Right Side Berths */}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "center",
-                      gap: 4,
-                    }}
-                  >
+                  <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
                     <BerthCard id="R1" label="BERTH R1" isTarget={false} isDark={isDark} />
                     <BerthCard id="R2" label="BERTH R2" isTarget={false} isDark={isDark} />
                   </Box>
                 </Box>
-
-                {/* BOTTOM BERTHS ROW */}
                 <Box sx={{ display: "flex", justifyContent: "center", gap: 6 }}>
                   <BerthCard id="B1" label="BERTH B1" isTarget={false} isDark={isDark} />
                   <BerthCard id="B2" label="BERTH B2" isTarget={false} isDark={isDark} />
@@ -557,21 +422,16 @@ function HeatmapPlaceholder() {
   );
 }
 
-export default function HeatmapView({
-  data,
-  loading,
-  targetBerthId,
-}: {
-  data?: VesselHeatmapViewData | null;
-  loading?: boolean;
-  targetBerthId?: string;
-}) {
+export default function HeatmapView({ data, loading, targetBerthId }: { data?: VesselHeatmapViewData | null; loading?: boolean; targetBerthId?: string; }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
 
+  // Tech canvas background
+  const bgColor = isDark ? "#121212" : "#f4f7fb";
+  const gridColor = isDark ? alpha("#ffffff", 0.04) : alpha("#000000", 0.05);
+
   if (loading || !data) return <HeatmapPlaceholder />;
 
-  // Sort all 9 blocks by their (y * 3 + x) grid coordinates so they are ordered properly in the 3x3 layout
   const blockIds = Object.keys(data.blocks || {});
   const sortedBlockIds = [...blockIds].sort((a, b) => {
     const posA = data.layout[a] || { x: 0, y: 0 };
@@ -591,68 +451,67 @@ export default function HeatmapView({
         height: "100%",
         position: "relative",
         overflow: "hidden",
+        bgcolor: bgColor,
+        backgroundImage: `radial-gradient(${gridColor} 1.5px, transparent 1.5px)`,
+        backgroundSize: "28px 28px",
       }}
     >
-      <TransformWrapper
-        initialScale={0.72}
-        minScale={0.4}
-        maxScale={3}
-        centerOnInit
-        wheel={{ step: 0.002 }}
-        panning={{ disabled: false }}
-      >
+      {/* Global CSS for Animations */}
+      <style>{`
+        @keyframes shimmer {
+          100% { transform: translateX(100%); }
+        }
+        @keyframes pulseOpacity {
+          0% { opacity: 0.6; transform: scale(0.95); }
+          50% { opacity: 1; transform: scale(1.1); }
+          100% { opacity: 0.6; transform: scale(0.95); }
+        }
+        @keyframes radarPulse {
+          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.8; }
+          100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
+        }
+      `}</style>
+
+      <TransformWrapper initialScale={0.75} minScale={0.4} maxScale={3} centerOnInit wheel={{ step: 0.002 }} panning={{ disabled: false }}>
         {({ resetTransform }) => (
           <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
-            {/* Unified zoom controls overlay */}
-            <Box sx={{ position: "absolute", top: 16, right: 16, zIndex: 100 }}>
-              <Tooltip title="Reset View">
+
+            {/* Glassmorphic Controls Header */}
+            <Box sx={{ position: "absolute", top: 24, right: 24, zIndex: 100 }}>
+              <Tooltip title="Reset View" placement="left">
                 <IconButton
                   onClick={() => resetTransform()}
                   sx={{
-                    bgcolor: "background.paper",
-                    border: "1px solid",
-                    borderColor: "divider",
-                    boxShadow: 3,
-                    "&:hover": { bgcolor: "action.hover" },
-                    p: 0.6,
-                    width: 28,
-                    height: 28,
+                    bgcolor: isDark ? alpha("#1e293b", 0.7) : alpha("#ffffff", 0.8),
+                    backdropFilter: "blur(8px)",
+                    border: `1px solid ${isDark ? alpha("#ffffff", 0.1) : alpha("#000000", 0.1)}`,
+                    boxShadow: `0 4px 12px ${alpha("#000", 0.1)}`,
+                    "&:hover": { bgcolor: isDark ? "#334155" : "#f8fafc" },
+                    p: 1,
                   }}
-                  size="small"
                 >
-                  <RestartAltRounded fontSize="small" />
+                  <RestartAltRounded fontSize="small" sx={{ color: isDark ? "#fff" : "#0f172a" }} />
                 </IconButton>
               </Tooltip>
             </Box>
 
-            {/* Legend floating overlay */}
-            <Box sx={{ position: "absolute", bottom: 16, left: 16, zIndex: 100 }}>
+            {/* Glassmorphic Legend */}
+            <Box sx={{ position: "absolute", bottom: 24, left: 24, zIndex: 100 }}>
               <Box
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 1.5,
-                  px: 1.2,
+                  gap: 2,
+                  px: 2,
                   py: 0.6,
-                  bgcolor: isDark
-                    ? "rgba(18, 22, 31, 0.9)"
-                    : "rgba(255, 255, 255, 0.9)",
-                  backdropFilter: "blur(4px)",
-                  border: "1px solid",
-                  borderColor: "divider",
-                  borderRadius: 1,
+                  bgcolor: isDark ? "rgba(18, 22, 31, 0.9)" : "rgba(255, 255, 255, 0.9)",
+                  backdropFilter: "blur(12px)",
+                  border: `1px solid ${isDark ? alpha("#ffffff", 0.1) : alpha("#000", 0.08)}`,
+                  boxShadow: `0 8px 24px ${alpha("#000", 0.15)}`,
+                  borderRadius: 2,
                 }}
               >
-                <Typography
-                  sx={{
-                    fontSize: "0.5rem",
-                    color: "text.secondary",
-                    fontWeight: 800,
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    mr: 0.5,
-                  }}
-                >
+                <Typography sx={{ fontSize: "0.5rem", color: "text.secondary", fontWeight: 800, letterSpacing: "0.5px", textTransform: "uppercase", mr: 0.5 }}>
                   Concentration
                 </Typography>
                 {[
@@ -661,92 +520,35 @@ export default function HeatmapView({
                   { c: "#00ff00", l: "Low" },
                 ].map(({ c, l }) => (
                   <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <Box
-                      sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }}
-                    />
-                    <Typography
-                      sx={{
-                        fontSize: "0.6rem",
-                        color: "text.secondary",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {l}
-                    </Typography>
+                    <Box sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }} />
+                    <Typography sx={{ fontSize: "0.6rem", color: "text.secondary", fontWeight: 500 }}>{l}</Typography>
                   </Box>
                 ))}
               </Box>
             </Box>
 
+            {/* Main Canvas */}
             <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: 1200,
-                  p: 4,
-                  gap: 5,
-                }}
-              >
+              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 1200, p: 6, gap: 6 }}>
+
                 {/* TOP BERTHS ROW */}
-                <Box sx={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
                   <BerthCard id="T1" label="BERTH T1" isTarget={targetBerthId === "T1"} vesselName={data.vessel} isDark={isDark} />
                   <BerthCard id="T2" label="BERTH T2" isTarget={targetBerthId === "T2"} vesselName={data.vessel} isDark={isDark} />
                 </Box>
 
-                {/* MIDDLE AREA: Yards + Right Berths */}
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 180px",
-                    gap: 4,
-                    alignItems: "center",
-                    width: "100%",
-                    maxWidth: 1100,
-                  }}
-                >
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 6, alignItems: "center", width: "100%", maxWidth: 1100 }}>
+
                   {/* Yards 3x3 Grid */}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                      width: "100%",
-                      alignItems: "center",
-                    }}
-                  >
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", alignItems: "center" }}>
                     {chunkedRows.map((rowBlockIds, rowIdx) => (
                       <Box key={rowIdx} sx={{ position: "relative", width: "100%", maxWidth: 900 }}>
-                        <Typography
-                          sx={{
-                            position: "absolute",
-                            right: 0,
-                            top: -32,
-                            fontSize: "0.6875rem",
-                            fontWeight: 700,
-                            color: isDark ? "#475e7a" : "#94a3b8",
-                            letterSpacing: "0.15em",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          {ROW_LABELS[rowIdx] || `ROW ${rowIdx + 1} ZONE`}
+                        <Typography sx={{ position: "absolute", left: -40, top: "50%", transform: "translateY(-50%) rotate(-90deg)", fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#94a3b8" : "#64748b", letterSpacing: "0.2em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                          {ROW_LABELS[rowIdx]}
                         </Typography>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            justifyContent: "center",
-                            gap: 3,
-                          }}
-                        >
+                        <Box sx={{ display: "flex", justifyContent: "center", gap: 4 }}>
                           {rowBlockIds.map((blockId) => (
-                            <BlockTile
-                              key={blockId}
-                              blockId={blockId}
-                              block={data.blocks[blockId]}
-                              isMax={blockId === data.max_block}
-                            />
+                            <BlockTile key={blockId} blockId={blockId} block={data.blocks[blockId]} isMax={blockId === data.max_block} />
                           ))}
                         </Box>
                       </Box>
@@ -754,24 +556,18 @@ export default function HeatmapView({
                   </Box>
 
                   {/* Right Side Berths */}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "center",
-                      gap: 4,
-                    }}
-                  >
+                  <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
                     <BerthCard id="R1" label="BERTH R1" isTarget={targetBerthId === "R1"} vesselName={data.vessel} isDark={isDark} />
                     <BerthCard id="R2" label="BERTH R2" isTarget={targetBerthId === "R2"} vesselName={data.vessel} isDark={isDark} />
                   </Box>
                 </Box>
 
                 {/* BOTTOM BERTHS ROW */}
-                <Box sx={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
                   <BerthCard id="B1" label="BERTH B1" isTarget={targetBerthId === "B1"} vesselName={data.vessel} isDark={isDark} />
                   <BerthCard id="B2" label="BERTH B2" isTarget={targetBerthId === "B2"} vesselName={data.vessel} isDark={isDark} />
                 </Box>
+
               </Box>
             </TransformComponent>
           </Box>

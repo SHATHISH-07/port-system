@@ -9,6 +9,9 @@ logger = logging.getLogger("port_system")
 
 # Checks if the training metadata table exists and creates it if not
 def _ensure_table():
+    """
+    Executes _ensure_table logic and processing.
+    """
     engine = get_engine()
     init_training_metadata_schema(engine)
     return engine
@@ -22,6 +25,9 @@ def save_training_metadata(
     status: str = "completed",
     notes: str = None,
 ) -> dict:
+    """
+    Executes save_training_metadata logic and processing.
+    """
     engine = _ensure_table()
     now = datetime.datetime.now(datetime.timezone.utc)
     with engine.begin() as conn:
@@ -45,6 +51,9 @@ def save_training_metadata(
 
 # Reads the latest training run
 def get_latest_training_metadata() -> dict | None:
+    """
+    Executes get_latest_training_metadata logic and processing.
+    """
     try:
         engine = _ensure_table()
         with engine.connect() as conn:
@@ -59,7 +68,10 @@ def get_latest_training_metadata() -> dict | None:
 
 
 # Reads all training runs (audit log)
-def get_training_metadata_history(limit: int = 20) -> list[dict]:
+def get_training_metadata_history(limit: int = settings.DEFAULT_TRAINING_HISTORY_LIMIT) -> list[dict]:
+    """
+    Executes get_training_metadata_history logic and processing.
+    """
     try:
         engine = _ensure_table()
         with engine.connect() as conn:

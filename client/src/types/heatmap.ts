@@ -9,6 +9,9 @@ export interface CellData {
 export interface ContainerData {
     unit_id: string;
     position: string;
+    bay?: string;
+    row?: string;
+    tier?: string;
     freight_kind: string;
     outbound_service: string;
     category: string;
@@ -63,11 +66,18 @@ export interface BerthAnalysis {
     recommendation_reason?: string;
 }
 
+export interface ConflictVessel {
+    vessel_service: string;
+    visit_id: string;
+    shared_blocks: string[];
+    overlap_hours: number;
+}
+
 export interface ConflictEntry {
     berth: string;
     block: string;
     conflict_risk: "High" | "Medium" | "Low";
-    conflict_with: string[];
+    conflict_with: ConflictVessel[];
     impact_score: number;
     reason: string;
 }

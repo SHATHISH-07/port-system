@@ -17,7 +17,7 @@ export default function StayTimeForm({
   onLoadedChange: (val: string) => void;
   discharged: string;
   onDischargedChange: (val: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.SubmitEvent<HTMLFormElement>) => void;
   loading: boolean;
 }) {
   const theme = useTheme();
@@ -61,8 +61,8 @@ export default function StayTimeForm({
             '& .MuiOutlinedInput-root': {
               borderRadius: 2,
               bgcolor: 'background.paper',
-              height: 40,
-              fontSize: '0.85rem',
+              height: 36,
+              fontSize: '0.8rem',
               '& fieldset': {
                 borderColor: alpha(theme.palette.divider, 0.8),
               },
@@ -92,7 +92,7 @@ export default function StayTimeForm({
           sx={{
             flex: 0.6,
             minWidth: { xs: '100%', lg: 120 },
-            '& .MuiOutlinedInput-root': { borderRadius: 2, height: 40, fontSize: '0.85rem' },
+            '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
           }}
         />
 
@@ -127,7 +127,7 @@ export default function StayTimeForm({
             whiteSpace: 'nowrap',
           }}
         >
-          Run Analysis
+          Analyze
         </Button>
       </Box>
 

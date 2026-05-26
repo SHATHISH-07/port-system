@@ -8,15 +8,14 @@ from sqlalchemy import text
 
 from db.connection import get_engine
 from utils.datetime_utils import parse_datetime
+from config import settings
 
 logger = logging.getLogger("port_system")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Internal helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _parse_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes _parse_datetime_columns logic and processing.
+    """
     for col in [
         "move_complete_time",
         "time_in",
@@ -31,32 +30,31 @@ def _parse_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _column_exists(conn, table: str, column: str) -> bool:
+    """
+    Executes _column_exists logic and processing.
+    """
     row = conn.execute(
-        text("""
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_name = :tbl
-              AND column_name = :col
-        """),
+        text(settings.QUERY_COLUMN_EXISTS),
         {"tbl": table, "col": column},
     ).fetchone()
     return row is not None
 
 
 def _table_exists(conn, table: str) -> bool:
+    """
+    Executes _table_exists logic and processing.
+    """
     row = conn.execute(
-        text("""
-            SELECT 1
-            FROM pg_class
-            WHERE relname = :t
-              AND relkind IN ('r', 'p')
-        """),
+        text(settings.QUERY_TABLE_EXISTS),
         {"t": table},
     ).fetchone()
     return row is not None
 
 
 def _safe_lower(value: str | None) -> str:
+    """
+    Executes _safe_lower logic and processing.
+    """
     return (value or "").lower().strip()
 
 
@@ -64,15 +62,13 @@ _VALID_YARD = re.compile(r"^[a-z0-9_]{1,30}$")
 
 
 def _add_index(conn, table: str, index_name: str, columns: str) -> None:
+    """
+    Executes _add_index logic and processing.
+    """
     try:
-        conn.execute(text(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table} ({columns});"))
+        conn.execute(text(settings.QUERY_CREATE_INDEX.format(index_name=index_name, table=table, columns=columns)))
     except Exception as exc:
         logger.debug("Index creation skipped [%s]: %s", index_name, exc)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ensure_yard_tables
-# ─────────────────────────────────────────────────────────────────────────────
 
 def ensure_yard_tables(engine, yard_id: str) -> None:
     """
@@ -91,127 +87,32 @@ def ensure_yard_tables(engine, yard_id: str) -> None:
 
     with engine.begin() as conn:
         try:
-            conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pgcrypto";'))
+            conn.execute(text(settings.QUERY_ENSURE_PGCRYPTO))
         except Exception as exc:
             logger.debug("[DB] pgcrypto extension ensure skipped: %s", exc)
 
-        # ══════════════════════════════════════════════════════════════════════
-        # NEW 3-TABLE SCHEMA
-        # ══════════════════════════════════════════════════════════════════════
-
-        # ── vessel_visits ────────────────────────────────────────────────────
         vv_tbl = f"{yard_id}_vessel_visits"
-        conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {vv_tbl} (
-                id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-                vessel_visit_id                  TEXT        UNIQUE NOT NULL,
-                outbound_service                 TEXT,
-                total_containers                 INTEGER     DEFAULT 0,
-                total_loaded                     INTEGER     DEFAULT 0,
-                total_discharged                 INTEGER     DEFAULT 0,
-                avg_crane_count                  FLOAT       DEFAULT 0,
-                avg_mphc                         FLOAT       DEFAULT 0,
-                stay_hours                       FLOAT,
-                first_move_time                  TIMESTAMP,
-                last_move_time                   TIMESTAMP,
-                vessel_arrival                   TIMESTAMP,
-                vessel_departure                 TIMESTAMP,
-                yard_id                          TEXT,
-                ingestion_id                     TEXT,
-                created_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
-                updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
-            );
-        """))
+        conn.execute(text(settings.QUERY_CREATE_VESSEL_VISITS.format(vv_tbl=vv_tbl)))
 
-        # ── container_operations ─────────────────────────────────────────────
         co_tbl = f"{yard_id}_container_operations"
-        conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {co_tbl} (
-                id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-                unit_id                          TEXT        NOT NULL,
-                unit_visit_gkey                  TEXT,
-                outbound_service                 TEXT,
-                actual_outbound_carrier_visit_id TEXT        NOT NULL,
-                inbound_service                  TEXT,
-                actual_inbound_carrier_visit_id  TEXT,
-                facility_id                      TEXT,
-                yard_id                          TEXT,
-                complex_id                       TEXT,
-                category_id                      TEXT,
-                freight_kind                     TEXT,
-                arrival_mode                     TEXT,
-                visit_state                      TEXT,
-                transit_state                    TEXT,
-                time_in                          TIMESTAMP   DEFAULT '2020-01-01',
-                time_out                         TIMESTAMP,
-                move_complete_time               TIMESTAMP,
-                equipment_class                  TEXT,
-                container_length                 TEXT,
-                equipment_type                   TEXT,
-                unit_weight_in_kg                FLOAT,
-                verified_gross_mass_kg           FLOAT,
-                reefer                           TEXT,
-                oog_unit                         TEXT,
-                hazardous_flag                   TEXT,
-                hazard_un_numbers                TEXT,
-                imdg_code                        TEXT,
-                port_of_discharge                TEXT,
-                destination                      TEXT,
-                ctr_from_position                TEXT,
-                ctr_to_position                  TEXT,
-                current_position                 TEXT,
-                stow_code_1                      TEXT,
-                stow_code_2                      TEXT,
-                stow_code_3                      TEXT,
-                record_type                      TEXT        DEFAULT 'history',
-                ingestion_id                     TEXT,
-                created_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
-                updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
-            );
-        """))
-        # Migration: ensure record_type exists and backfill NULL rows
+        conn.execute(text(settings.QUERY_CREATE_CONTAINER_OPERATIONS.format(co_tbl=co_tbl)))
         try:
-            conn.execute(text(f"ALTER TABLE {co_tbl} ADD COLUMN IF NOT EXISTS record_type TEXT DEFAULT 'history'"))
+            conn.execute(text(settings.QUERY_ADD_RECORD_TYPE_COL.format(co_tbl=co_tbl)))
         except Exception:
             pass
         try:
-            conn.execute(text(f"UPDATE {co_tbl} SET record_type = 'history' WHERE record_type IS NULL"))
+            conn.execute(text(settings.QUERY_BACKFILL_RECORD_TYPE.format(co_tbl=co_tbl)))
         except Exception:
             pass
 
-        # Partial unique index: only enforced for current records (upsert target)
         try:
-            conn.execute(text(f"""
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_{yard_id}_co_unit_yard_current
-                ON {co_tbl} (unit_id, yard_id)
-                WHERE record_type = 'current';
-            """))
+            conn.execute(text(settings.QUERY_CREATE_CO_UNIQUE_INDEX.format(yard_id=yard_id, co_tbl=co_tbl)))
         except Exception:
             pass
 
-        # ── crane_operations ─────────────────────────────────────────────────
         cro_tbl = f"{yard_id}_crane_operations"
-        conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {cro_tbl} (
-                id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-                crane_id       TEXT,
-                unit_id        TEXT,
-                carrier_visit  TEXT        NOT NULL,
-                event_type     TEXT,
-                move_kind      TEXT,
-                line_op        TEXT,
-                unit_category  TEXT,
-                exclude        TEXT,
-                time_completed TIMESTAMP,
-                from_position  TEXT,
-                to_position    TEXT,
-                yard_id        TEXT,
-                ingestion_id   TEXT,
-                created_at     TIMESTAMP   NOT NULL DEFAULT NOW()
-            );
-        """))
+        conn.execute(text(settings.QUERY_CREATE_CRANE_OPERATIONS.format(cro_tbl=cro_tbl)))
 
-        # ── New-schema indexes ───────────────────────────────────────────────
         new_idx_defs = [
             (vv_tbl,  f"idx_{yard_id}_vv_visit",    "vessel_visit_id"),
             (vv_tbl,  f"idx_{yard_id}_vv_service",  "outbound_service"),
@@ -229,43 +130,19 @@ def ensure_yard_tables(engine, yard_id: str) -> None:
         for tbl, idx_name, cols in new_idx_defs:
             _add_index(conn, tbl, idx_name, cols)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Support schemas
-# ─────────────────────────────────────────────────────────────────────────────
-
 def init_simplified_schema(engine) -> None:
+    """
+    Executes init_simplified_schema logic and processing.
+    """
     with engine.begin() as conn:
         try:
-            conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pgcrypto";'))
+            conn.execute(text(settings.QUERY_ENSURE_PGCRYPTO))
         except Exception:
             pass
 
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS ingestion_logs (
-                id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-                filename         TEXT,
-                file_hash        TEXT,
-                dataset_type     TEXT,
-                status           TEXT,
-                records_total    INTEGER,
-                records_accepted INTEGER,
-                records_rejected INTEGER,
-                uploaded_by      INTEGER,
-                completed_at     TIMESTAMP,
-                error_summary    TEXT,
-                created_at       TIMESTAMP DEFAULT NOW()
-            );
-        """))
+        conn.execute(text(settings.QUERY_CREATE_INGESTION_LOGS))
 
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS rejection_logs (
-                id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                ingestion_id TEXT,
-                row_data     TEXT,
-                reason       TEXT,
-                created_at   TIMESTAMP DEFAULT NOW()
-            );
-        """))
+        conn.execute(text(settings.QUERY_CREATE_REJECTION_LOGS))
 
         for col, col_type in [
             ("file_hash", "TEXT"),
@@ -277,24 +154,14 @@ def init_simplified_schema(engine) -> None:
             ("error_summary", "TEXT"),
         ]:
             try:
-                conn.execute(text(
-                    f"ALTER TABLE ingestion_logs ADD COLUMN IF NOT EXISTS {col} {col_type}"
-                ))
+                conn.execute(text(settings.QUERY_ALTER_ADD_COLUMN.format(table="ingestion_logs", col=col, col_type=col_type)))
             except Exception:
                 pass
 
     try:
         with engine.connect() as conn2:
-            # Discover yards from both legacy and new tables
-            res = conn2.execute(text("""
-                SELECT replace(relname, '_container_operations', '') AS yard_prefix
-                FROM pg_class
-                WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_container_operations'
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-                  AND relname != ''
-                ORDER BY relname
-            """)).fetchall()
+        
+            res = conn2.execute(text(settings.QUERY_DISCOVER_YARDS)).fetchall()
 
         for r in res:
             yid = r[0]
@@ -305,86 +172,28 @@ def init_simplified_schema(engine) -> None:
 
 
 def init_auth_schema(engine) -> None:
+    """
+    Executes init_auth_schema logic and processing.
+    """
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS users (
-                id            SERIAL PRIMARY KEY,
-                username      TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role          TEXT NOT NULL DEFAULT 'user',
-                is_active     BOOLEAN DEFAULT TRUE,
-                created_at    TIMESTAMP DEFAULT NOW()
-            );
-        """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS operational_requests (
-                id              SERIAL PRIMARY KEY,
-                type            TEXT NOT NULL,
-                status          TEXT DEFAULT 'pending',
-                payload         TEXT,
-                created_at      TIMESTAMP DEFAULT NOW(),
-                created_by_user TEXT
-            );
-        """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id        SERIAL PRIMARY KEY,
-                action    TEXT NOT NULL,
-                details   TEXT,
-                username  TEXT,
-                user_id   INTEGER,
-                timestamp TIMESTAMP DEFAULT NOW()
-            );
-        """))
+        conn.execute(text(settings.QUERY_CREATE_USERS))
+        conn.execute(text(settings.QUERY_CREATE_OP_REQUESTS))
+        conn.execute(text(settings.QUERY_CREATE_AUDIT_LOGS))
         try:
-            conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_id INTEGER"))
+            conn.execute(text(settings.QUERY_ALTER_ADD_COLUMN.format(table="audit_logs", col="user_id", col_type="INTEGER")))
         except Exception:
             pass
 
 
 def init_training_metadata_schema(engine) -> None:
+    """
+    Executes init_training_metadata_schema logic and processing.
+    """
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS training_metadata (
-                id                      SERIAL PRIMARY KEY,
-                dataset_size            INTEGER,
-                last_trained_timestamp  TIMESTAMP,
-                data_source             TEXT,
-                training_type           TEXT,
-                status                  TEXT,
-                notes                   TEXT,
-                created_at              TIMESTAMP DEFAULT NOW(),
-                updated_at              TIMESTAMP DEFAULT NOW()
-            );
-        """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS feature_configs (
-                id            SERIAL PRIMARY KEY,
-                name          TEXT UNIQUE,
-                description   TEXT,
-                feature_names JSONB,
-                created_at    TIMESTAMP DEFAULT NOW(),
-                updated_at    TIMESTAMP DEFAULT NOW()
-            );
-        """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS model_versions (
-                id                SERIAL PRIMARY KEY,
-                model_name        TEXT,
-                version           TEXT UNIQUE,
-                artifact_path     TEXT,
-                feature_config_id INTEGER REFERENCES feature_configs(id),
-                dataset_size      INTEGER,
-                metrics           JSONB,
-                status            TEXT DEFAULT 'active',
-                promoted_at       TIMESTAMP,
-                trained_at        TIMESTAMP,
-                notes             TEXT,
-                created_at        TIMESTAMP DEFAULT NOW(),
-                updated_at        TIMESTAMP DEFAULT NOW()
-            );
-        """))
-        # ── Migrations: add columns that may be missing from older deployments ──
+        conn.execute(text(settings.QUERY_CREATE_TRAINING_METADATA))
+        conn.execute(text(settings.QUERY_CREATE_FEATURE_CONFIGS))
+        conn.execute(text(settings.QUERY_CREATE_MODEL_VERSIONS))
+  
         migration_cols = [
             ("model_versions", "tags",         "JSONB    DEFAULT '[]'::JSONB"),
             ("model_versions", "model_binary", "BYTEA"),
@@ -392,16 +201,22 @@ def init_training_metadata_schema(engine) -> None:
         ]
         for table, col, col_def in migration_cols:
             try:
-                conn.execute(text(
-                    f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_def}"
-                ))
+                conn.execute(text(settings.QUERY_ALTER_ADD_COLUMN.format(table=table, col=col, col_type=col_def)))
             except Exception:
                 pass
 
+def _resolve_terminal(yard_id: str | None) -> str:
+    """
+    Executes _resolve_terminal logic and processing.
+    """
+    if yard_id:
+        y = str(yard_id).upper()
+        if "PEB" in y:
+            return "PEB"
+        if "CWIT" in y:
+            return "CWIT"
+    return "CWIT"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Load helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 def load_from_db(
     dataset_type: str,
@@ -412,17 +227,38 @@ def load_from_db(
     crane_id: str = None,
     columns: list[str] = None,
 ) -> pd.DataFrame:
-    from config import settings
+    """
+    Executes load_from_db logic and processing.
+    """
 
     engine = get_engine()
     dataset_type = (dataset_type or "").strip().lower()
 
-    # ── Try new unified tables first ─────────────────────────────────────────
+    if dataset_type == "crane":
+        crane_tables = _discover_tables(engine, "crane_operations", yard_id)
+        if crane_tables:
+            df = _load_crane_ops(
+                engine, crane_tables, vessel_id, full_load, settings,
+                days=days, crane_id=crane_id, columns=columns,
+            )
+            if not df.empty:
+                if "exclude" in df.columns:
+                    df = df[df["exclude"].astype(str).str.strip() != "Yes"].copy()
+                if "time_completed" in df.columns:
+                    df["time_completed"] = pd.to_datetime(
+                        df["time_completed"], errors="coerce"
+                    )
+                sort_cols = [c for c in ["crane_id", "carrier_visit", "time_completed"] if c in df.columns]
+                if sort_cols:
+                    df = df.sort_values(sort_cols).reset_index(drop=True)
+            return df
+        return pd.DataFrame()
+
     new_suffix_map = {
         "history":       "container_operations",
         "current":       "container_operations",
-        "crane":         "crane_operations",
         "vessel_visits": "vessel_visits",
+        "crane":         "crane_operations",
     }
     new_suffix = new_suffix_map.get(dataset_type)
 
@@ -433,12 +269,11 @@ def load_from_db(
                 return _load_container_ops(engine, new_tables, vessel_id, full_load, settings, record_type="history")
             if dataset_type == "current":
                 return _load_current_from_ops(engine, new_tables, vessel_id, settings)
-            if dataset_type == "crane":
-                return _load_crane_ops(engine, new_tables, vessel_id, full_load, settings, days=days, crane_id=crane_id, columns=columns)
             if dataset_type == "vessel_visits":
                 return _load_vessel_visits(engine, new_tables, vessel_id, settings)
+            if dataset_type == "crane":
+                return _load_crane_ops(engine, new_tables, vessel_id, full_load, settings)
 
-    # No legacy fallback — unified tables only
     return pd.DataFrame()
 
 
@@ -450,14 +285,7 @@ def _discover_tables(engine, suffix: str, yard_id: str | None = None) -> list[st
             if _table_exists(probe, tbl_name):
                 return [tbl_name]
             return []
-        rows = probe.execute(text(f"""
-            SELECT relname
-            FROM pg_class
-            WHERE relkind IN ('r', 'p')
-              AND relname LIKE '%_{suffix}'
-              AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-            ORDER BY relname
-        """)).fetchall()
+        rows = probe.execute(text(settings.QUERY_DISCOVER_TABLES.format(suffix=suffix))).fetchall()
         return [r[0] for r in rows]
 
 
@@ -529,7 +357,6 @@ def _load_current_from_ops(
 
             where_sql = "WHERE " + " AND ".join(filters)
 
-            # FIX: push record_type filter to DB; DISTINCT ON deduplicates per unit
             q = f"""
                 SELECT DISTINCT ON (unit_id) *
                 FROM {tbl}
@@ -640,3 +467,31 @@ def _load_vessel_visits(
     return pd.concat(dfs, ignore_index=True)
 
 
+def get_vessel_schedule(engine, vessel_id: str) -> list[str]:
+    """Fetch the exact chronological route sequence from the vessel_schedules table."""
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(settings.QUERY_SELECT_VESSEL_SCHEDULES),
+                {"v_id": vessel_id}
+            ).fetchall()
+            return [r[0] for r in rows]
+    except Exception as e:
+        logger.error("Failed to load vessel schedule for %s: %s", vessel_id, e)
+        return []
+
+def update_vessel_schedule(engine, vessel_id: str, port_rotation: list[str]) -> None:
+    """Save a manually applied port sequence to the master vessel_schedules table."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(settings.QUERY_DELETE_VESSEL_SCHEDULES),
+                {"v_id": vessel_id}
+            )
+            for i, port in enumerate(port_rotation, start=1):
+                conn.execute(
+                    text(settings.QUERY_INSERT_VESSEL_SCHEDULES),
+                    {"v_id": vessel_id, "port": port.upper().strip(), "seq": i}
+                )
+    except Exception as e:
+        logger.error("Failed to save vessel schedule for %s: %s", vessel_id, e)

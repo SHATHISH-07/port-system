@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
-from typing import List, Optional
 from sqlalchemy import text
 
 from auth.dependencies import get_current_user
@@ -19,21 +17,10 @@ logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/vessel", tags=["Vessel Analytics"])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Request Models
-# ─────────────────────────────────────────────────────────────────────────────
+from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse
 
-class HeatmapRequest(BaseModel):
-    vessel_id: str
-    unit_ids: Optional[List[str]] = None
-    yard_id: Optional[str] = None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # GET /vessel/analysis
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/analysis")
+@router.get("/analysis", response_model=VesselAnalysisResponse)
 async def get_vessel_analysis(
     vessel_id: str = Query(..., alias="vesselId"),
     loaded: int = Query(None, alias="loaded"),
@@ -76,14 +63,14 @@ async def get_vessel_analysis(
             )
             if "error" not in hist_result:
                 return hist_result
-
             # Surface suggestions cleanly rather than exposing internal keys
             suggestions = result.get("suggestions", [])
-            return {
+            err_result = {
                 "error":       result.get("error", "Vessel not found"),
                 "vessel":      vessel_id,
                 "suggestions": suggestions,
             }
+            return err_result
 
         return result
 
@@ -92,9 +79,7 @@ async def get_vessel_analysis(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # POST /vessel/heatmap  — unified map/heatmap/container-position endpoint
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/heatmap")
 async def get_vessel_heatmap_route(
@@ -119,7 +104,7 @@ async def get_vessel_heatmap_route(
         logger.error("vessel_heatmap error for %s: %s", request.vessel_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
 
-@router.get("/yard/summary")
+@router.get("/yard/summary", response_model=YardSummaryResponse)
 def get_yard_summary(
     yard_id: str = Query(None, alias="yardId"),
     current_user: dict = Depends(get_current_user),

@@ -17,19 +17,24 @@ from utils.position_parser import (
     safe_get_pos,
 )
 from utils.stay_utils import compute_vessel_stay, prepare_visit_data
+from config import settings as _settings
+from db.queries import load_from_db
+from models.stay_model import _prepare_model_visit_data as _raw_prep
+from models.stay_model import _compute_raw_visit_stay as _raw_stay
 
 logger = logging.getLogger("port_system")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Small helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _is_yes(val) -> bool:
+    """
+    Executes _is_yes logic and processing.
+    """
     return str(val).strip().upper() in ("YES", "Y", "TRUE", "1")
 
-
 def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
+    """
+    Executes _extract_move_side logic and processing.
+    """
     row = dict(row)
     from_pos = safe_get_pos(row, "crane_from", "ctr_from_position", "from_position")
     to_pos = safe_get_pos(row, "crane_to", "ctr_to_position", "to_position")
@@ -62,13 +67,11 @@ def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
 
     return move_type, yard_pos
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Vessel summary fetch  (fast-path from vessel_visits table)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _fetch_vessel_summary(vessel_id: str) -> Optional[dict]:
-    from db.queries import load_from_db
+    """
+    Executes _fetch_vessel_summary logic and processing.
+    """
     try:
         df = load_from_db("vessel_visits", vessel_id=vessel_id)
         if df.empty:
@@ -82,12 +85,11 @@ def _fetch_vessel_summary(vessel_id: str) -> Optional[dict]:
         logger.warning("vessel summary fetch failed for %s: %s", vessel_id, exc)
     return None
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Crane data fetching
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
+    """
+    Executes _fetch_crane_for_visit logic and processing.
+    """
     from db.queries import load_from_db
     try:
         df = load_from_db("crane", vessel_id=str(visit_id))
@@ -105,7 +107,6 @@ def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
     except Exception as exc:
         logger.warning("crane fetch failed for %s: %s", visit_id, exc)
         return pd.DataFrame()
-
 
 def _fetch_crane_counts_batch(visit_ids: list[str]) -> dict[str, int]:
     """
@@ -133,21 +134,44 @@ def _fetch_crane_counts_batch(visit_ids: list[str]) -> dict[str, int]:
         logger.warning("Batch crane fetch failed: %s", exc)
     return {vid: 0 for vid in visit_ids}
 
-
-def _fetch_assigned_crane_count(visit_id: str) -> int:
+def _fetch_crane_stats_batch(visit_groups: dict) -> dict:
     """
-    Fetch the number of distinct cranes assigned to a visit directly from the DB.
+    Executes _fetch_crane_stats_batch logic and processing.
     """
-    crane_df = _fetch_crane_for_visit(visit_id)
-    if crane_df.empty:
-        return 0
-    valid = crane_df[crane_df["exclude"] != "Yes"] if "exclude" in crane_df.columns else crane_df
-    if valid.empty or "crane_id" not in valid.columns:
-        return 0
-    return int(valid["crane_id"].nunique())
+    visit_ids = list(visit_groups.keys())
+    if not visit_ids:
+        return {}
+    from db.queries import load_from_db
+    try:
+        df = load_from_db("crane", vessel_id=visit_ids)
+        if not df.empty:
+            df = df.rename(columns={
+                "time_completed": "crane_time",
+                "from_position":  "crane_from",
+                "to_position":    "crane_to",
+                "move_kind":      "crane_move_kind",
+            })
+            df["crane_time"] = pd.to_datetime(df["crane_time"], errors="coerce")
+    except Exception as exc:
+        logger.warning("batch crane fetch failed: %s", exc)
+        df = pd.DataFrame()
 
+    out = {}
+    crane_by_visit = {}
+    if not df.empty and "carrier_visit" in df.columns:
+        crane_by_visit = dict(tuple(df.groupby("carrier_visit")))
+
+    for vid, vdf in visit_groups.items():
+        container_count = int(vdf["unit_id"].nunique()) if "unit_id" in vdf.columns else len(vdf)
+        crane_df = crane_by_visit.get(vid, pd.DataFrame())
+        out[vid] = _compute_crane_stats(crane_df, container_count)
+        
+    return out
 
 def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
+    """
+    Executes _compute_crane_stats logic and processing.
+    """
     empty_stats = {
         "_crane_move_count":      0,
         "_crane_effective_moves": 0,
@@ -168,7 +192,7 @@ def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
         return {**empty_stats, "_crane_move_count": total_moves}
 
     crane_count = int(valid["crane_id"].nunique()) if "crane_id" in valid.columns else 0
-    IDLE_THRESHOLD_SEC = 1800  # 30 minutes
+    IDLE_THRESHOLD_SEC = _settings.CRANE_IDLE_THRESHOLD_MINUTES * 60
 
     crane_mphs: list[float] = []
     total_active_hours = 0.0
@@ -206,28 +230,14 @@ def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
         "_crane_ids":             str(crane_ids[:8]),
     }
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Group enrichment
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _enrich_group(group: pd.DataFrame, visit_id: str) -> pd.DataFrame:
-    crane_df = _fetch_crane_for_visit(visit_id)
-    stats = _compute_crane_stats(crane_df, len(group))
-
-    group = group.copy()
-    for col, val in stats.items():
-        group[col] = val
-
-    return group
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Visit detail extraction
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _visit_details(visit_groups: dict) -> dict:
+    """
+    Executes _visit_details logic and processing.
+    """
     out: dict = {}
+    batch_crane_stats = _fetch_crane_stats_batch(visit_groups)
     for visit_id, vdf in visit_groups.items():
         if vdf is None or vdf.empty:
             continue
@@ -251,15 +261,26 @@ def _visit_details(visit_groups: dict) -> dict:
                         stay_hours = round((times.max() - times.min()).total_seconds() / 3600, 2)
                     break
 
-        loads = discharges = restow_count = 0
-        for _, row in vdf.iterrows():
-            mt, _ = _extract_move_side(row)
-            if mt == "LOAD":
-                loads += 1
-            elif mt == "DISCHARGE":
-                discharges += 1
-            elif mt in ("SHIFT", "RESTOW"):
-                restow_count += 1
+        # Fast vectorized move counting
+        f_str = vdf.get("ctr_from_position", vdf.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+        t_str = vdf.get("ctr_to_position", vdf.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+        
+        f_is_v = f_str.str.startswith("V-")
+        t_is_v = t_str.str.startswith("V-")
+        f_is_y = (f_str != "") & (~f_is_v)
+        t_is_y = (t_str != "") & (~t_is_v)
+        
+        loads = int((f_is_y & t_is_v).sum())
+        discharges = int((f_is_v & t_is_y).sum())
+        restow_count = int(((f_is_y & t_is_y) | (f_is_v & t_is_v)).sum())
+        
+        move_kind = vdf.get("crane_move_kind", vdf.get("move_kind", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+        unknowns = ~( (f_is_y & t_is_v) | (f_is_v & t_is_y) | ((f_is_y & t_is_y) | (f_is_v & t_is_v)) )
+        
+        if unknowns.any():
+            loads += int((unknowns & (move_kind == "LOAD")).sum())
+            discharges += int((unknowns & (move_kind == "DISCHARGE")).sum())
+            restow_count += int((unknowns & move_kind.isin(["SHIFT", "RESTOW"])).sum())
 
         total_units = int(vdf["unit_id"].nunique()) if "unit_id" in vdf.columns else len(vdf)
         w_col = (
@@ -287,8 +308,7 @@ def _visit_details(visit_groups: dict) -> dict:
             if "port_of_discharge" in vdf.columns else {}
         )
 
-        # Fetch assigned crane count from DB for this visit
-        assigned_cranes = _fetch_assigned_crane_count(str(visit_id))
+        crane_stats = batch_crane_stats.get(str(visit_id)) or _compute_crane_stats(pd.DataFrame(), total_units)
 
         out[str(visit_id)] = {
             "stay_hours":            stay_hours,
@@ -299,53 +319,17 @@ def _visit_details(visit_groups: dict) -> dict:
             "discharged_containers": discharges,
             "move_start":            str(move_start) if move_start is not None else None,
             "move_end":              str(move_end) if move_end is not None else None,
-            "total_units":           total_units,
             "restow_count":          restow_count,
             "avg_weight_kg":         avg_weight_kg,
-            "freight_kind_breakdown": freight_breakdown,
             "port_of_discharge_top5": pod_top5,
-            "assigned_cranes":       assigned_cranes,
+            "assigned_cranes":       int(crane_stats.get("_crane_count", 0)),
+            "cranes_assigned":       eval(crane_stats.get("_crane_ids", "[]")),
+            "crane_mph":             float(crane_stats.get("_crane_mphc", 0.0)),
         }
 
     return out
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Operational metrics prediction
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _predict_operational_metrics(
-    visit_df,
-    loaded: int = 0,
-    discharged: int = 0,
-    historical_mph_avg: float = None,
-):
-    if visit_df.empty:
-        return None
-
-    total_ops = (loaded or 0) + (discharged or 0)
-    if total_ops == 0:
-        total_ops = len(visit_df)
-
-    from config import settings as _s
-    if historical_mph_avg and float(historical_mph_avg) > 0:
-        target_mph = max(float(historical_mph_avg), 15.0)
-    else:
-        target_mph = float(_s.CRANE_MOVES_PER_HOUR_TARGET)
-
-    load_ratio = (loaded or 0) / max(total_ops, 1)
-
-    return {
-        "load_discharge_ratio":    round(load_ratio, 3),
-        "total_operations":        total_ops,
-        "effective_mph_used":      round(target_mph, 2),
-        "operational_rules_applied": [
-            f"Target {target_mph:.1f} MPH per crane"
-            + (" (historical avg)" if historical_mph_avg and float(historical_mph_avg) > 0 else "")
-        ],
-    }
-
-
 def _calculate_delay_analysis(visit_df) -> list:
     """Analyse potential delay causes from container operation data only."""
     causes = []
@@ -363,12 +347,59 @@ def _calculate_delay_analysis(visit_df) -> list:
                     "impact": "Medium",
                     "reason": f"Detected {len(long_gaps)} move-completion gaps exceeding 60 mins.",
                 })
+        
+        # M-Cycle (Dual Cycle) percentage analysis
+        mct_df = visit_df.dropna(subset=["move_complete_time"]).copy()
+        if not mct_df.empty:
+            mct_df["move_complete_time"] = pd.to_datetime(mct_df["move_complete_time"], errors="coerce")
+            mct_df = mct_df.dropna(subset=["move_complete_time"]).sort_values("move_complete_time")
+            if len(mct_df) > 10:
+                f_str_mct = mct_df.get("ctr_from_position", mct_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+                t_str_mct = mct_df.get("ctr_to_position", mct_df.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+                
+                is_load = (~f_str_mct.str.startswith("V-")) & t_str_mct.str.startswith("V-")
+                is_disc = f_str_mct.str.startswith("V-") & (~t_str_mct.str.startswith("V-"))
+                
+                mct_df["op_type"] = "OTHER"
+                mct_df.loc[is_load, "op_type"] = "LOAD"
+                mct_df.loc[is_disc, "op_type"] = "DISCHARGE"
+                
+                productive_mask = mct_df["op_type"].isin(["LOAD", "DISCHARGE"])
+                if productive_mask.sum() > 10:
+                    prod_df = mct_df[productive_mask].copy()
+                    prod_df["prev_op"] = prod_df["op_type"].shift(1)
+                    prod_df["gap_mins"] = prod_df["move_complete_time"].diff().dt.total_seconds() / 60
+                    
+                    dual_cycles = (
+                        (prod_df["op_type"] != prod_df["prev_op"]) &
+                        (prod_df["prev_op"].notna()) &
+                        (prod_df["gap_mins"] <= 15)
+                    ).sum()
+                    
+                    productive = len(prod_df)
+                    dual_cycle_rate = (dual_cycles / productive) * 100
+                    
+                    if dual_cycle_rate < 15.0:
+                        causes.append({
+                            "factor": "Low M-Cycle Percentage",
+                            "impact": "Low",
+                            "reason": f"Only {dual_cycle_rate:.1f}% dual-cycles (M-cycles) detected. Poor interleaving of loads and discharges.",
+                        })
 
-    restow_count = 0
-    for _, row in visit_df.iterrows():
-        mt, _ = _extract_move_side(row)
-        if mt in ("SHIFT", "RESTOW"):
-            restow_count += 1
+    # Fast vectorised restow count
+    f_str = visit_df.get("ctr_from_position", visit_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    t_str = visit_df.get("ctr_to_position", visit_df.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    
+    f_is_v = f_str.str.startswith("V-")
+    t_is_v = t_str.str.startswith("V-")
+    f_is_y = (f_str != "") & (~f_is_v)
+    t_is_y = (t_str != "") & (~t_is_v)
+    
+    restow_count = int(((f_is_y & t_is_y) | (f_is_v & t_is_v)).sum())
+    move_kind = visit_df.get("crane_move_kind", visit_df.get("move_kind", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    unknowns = ~( (f_is_y & t_is_v) | (f_is_v & t_is_y) | ((f_is_y & t_is_y) | (f_is_v & t_is_v)) )
+    if unknowns.any():
+        restow_count += int((unknowns & move_kind.isin(["SHIFT", "RESTOW"])).sum())
 
     if restow_count > 20:
         causes.append({
@@ -379,183 +410,8 @@ def _calculate_delay_analysis(visit_df) -> list:
 
     return causes
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Berth table builder
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _build_berth_tables(
-    visit_df: pd.DataFrame,
-    total_loaded: int,
-    total_discharged: int,
-    avg_hours: float,
-    historical_crane_avg: float = None,
-) -> tuple[list, dict, list]:
-    eff_hours = (
-        max(avg_hours, 1.0)
-        if avg_hours and avg_hours > 0
-        else max((total_loaded + total_discharged) / 25.0, 1.0)
-    )
-
-    berth_counts: dict = defaultdict(lambda: {
-        "total_moves": 0,
-        "load_moves": 0,
-        "discharge_moves": 0,
-        "units": set(),
-        "hazardous": 0,
-        "reefer": 0,
-        "oog": 0,
-    })
-
-    for _, row in visit_df.iterrows():
-        move_type, yard_pos = _extract_move_side(row)
-        if yard_pos is None:
-            continue
-        if move_type not in ("LOAD", "DISCHARGE", "SHIFT", "RESTOW", "SNAPSHOT"):
-            continue
-
-        bk = block_label(yard_pos) or "UNKNOWN"
-        bucket = berth_counts[bk]
-
-        bucket["total_moves"] += 1
-        bucket["units"].add(str(row.get("unit_id", "")).strip())
-
-        if move_type == "LOAD":
-            bucket["load_moves"] += 1
-        elif move_type == "DISCHARGE":
-            bucket["discharge_moves"] += 1
-
-        if _is_yes(row.get("hazardous_flag")):
-            bucket["hazardous"] += 1
-        if _is_yes(row.get("reefer")):
-            bucket["reefer"] += 1
-        if _is_yes(row.get("oog_unit")):
-            bucket["oog"] += 1
-
-    if not berth_counts:
-        return [], {}, []
-
-    total_all = sum(v["total_moves"] for v in berth_counts.values()) or 1
-    sorted_berths = sorted(berth_counts.items(), key=lambda x: x[1]["total_moves"], reverse=True)
-    max_count = sorted_berths[0][1]["total_moves"]
-
-    berth_analysis: list[dict] = []
-    for idx, (bk, data) in enumerate(sorted_berths[:5], start=1):
-        total = data["total_moves"]
-        share = round((total / total_all) * 100, 2)
-        intensity = round(total / max(max_count, 1), 4)
-
-        risk = (
-            "High" if share >= 40 or total >= 60
-            else "Medium" if share >= 20 or total >= 30
-            else "Low"
-        )
-
-        total_ops_all = max(total_loaded + total_discharged, total_all, 1)
-        block_share = total / max(total_all, 1)
-        vol_min_cranes = 3 if total_ops_all > 300 else 2 if total_ops_all > 100 else 1
-        target_v_cranes = max(vol_min_cranes, round(total_ops_all / 120))
-        stay_based_cranes = max(1, round(total_ops_all / (max(eff_hours, 1.0) * 20)))
-        vessel_total_cranes = max(target_v_cranes, stay_based_cranes)
-
-        if historical_crane_avg and float(historical_crane_avg) > 0:
-            vessel_total_cranes = max(vessel_total_cranes, round(float(historical_crane_avg)))
-
-        rec_cranes = max(1, math.ceil(vessel_total_cranes * block_share * 2.0))
-        rec_cranes = min(rec_cranes, vessel_total_cranes)
-
-        parts = bk.split("-", 1)
-        terminal = parts[0] if len(parts) == 2 else "YARD"
-        block = parts[1] if len(parts) == 2 else bk
-
-        impact_score = round(share + data["hazardous"] * 2 + data["reefer"] + data["oog"], 2)
-        travel_score = int((hash(bk) % 90) + 10)
-
-        berth_analysis.append({
-            "rank":                    idx,
-            "berth":                   bk,
-            "terminal":                terminal,
-            "block":                   block,
-            "total_moves":             total,
-            "load_moves":              data["load_moves"],
-            "discharge_moves":         data["discharge_moves"],
-            "cargo_concentration_pct": share,
-            "intensity":               intensity,
-            "recommended_cranes":      rec_cranes,
-            "congestion_risk":         risk,
-            "hazardous":               data["hazardous"],
-            "reefer":                  data["reefer"],
-            "oog":                     data["oog"],
-            "unique_containers":       len(data["units"]),
-            "impact_score":            impact_score,
-            "travel_distance_score":   travel_score,
-            "travel_distance_label": (
-                "Short" if travel_score < 30
-                else "Moderate" if travel_score < 70
-                else "Long"
-            ),
-            "corridor_congestion": (
-                "High" if intensity > 0.8
-                else "Moderate" if intensity > 0.4
-                else "Low"
-            ),
-            "mitigation": (
-                "Deploy additional transport units"
-                if travel_score >= 70 else "Standard operations"
-            ),
-        })
-
-    top_impact = berth_analysis[0]["impact_score"] if berth_analysis else 1
-    conflict_table: list[dict] = []
-
-    for row in berth_analysis:
-        conflicts: list[str] = []
-        for other in berth_analysis:
-            if other["berth"] == row["berth"]:
-                continue
-            same_terminal = (row["terminal"] == other["terminal"])
-            high_combined = (row["impact_score"] + other["impact_score"]) > top_impact * 1.2
-            haz_adjacent = (row["hazardous"] > 0 or other["hazardous"] > 0) and same_terminal
-            reef_adjacent = (row["reefer"] > 0 or other["reefer"] > 0) and same_terminal
-            if same_terminal or high_combined or haz_adjacent or reef_adjacent:
-                conflicts.append(other["berth"])
-
-        reason = (
-            f"High congestion — {row['cargo_concentration_pct']}% of units here."
-            if row["congestion_risk"] == "High"
-            else f"Moderate load — {row['cargo_concentration_pct']}% of units here."
-            if row["congestion_risk"] == "Medium"
-            else f"{row['cargo_concentration_pct']}% of units concentrated here."
-        )
-        if row["hazardous"] > 0:
-            reason += f" {row['hazardous']} hazmat units require buffer zones."
-        if row["reefer"] > 0:
-            reason += f" {row['reefer']} reefer units need power allocation."
-
-        conflict_table.append({
-            "berth":         row["berth"],
-            "block":         row["block"],
-            "conflict_risk": row["congestion_risk"],
-            "conflict_with": conflicts[:4],
-            "impact_score":  row["impact_score"],
-            "reason":        reason,
-        })
-
-    primary: dict = {}
-    if berth_analysis:
-        primary = dict(berth_analysis[0])
-        primary["recommendation_reason"] = (
-            f"{primary['cargo_concentration_pct']}% of cargo concentrated in this berth. "
-            f"{primary['congestion_risk']} congestion expected."
-        )
-
-    return berth_analysis, primary, conflict_table
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Dashboard & Heatmap builders
-# ─────────────────────────────────────────────────────────────────────────────
-
 def get_yard_heatmap_data(
     vessel_id: str,
     unit_ids: list[str] = None,
@@ -564,8 +420,6 @@ def get_yard_heatmap_data(
     """
     Unified endpoint for all map/heatmap/terminal visualization data.
     """
-    from db.queries import load_from_db
-
     df = load_from_db("current", yard_id=yard_id, vessel_id=vessel_id)
 
     if df.empty:
@@ -702,20 +556,25 @@ def get_yard_heatmap_data(
             "oog_count": data["oog"],
             "density_pct": round(data["density"] / max(max_density, 1), 4),
             "avg_stack_height": round(avg_h, 1),
-            "containers": [
-                {
-                    "unit_id": u.get("unit_id"),
-                    "position": u.get("current_position") or u.get("ctr_to_position"),
-                    "freight_kind": u.get("freight_kind"),
-                    "outbound_service": u.get("outbound_service"),
-                    "category": u.get("category_id"),
-                    "hazardous": _is_yes(u.get("hazardous_flag")),
-                    "reefer": _is_yes(u.get("reefer")),
-                    "oog": _is_yes(u.get("oog_unit")),
-                }
-                for u in data["unit_rows"]
-            ],
+            "containers": []
         })
+
+        for u in data["unit_rows"]:
+            c_pos = u.get("current_position") or u.get("ctr_to_position")
+            p_info = parse_position(c_pos)
+            block_list[-1]["containers"].append({
+                "unit_id": u.get("unit_id"),
+                "position": c_pos,
+                "bay": p_info.get("bay") if p_info else "-",
+                "row": p_info.get("row") if p_info else "-",
+                "tier": p_info.get("tier") if p_info else "-",
+                "freight_kind": u.get("freight_kind"),
+                "outbound_service": u.get("outbound_service"),
+                "category": u.get("category_id"),
+                "hazardous": _is_yes(u.get("hazardous_flag")),
+                "reefer": _is_yes(u.get("reefer")),
+                "oog": _is_yes(u.get("oog_unit")),
+            })
 
     summary = {
         "total_containers": sum(b["total_containers"] for b in block_list),
@@ -740,8 +599,8 @@ def get_yard_heatmap_data(
         intensity = round(total / max(max_count, 1), 4)
 
         risk = (
-            "High" if share >= 40 or total >= 60
-            else "Medium" if share >= 20 or total >= 30
+            "High" if share >= _settings.BERTH_HIGH_RISK_SHARE_PCT or total >= _settings.BERTH_HIGH_RISK_MOVES
+            else "Medium" if share >= _settings.BERTH_MEDIUM_RISK_SHARE_PCT or total >= _settings.BERTH_MEDIUM_RISK_MOVES
             else "Low"
         )
 
@@ -792,17 +651,67 @@ def get_yard_heatmap_data(
 
     if berth_analysis:
         top_impact = berth_analysis[0]["impact_score"]
+        
+        # 1. Target Vessel Window
+        target_visit_id = str(visit_id) if visit_id else ""
+        min_time, max_time = pd.NaT, pd.NaT
+        if not df.empty and "move_complete_time" in df.columns:
+            mct = pd.to_datetime(df["move_complete_time"], errors="coerce").dropna()
+            if not mct.empty:
+                min_time = mct.min()
+                max_time = mct.max()
+        
+        # 2. Query Concurrent Vessels
+        concurrent_vessels = {}  # visit_id -> {"service": str, "blocks": set()}
+        if pd.notna(min_time) and pd.notna(max_time):
+            try:
+                from db.queries import get_engine, _discover_tables
+                from sqlalchemy import text
+                engine = get_engine()
+                tables = _discover_tables(engine, "container_operations", yard_id)
+                for tbl in tables:
+                    query = text(f"""
+                        SELECT actual_outbound_carrier_visit_id, outbound_service, ctr_from_position
+                        FROM {tbl}
+                        WHERE actual_outbound_carrier_visit_id != :visit_id
+                          AND actual_outbound_carrier_visit_id IS NOT NULL
+                          AND move_complete_time BETWEEN :min_time AND :max_time
+                    """)
+                    cdf = pd.read_sql(query, engine, params={
+                        "visit_id": target_visit_id,
+                        "min_time": min_time,
+                        "max_time": max_time
+                    })
+                    for _, crow in cdf.iterrows():
+                        v_id = crow["actual_outbound_carrier_visit_id"]
+                        if v_id not in concurrent_vessels:
+                            concurrent_vessels[v_id] = {"service": crow["outbound_service"], "blocks": set()}
+                        c_pos = crow.get("ctr_from_position")
+                        if pd.notna(c_pos):
+                            cp_info = parse_position(str(c_pos))
+                            if cp_info and cp_info.get("is_yard"):
+                                cbk = block_label(cp_info)
+                                if cbk:
+                                    concurrent_vessels[v_id]["blocks"].add(cbk)
+            except Exception as e:
+                print(f"Error querying concurrent vessels: {e}")
+
         for row in berth_analysis:
-            conflicts: list[str] = []
-            for other in berth_analysis:
-                if other["berth"] == row["berth"]:
-                    continue
-                same_terminal = (row["terminal"] == other["terminal"])
-                high_combined = (row["impact_score"] + other["impact_score"]) > top_impact * 1.2
-                haz_adjacent = (row["hazardous"] > 0 or other["hazardous"] > 0) and same_terminal
-                reef_adjacent = (row["reefer"] > 0 or other["reefer"] > 0) and same_terminal
-                if same_terminal or high_combined or haz_adjacent or reef_adjacent:
-                    conflicts.append(other["berth"])
+            conflicts: list[dict] = []
+            row_block = row["berth"]
+            
+            for v_id, v_data in concurrent_vessels.items():
+                shared_blocks = []
+                if row_block in v_data["blocks"]:
+                    shared_blocks.append(row_block)
+                if shared_blocks:
+                    overlap_hours = round((max_time - min_time).total_seconds() / 3600, 1) if pd.notna(max_time) else 0
+                    conflicts.append({
+                        "vessel_service": str(v_data["service"]),
+                        "visit_id": str(v_id),
+                        "shared_blocks": shared_blocks,
+                        "overlap_hours": overlap_hours
+                    })
 
             reason = (
                 f"High congestion — {row['cargo_concentration_pct']}% of units here."
@@ -811,9 +720,16 @@ def get_yard_heatmap_data(
                 if row["congestion_risk"] == "Medium"
                 else f"{row['cargo_concentration_pct']}% of units concentrated here."
             )
-            if row["hazardous"] > 0:
+            
+            if conflicts:
+                svc = conflicts[0]["vessel_service"]
+                hrs = conflicts[0]["overlap_hours"]
+                reason = f"Block {row_block} is shared with vessel {svc} for {hrs} hrs — HIGH crane clash risk."
+                row["congestion_risk"] = "High"
+                
+            elif row["hazardous"] > 0:
                 reason += f" {row['hazardous']} hazmat units require buffer zones."
-            if row["reefer"] > 0:
+            elif row["reefer"] > 0:
                 reason += f" {row['reefer']} reefer units need power allocation."
 
             conflict_table.append({
@@ -844,7 +760,6 @@ def get_yard_heatmap_data(
         "timestamp": pd.Timestamp.now().isoformat(),
     }
 
-
 def _get_infrastructure() -> dict:
     """Terminal infrastructure data for berths and lanes."""
     return {
@@ -860,11 +775,7 @@ def _get_infrastructure() -> dict:
         ],
     }
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Main dashboard entry point
-# ─────────────────────────────────────────────────────────────────────────────
-
 def analyze_vessel_dashboard(
     df: pd.DataFrame,
     vessel_service: str,
@@ -873,6 +784,9 @@ def analyze_vessel_dashboard(
     history_df: pd.DataFrame = None,
     optional_unit_ids: list[str] = None,
 ) -> dict:
+    """
+    Executes analyze_vessel_dashboard logic and processing.
+    """
     if df is None or df.empty:
         return {"error": "No data available", "vessel": vessel_service}
 
@@ -953,18 +867,11 @@ def analyze_vessel_dashboard(
         baseline_vessel = baseline_vessel[
             baseline_vessel["outbound_service"].astype(str).str.strip().str.upper() == search_key
         ].copy()
-        
-        # ── OPTIMIZATION: Limit baseline to last 20 visits for speed ──────────
-        v_ids = baseline_vessel["actual_outbound_carrier_visit_id"].unique()
-        if len(v_ids) > 20:
-            last_20 = sorted(v_ids, reverse=True)[:20]
-            baseline_vessel = baseline_vessel[baseline_vessel["actual_outbound_carrier_visit_id"].isin(last_20)].copy()
 
     baseline_prepared: dict = {}
     if not baseline_vessel.empty:
         for vid, grp in baseline_vessel.groupby("actual_outbound_carrier_visit_id"):
             # Use raw (unwindowed) prep so move_span_hours is the full span
-            from models.stay_model import _prepare_model_visit_data as _raw_prep
             baseline_prepared[vid] = _raw_prep(grp.copy())
 
     if baseline_prepared:
@@ -973,14 +880,12 @@ def analyze_vessel_dashboard(
             f = create_features(vdf)
             if f:
                 # Override move_span_hours with actual computed stay when available
-                from models.stay_model import _compute_raw_visit_stay as _raw_stay
                 raw_stay = _raw_stay(vdf)
                 if raw_stay and raw_stay > 0:
                     f["move_span_hours"] = raw_stay
                 historical_features_list.append(f)
 
         if historical_features_list:
-            from config import settings as _settings
             for k in _settings.FEATURE_NAMES:
                 vals = [f[k] for f in historical_features_list if k in f]
                 if vals:
@@ -1046,7 +951,6 @@ def analyze_vessel_dashboard(
             total_loaded = loaded_override if loaded_override is not None else 0
             total_discharged = discharged_override if discharged_override is not None else 0
 
-            from models.stay_model import predict_stay_duration_from_metrics
             # Use average crane count across visits for metric-override path
             avg_crane_count = (
                 round(sum(visit_crane_counts.values()) / len(visit_crane_counts))
@@ -1090,22 +994,27 @@ def analyze_vessel_dashboard(
             "discharged_containers":  details.get("discharged_containers", 0),
             "move_start":             details.get("move_start"),
             "move_end":               details.get("move_end"),
-            "total_units":            details.get("total_units", 0),
             "restow_count":           details.get("restow_count", 0),
-            "avg_weight_kg":          details.get("avg_weight_kg", 0.0),
-            "freight_kind_breakdown": details.get("freight_kind_breakdown", {}),
-            "port_of_discharge_top5": details.get("port_of_discharge_top5", {}),
+            "avg_weight_kg":          details.get("avg_weight_kg", 0),
+            "port_of_discharge_top5": details.get("port_of_discharge_top5", []),
             "assigned_cranes":        details.get("assigned_cranes", 0),
+            "cranes_assigned":        details.get("cranes_assigned", []),
+            "crane_mph":              details.get("crane_mph", 0.0),
+            "crane_mpm":              round(60.0 / details.get("crane_mph"), 1) if details.get("crane_mph") > 0 else 0.0,
         }
 
     merged_stays = [v["stay_hours"] for v in merged_visits.values() if v.get("stay_hours", 0) > 0]
     merged_avg_hours = round(sum(merged_stays) / len(merged_stays), 2) if merged_stays else 0.0
+
+    merged_restows = [v.get("restow_count", 0) for v in merged_visits.values()]
+    merged_avg_restows = round(sum(merged_restows) / len(merged_restows), 1) if merged_restows else 0.0
 
     actual = {
         "visits":    merged_visits,
         "avg_hours": merged_avg_hours if merged_avg_hours > 0 else actual_raw.get("avg_hours"),
         "max_hours": max(merged_stays) if merged_stays else actual_raw.get("max_hours"),
         "min_hours": min(merged_stays) if merged_stays else actual_raw.get("min_hours"),
+        "avg_restows": merged_avg_restows,
     }
 
     # ── Pick busiest visit ───────────────────────────────────────────────────
@@ -1113,14 +1022,7 @@ def analyze_vessel_dashboard(
     for vid, vdf in visit_groups.items():
         if vdf is None or vdf.empty:
             continue
-        score = (
-            len(vdf) if is_current_mode
-            else sum(
-                1 for _, row in vdf.iterrows()
-                if _extract_move_side(row)[0] in ("LOAD", "DISCHARGE")
-            )
-        )
-        visit_scores.append((vid, score))
+        visit_scores.append((vid, len(vdf)))
 
     if not visit_scores:
         return {"error": "No valid visit data found", "vessel": vessel_service}
@@ -1133,13 +1035,23 @@ def analyze_vessel_dashboard(
         return {"error": "Top visit has no usable rows", "vessel": vessel_service}
 
     # ── Count loads / discharges ─────────────────────────────────────────────
-    total_loaded = total_discharged = 0
-    for _, row in visit_df.iterrows():
-        mt, _ = _extract_move_side(row)
-        if mt == "LOAD":
-            total_loaded += 1
-        elif mt == "DISCHARGE":
-            total_discharged += 1
+    f_str = visit_df.get("ctr_from_position", visit_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    t_str = visit_df.get("ctr_to_position", visit_df.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    
+    f_is_v = f_str.str.startswith("V-")
+    t_is_v = t_str.str.startswith("V-")
+    f_is_y = (f_str != "") & (~f_is_v)
+    t_is_y = (t_str != "") & (~t_is_v)
+    
+    total_loaded = int((f_is_y & t_is_v).sum())
+    total_discharged = int((f_is_v & t_is_y).sum())
+    
+    move_kind = visit_df.get("crane_move_kind", visit_df.get("move_kind", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+    unknowns = ~( (f_is_y & t_is_v) | (f_is_v & t_is_y) | ((f_is_y & t_is_y) | (f_is_v & t_is_v)) )
+    
+    if unknowns.any():
+        total_loaded += int((unknowns & (move_kind == "LOAD")).sum())
+        total_discharged += int((unknowns & (move_kind == "DISCHARGE")).sum())
 
     hazardous = int(visit_df["hazardous_flag"].apply(_is_yes).sum()) if "hazardous_flag" in visit_df.columns else 0
     reefer = int(visit_df["reefer"].apply(_is_yes).sum()) if "reefer" in visit_df.columns else 0

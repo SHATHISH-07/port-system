@@ -19,7 +19,7 @@ import {
 } from "@mui/material";
 import {
   FullscreenRounded,
-  UploadFileRounded,
+  UploadFileOutlined,
   ClearRounded,
   SearchRounded,
   CloseRounded,
@@ -29,6 +29,7 @@ import TerminalMap2D from "./components/TerminalMap2D";
 import TerminalMap3D from "./components/TerminalMap3D";
 import BerthRecommendation from "./components/BerthRecommendation";
 import HeatmapView from "./components/HeatmapView";
+import ContainerPositionTable from "./components/ContainerPositionTable";
 import type {
   CellData,
   VesselHeatmapViewData,
@@ -82,7 +83,10 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
   const layoutObj: Record<string, { x: number; y: number }> = {};
 
   const activeBlockIds = [...newData.blocks].map((b) => b.block_id).filter(Boolean);
-  const paddingCandidates = ["CWIT-3A", "CWIT-3B", "PEB-5B", "PEB-4A", "PEB-4B", "PEB-5A"];
+  const isPEB = newData.yard_id?.toUpperCase().includes("PEB") || activeBlockIds.some(id => id.toUpperCase().includes("PEB"));
+  const paddingCandidates = isPEB
+    ? ["PEB-3A", "PEB-3B", "PEB-5B", "PEB-4A", "PEB-4B", "PEB-5A"]
+    : ["CWIT-3A", "CWIT-3B", "CWIT-5B", "CWIT-4A", "CWIT-4B", "CWIT-5A"];
   const emptyBlockIds: string[] = [];
 
   for (const candidate of paddingCandidates) {
@@ -93,7 +97,7 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
 
   let genIdx = 1;
   while (emptyBlockIds.length < 3) {
-    const candidate = `EXT-${genIdx++}`;
+    const candidate = `${isPEB ? 'PEB' : 'CWIT'}-EXT-${genIdx++}`;
     if (!activeBlockIds.includes(candidate) && !emptyBlockIds.includes(candidate)) {
       emptyBlockIds.push(candidate);
     }
@@ -143,6 +147,7 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
         intensity: intensity,
         concentration: concentration,
         cells: b.cells || [],
+        containers: b.containers || [],
       };
       if (count === maxCount && count > 0) computedMaxBlockId = bId;
     } else {
@@ -154,6 +159,7 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
         intensity: 0,
         concentration: "Low",
         cells: [],
+        containers: [],
       };
     }
   });
@@ -218,7 +224,7 @@ export default function OperationalDashboard() {
   const [rawApiData, setRawApiData] = React.useState<ApiHeatmapResponse | null>(null);
   const [mapData, setMapData] = React.useState<VesselHeatmapViewData | null>(null);
 
-  const [mapView, setMapView] = React.useState<"HEATMAP" | "MAP2D" | "3D">("3D");
+  const [mapView, setMapView] = React.useState<"HEATMAP" | "MAP2D" | "3D" | "CONTAINERS">("3D");
   const [overlayView, setOverlayView] = React.useState<"NONE" | "BERTH">("NONE");
   const [inputsOpen, setInputsOpen] = React.useState(true);
 
@@ -313,7 +319,7 @@ export default function OperationalDashboard() {
 
   const handleViewToggle = (
     _e: React.MouseEvent<HTMLElement>,
-    next: "HEATMAP" | "MAP2D" | "3D" | "BERTH" | null
+    next: "HEATMAP" | "MAP2D" | "3D" | "CONTAINERS" | "BERTH" | null
   ) => {
     if (!next) return;
     if (next === "BERTH") {
@@ -335,8 +341,10 @@ export default function OperationalDashboard() {
     <Box
       ref={wrapperRef}
       sx={{
-        width: "100%",
-        height: "100%",
+        width: "calc(100% - 32px)",
+        height: "calc(100% - 32px)",
+        m: 2,
+        borderRadius: 2,
         position: "relative",
         overflow: "hidden",
         bgcolor: "background.default",
@@ -371,6 +379,11 @@ export default function OperationalDashboard() {
             />
           </Box>
         )}
+        {mapView === "CONTAINERS" && (
+          <Box sx={{ width: "100%", height: "100%", overflow: "hidden" }}>
+            <ContainerPositionTable data={mapData} />
+          </Box>
+        )}
       </Box>
 
       {/* TOP LEFT: INPUT CONTROLS */}
@@ -381,9 +394,9 @@ export default function OperationalDashboard() {
           top: 16,
           left: 16,
           zIndex: 10,
-          backdropFilter: "blur(20px)",
-          bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.8 : 0.9),
-          borderRadius: 3,
+          backdropFilter: "none",
+          bgcolor: "background.paper",
+          borderRadius: 1,
           overflow: "hidden",
           transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           width: inputsOpen ? 260 : "auto",
@@ -408,18 +421,18 @@ export default function OperationalDashboard() {
         ) : (
           <Box sx={{ p: 1.8 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
-              <Typography sx={{ fontSize: "0.6rem", fontWeight: 900, color: "text.secondary", letterSpacing: 1.2, textTransform: "uppercase" }}>
-                Command Parameters
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Heatmap Analysis
               </Typography>
               <IconButton size="small" onClick={() => setInputsOpen(false)} sx={{ mr: -0.5 }}>
                 <CloseRounded sx={{ fontSize: 16 }} />
               </IconButton>
             </Box>
             <Stack spacing={1.2}>
-              <TextField size="small" fullWidth label="Vessel ID" value={vesselInput} onChange={(e) => setVesselInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
-              <TextField size="small" fullWidth label="Yard ID (Optional)" value={yardInput} onChange={(e) => setYardInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
+              <TextField size="small" fullWidth label="Vessel ID" value={vesselInput} onChange={(e) => setVesselInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36 } }} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
+              <TextField size="small" fullWidth label="Yard ID (Optional)" value={yardInput} onChange={(e) => setYardInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36 } }} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
               <Box>
-                <Button fullWidth component="label" variant="outlined" startIcon={<UploadFileRounded sx={{ fontSize: 16 }} />} sx={{ fontSize: '0.75rem', py: 0.6, fontWeight: 700, textTransform: "none", justifyContent: "flex-start", color: 'text.primary', borderColor: 'divider' }}>
+                <Button fullWidth component="label" variant="outlined" startIcon={<UploadFileOutlined sx={{ fontSize: 16 }} />} sx={{ borderRadius: 2, fontSize: '0.75rem', py: 0.6, fontWeight: 500, textTransform: "none", justifyContent: "flex-start", color: 'text.primary', borderColor: 'divider' }}>
                   <Typography noWrap sx={{ fontSize: '0.75rem', maxWidth: 180 }}>
                     {containerFile ? containerFile.name : "Upload Container List"}
                   </Typography>
@@ -431,8 +444,8 @@ export default function OperationalDashboard() {
                   </Button>
                 )}
               </Box>
-              <Button variant="contained" fullWidth onClick={load} disabled={loading} sx={{ fontWeight: 800, py: 1, fontSize: '0.8rem' }}>
-                {loading ? "Analyzing..." : "Execute Analysis"}
+              <Button variant="contained" fullWidth onClick={load} disabled={loading} sx={{ borderRadius: 2, fontWeight: 800, py: 1, fontSize: '0.8rem' }}>
+                {loading ? "Analyzing..." : "Analyze"}
               </Button>
             </Stack>
           </Box>
@@ -447,8 +460,8 @@ export default function OperationalDashboard() {
             top: 16,
             right: 16,
             zIndex: 10,
-            backdropFilter: "blur(20px)",
-            bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.8 : 0.9),
+            backdropFilter: "none",
+            bgcolor: "background.paper",
             borderRadius: 3,
             px: 1.5,
             py: 0.8,
@@ -517,13 +530,18 @@ export default function OperationalDashboard() {
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 10,
-          backdropFilter: "blur(20px)",
-          bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.8 : 0.9),
+          backdropFilter: "none",
+          bgcolor: "background.paper",
           borderRadius: 8,
           p: 0.4,
           border: "1px solid",
           borderColor: theme.palette.divider,
           boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[10],
+          maxWidth: "calc(100% - 32px)",
+          overflowX: "auto",
+          "&::-webkit-scrollbar": { display: "none" },
+          msOverflowStyle: "none",
+          scrollbarWidth: "none",
         }}
       >
         <ToggleButtonGroup
@@ -531,7 +549,10 @@ export default function OperationalDashboard() {
           exclusive
           onChange={handleViewToggle}
           sx={{
+            display: "flex",
+            flexWrap: "nowrap",
             "& .MuiToggleButton-root": {
+              whiteSpace: "nowrap",
               borderRadius: 5, px: { xs: 1.2, md: 1.8 }, py: 0.55, border: "none", fontWeight: 700, textTransform: "none", color: "text.secondary", fontSize: "0.75rem",
               "&.Mui-selected": { bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" } }
             }
@@ -540,6 +561,7 @@ export default function OperationalDashboard() {
           <ToggleButton value="HEATMAP">Block Illustrator</ToggleButton>
           <ToggleButton value="MAP2D">2D Heatmap</ToggleButton>
           <ToggleButton value="3D">3D Heatmap</ToggleButton>
+          <ToggleButton value="CONTAINERS">Container Positions</ToggleButton>
           <Divider flexItem orientation="vertical" sx={{ mx: 0.5, my: 0.6 }} />
           <ToggleButton value="BERTH">Recommended Berth</ToggleButton>
         </ToggleButtonGroup>

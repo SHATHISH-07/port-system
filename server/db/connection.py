@@ -43,9 +43,9 @@ def _ensure_database_exists() -> None:
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
 
-        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+        cur.execute(settings.QUERY_CHECK_DB_EXISTS, (db_name,))
         if not cur.fetchone():
-            cur.execute(f'CREATE DATABASE "{db_name}"')
+            cur.execute(settings.QUERY_CREATE_DB.format(db_name=db_name))
             logger.info("[DB] Created database '%s'", db_name)
         else:
             logger.info("[DB] Database '%s' already exists", db_name)
@@ -63,15 +63,21 @@ _ensure_database_exists()
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_engine():
+    """
+    Executes get_engine logic and processing.
+    """
     return engine
 
 
 def get_session():
+    """
+    Executes get_session logic and processing.
+    """
     return SessionLocal()

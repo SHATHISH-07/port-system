@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-from io import BytesIO
 from typing import Optional
-from datetime import datetime, timezone
 
 import pandas as pd
 
 from config import settings
 from utils.datetime_utils import parse_datetime
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Column normalization
-# ─────────────────────────────────────────────────────────────────────────────
-
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Executes clean_column_names logic and processing.
+    """
     df = df.copy()
     df.columns = (
         df.columns.astype(str)
@@ -27,7 +24,6 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
         .str.replace(r"[^a-z0-9_]", "", regex=True)
     )
     return df
-
 
 _HISTORY_MAPPING: dict[str, str] = {
     "unit_id": "unit_id",
@@ -78,14 +74,12 @@ _HISTORY_MAPPING: dict[str, str] = {
     "stow_code_3": "stow_code_3",
 }
 
-
 _CURRENT_MAPPING: dict[str, str] = {
     **_HISTORY_MAPPING,
     "current_position": "current_position",
     "updated_at": "updated_at",
     "created_at": "created_at",
 }
-
 
 _CRANE_MAPPING: dict[str, str] = {
     "crane_id": "crane_id",
@@ -114,8 +108,10 @@ _CRANE_MAPPING: dict[str, str] = {
     "yard_id": "yard_id",
 }
 
-
 def _now_utc_naive() -> pd.Timestamp:
+    """
+    Executes _now_utc_naive logic and processing.
+    """
     return pd.Timestamp.now(tz="UTC").tz_localize(None)
 
 
@@ -151,8 +147,10 @@ def _add_missing_current_fallbacks(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-
 def normalize_dataframe(df: pd.DataFrame, dataset_type: Optional[str] = None) -> pd.DataFrame:
+    """
+    Executes normalize_dataframe logic and processing.
+    """
     df = clean_column_names(df)
     dataset_type = (dataset_type or "").strip().lower()
 
@@ -181,8 +179,10 @@ def normalize_dataframe(df: pd.DataFrame, dataset_type: Optional[str] = None) ->
 
     return df
 
-
 def infer_dataset_type(df: pd.DataFrame) -> str:
+    """
+    Executes infer_dataset_type logic and processing.
+    """
     cols = set(df.columns)
 
     if {"crane_id", "carrier_visit"}.issubset(cols):
@@ -197,91 +197,3 @@ def infer_dataset_type(df: pd.DataFrame) -> str:
         return "history"
 
     return "history"
-
-
-def load_from_file(file_bytes: bytes, dataset_type: Optional[str] = None) -> pd.DataFrame:
-    df = pd.read_csv(BytesIO(file_bytes), low_memory=False)
-    df = normalize_dataframe(df, dataset_type=dataset_type)
-
-    if dataset_type is None:
-        dataset_type = infer_dataset_type(df)
-    dataset_type = dataset_type.lower().strip()
-
-    if dataset_type in ("history", "current"):
-        for col in ["move_complete_time", "time_in", "time_out", "updated_at", "created_at"]:
-            if col in df.columns:
-                df[col] = parse_datetime(df[col], col)
-
-        # Ensure current snapshots always have usable timestamps
-        if dataset_type == "current":
-            df = _add_missing_current_fallbacks(df)
-            for col in ["move_complete_time", "updated_at", "created_at"]:
-                if col in df.columns:
-                    df[col] = parse_datetime(df[col], col)
-
-    if dataset_type == "crane":
-        if "time_completed" in df.columns:
-            df["time_completed"] = parse_datetime(df["time_completed"], "time_completed")
-        if "move_kind" in df.columns:
-            df["move_kind"] = (
-                df["move_kind"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-                .replace({"NAN": None, "NONE": None, "NULL": None, "": None})
-            )
-
-    return df
-
-
-def validate_dataframe(df: pd.DataFrame, dataset_type: Optional[str] = None) -> pd.DataFrame:
-    if df is None or df.empty:
-        raise ValueError("Uploaded data is empty")
-
-    if dataset_type is None:
-        dataset_type = infer_dataset_type(df)
-    dataset_type = dataset_type.lower().strip()
-
-    required_map = getattr(settings, "REQUIRED_COLS_BY_TYPE", {})
-    required_cols = list(required_map.get(dataset_type, getattr(settings, "REQUIRED_COLS", [])))
-
-    if dataset_type == "current":
-        # current snapshots can be analyzed using service or vessel visit id
-        if "actual_outbound_carrier_visit_id" not in df.columns and "outbound_service" not in df.columns:
-            raise ValueError(
-                "Current dataset must contain either actual_outbound_carrier_visit_id or outbound_service"
-            )
-
-    missing = [c for c in required_cols if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns for {dataset_type}: {missing}")
-
-    initial_len = len(df)
-
-    if dataset_type == "crane":
-        df = df.dropna(subset=[c for c in ["crane_id", "unit_id", "carrier_visit", "move_kind", "time_completed"] if c in df.columns])
-
-        if not any(c in df.columns for c in ("from_position", "ctr_from_position")):
-            raise ValueError("Crane file must contain a from position column")
-        if not any(c in df.columns for c in ("to_position", "ctr_to_position")):
-            raise ValueError("Crane file must contain a to position column")
-
-        if "time_completed" in df.columns:
-            df["time_completed"] = parse_datetime(df["time_completed"], "time_completed")
-    else:
-        primary_cols = [c for c in ["outbound_service", "actual_outbound_carrier_visit_id", "unit_id"] if c in df.columns]
-        if primary_cols:
-            df = df.dropna(subset=primary_cols)
-
-        for col in ["move_complete_time", "time_in", "time_out", "updated_at", "created_at"]:
-            if col in df.columns:
-                df[col] = parse_datetime(df[col], col)
-
-        if dataset_type == "current":
-            df = _add_missing_current_fallbacks(df)
-
-    dropped = initial_len - len(df)
-    if dropped > 0:
-        print(f"Cleaned dataset: dropped {dropped} records with null primary keys.")
-
-    return df
