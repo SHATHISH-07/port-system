@@ -1,0 +1,380 @@
+[
+  {
+    "test_case": "Auth - Login with Valid Admin Credentials",
+    "endpoint": "/auth/login",
+    "method": "POST",
+    "input": {
+      "username": "admin",
+      "password": "admin"
+    },
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 487.0,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Auth - Login with Invalid Credentials",
+    "endpoint": "/auth/login",
+    "method": "POST",
+    "input": {
+      "username": "admin",
+      "password": "wrongpassword"
+    },
+    "expected_status": 401,
+    "actual_status": 401,
+    "response_time_ms": 222.41,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Auth - Verify Admin Role Access",
+    "endpoint": "/users",
+    "method": "GET",
+    "input": {},
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 8.42,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Auth - Verify Standard User Denied Access to Admin Route",
+    "endpoint": "/users",
+    "method": "GET",
+    "input": {},
+    "expected_status": 403,
+    "actual_status": 403,
+    "response_time_ms": 5.64,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Auth - Verify Current User Identity",
+    "endpoint": "/auth/me",
+    "method": "GET",
+    "input": {},
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 7.79,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Auth - Unauthenticated Request Denied",
+    "endpoint": "/auth/me",
+    "method": "GET",
+    "input": {},
+    "expected_status": 401,
+    "actual_status": 401,
+    "response_time_ms": 3.49,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Vessels - Fetch Specific Vessel Stats (Without Overrides)",
+    "endpoint": "/vessel/analysis?vesselId=VS-PEB-07",
+    "method": "GET",
+    "input": {},
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 2599.64,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Vessels - Fetch Specific Vessel Stats (With Load/Discharge Overrides)",
+    "endpoint": "/vessel/analysis?vesselId=VS-PEB-07&loaded=50&discharged=20",
+    "method": "GET",
+    "input": {},
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 1104.54,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Vessels - Missing Vessel Lookup",
+    "endpoint": "/vessel/analysis?vesselId=UNKNOWN-99",
+    "method": "GET",
+    "input": {},
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 20.42,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Vessels - Yard Summary",
+    "endpoint": "/vessel/yard/summary?yardId=PEB",
+    "method": "GET",
+    "input": {},
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 40.71,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Heatmap - Valid Heatmap (Vessel and Units)",
+    "endpoint": "/vessel/heatmap",
+    "method": "POST",
+    "input": {
+      "vessel_id": "VS-PEB-07",
+      "unit_ids": [
+        "BMOU1234567"
+      ]
+    },
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 120.58,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Heatmap - Valid Heatmap (With Yard Filter)",
+    "endpoint": "/vessel/heatmap",
+    "method": "POST",
+    "input": {
+      "vessel_id": "VS-PEB-07",
+      "unit_ids": [
+        "BMOU1234567"
+      ],
+      "yard_id": "PEB"
+    },
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 89.05,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Heatmap - Unknown Yard ID",
+    "endpoint": "/vessel/heatmap",
+    "method": "POST",
+    "input": {
+      "vessel_id": "VS-PEB-07",
+      "unit_ids": [
+        "BMOU1234567"
+      ],
+      "yard_id": "UNKNOWN_999"
+    },
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 9.15,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Heatmap - Missing Required Vessel ID",
+    "endpoint": "/vessel/heatmap",
+    "method": "POST",
+    "input": {
+      "unit_ids": [
+        "BMOU1234567"
+      ],
+      "yard_id": "PEB"
+    },
+    "expected_status": 422,
+    "actual_status": 422,
+    "response_time_ms": 6.83,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Heatmap - Missing Required Unit IDs",
+    "endpoint": "/vessel/heatmap",
+    "method": "POST",
+    "input": {
+      "vessel_id": "VS-PEB-07",
+      "yard_id": "PEB"
+    },
+    "expected_status": 422,
+    "actual_status": 422,
+    "response_time_ms": 5.49,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Stowage Planning - Current Planning (Valid)",
+    "endpoint": "/stowage/current/planning",
+    "method": "POST",
+    "input": {
+      "vesselId": "VS-PEB-07",
+      "yardId": "PEB",
+      "containerIds": "CMAU6000728, MSCU6005364, HLCU6007597, ONEY6007977, MAEU6004558, GCXU6006376, TRLU6007976, MAEU6007860, HLCU6002577, MAEU6007975, CMAU6005064, CMAU6005812, GCXU6002464, ONEY6005500, GCXU6000956, CMAU6001376, GCXU6005685, ONEY6007691, HLCU6004094, MAEU6002970, ONEY6005663, TRLU6000094, GCXU6001306, MSCU6000513, HLCU6007536, ONEY6002191, MAEU6007974, HLCU6001777, OOLU6000934, CMAU6006681, ONEY6000364, MAEU6004468, HLCU6006527, CMAU6006818, CMAU6001588, OOLU6007973, CMAU6007972, GCXU6006583, CMAU6002715, ONEY6003740, OOLU6007727, TRLU6003749, GCXU6005097, CMAU6005598, HLCU6004409, OOLU6002504, MSCU6007971, GCXU6007970, TRLU6004471, MSCU6004824"
+    },
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 215.24,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Stowage Planning - Current Planning (Empty Containers)",
+    "endpoint": "/stowage/current/planning",
+    "method": "POST",
+    "input": {
+      "vesselId": "VS-PEB-07",
+      "yardId": "PEB",
+      "containerIds": ""
+    },
+    "expected_status": 400,
+    "actual_status": 400,
+    "response_time_ms": 5.59,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Stowage Planning - Invalid Vessel ID",
+    "endpoint": "/stowage/current/planning",
+    "method": "POST",
+    "input": {
+      "vesselId": "",
+      "yardId": "PEB",
+      "containerIds": "CMAU6000728, MSCU6005364, HLCU6007597, ONEY6007977, MAEU6004558, GCXU6006376, TRLU6007976, MAEU6007860, HLCU6002577, MAEU6007975, CMAU6005064, CMAU6005812, GCXU6002464, ONEY6005500, GCXU6000956, CMAU6001376, GCXU6005685, ONEY6007691, HLCU6004094, MAEU6002970, ONEY6005663, TRLU6000094, GCXU6001306, MSCU6000513, HLCU6007536, ONEY6002191, MAEU6007974, HLCU6001777, OOLU6000934, CMAU6006681, ONEY6000364, MAEU6004468, HLCU6006527, CMAU6006818, CMAU6001588, OOLU6007973, CMAU6007972, GCXU6006583, CMAU6002715, ONEY6003740, OOLU6007727, TRLU6003749, GCXU6005097, CMAU6005598, HLCU6004409, OOLU6002504, MSCU6007971, GCXU6007970, TRLU6004471, MSCU6004824"
+    },
+    "expected_status": 400,
+    "actual_status": 400,
+    "response_time_ms": 7.47,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Stowage Visualization - Current View",
+    "endpoint": "/stowage/visualization",
+    "method": "POST",
+    "input": {
+      "vesselId": "VS-PEB-07",
+      "yardId": "PEB",
+      "containerIds": "CMAU6000728, MSCU6005364, HLCU6007597, ONEY6007977, MAEU6004558, GCXU6006376, TRLU6007976, MAEU6007860, HLCU6002577, MAEU6007975, CMAU6005064, CMAU6005812, GCXU6002464, ONEY6005500, GCXU6000956, CMAU6001376, GCXU6005685, ONEY6007691, HLCU6004094, MAEU6002970, ONEY6005663, TRLU6000094, GCXU6001306, MSCU6000513, HLCU6007536, ONEY6002191, MAEU6007974, HLCU6001777, OOLU6000934, CMAU6006681, ONEY6000364, MAEU6004468, HLCU6006527, CMAU6006818, CMAU6001588, OOLU6007973, CMAU6007972, GCXU6006583, CMAU6002715, ONEY6003740, OOLU6007727, TRLU6003749, GCXU6005097, CMAU6005598, HLCU6004409, OOLU6002504, MSCU6007971, GCXU6007970, TRLU6004471, MSCU6004824"
+    },
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 110.75,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Stowage Visualization - Historical Visit",
+    "endpoint": "/stowage/visualization",
+    "method": "POST",
+    "input": {
+      "vesselId": "VS-PEB-07",
+      "yardId": "PEB",
+      "visitId": "MAE180081"
+    },
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 237.49,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Ingestion - Valid CSV Upload",
+    "endpoint": "/ingest/upload?datasetType=current",
+    "method": "POST",
+    "input": "Multipart payload omitted",
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 162.93,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Ingestion - Missing Dataset Type",
+    "endpoint": "/ingest/upload",
+    "method": "POST",
+    "input": "Multipart payload omitted",
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 7.67,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Model - Trigger Retraining",
+    "endpoint": "/model/training",
+    "method": "POST",
+    "input": {
+      "model_type": "stay_time",
+      "force": true
+    },
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 22485.19,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "Model - Status Lookup",
+    "endpoint": "/model/status",
+    "method": "GET",
+    "input": {},
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 11.29,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "System - Health Check",
+    "endpoint": "/health",
+    "method": "GET",
+    "input": {},
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 7.55,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "System - Logs Lookup (Admin)",
+    "endpoint": "/audit-logs",
+    "method": "GET",
+    "input": {},
+    "expected_status": 200,
+    "actual_status": 200,
+    "response_time_ms": 11.92,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  },
+  {
+    "test_case": "System - Logs Lookup (User Denied)",
+    "endpoint": "/audit-logs",
+    "method": "GET",
+    "input": {},
+    "expected_status": 403,
+    "actual_status": 403,
+    "response_time_ms": 5.53,
+    "passed": true,
+    "error": null,
+    "actual_output_snippet": "Output Validated Successfully (Omitted)"
+  }
+]
