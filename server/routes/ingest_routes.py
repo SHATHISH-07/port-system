@@ -864,8 +864,9 @@ def _insert_container_operations(
                 }
                 stmt = stmt.on_conflict_do_update(
                     index_elements=["unit_id", "yard_id"],
+                    index_where=text("record_type = 'current'"),
                     set_=update_set,
-                    where=text("record_type = 'current'"),
+                    where=text(f"{table.name}.record_type = 'current'"),
                 )
                 with engine.begin() as conn:
                     conn.execute(stmt)

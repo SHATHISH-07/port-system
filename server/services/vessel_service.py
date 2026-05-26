@@ -347,6 +347,44 @@ def _calculate_delay_analysis(visit_df) -> list:
                     "impact": "Medium",
                     "reason": f"Detected {len(long_gaps)} move-completion gaps exceeding 60 mins.",
                 })
+        
+        # M-Cycle (Dual Cycle) percentage analysis
+        mct_df = visit_df.dropna(subset=["move_complete_time"]).copy()
+        if not mct_df.empty:
+            mct_df["move_complete_time"] = pd.to_datetime(mct_df["move_complete_time"], errors="coerce")
+            mct_df = mct_df.dropna(subset=["move_complete_time"]).sort_values("move_complete_time")
+            if len(mct_df) > 10:
+                f_str_mct = mct_df.get("ctr_from_position", mct_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+                t_str_mct = mct_df.get("ctr_to_position", mct_df.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
+                
+                is_load = (~f_str_mct.str.startswith("V-")) & t_str_mct.str.startswith("V-")
+                is_disc = f_str_mct.str.startswith("V-") & (~t_str_mct.str.startswith("V-"))
+                
+                mct_df["op_type"] = "OTHER"
+                mct_df.loc[is_load, "op_type"] = "LOAD"
+                mct_df.loc[is_disc, "op_type"] = "DISCHARGE"
+                
+                productive_mask = mct_df["op_type"].isin(["LOAD", "DISCHARGE"])
+                if productive_mask.sum() > 10:
+                    prod_df = mct_df[productive_mask].copy()
+                    prod_df["prev_op"] = prod_df["op_type"].shift(1)
+                    prod_df["gap_mins"] = prod_df["move_complete_time"].diff().dt.total_seconds() / 60
+                    
+                    dual_cycles = (
+                        (prod_df["op_type"] != prod_df["prev_op"]) &
+                        (prod_df["prev_op"].notna()) &
+                        (prod_df["gap_mins"] <= 15)
+                    ).sum()
+                    
+                    productive = len(prod_df)
+                    dual_cycle_rate = (dual_cycles / productive) * 100
+                    
+                    if dual_cycle_rate < 15.0:
+                        causes.append({
+                            "factor": "Low M-Cycle Percentage",
+                            "impact": "Low",
+                            "reason": f"Only {dual_cycle_rate:.1f}% dual-cycles (M-cycles) detected. Poor interleaving of loads and discharges.",
+                        })
 
     # Fast vectorised restow count
     f_str = visit_df.get("ctr_from_position", visit_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
@@ -613,17 +651,67 @@ def get_yard_heatmap_data(
 
     if berth_analysis:
         top_impact = berth_analysis[0]["impact_score"]
+        
+        # 1. Target Vessel Window
+        target_visit_id = str(visit_id) if visit_id else ""
+        min_time, max_time = pd.NaT, pd.NaT
+        if not df.empty and "move_complete_time" in df.columns:
+            mct = pd.to_datetime(df["move_complete_time"], errors="coerce").dropna()
+            if not mct.empty:
+                min_time = mct.min()
+                max_time = mct.max()
+        
+        # 2. Query Concurrent Vessels
+        concurrent_vessels = {}  # visit_id -> {"service": str, "blocks": set()}
+        if pd.notna(min_time) and pd.notna(max_time):
+            try:
+                from db.queries import get_engine, _discover_tables
+                from sqlalchemy import text
+                engine = get_engine()
+                tables = _discover_tables(engine, "container_operations", yard_id)
+                for tbl in tables:
+                    query = text(f"""
+                        SELECT actual_outbound_carrier_visit_id, outbound_service, ctr_from_position
+                        FROM {tbl}
+                        WHERE actual_outbound_carrier_visit_id != :visit_id
+                          AND actual_outbound_carrier_visit_id IS NOT NULL
+                          AND move_complete_time BETWEEN :min_time AND :max_time
+                    """)
+                    cdf = pd.read_sql(query, engine, params={
+                        "visit_id": target_visit_id,
+                        "min_time": min_time,
+                        "max_time": max_time
+                    })
+                    for _, crow in cdf.iterrows():
+                        v_id = crow["actual_outbound_carrier_visit_id"]
+                        if v_id not in concurrent_vessels:
+                            concurrent_vessels[v_id] = {"service": crow["outbound_service"], "blocks": set()}
+                        c_pos = crow.get("ctr_from_position")
+                        if pd.notna(c_pos):
+                            cp_info = parse_position(str(c_pos))
+                            if cp_info and cp_info.get("is_yard"):
+                                cbk = block_label(cp_info)
+                                if cbk:
+                                    concurrent_vessels[v_id]["blocks"].add(cbk)
+            except Exception as e:
+                print(f"Error querying concurrent vessels: {e}")
+
         for row in berth_analysis:
-            conflicts: list[str] = []
-            for other in berth_analysis:
-                if other["berth"] == row["berth"]:
-                    continue
-                same_terminal = (row["terminal"] == other["terminal"])
-                high_combined = (row["impact_score"] + other["impact_score"]) > top_impact * 1.2
-                haz_adjacent = (row["hazardous"] > 0 or other["hazardous"] > 0) and same_terminal
-                reef_adjacent = (row["reefer"] > 0 or other["reefer"] > 0) and same_terminal
-                if same_terminal or high_combined or haz_adjacent or reef_adjacent:
-                    conflicts.append(other["berth"])
+            conflicts: list[dict] = []
+            row_block = row["berth"]
+            
+            for v_id, v_data in concurrent_vessels.items():
+                shared_blocks = []
+                if row_block in v_data["blocks"]:
+                    shared_blocks.append(row_block)
+                if shared_blocks:
+                    overlap_hours = round((max_time - min_time).total_seconds() / 3600, 1) if pd.notna(max_time) else 0
+                    conflicts.append({
+                        "vessel_service": str(v_data["service"]),
+                        "visit_id": str(v_id),
+                        "shared_blocks": shared_blocks,
+                        "overlap_hours": overlap_hours
+                    })
 
             reason = (
                 f"High congestion — {row['cargo_concentration_pct']}% of units here."
@@ -632,9 +720,16 @@ def get_yard_heatmap_data(
                 if row["congestion_risk"] == "Medium"
                 else f"{row['cargo_concentration_pct']}% of units concentrated here."
             )
-            if row["hazardous"] > 0:
+            
+            if conflicts:
+                svc = conflicts[0]["vessel_service"]
+                hrs = conflicts[0]["overlap_hours"]
+                reason = f"Block {row_block} is shared with vessel {svc} for {hrs} hrs — HIGH crane clash risk."
+                row["congestion_risk"] = "High"
+                
+            elif row["hazardous"] > 0:
                 reason += f" {row['hazardous']} hazmat units require buffer zones."
-            if row["reefer"] > 0:
+            elif row["reefer"] > 0:
                 reason += f" {row['reefer']} reefer units need power allocation."
 
             conflict_table.append({

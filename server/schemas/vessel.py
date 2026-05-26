@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict
 
 class HeatmapRequest(BaseModel):
     vessel_id: str
-    unit_ids: Optional[List[str]] = None
+    unit_ids: List[str]
     yard_id: Optional[str] = None
 
 class VesselAnalysisResponse(BaseModel):

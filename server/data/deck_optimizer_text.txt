@@ -1,0 +1,223 @@
+--- PAGE 1 ---
+BERTH OPTIMIZATION & YARD
+PREPARATION FRAMEWORK
+Operational Planning & Decision Support Document
+1. Introduction
+In container terminal operations, berth allocation is one of the most critical decisions.
+Traditionally, berth selection is often based on availability and vessel size. However, this
+approach does not consider:
+● Where the cargo is located in the yard
+● Travel distance for internal trucks (ITVs)
+● Crane idle time risk
+● Yard congestion
+● Historical vessel productivity
+● Conflict with other working vessels
+The purpose of this document is to define a structured operational method to:
+1. Identify the most suitable berth for an upcoming vessel
+2. Predict expected port stay time
+3. Detect operational conflict risks
+4. Learn from previous vessel delays
+5. Prepare the yard strategically before vessel arrival
+The goal is simple:
+Place the vessel in the best berth to minimize travel, reduce congestion, and
+complete operations faster.
+--- PAGE 2 ---
+2. Berth Selection Based on Yard Cargo
+Distribution
+2.1 Operational Principle
+When a vessel is scheduled to arrive, most of its loading containers are already inside the yard.
+If the majority of these containers are located near a specific berth zone, placing the vessel at
+that berth will:
+● Reduce internal truck travel distance
+● Reduce fuel consumption
+● Reduce crane waiting time
+● Reduce yard congestion
+● Improve overall productivity
+Therefore, berth selection should consider cargo location concentration.
+2.2 Step 1 – Identify Loading Container Locations
+Before confirming the berth, the system must:
+1. Extract all containers nominated for loading.
+2. Identify for each container:
+○ Yard block
+○ Yard row
+○ Yard bay
+○ Equipment class
+○ Weight class
+3. Map each yard block to its closest berth area.
+This creates a clear picture of where the cargo is physically located.
+2.3 Step 2 – Generate Yard Heat Map
+A yard heat map must be created to visually represent container concentration.
+The heat map should:
+● Highlight blocks with high concentration (Red)
+● Medium concentration (Orange)
+--- PAGE 3 ---
+● Low concentration (Green)
+This visual tool allows planners to quickly see where the vessel’s cargo is clustered.
+Example:
+Terminal has:
+● Berth 1
+● Berth 2
+● Berth 3
+Vessel A has 1,500 loading containers.
+After analysis:
+● 78% located in blocks near Berth 1
+● 40% located near Berth 2
+● 25% located near Berth 3
+Operational interpretation:
+If the vessel is berthed at Berth 1:
+● Minimal travel
+● Lower congestion
+● Higher crane efficiency
+If berthed at Berth 3:
+● Long travel distance
+● Higher risk of ITV queue
+● Increased crane idle time
+2.4 Step 3 – Distance Impact Simulation
+For each berth option, the system must calculate:
+● Total Laden Travel Distance
+(Yard Block → Selected Berth × Number of Containers)
+● Estimated Unladen Travel
+(Return trips, repositioning)
+● Corridor congestion impact
+This provides measurable data rather than opinion-based decisions.
+--- PAGE 4 ---
+Final output example:
+Berth Cargo Concentration Total Travel Distance Congestion
+Risk
+B1 High (78%) Low Low
+B2 Medium Medium Medium
+B3 Low High High
+Recommended berth = Lowest combined operational impact.
+3. Port Stay Time Prediction
+3.1 Objective
+To predict how long the vessel will remain at berth using historical performance data.
+3.2 Operational Logic
+Port stay depends on:
+● Total moves (Load + Discharge)
+● Number of cranes assigned
+● Average crane productivity
+● Crane intensity (how many cranes work simultaneously)
+3.3 Calculation Method
+Step 1: Estimate total moves
+Total Moves = Planned Load + Planned Discharge
+Step 2: Identify historical data for similar vessels:
+● Average number of cranes assigned
+● Average moves per hour per crane
+--- PAGE 5 ---
+Step 3: Calculate expected port stay:
+Port Stay =
+Total Moves ÷ (Number of Cranes × Average Productivity)
+Example:
+Total moves = 2,000
+Cranes assigned = 4
+Productivity = 30 moves/hour
+Port Stay = 2000 ÷ (4 × 30) = 16.6 hours
+3.4 Operational Benefit
+This helps:
+● Marine scheduling
+● Manpower planning
+● Crane allocation
+● Berth window planning
+● Customer communication
+4. Berth Conflict & Crane Clash Analysis
+4.1 Objective
+To prevent operational conflicts when multiple vessels work simultaneously.
+4.2 Operational Risks
+Conflicts occur when:
+● Two vessels load from same yard blocks
+● Heavy ITV traffic in same corridors
+● Crane rail overlap
+--- PAGE 6 ---
+● Equipment competition
+These situations increase:
+● Crane idle time
+● Truck waiting time
+● Vessel delay
+4.3 Required Analysis
+The system must check:
+1. Percentage of shared yard blocks
+2. Corridor overlap
+3. Crane working zone overlap
+4. Equipment demand conflicts
+Output must classify risk:
+● Low risk
+● Medium risk
+● High risk
+And suggest mitigation:
+● Change berth
+● Adjust crane allocation
+● Pre-consolidate yard cargo
+5. Historical Delay Root Cause Analysis
+5.1 Objective
+To understand why previous vessels were delayed and avoid repeating mistakes.
+5.2 Operational Checks
+--- PAGE 7 ---
+For previous delayed vessels, analyze:
+● Crane idle time
+● Container availability timing
+● ITV arrival delays
+● High M-cycle percentage
+● Poor stacking strategy
+● Long unladen travel
+● Crane crossing conflicts
+5.3 Interpretation
+If delay reason = Container not ready
+→ Improve yard readiness before arrival
+If delay reason = High M-cycle
+→ Improve stacking and consolidation
+If delay reason = ITV congestion
+→ Review corridor planning
+Learning from history improves predictability.
+6. Yard Preparation & Weight Distribution
+Strategy
+6.1 Objective
+To prepare the yard before vessel arrival to reduce reshuffles and crane delay.
+6.2 Historical Stowage Pattern Analysis
+The system must analyze:
+● Weight distribution loaded above deck
+--- PAGE 8 ---
+● Weight distribution loaded below deck
+● Equipment class distribution
+● Discharge port grouping
+6.3 Yard Strategy
+Based on prediction:
+● Heavy containers positioned close to berth
+● Light containers positioned for upper stack loading
+● Group containers by discharge sequence
+● Reduce reshuffle requirement
+Expected result:
+● Lower reshuffle %
+● Better dual cycle
+● Faster crane execution
+7. Dynamic Recalculation Based on ETA
+Accuracy
+If vessel ETA changes:
+● Re-run berth simulation
+● Recalculate congestion
+● Update port stay prediction
+This ensures berth plan remains optimized in real time.
+8. Overall Operational Benefits
+Implementing this framework will:
+● Reduce total travel distance
+--- PAGE 9 ---
+● Reduce fuel cost
+● Reduce crane idle time
+● Improve vessel turnaround time
+● Improve berth utilization
+● Reduce operational uncertainty
+● Support data-driven decision making
+9. Final Conclusion
+Berth selection must move from availability-based decision to data-driven operational
+optimization.
+This framework ensures that berth allocation considers:
+● Cargo concentration
+● Travel distance
+● Crane productivity
+● Conflict risk
+● Historical delays
+● Yard readiness
+By following this structured operational approach, the terminal can achieve:
+● Faster vessel completion
+● Reduced congestion
+● Predictable performance
+● Continuous improvement

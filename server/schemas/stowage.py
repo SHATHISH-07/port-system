@@ -160,6 +160,7 @@ class CurrentPlanningResponse(BaseModel):
     reshuffleStats: dict
     dischargeSequence: List[DischargeSequenceEntry] = Field(default_factory=list)
     strategyInsights: List[str]
+    equipmentClassDistribution: List[EquipmentClassDistribution] = Field(default_factory=list)
 
 # Visualization Schemas
 class MapPosition(BaseModel):

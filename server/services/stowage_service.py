@@ -581,16 +581,42 @@ def process_current_planning_and_yard_strategy(
                 rotation = db_schedule
         except Exception:
             pass
+            
+    current_ports = [p.upper() for p in temp_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
 
-        # Fallback to historical guessing if DB schedule is empty
-        if not rotation:
+    if rotation:
+        # Check if there are completely new ports in the current dataset that the DB sequence doesn't know about!
+        missing_ports = [p for p in current_ports if p not in rotation]
+        if missing_ports:
+            from utils.routing import sort_ports_nearest_neighbor
+            # Geographically sort the missing ports starting from the last known port in the rotation
+            last_port = rotation[-1] if rotation else None
+            sorted_missing = sort_ports_nearest_neighbor(missing_ports, start_port=last_port)
+            rotation.extend(sorted_missing)
+            
+            # Since we dynamically found and sequenced new ports, auto-update the DB so it remembers them!
             try:
-                history_df = load_from_db("history", vessel_id=vessel_id)
-                if history_df is not None and not history_df.empty and "port_of_discharge" in history_df.columns:
-                    hist_counts = history_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
-                    rotation = [p for p in hist_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
+                update_vessel_schedule(get_engine(), str(vessel_id).strip().upper(), rotation)
             except Exception:
-                rotation = [p for p in temp_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
+                pass
+    else:
+        # Fallback to nearest-neighbor geographic sorting if DB schedule is entirely empty
+        from utils.routing import sort_ports_nearest_neighbor
+        ports_to_sort = current_ports.copy()
+        try:
+            # Try to include historical ports if available
+            history_df = load_from_db("history", vessel_id=vessel_id)
+            if history_df is not None and not history_df.empty and "port_of_discharge" in history_df.columns:
+                hist_counts = history_df["port_of_discharge"].dropna().astype(str).str.strip().str.upper().value_counts()
+                hist_ports = [p for p in hist_counts.index if p and p not in ("NAN", "NONE", "NULL", "UNKNOWNPORT")]
+                for hp in hist_ports:
+                    if hp not in ports_to_sort:
+                        ports_to_sort.append(hp)
+        except Exception:
+            pass
+        
+        # Sort ALL discovered ports (current + historical) geographically based on real-world distance
+        rotation = sort_ports_nearest_neighbor(ports_to_sort)
 
     rank_map = {}
     current_rank = 1
@@ -861,6 +887,30 @@ def process_current_planning_and_yard_strategy(
         "projectedReduction": projected_reshuffle_reduction
     }
 
+    equip_class_dist = []
+    equip_col = None
+    for candidate in ["equipment_class", "equipment_type"]:
+        if candidate in df.columns:
+            equip_col = candidate
+            break
+
+    if equip_col is not None:
+        eq_series = df[equip_col].fillna("UNKNOWN").astype(str).str.strip()
+        if "equipment_class" in df.columns and "equipment_type" in df.columns:
+            eq_series = (
+                df["equipment_class"].fillna("UNKNOWN").astype(str).str.strip()
+                + " | "
+                + df["equipment_type"].fillna("UNKNOWN").astype(str).str.strip()
+            )
+
+        counts = eq_series.value_counts()
+        for eq_class, count in counts.head(20).items():
+            equip_class_dist.append({
+                "equipmentClass": eq_class,
+                "count": int(count),
+                "percentage": round((count / max(resolved_count, 1)) * 100, 1),
+            })
+
     return {
         "vesselId": vessel_id,
         "outboundService": outbound_service or vessel_id,
@@ -878,8 +928,8 @@ def process_current_planning_and_yard_strategy(
         "reshuffleStats": reshuffleStats,
         "dischargeSequence": discharge_sequence,
         "strategyInsights": insights,
+        "equipmentClassDistribution": equip_class_dist,
     }
-
 
 def _empty_history_response() -> dict:
     """
@@ -922,4 +972,5 @@ def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
         "reshuffleStats": {},
         "dischargeSequence": [],
         "strategyInsights": [],
+        "equipmentClassDistribution": [],
     }
