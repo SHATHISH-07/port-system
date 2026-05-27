@@ -31,6 +31,7 @@ from routes.user_routes   import router as user_router
 from routes.system_routes import router as system_router
 from routes.stowage_routes import router as stowage_router
 from services.retraining_service import scheduled_retraining_job
+from models.stay_model import load_stay_model
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,6 +91,13 @@ async def lifespan(app: FastAPI):
                 logger.info("[Auth] Default admin role corrected")
 
         logger.info("[Startup] Schema initialisation complete")
+
+        # Preload the stay model to avoid cold-start delays on the first API request
+        try:
+            load_stay_model()
+            logger.info("[Startup] ML model preloaded successfully")
+        except Exception as ml_exc:
+            logger.warning("[Startup] ML model preload failed: %s", ml_exc)
 
     except Exception as e:
         logger.error("[Startup] Schema init failed: %s", e)

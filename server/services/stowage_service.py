@@ -68,6 +68,7 @@ def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
     """
     if df.empty or "unit_id" not in df.columns:
         return df
+    df["unit_id"] = df["unit_id"].astype(str).str.strip().str.upper()
     sort_cols = []
     ascending = []
     for col in ["move_complete_time", "updated_at", "created_at"]:
@@ -273,6 +274,7 @@ def get_historical_stowage_analysis(
     else:
         if "actual_outbound_carrier_visit_id" in df.columns:
             # Sort to keep latest event per visit for each unit
+            df["unit_id"] = df["unit_id"].astype(str).str.strip().str.upper()
             sort_cols = []
             ascending = []
             for col in ["move_complete_time", "updated_at", "created_at"]:
@@ -543,15 +545,15 @@ def process_current_planning_and_yard_strategy(
     visit_id = None
     terminal = "PEB" if (yard_id and "PEB" in str(yard_id).upper()) else "CWIT"
 
-    # Assign yard_block, weight_band, is_loaded
     def resolve_yard_block(row):
         """
         Executes resolve_yard_block logic and processing.
         """
         visit_state = _safe_str(row.get("visit_state"), "")
-        category = _safe_str(row.get("category_id"), "")
-        is_loaded = visit_state == "3DEPARTED" or category == "EXPRT"
+        is_loaded = "DEPARTED" in visit_state.upper()
         pos = _safe_str(row.get("ctr_from_position") if is_loaded else row.get("current_position"), "")
+        if not pos:
+            pos = _safe_str(row.get("current_position") or row.get("ctr_from_position") or "", "")
         info = parse_position(pos)
         return info.get("block") if info and info.get("is_yard") else None
 
