@@ -10,8 +10,10 @@ verification_log.txt
 
 response_logs/
 
-# Generated datasets
-data/*_active_yard_containers.csv
-data/*_active_yard_containers.json
-data/*_synthetic_container_dataset.csv
-data/*_synthetic_crane_dataset.csv
+# Generated datasets and raw data files
+data/*.csv
+data/*.json
+data/*.xlsx
+data/*.pdf
+data/*.txt
+data/port_coordinates.json
