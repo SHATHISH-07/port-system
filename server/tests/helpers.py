@@ -62,7 +62,9 @@ def run_test_case(tc: dict) -> dict:
         elif tc["method"] == "DELETE":
             response = client.delete(tc["endpoint"], headers=headers)
         elif tc["method"] == "PUT":
-            response = client.put(tc["endpoint"], json=tc["payload"], headers=headers)
+            response = client.put(tc["endpoint"], json=tc.get("payload"), headers=headers)
+        elif tc["method"] == "PATCH":
+            response = client.patch(tc["endpoint"], json=tc.get("payload"), headers=headers)
             
         response_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
         actual_status = response.status_code
@@ -119,6 +121,7 @@ def run_test_case(tc: dict) -> dict:
             "actual_status": "EXCEPTION",
             "response_time_ms": round((time.perf_counter() - start_time) * 1000, 2),
             "passed": False,
+            "error": str(e),
             "actual_output_snippet": str(e)
         }
     finally:

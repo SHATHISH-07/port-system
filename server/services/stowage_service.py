@@ -25,7 +25,7 @@ _PEB_PROXIMITY = {
 
 def _normalize_column_name(name: str) -> str:
     """
-    Executes _normalize_column_name logic and processing.
+    Normalizes a column name by lowercasing, stripping, and replacing special characters.
     """
     import re
     name = str(name).strip().lower()
@@ -34,7 +34,7 @@ def _normalize_column_name(name: str) -> str:
 
 def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Executes _normalize_dataframe_columns logic and processing.
+    Normalizes all column names in a DataFrame.
     """
     if df.empty:
         return df
@@ -44,7 +44,7 @@ def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def _first_existing_value(row: pd.Series, candidates: List[str]) -> Any:
     """
-    Executes _first_existing_value logic and processing.
+    Returns the first non-empty value found in the row for a given list of candidate columns.
     """
     for col in candidates:
         if col in row and pd.notna(row.get(col)) and str(row.get(col)).strip() != "":
@@ -53,7 +53,7 @@ def _first_existing_value(row: pd.Series, candidates: List[str]) -> Any:
 
 def _safe_str(value: Any, default: str = "") -> str:
     """
-    Executes _safe_str logic and processing.
+    Safely converts a value to a string, handling None, NaNs, and explicit null words.
     """
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return default
@@ -64,7 +64,7 @@ def _safe_str(value: Any, default: str = "") -> str:
 
 def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Executes _dedupe_latest_per_unit logic and processing.
+    Deduplicates a DataFrame by unit_id, keeping the latest record based on timestamp columns.
     """
     if df.empty or "unit_id" not in df.columns:
         return df
@@ -82,7 +82,7 @@ def _dedupe_latest_per_unit(df: pd.DataFrame) -> pd.DataFrame:
 
 def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
     """
-    Executes _derive_recommended_tier logic and processing.
+    Derives the recommended vessel tier based on weight band and loading priority.
     """
     band = str(weight_band).strip().upper()
     if band == "HEAVY":
@@ -93,7 +93,7 @@ def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
 
 def _determine_historical_deck(position_text: str, weight_band: str) -> str:
     """
-    Executes _determine_historical_deck logic and processing.
+    Determines if a vessel position was ABOVE_DECK or BELOW_DECK, falling back to weight heuristics.
     """
     if position_text:
         v_info = parse_vessel_slot(position_text)
@@ -109,7 +109,7 @@ def _compute_crane_metrics(
     visit_id: Optional[str] = None,
 ) -> Optional[dict]:
     """
-    Executes _compute_crane_metrics logic and processing.
+    Computes crane productivity and reshuffle metrics for a specific vessel visit from history.
     """
     if visit_id:
         # Fast path: query crane data directly for this specific visit only
@@ -226,7 +226,7 @@ def get_historical_stowage_analysis(
     visit_id: Optional[str] = None,
 ) -> dict:
     """
-    Executes get_historical_stowage_analysis logic and processing.
+    Retrieves and aggregates historical stowage data, returning a comprehensive analysis.
     """
     df = load_from_db("history", vessel_id=vessel_id, yard_id=yard_id, full_load=True)
     if df is None or df.empty:
@@ -293,18 +293,18 @@ def get_historical_stowage_analysis(
 
     def _resolve_attributes(row: pd.Series) -> pd.Series:
         """
-        Executes _resolve_attributes logic and processing.
+        Derives weight band and historical deck position for a single container row.
         """
         w = _first_existing_value(
             row,
             ["unit_weight_in_kg", "verified_gross_mass_kg", "gross_mass_kg", "gross_weight_kg"],
         )
-        l = _first_existing_value(row, ["container_length", "equipment_length"])
+        length_val = _first_existing_value(row, ["container_length", "equipment_length"])
         pos = _first_existing_value(
             row,
             ["current_position", "ctr_to_position", "ctr_from_position", "slot_position"],
         )
-        wb = classify_weight_band(w, l)
+        wb = classify_weight_band(w, length_val)
         deck = _determine_historical_deck(_safe_str(pos), wb)
         return pd.Series([wb, deck])
 
@@ -469,7 +469,7 @@ def get_historical_stowage_analysis(
 
 def _generate_current_planning_insights(block_strategies, pod_groups, baseline_reshuffle, pod_conc, proj_reduction, crane_metrics=None) -> list[str]:
     """
-    Executes _generate_current_planning_insights logic and processing.
+    Generates strategic textual insights about the current yard block groupings and vessel planning.
     """
     insights = []
     
@@ -519,7 +519,7 @@ def process_current_planning_and_yard_strategy(
     port_rotation: Optional[List[str]] = None,
 ) -> dict:
     """
-    Executes process_current_planning_and_yard_strategy logic and processing.
+    Analyzes current container locations and generates an optimized loading plan and block strategy.
     """
     if not container_ids:
         return _empty_planning_response(vessel_id, 0)
@@ -547,7 +547,7 @@ def process_current_planning_and_yard_strategy(
 
     def resolve_yard_block(row):
         """
-        Executes resolve_yard_block logic and processing.
+        Parses a yard position string to safely extract the block identifier.
         """
         visit_state = _safe_str(row.get("visit_state"), "")
         is_loaded = "DEPARTED" in visit_state.upper()
@@ -710,9 +710,6 @@ def process_current_planning_and_yard_strategy(
             "percentage": round((count / max(resolved_count, 1)) * 100, 1),
             "containerIds": port_ids.get(port, [])
         })
-        
-    rotation_msg = "Discharge sequence built using Master Vessel Schedule and historical fallbacks." if not port_rotation else "Discharge sequence manually overridden by user."
-    
     discharge_sequence = []
     # rank_map is already built at the top!
     # Just need to format it for the UI response
@@ -787,7 +784,8 @@ def process_current_planning_and_yard_strategy(
     pod_concentration = round(correct_count / max(resolved_count, 1), 3)
 
     for blk, grp in df.groupby("yard_block", dropna=True):
-        if str(blk) == "UNKNOWN": continue
+        if str(blk) == "UNKNOWN":
+            continue
         prox = proximity_map.get(str(blk), "MID")
         
         discharge_port_groups = []
@@ -840,7 +838,8 @@ def process_current_planning_and_yard_strategy(
 
     for rank, port in enumerate(ports_ranked, start=1):
         grp = df[df["port_of_discharge"].astype(str) == port] if "port_of_discharge" in df.columns else pd.DataFrame()
-        if grp.empty: continue
+        if grp.empty:
+            continue
         
         wb_counts = grp["weight_band"].value_counts()
         dominant_wb = wb_counts.index[0] if not wb_counts.empty else "MEDIUM"
@@ -935,7 +934,7 @@ def process_current_planning_and_yard_strategy(
 
 def _empty_history_response() -> dict:
     """
-    Executes _empty_history_response logic and processing.
+    Returns an empty dictionary structure for history analysis when no data is found.
     """
     return {
         "summary": {"totalContainers": 0, "heavyCount": 0, "lightCount": 0, "mediumCount": 0, "aboveDeckCount": 0, "belowDeckCount": 0},
@@ -955,7 +954,7 @@ def _empty_history_response() -> dict:
 
 def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
     """
-    Executes _empty_planning_response logic and processing.
+    Returns an empty dictionary structure for current planning when no data is found.
     """
     return {
         "vesselId": vessel_id,

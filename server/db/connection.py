@@ -1,21 +1,17 @@
 from __future__ import annotations
-
 import logging
 from urllib.parse import urlparse
-
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
-
 from config import settings
 
 load_dotenv()
 logger = logging.getLogger("port_system")
 
 DATABASE_URL = settings.DATABASE_URL
-
 
 def _ensure_database_exists() -> None:
     """
@@ -68,16 +64,15 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-
 def get_engine():
     """
-    Executes get_engine logic and processing.
+    Returns the SQLAlchemy Engine instance.
     """
     return engine
 
-
 def get_session():
     """
-    Executes get_session logic and processing.
+    Yields a SQLAlchemy Session instance.
+    Should be used as a dependency in FastAPI.
     """
     return SessionLocal()

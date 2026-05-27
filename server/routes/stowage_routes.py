@@ -19,6 +19,7 @@ from utils.stowage_parser import parse_upload_request
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/stowage", tags=["Stowage"])
 
+# Retrieves aggregated historical stowage patterns, groupings, and distributions
 @router.get("/history/analysis", response_model=HistoryAnalysisResponse)
 def history_analysis(
     vesselId: str = Query(..., description="Outbound Service / Vessel ID"),
@@ -35,7 +36,7 @@ def history_analysis(
         logger.error("Error in history_analysis: %s", e)
         raise HTTPException(status_code=500, detail="Failed to aggregate historical stowage")
 
-
+# Generates a complete stowage plan and yard strategy for current containers
 @router.post("/current/planning", response_model=CurrentPlanningResponse)
 async def current_planning(
     request: Request,
@@ -79,8 +80,7 @@ async def current_planning(
         logger.error("Error in current_planning: %s", e)
         raise HTTPException(status_code=500, detail="Failed to process current stowage plan")
 
-
-
+# Generates a stowage visualization map based on actual database records
 @router.post("/visualization", response_model=StowageVisualizationResponse)
 async def stowage_visualization(
     request: Request,

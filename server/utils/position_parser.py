@@ -7,9 +7,8 @@ _BLOCK_RE = re.compile(r"^([A-Z]?\d{2,3})", re.IGNORECASE)
 
 # NaN-safe helpers
 def _safe_str(value) -> str | None:
-    # return a clean string or None for null-like values (including NaN).
     """
-    Executes _safe_str logic and processing.
+    Safely converts a value to a string, returning None for null-like values and NaNs.
     """
     if value is None:
         return None
@@ -43,9 +42,8 @@ def get_yard_id(row: Any) -> str | None:
 
 # Safe row value accessor (NaN-proof)
 def _row_get(row: Any, key: str):
-    # Handle None
     """
-    Executes _row_get logic and processing.
+    Safely retrieves a value from a row, handling both dictionaries and pandas Series.
     """
     if row is None:
         return None
@@ -63,10 +61,8 @@ def _row_get(row: Any, key: str):
 
 # Core parser
 def parse_position(raw) -> dict | None:
-    # return a normalized dict for any position string.
-    # return None for empty or unrecognised values.
     """
-    Executes parse_position logic and processing.
+    Parses a raw position string and returns a normalized dictionary containing terminal, block, bay, row, and tier.
     """
     s = _safe_str(raw)
     if s is None:
@@ -289,7 +285,7 @@ def parse_position(raw) -> dict | None:
 # Convenience helpers
 def is_vessel_pos(pos) -> bool:
     """
-    Executes is_vessel_pos logic and processing.
+    Checks if a position string refers to a vessel location.
     """
     p = parse_position(pos)
     return bool(p and p["is_vessel"])
@@ -297,19 +293,15 @@ def is_vessel_pos(pos) -> bool:
 # check if the position is yard
 def is_yard_pos(pos) -> bool:
     """
-    Executes is_yard_pos logic and processing.
+    Checks if a position string refers to a yard location.
     """
     p = parse_position(pos)
     return bool(p and p["is_yard"])
 
 # classify a move.
 def classify_move(from_pos, to_pos) -> str:
-    # LOAD      : Yard  -> Vessel
-    # DISCHARGE : Vessel -> Yard
-    # SHIFT     : Yard  -> Yard  |  Vessel -> Vessel
-    # UNKNOWN   : missing / unrecognised positions
     """
-    Executes classify_move logic and processing.
+    Classifies a move type based on the from and to positions.
     """
     f_p = parse_position(from_pos)
     t_p = parse_position(to_pos)
@@ -332,10 +324,8 @@ def classify_move(from_pos, to_pos) -> str:
 
 # safe get position
 def safe_get_pos(row: dict, *keys) -> str | None:
-    # Return the first non-null value from a row using case-insensitive keys.
-    # This is safe for pandas NaN and handles title-case / snake_case columns.
     """
-    Executes safe_get_pos logic and processing.
+    Safely retrieves the first non-null value from a row for the provided case-insensitive keys.
     """
     if row is None:
         return None
@@ -366,9 +356,8 @@ def safe_get_pos(row: dict, *keys) -> str | None:
 
 # block label
 def block_label(parsed: dict | None) -> str | None:
-    # Return a display-ready block label like 'D08' or 'PEB-3A'.
     """
-    Executes block_label logic and processing.
+    Returns a display-ready block label based on the parsed position dictionary.
     """
     if not parsed or not parsed.get("is_yard"):
         return None

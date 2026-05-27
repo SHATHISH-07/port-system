@@ -6,7 +6,7 @@ logger = logging.getLogger("port_system")
 
 def _first_existing_value(row: dict, candidates: list[str]) -> any:
     """
-    Executes _first_existing_value logic and processing.
+    Returns the first non-empty value found in the row for a given list of candidate columns.
     """
     for col in candidates:
         if col in row and pd.notna(row.get(col)) and str(row.get(col)).strip() != "":

@@ -38,7 +38,7 @@ class PositionAllocator:
     """Stateful allocator to simulate physical ship stacking with distinct Bays, Rows, and Tiers per Port."""
     def __init__(self):
         """
-        Executes __init__ logic and processing.
+        Initializes the stateful stowage position allocator.
         """
         self.port_bay_map = {}
         self.next_available_bay = 1
@@ -46,7 +46,7 @@ class PositionAllocator:
 
     def get_next_position(self, port: str, deck: str):
         """
-        Executes get_next_position logic and processing.
+        Calculates the next available yard or vessel slot position for a given port and deck.
         """
         if port not in self.port_bay_map:
             self.port_bay_map[port] = f"{self.next_available_bay:02d}"

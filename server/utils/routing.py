@@ -21,6 +21,10 @@ INITIAL_COORDINATES = {
 }
 
 def load_coordinates():
+    """
+    Loads port coordinates from the local JSON cache file.
+    If the file does not exist, it initializes it with the fallback coordinates.
+    """
     if os.path.exists(COORDS_FILE):
         try:
             with open(COORDS_FILE, "r") as f:
@@ -33,10 +37,13 @@ def load_coordinates():
         return INITIAL_COORDINATES.copy()
 
 def save_coordinates(coords):
+    """
+    Saves the provided port coordinates dictionary to the local JSON cache file.
+    """
     try:
         os.makedirs(os.path.dirname(COORDS_FILE), exist_ok=True)
         with open(COORDS_FILE, "w") as f:
-            json.stringify = json.dump(coords, f, indent=4)
+            json.dump(coords, f, indent=4)
     except Exception as e:
         logger.error("Failed to save port_coordinates.json: %s", e)
 
@@ -56,6 +63,11 @@ def fetch_coordinates(port_code: str):
     return None
 
 def haversine(lat1, lon1, lat2, lon2):
+    """
+    Calculates the great-circle distance between two points on the Earth's surface
+    specified by their latitude and longitude using the Haversine formula.
+    Returns the distance in kilometers.
+    """
     R = 6371.0
     lat1_rad = math.radians(lat1)
     lon1_rad = math.radians(lon1)
@@ -72,6 +84,10 @@ def haversine(lat1, lon1, lat2, lon2):
     return distance
 
 def sort_ports_nearest_neighbor(ports: list[str], start_port: str = None) -> list[str]:
+    """
+    Sorts a list of ports using a greedy nearest-neighbor approach.
+    It resolves unknown ports dynamically via OpenStreetMap and falls back to appending them at the end.
+    """
     if not ports:
         return []
         

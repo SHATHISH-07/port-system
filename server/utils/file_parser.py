@@ -1,8 +1,6 @@
 import json
 import logging
 from io import BytesIO
-from typing import Any
-
 import pandas as pd
 
 logger = logging.getLogger("port_system")
@@ -80,7 +78,7 @@ def extract_container_ids_from_file(file_bytes: bytes, filename: str) -> list[st
 
 def _extract_from_dataframe(df: pd.DataFrame) -> list[str]:
     """
-    Executes _extract_from_dataframe logic and processing.
+    Extracts container IDs from a dataframe by intelligently finding the relevant column name.
     """
     col_names = [str(c).lower().strip() for c in df.columns]
     target_col = None

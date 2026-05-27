@@ -1,21 +1,17 @@
 import threading
 
-# Default training configuration
 DEFAULT_CONFIG = {
     "min_hours": 2,
     "max_hours": 240,
     "min_visit_rows": 5,
 }
 
-# Stay time model training status
 class TrainingStatus:
-    # init training status
+    """
+    Thread-safe class to manage and track the current stay time model training status.
+    """
     def __init__(self):
-        """
-        Executes __init__ logic and processing.
-        """
         self._lock = threading.Lock()
-        # Initialize training status
         self.data = {
             "status": "idle",
             "message": "",
@@ -25,10 +21,9 @@ class TrainingStatus:
             "last_config": DEFAULT_CONFIG.copy(),
         }
     
-    # method to set the training status
-    def set(self, status, message="", records_count=0, data_source="", training_type="", config=None):
+    def set(self, status: str, message: str = "", records_count: int = 0, data_source: str = "", training_type: str = "", config: dict = None):
         """
-        Executes set logic and processing.
+        Updates the current training status.
         """
         with self._lock:
             self.data["status"] = status
@@ -42,18 +37,16 @@ class TrainingStatus:
             if config:
                 self.data["last_config"] = config
     
-    # method to get the training status
-    def get(self):
+    def get(self) -> dict:
         """
-        Executes get logic and processing.
+        Returns a dictionary copy of the current training status.
         """
         with self._lock:
             return dict(self.data)
     
-    # method to get the last training config
     def get_last_config(self) -> dict:
         """
-        Executes get_last_config logic and processing.
+        Retrieves the configuration used in the most recent training run.
         """
         with self._lock:
             return dict(self.data.get("last_config", DEFAULT_CONFIG))

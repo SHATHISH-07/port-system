@@ -5,7 +5,7 @@ class TTLCache:
     # Initialize cache with a default TTL of 1 hour
     def __init__(self, ttl_seconds: int = 3600):
         """
-        Executes __init__ logic and processing.
+        Initializes the TTL cache with a given time-to-live in seconds.
         """
         self.ttl_seconds = ttl_seconds
         self._cache = {}
@@ -13,7 +13,7 @@ class TTLCache:
     # Get cached data
     def get(self, key: str):
         """
-        Executes get logic and processing.
+        Retrieves the value for the given key if it has not expired. Returns None otherwise.
         """
         if key in self._cache:
             entry = self._cache[key]
@@ -26,7 +26,7 @@ class TTLCache:
     # Add data to cache
     def set(self, key: str, value: any):
         """
-        Executes set logic and processing.
+        Stores the given value in the cache with the current timestamp.
         """
         self._cache[key] = {
             "value": value,
@@ -36,14 +36,14 @@ class TTLCache:
     # Clear cache
     def clear(self):
         """
-        Executes clear logic and processing.
+        Clears all entries from the cache.
         """
         self._cache.clear()
     
     # Remove data from cache
     def remove(self, key: str):
         """
-        Executes remove logic and processing.
+        Removes a specific entry from the cache by its key.
         """
         if key in self._cache:
             del self._cache[key]

@@ -27,13 +27,13 @@ logger = logging.getLogger("port_system")
 # Small helpers
 def _is_yes(val) -> bool:
     """
-    Executes _is_yes logic and processing.
+    Checks if a string or value represents a 'yes', 'true', or '1' flag.
     """
     return str(val).strip().upper() in ("YES", "Y", "TRUE", "1")
 
 def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
     """
-    Executes _extract_move_side logic and processing.
+    Determines if a crane move was a LOAD, DISCHARGE, SHIFT, or RESTOW and parses the yard position.
     """
     row = dict(row)
     from_pos = safe_get_pos(row, "crane_from", "ctr_from_position", "from_position")
@@ -70,7 +70,7 @@ def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
 # Vessel summary fetch  (fast-path from vessel_visits table)
 def _fetch_vessel_summary(vessel_id: str) -> Optional[dict]:
     """
-    Executes _fetch_vessel_summary logic and processing.
+    Fetches the latest summary record for a vessel visit from the database.
     """
     try:
         df = load_from_db("vessel_visits", vessel_id=vessel_id)
@@ -88,7 +88,7 @@ def _fetch_vessel_summary(vessel_id: str) -> Optional[dict]:
 # Crane data fetching
 def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
     """
-    Executes _fetch_crane_for_visit logic and processing.
+    Fetches and normalizes crane operations for a specific visit.
     """
     from db.queries import load_from_db
     try:
@@ -136,7 +136,7 @@ def _fetch_crane_counts_batch(visit_ids: list[str]) -> dict[str, int]:
 
 def _fetch_crane_stats_batch(visit_groups: dict) -> dict:
     """
-    Executes _fetch_crane_stats_batch logic and processing.
+    Fetches and computes crane statistics for a batch of vessel visits.
     """
     visit_ids = list(visit_groups.keys())
     if not visit_ids:
@@ -170,7 +170,7 @@ def _fetch_crane_stats_batch(visit_groups: dict) -> dict:
 
 def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
     """
-    Executes _compute_crane_stats logic and processing.
+    Computes crane productivity (moves per hour), duration, and restow ratios for a visit.
     """
     empty_stats = {
         "_crane_move_count":      0,
@@ -234,7 +234,7 @@ def _compute_crane_stats(crane_df: pd.DataFrame, container_count: int) -> dict:
 # Visit detail extraction
 def _visit_details(visit_groups: dict) -> dict:
     """
-    Executes _visit_details logic and processing.
+    Extracts detailed operational metrics (stay hours, load/discharge counts, weights) per visit.
     """
     out: dict = {}
     batch_crane_stats = _fetch_crane_stats_batch(visit_groups)
@@ -292,10 +292,7 @@ def _visit_details(visit_groups: dict) -> dict:
             float(pd.to_numeric(vdf[w_col], errors="coerce").mean())
             if w_col and not vdf[w_col].isna().all() else 0.0
         )
-        freight_breakdown = (
-            vdf["freight_kind"].value_counts().to_dict()
-            if "freight_kind" in vdf.columns else {}
-        )
+        # Removed unused freight_breakdown
 
         svc_name = (
             str(vdf["outbound_service"].iloc[0]).strip()
@@ -650,8 +647,7 @@ def get_yard_heatmap_data(
         })
 
     if berth_analysis:
-        top_impact = berth_analysis[0]["impact_score"]
-        
+        # 1. Target Vessel Window
         # 1. Target Vessel Window
         target_visit_id = str(visit_id) if visit_id else ""
         min_time, max_time = pd.NaT, pd.NaT
@@ -785,7 +781,7 @@ def analyze_vessel_dashboard(
     optional_unit_ids: list[str] = None,
 ) -> dict:
     """
-    Executes analyze_vessel_dashboard logic and processing.
+    Analyzes vessel data to predict stay durations, identify bottlenecks, and synthesize operational dashboards.
     """
     if df is None or df.empty:
         return {"error": "No data available", "vessel": vessel_service}
@@ -1053,15 +1049,8 @@ def analyze_vessel_dashboard(
         total_loaded += int((unknowns & (move_kind == "LOAD")).sum())
         total_discharged += int((unknowns & (move_kind == "DISCHARGE")).sum())
 
-    hazardous = int(visit_df["hazardous_flag"].apply(_is_yes).sum()) if "hazardous_flag" in visit_df.columns else 0
-    reefer = int(visit_df["reefer"].apply(_is_yes).sum()) if "reefer" in visit_df.columns else 0
-    oog = int(visit_df["oog_unit"].apply(_is_yes).sum()) if "oog_unit" in visit_df.columns else 0
-    total_units = int(visit_df["unit_id"].nunique()) if "unit_id" in visit_df.columns else 0
-
-    avg_hours = actual.get("avg_hours") or 0
-
-    top_visit_stats_merged = actual.get("visits", {}).get(str(top_visit_id), {})
-    restow_count = top_visit_stats_merged.get("restow_count", 0)
+    # Removed unused local variables for hazardous, reefer, oog, total_units, avg_hours, and restow_count
+    actual.get("visits", {}).get(str(top_visit_id), {})
 
     if loaded_override is not None:
         total_loaded = loaded_override

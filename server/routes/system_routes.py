@@ -17,11 +17,10 @@ class RequestCreate(BaseModel):
     type: str 
     payload: Optional[str] = None
 
-# GET /audit-logs
 @router.get("/audit-logs")
 def get_audit_logs(admin: dict = Depends(require_admin)):
     """
-    Executes get_audit_logs logic and processing.
+    Retrieves the 100 most recent system audit logs for administrative review.
     """
     engine = get_engine()
     with engine.connect() as conn:
@@ -34,11 +33,10 @@ def get_audit_logs(admin: dict = Depends(require_admin)):
     return [dict(r._mapping) for r in result]
 
 
-# GET /requests
 @router.get("/requests")
 def get_requests(user: dict = Depends(get_current_user)):
     """
-    Executes get_requests logic and processing.
+    Retrieves operational requests. Admins see all requests; standard users see only their own.
     """
     engine = get_engine()
     with engine.connect() as conn:
@@ -59,11 +57,10 @@ def get_requests(user: dict = Depends(get_current_user)):
     return [dict(r._mapping) for r in result]
 
 
-# POST /requests
 @router.post("/requests")
 def create_request(req: RequestCreate, user: dict = Depends(get_current_user)):
     """
-    Executes create_request logic and processing.
+    Creates a new operational request assigned to the currently authenticated user.
     """
     engine = get_engine()
     with engine.begin() as conn:

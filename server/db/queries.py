@@ -1,11 +1,8 @@
 from __future__ import annotations
-
 import logging
 import re
-
 import pandas as pd
 from sqlalchemy import text
-
 from db.connection import get_engine
 from utils.datetime_utils import parse_datetime
 from config import settings
@@ -14,7 +11,7 @@ logger = logging.getLogger("port_system")
 
 def _parse_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Executes _parse_datetime_columns logic and processing.
+    Parses configured date/time columns into standard pandas datetime formats.
     """
     for col in [
         "move_complete_time",
@@ -31,7 +28,7 @@ def _parse_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def _column_exists(conn, table: str, column: str) -> bool:
     """
-    Executes _column_exists logic and processing.
+    Checks if a specific column exists in the database table.
     """
     row = conn.execute(
         text(settings.QUERY_COLUMN_EXISTS),
@@ -42,7 +39,7 @@ def _column_exists(conn, table: str, column: str) -> bool:
 
 def _table_exists(conn, table: str) -> bool:
     """
-    Executes _table_exists logic and processing.
+    Checks if a given table exists in the database.
     """
     row = conn.execute(
         text(settings.QUERY_TABLE_EXISTS),
@@ -53,7 +50,7 @@ def _table_exists(conn, table: str) -> bool:
 
 def _safe_lower(value: str | None) -> str:
     """
-    Executes _safe_lower logic and processing.
+    Safely converts a string to lowercase and strips whitespace, handling None.
     """
     return (value or "").lower().strip()
 
@@ -63,7 +60,7 @@ _VALID_YARD = re.compile(r"^[a-z0-9_]{1,30}$")
 
 def _add_index(conn, table: str, index_name: str, columns: str) -> None:
     """
-    Executes _add_index logic and processing.
+    Adds an index to the specified table if it doesn't already exist.
     """
     try:
         conn.execute(text(settings.QUERY_CREATE_INDEX.format(index_name=index_name, table=table, columns=columns)))
@@ -132,7 +129,8 @@ def ensure_yard_tables(engine, yard_id: str) -> None:
 
 def init_simplified_schema(engine) -> None:
     """
-    Executes init_simplified_schema logic and processing.
+    Initializes global tables for ingestion management, rejection tracking, 
+    and iterates through all yards to ensure their respective schema components exist.
     """
     with engine.begin() as conn:
         try:
@@ -173,7 +171,7 @@ def init_simplified_schema(engine) -> None:
 
 def init_auth_schema(engine) -> None:
     """
-    Executes init_auth_schema logic and processing.
+    Initializes the database schema for authentication, user management, and audit logging.
     """
     with engine.begin() as conn:
         conn.execute(text(settings.QUERY_CREATE_USERS))
@@ -187,7 +185,7 @@ def init_auth_schema(engine) -> None:
 
 def init_training_metadata_schema(engine) -> None:
     """
-    Executes init_training_metadata_schema logic and processing.
+    Initializes the database schema for AI model training metadata, features, and model versions.
     """
     with engine.begin() as conn:
         conn.execute(text(settings.QUERY_CREATE_TRAINING_METADATA))
@@ -207,7 +205,7 @@ def init_training_metadata_schema(engine) -> None:
 
 def _resolve_terminal(yard_id: str | None) -> str:
     """
-    Executes _resolve_terminal logic and processing.
+    Resolves the provided yard ID into a primary terminal identifier (e.g. PEB or CWIT).
     """
     if yard_id:
         y = str(yard_id).upper()
@@ -228,7 +226,8 @@ def load_from_db(
     columns: list[str] = None,
 ) -> pd.DataFrame:
     """
-    Executes load_from_db logic and processing.
+    Main entry point for loading operational data (crane, current, history) into a DataFrame.
+    Automatically discovers and queries the relevant tables based on dataset_type.
     """
 
     engine = get_engine()
