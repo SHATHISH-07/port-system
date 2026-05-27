@@ -20,7 +20,7 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <Box
-      sx={{ display: "flex", height: "100vh", bgcolor: "background.default" }}
+      sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, height: "100vh", bgcolor: "background.default" }}
     >
       <Sidebar />
 
@@ -32,7 +32,8 @@ export default function Layout({ children }: LayoutProps) {
           flexDirection: "column",
           overflow: isSelfContainedPage ? "hidden" : "auto",
           minWidth: 0,
-          p: isSelfContainedPage ? 0 : { xs: "20px 16px", md: "32px 40px" },
+          p: isSelfContainedPage ? 0 : { xs: "20px 0px", sm: "20px 16px", md: "32px 40px" },
+          position: "relative",
         }}
       >
         <Box

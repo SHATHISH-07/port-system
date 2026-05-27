@@ -422,7 +422,7 @@ function HeatmapPlaceholder() {
   );
 }
 
-export default function HeatmapView({ data, loading, targetBerthId }: { data?: VesselHeatmapViewData | null; loading?: boolean; targetBerthId?: string; }) {
+export default function BlockIllustrator({ data, loading, targetBerthId }: { data?: VesselHeatmapViewData | null; loading?: boolean; targetBerthId?: string; }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
 
@@ -472,12 +472,12 @@ export default function HeatmapView({ data, loading, targetBerthId }: { data?: V
         }
       `}</style>
 
-      <TransformWrapper initialScale={0.75} minScale={0.4} maxScale={3} centerOnInit wheel={{ step: 0.002 }} panning={{ disabled: false }}>
+      <TransformWrapper initialScale={0.75} minScale={0.15} maxScale={3} centerOnInit wheel={{ step: 0.002 }} panning={{ disabled: false }}>
         {({ resetTransform }) => (
           <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
 
             {/* Glassmorphic Controls Header */}
-            <Box sx={{ position: "absolute", top: 24, right: 24, zIndex: 100 }}>
+            <Box sx={{ position: "absolute", top: { xs: 52, lg: "auto" }, bottom: { xs: "auto", lg: 16 }, right: 16, zIndex: 100 }}>
               <Tooltip title="Reset View" placement="left">
                 <IconButton
                   onClick={() => resetTransform()}
@@ -487,7 +487,7 @@ export default function HeatmapView({ data, loading, targetBerthId }: { data?: V
                     border: `1px solid ${isDark ? alpha("#ffffff", 0.1) : alpha("#000000", 0.1)}`,
                     boxShadow: `0 4px 12px ${alpha("#000", 0.1)}`,
                     "&:hover": { bgcolor: isDark ? "#334155" : "#f8fafc" },
-                    p: 1,
+                    p: 0.6, width: 28, height: 28
                   }}
                 >
                   <RestartAltRounded fontSize="small" sx={{ color: isDark ? "#fff" : "#0f172a" }} />
@@ -495,15 +495,15 @@ export default function HeatmapView({ data, loading, targetBerthId }: { data?: V
               </Tooltip>
             </Box>
 
-            {/* Glassmorphic Legend */}
-            <Box sx={{ position: "absolute", bottom: 24, left: 24, zIndex: 100 }}>
+            <Box sx={{ position: "absolute", top: { xs: 88, lg: "auto" }, bottom: { xs: "auto", lg: 24 }, right: { xs: 16, lg: "auto" }, left: { xs: "auto", lg: 24 }, zIndex: 100 }}>
               <Box
                 sx={{
                   display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  px: 2,
-                  py: 0.6,
+                  alignItems: { xs: "flex-start", lg: "center" },
+                  flexDirection: { xs: "column", lg: "row" },
+                  gap: { xs: 1.5, lg: 1.2 },
+                  px: { xs: 1.5, lg: 1.2 },
+                  py: { xs: 1, lg: 0.4 },
                   bgcolor: isDark ? "rgba(18, 22, 31, 0.9)" : "rgba(255, 255, 255, 0.9)",
                   backdropFilter: "blur(12px)",
                   border: `1px solid ${isDark ? alpha("#ffffff", 0.1) : alpha("#000", 0.08)}`,
@@ -511,7 +511,7 @@ export default function HeatmapView({ data, loading, targetBerthId }: { data?: V
                   borderRadius: 2,
                 }}
               >
-                <Typography sx={{ fontSize: "0.5rem", color: "text.secondary", fontWeight: 800, letterSpacing: "0.5px", textTransform: "uppercase", mr: 0.5 }}>
+                <Typography sx={{ display: { xs: "none", lg: "block" }, fontSize: "0.45rem", color: "text.secondary", fontWeight: 800, letterSpacing: "0.5px", textTransform: "uppercase", mr: 0.2 }}>
                   Concentration
                 </Typography>
                 {[
@@ -520,8 +520,8 @@ export default function HeatmapView({ data, loading, targetBerthId }: { data?: V
                   { c: "#00ff00", l: "Low" },
                 ].map(({ c, l }) => (
                   <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <Box sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }} />
-                    <Typography sx={{ fontSize: "0.6rem", color: "text.secondary", fontWeight: 500 }}>{l}</Typography>
+                    <Box sx={{ width: { xs: 7, lg: 6 }, height: { xs: 7, lg: 6 }, bgcolor: c, borderRadius: "1px" }} />
+                    <Typography sx={{ fontSize: { xs: "0.6rem", lg: "0.55rem" }, color: "text.secondary", fontWeight: 500 }}>{l}</Typography>
                   </Box>
                 ))}
               </Box>

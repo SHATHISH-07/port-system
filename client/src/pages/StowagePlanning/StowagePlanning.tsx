@@ -52,11 +52,11 @@ export default function StowagePlanning() {
     <Box
       sx={{
         width: "100%",
-        height: visualizationOpen ? "calc(100vh - 64px)" : "auto",
+        height: visualizationOpen ? "calc(100dvh - 64px)" : "auto",
+        overflow: visualizationOpen ? "hidden" : "visible",
         bgcolor: "transparent",
         display: "flex",
         flexDirection: "column",
-        position: "relative",
       }}
     >
       <Box sx={{ display: visualizationOpen ? "none" : "block" }}>
@@ -88,9 +88,10 @@ export default function StowagePlanning() {
 
       <Box
         sx={{
-          p: visualizationOpen ? 0 : 3,
+          p: visualizationOpen ? 0 : { xs: 2, md: 3 },
           display: "flex",
           flexDirection: "column",
+          width: "100%",
         }}
       >
         <Box
@@ -146,17 +147,18 @@ export default function StowagePlanning() {
         </Box>
       </Box>
 
-      {/* Render Visualization as an absolute overlay so we don't unmount CurrentPlanningTab, but KEEP the sidebar visible! */}
       {visualizationOpen && (
         <Box
           sx={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 9999,
-            bgcolor: "transparent",
-            display: "flex",
-            flexDirection: "column",
-            m: { xs: "-20px -16px", md: "-32px -40px" },
+            position: { xs: "fixed", lg: "absolute" },
+            top: { xs: 0, lg: 32 },
+            bottom: { xs: 0, lg: 32 },
+            left: { xs: 0, lg: 40 },
+            right: { xs: 0, lg: 40 },
+            zIndex: 1300,
+            bgcolor: "background.default",
+            borderRadius: { xs: 0, lg: "16px" },
+            overflow: "hidden",
           }}
         >
           <StowageVisualizationTab

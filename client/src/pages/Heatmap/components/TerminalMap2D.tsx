@@ -48,8 +48,8 @@ function getZones(layout: Record<string, { x: number; y: number }>): ZoneData[] 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 const Controls = ({ resetTransform }: { resetTransform: () => void }) => (
-  <Box sx={{ position: "absolute", bottom: 16, right: 64, zIndex: 100, display: "flex", gap: 1 }}>
-    <Tooltip title="Reset View">
+  <Box sx={{ position: "absolute", top: { xs: 52, lg: "auto" }, bottom: { xs: "auto", lg: 16 }, right: 16, zIndex: 100 }}>
+    <Tooltip title="Reset View" placement="left">
       <IconButton
         onClick={() => resetTransform()}
         sx={{
@@ -62,7 +62,6 @@ const Controls = ({ resetTransform }: { resetTransform: () => void }) => (
           width: 28,
           height: 28,
         }}
-        size="small"
       >
         <RestartAltRounded fontSize="small" />
       </IconButton>
@@ -255,7 +254,7 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
 
       <TransformWrapper
         initialScale={0.72}
-        minScale={0.4}
+        minScale={0.15}
         maxScale={5}
         centerOnInit
         wheel={{ step: 0.001 }}
@@ -493,13 +492,13 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
         )}
       </TransformWrapper>
 
-      <Box sx={{ position: "absolute", bottom: 16, left: 16, zIndex: 10 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 1.2, py: 0.6, bgcolor: isDark ? "rgba(18, 22, 31, 0.9)" : "rgba(255, 255, 255, 0.9)", backdropFilter: "blur(4px)", border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
-          <Typography sx={{ fontSize: "0.5rem", color: "text.secondary", fontWeight: 800, letterSpacing: "0.5px", textTransform: "uppercase", mr: 0.5 }}>Concentration</Typography>
+      <Box sx={{ position: "absolute", top: { xs: 88, lg: "auto" }, bottom: { xs: "auto", lg: 24 }, right: { xs: 16, lg: "auto" }, left: { xs: "auto", lg: 24 }, zIndex: 100 }}>
+        <Box sx={{ display: "flex", alignItems: { xs: "flex-start", lg: "center" }, flexDirection: { xs: "column", lg: "row" }, gap: { xs: 1.5, lg: 1.2 }, px: { xs: 1.5, lg: 1.2 }, py: { xs: 1, lg: 0.4 }, bgcolor: isDark ? "rgba(18, 22, 31, 0.9)" : "rgba(255, 255, 255, 0.9)", backdropFilter: "blur(4px)", border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+          <Typography sx={{ display: { xs: "none", lg: "block" }, fontSize: "0.45rem", color: "text.secondary", fontWeight: 800, letterSpacing: "0.5px", textTransform: "uppercase", mr: 0.2 }}>Concentration</Typography>
           {[{ c: "#ff0000", l: "High" }, { c: "#ffaa00", l: "Medium" }, { c: "#00ff00", l: "Low" }].map(({ c, l }) => (
             <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Box sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }} />
-              <Typography sx={{ fontSize: "0.6rem", color: "text.secondary", fontWeight: 500 }}>{l}</Typography>
+              <Box sx={{ width: { xs: 7, lg: 6 }, height: { xs: 7, lg: 6 }, bgcolor: c, borderRadius: "1px" }} />
+              <Typography sx={{ fontSize: { xs: "0.6rem", lg: "0.55rem" }, color: "text.secondary", fontWeight: 500 }}>{l}</Typography>
             </Box>
           ))}
         </Box>

@@ -1,4 +1,4 @@
-import { Card, Box, Typography, useTheme, alpha, Grid } from '@mui/material';
+import { Card, Box, Typography, useTheme, alpha, Grid, useMediaQuery } from '@mui/material';
 import {
     ResponsiveContainer,
     ComposedChart,
@@ -26,15 +26,15 @@ function TrendChartTooltip({ active, payload, label }: any) {
 
     return (
         <Box
-            sx={{
-                bgcolor: 'background.paper',
+            sx={(theme) => ({
+                bgcolor: theme.palette.mode === 'dark' ? '#121212' : '#ffffff',
                 border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: 2,
-                p: 1.5,
+                p: { xs: 1, sm: 1.5 },
                 boxShadow: '0 12px 30px rgba(0,0,0,0.12)',
-                minWidth: 160,
-            }}
+                minWidth: { xs: 130, sm: 160 },
+            })}
         >
             <Typography
                 variant="caption"
@@ -56,7 +56,7 @@ function TrendChartTooltip({ active, payload, label }: any) {
                             flexShrink: 0,
                         }}
                     />
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                    <Typography sx={{ fontSize: { xs: '0.7rem', sm: '0.875rem' }, fontWeight: 600, color: 'text.primary' }}>
                         {item.name}:{' '}
                         <Box component="span" sx={{ color: item.color || 'text.primary', fontWeight: 700 }}>
                             {Number(item.value).toFixed(1)}
@@ -73,15 +73,15 @@ function PortChartTooltip({ active, payload, label }: any) {
 
     return (
         <Box
-            sx={{
-                bgcolor: 'background.paper',
+            sx={(theme) => ({
+                bgcolor: theme.palette.mode === 'dark' ? '#121212' : '#ffffff',
                 border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: 2,
-                p: 1.5,
+                p: { xs: 1, sm: 1.5 },
                 boxShadow: '0 12px 30px rgba(0,0,0,0.12)',
-                minWidth: 160,
-            }}
+                minWidth: { xs: 130, sm: 160 },
+            })}
         >
             <Typography
                 variant="caption"
@@ -97,7 +97,7 @@ function PortChartTooltip({ active, payload, label }: any) {
                 {label}
             </Typography>
             {payload.map((item: any) => (
-                <Typography key={item.dataKey} variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                <Typography key={item.dataKey} sx={{ fontSize: { xs: '0.7rem', sm: '0.875rem' }, fontWeight: 700, color: 'primary.main' }}>
                     {item.value.toLocaleString()} units discharged
                 </Typography>
             ))}
@@ -125,6 +125,7 @@ export default function StayTimeTrendChart({
     avgHours: number;
 }) {
     const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     // ─── Trend chart data ────────────────────────────────────────────────────
     const trendData = Object.entries(visits || {})
@@ -215,14 +216,14 @@ export default function StayTimeTrendChart({
                         },
                     }}
                 >
-                    {/* Header */}
                     <Box
                         sx={{
-                            px: 3,
+                            px: { xs: 1.5, sm: 2, md: 3 },
                             py: 2.5,
                             borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
                             display: 'flex',
-                            alignItems: 'flex-start',
+                            flexDirection: { xs: 'column', sm: 'row' },
+                            alignItems: { xs: 'flex-start', sm: 'center' },
                             justifyContent: 'space-between',
                             gap: 2,
                         }}
@@ -272,16 +273,16 @@ export default function StayTimeTrendChart({
                     </Box>
 
                     {/* Chart area – ResponsiveContainer MUST have an explicit pixel height, not 100% */}
-                    <Box sx={{ pt: 3, pb: 1, px: 2 }}>
+                    <Box sx={{ pt: 3, pb: 1, px: { xs: 0.5, sm: 2 } }}>
                         {trendData.length === 0 ? (
                             <Box sx={{ height: 380, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <EmptyState message="No visit history available for this vessel." />
                             </Box>
                         ) : (
-                            <ResponsiveContainer width="100%" height={400}>
+                            <ResponsiveContainer width="100%" height={isMobile ? 320 : 400}>
                                 <ComposedChart
                                     data={trendData}
-                                    margin={{ top: 8, right: 24, left: 8, bottom: 40 }}
+                                    margin={{ top: 8, right: isMobile ? 4 : 24, left: isMobile ? 0 : 8, bottom: isMobile ? 80 : 40 }}
                                 >
                                     <defs>
                                         <linearGradient id="stayFill" x1="0" y1="0" x2="0" y2="1">
@@ -306,19 +307,20 @@ export default function StayTimeTrendChart({
 
                                     <XAxis
                                         dataKey="visitId"
+                                        interval={0}
                                         tickLine={false}
                                         axisLine={{ stroke: alpha(theme.palette.divider, 0.4) }}
                                         tick={{
                                             fill: theme.palette.text.secondary,
-                                            fontSize: 10,
+                                            fontSize: isMobile ? 9 : 10,
                                             fontWeight: 600,
                                         }}
-                                        angle={-45}
+                                        angle={isMobile ? -90 : -45}
                                         textAnchor="end"
-                                        height={60}
-                                        dx={-4}
-                                        dy={4}
-                                        label={{
+                                        height={isMobile ? 80 : 60}
+                                        dx={isMobile ? -4 : -4}
+                                        dy={isMobile ? 0 : 4}
+                                        label={isMobile ? undefined : {
                                             value: 'Visit ID',
                                             position: 'insideBottom',
                                             offset: -10,
@@ -326,7 +328,7 @@ export default function StayTimeTrendChart({
                                             fontSize: 11,
                                             fontWeight: 700,
                                         }}
-                                        tickFormatter={(val) => String(val).length > 14 ? String(val).substring(0, 14) + '...' : val}
+                                        tickFormatter={(val) => String(val).length > (isMobile ? 10 : 14) ? String(val).substring(0, isMobile ? 10 : 14) + '...' : val}
                                     />
 
                                     {/* Left Y-axis: Stay Hours */}
@@ -336,11 +338,11 @@ export default function StayTimeTrendChart({
                                         axisLine={false}
                                         tick={{
                                             fill: theme.palette.text.secondary,
-                                            fontSize: 11,
+                                            fontSize: 10,
                                             fontWeight: 600,
                                         }}
-                                        width={56}
-                                        label={{
+                                        width={isMobile ? 44 : 56}
+                                        label={isMobile ? undefined : {
                                             value: 'Stay Time (hrs)',
                                             angle: -90,
                                             position: 'insideLeft',
@@ -358,6 +360,7 @@ export default function StayTimeTrendChart({
                                         orientation="right"
                                         tickLine={false}
                                         axisLine={false}
+                                        hide={isMobile}
                                         tick={{
                                             fill: theme.palette.text.secondary,
                                             fontSize: 11,
@@ -378,11 +381,13 @@ export default function StayTimeTrendChart({
 
                                     <Tooltip
                                         content={<TrendChartTooltip />}
+                                        position={isMobile ? { x: 50, y: 235 } : undefined}
                                         cursor={{
                                             stroke: alpha(theme.palette.primary.main, 0.4),
                                             strokeWidth: 1.5,
                                             strokeDasharray: '4 4',
                                         }}
+                                        wrapperStyle={{ zIndex: 1000 }}
                                     />
 
                                     <Legend
@@ -455,7 +460,7 @@ export default function StayTimeTrendChart({
                     {/* Header */}
                     <Box
                         sx={{
-                            px: 3,
+                            px: { xs: 1.5, sm: 2, md: 3 },
                             py: 2.5,
                             borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
                         }}
@@ -469,7 +474,7 @@ export default function StayTimeTrendChart({
                     </Box>
 
                     {/* Chart area */}
-                    <Box sx={{ pt: 3, pb: 2, pr: 2, pl: 1 }}>
+                    <Box sx={{ pt: 3, pb: 2, pr: { xs: 1, sm: 2 }, pl: { xs: 0, sm: 1 } }}>
                         {portData.length === 0 ? (
                             <Box sx={{ height: 380, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <EmptyState message="No port breakdown available." />
@@ -479,7 +484,7 @@ export default function StayTimeTrendChart({
                                 <BarChart
                                     data={portData}
                                     layout="vertical"
-                                    margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+                                    margin={{ top: 4, right: isMobile ? 12 : 16, left: isMobile ? 4 : 4, bottom: 4 }}
                                     barCategoryGap="28%"
                                 >
                                     <CartesianGrid
@@ -508,7 +513,7 @@ export default function StayTimeTrendChart({
                                         tickLine={false}
                                         axisLine={false}
                                         // Let recharts calculate the width needed; set a sensible min
-                                        width={72}
+                                        width={isMobile ? 64 : 72}
                                         tick={{
                                             fill: theme.palette.text.primary,
                                             fontSize: 11,
@@ -521,6 +526,7 @@ export default function StayTimeTrendChart({
                                         cursor={{
                                             fill: alpha(theme.palette.text.primary, 0.04),
                                         }}
+                                        wrapperStyle={{ zIndex: 1000 }}
                                     />
 
                                     <Bar

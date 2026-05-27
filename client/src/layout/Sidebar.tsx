@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -7,6 +7,7 @@ import {
   useTheme,
   Button,
   Collapse,
+  useMediaQuery,
 } from "@mui/material";
 import {
   HistoryOutlined,
@@ -34,28 +35,28 @@ const USER_ITEMS: {
   icon?: React.ElementType;
   userOnly?: boolean;
 }[] = [
-  {
-    path: "/stay-analysis",
-    label: "Stay Time Analysis",
-    icon: HistoryOutlined,
-  },
-  {
-    path: "/heatmap",
-    label: "Port Heatmap",
-    icon: WhatshotIcon,
-  },
-  {
-    path: "/stowage-planning",
-    label: "Stowage Planning",
-    icon: WidgetsOutlinedIcon,
-  },
-  {
-    path: "/requests",
-    label: "Request",
-    icon: AssignmentOutlined,
-    userOnly: true,
-  },
-];
+    {
+      path: "/stay-analysis",
+      label: "Stay Time Analysis",
+      icon: HistoryOutlined,
+    },
+    {
+      path: "/heatmap",
+      label: "Port Heatmap",
+      icon: WhatshotIcon,
+    },
+    {
+      path: "/stowage-planning",
+      label: "Stowage Planning",
+      icon: WidgetsOutlinedIcon,
+    },
+    {
+      path: "/requests",
+      label: "Request",
+      icon: AssignmentOutlined,
+      userOnly: true,
+    },
+  ];
 
 const ADMIN_ITEMS = [
   { path: "/requests", label: "Requests" },
@@ -66,11 +67,18 @@ const ADMIN_ITEMS = [
 ];
 
 export default function Sidebar() {
-  const [open, setOpen] = useState(true);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [open, setOpen] = useState(!isMobile);
   const [adminOpen, setAdminOpen] = useState(false);
 
+  useEffect(() => {
+    if (isMobile) {
+      setOpen(false);
+    }
+  }, [isMobile]);
+
   const loc = useLocation();
-  const theme = useTheme();
   const { user, logout } = useAuth();
   const { mode, toggleColorMode } = useColorMode();
 
@@ -170,20 +178,39 @@ export default function Sidebar() {
   };
 
   return (
-    <Box
-      component="nav"
+    <>
+      {isMobile && open && (
+        <Box
+          onClick={() => setOpen(false)}
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            bgcolor: "rgba(0,0,0,0.4)",
+            zIndex: 199,
+          }}
+        />
+      )}
+      {isMobile && open && <Box sx={{ height: 54, flexShrink: 0, width: "100%" }} />}
+      <Box
+        component="nav"
       sx={{
-        width: open ? OPEN : CLOSED,
-        minHeight: "100vh",
+        width: open ? OPEN : (isMobile ? "100vw" : CLOSED),
+        minHeight: (isMobile && !open) ? "auto" : "100vh",
+        height: (isMobile && !open) ? "auto" : "100vh",
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
         bgcolor: theme.palette.background.default,
-        transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+        transition: "height 300ms, width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
         overflow: "hidden",
-        position: "sticky",
+        position: isMobile ? (open ? "fixed" : "static") : "sticky",
         top: 0,
+        left: 0,
         zIndex: 200,
+        boxShadow: (isMobile && open) ? 24 : 0,
       }}
     >
       {/* ─── Brand / Title / Toggle ─── */}
@@ -192,15 +219,69 @@ export default function Sidebar() {
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: open ? "space-between" : "center",
-          p: open ? "16px 20px" : "12px 16px",
-          pt: open ? 2.5 : 2,
+          justifyContent: (!isMobile && !open) ? "center" : "space-between",
+          p: (open || isMobile) ? "16px 20px" : "12px 16px",
+          pt: (open || isMobile) ? 2.5 : 2,
           gap: 1.5,
           flexShrink: 0,
           mb: 0.5,
         }}
       >
-        {open ? (
+        {isMobile ? (
+          <>
+            <Box
+              onClick={() => {
+                setOpen(!open);
+                if (open) setAdminOpen(false);
+              }}
+              sx={{
+                width: 34,
+                height: 34,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "8px",
+                "&:hover": { bgcolor: menuIconHover },
+                "& .menu-icon": { display: "none" },
+                "&:hover .logo-icon": { display: "none" },
+                "&:hover .menu-icon": {
+                  display: "block",
+                  color: textActiveColor,
+                },
+              }}
+            >
+              <Box
+                className="logo-icon"
+                sx={{
+                  width: 30,
+                  height: 30,
+                  bgcolor: isDark ? "#ffffff" : "#000000",
+                  borderRadius: 1.5,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              />
+              <ViewSidebarOutlined
+                className="menu-icon"
+                sx={{ fontSize: 20, color: menuIconColor }}
+              />
+            </Box>
+
+            <Typography
+              sx={{
+                fontSize: "1rem",
+                fontWeight: 700,
+                color: "primary",
+                lineHeight: 1.2,
+                letterSpacing: "0.02em",
+              }}
+            >
+              Deck Optimiser
+            </Typography>
+          </>
+        ) : open ? (
           <>
             <Box
               sx={{
@@ -221,24 +302,17 @@ export default function Sidebar() {
                   flexShrink: 0,
                 }}
               />
-              <Box
+              <Typography
                 sx={{
-                  display: "flex",
-                  alignItems: "center",
+                  fontSize: "0.85rem",
+                  fontWeight: 700,
+                  color: "primary",
+                  lineHeight: 1.2,
+                  letterSpacing: "0.02em",
                 }}
               >
-                <Typography
-                  sx={{
-                    fontSize: "0.85rem",
-                    fontWeight: 700,
-                    color: "primary",
-                    lineHeight: 1.2,
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  Deck Optimiser
-                </Typography>
-              </Box>
+                Deck Optimiser
+              </Typography>
             </Box>
 
             <Tooltip title="Collapse sidebar" placement="right">
@@ -303,7 +377,7 @@ export default function Sidebar() {
       </Box>
 
       {/* ─── Navigation Items ─── */}
-      <Box sx={{ flex: 1, py: 1, overflowY: "auto", overflowX: "hidden" }}>
+      <Box sx={{ flex: 1, py: 1, overflowY: "auto", overflowX: "hidden", display: (isMobile && !open) ? "none" : "block" }}>
         {renderNavItems(
           USER_ITEMS.filter(
             (item) => !(user?.role === "admin" && item.userOnly),
@@ -378,7 +452,7 @@ export default function Sidebar() {
         sx={{
           p: open ? "12px 16px" : "8px 12px",
           pb: 2,
-          display: "flex",
+          display: (isMobile && !open) ? "none" : "flex",
           flexDirection: "column",
           gap: open ? 0.75 : 0.1,
           alignItems: open ? "stretch" : "center",
@@ -479,6 +553,7 @@ export default function Sidebar() {
           </>
         )}
       </Box>
-    </Box>
+      </Box>
+    </>
   );
 }

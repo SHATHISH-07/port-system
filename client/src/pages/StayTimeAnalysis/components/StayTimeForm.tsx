@@ -49,15 +49,15 @@ export default function StayTimeForm({
         }}
       >
         <TextField
-          fullWidth
           size="small"
-          placeholder="Search Vessel Service (e.g. VS-PEB-07)"
+          placeholder="Search Vessel Service"
           value={value}
           onChange={(e) => onChange(e.target.value.toUpperCase())}
           disabled={loading}
           variant="outlined"
           sx={{
-            flex: 2,
+            flex: { lg: 2 },
+            width: { xs: '100%', lg: 'auto' },
             '& .MuiOutlinedInput-root': {
               borderRadius: 2,
               bgcolor: 'background.paper',
@@ -90,8 +90,9 @@ export default function StayTimeForm({
           onChange={(e) => onLoadedChange(e.target.value)}
           disabled={loading}
           sx={{
-            flex: 0.6,
-            minWidth: { xs: '100%', lg: 120 },
+            flex: { lg: 0.6 },
+            width: { xs: '100%', lg: 'auto' },
+            minWidth: { lg: 120 },
             '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
           }}
         />
@@ -104,8 +105,9 @@ export default function StayTimeForm({
           onChange={(e) => onDischargedChange(e.target.value)}
           disabled={loading}
           sx={{
-            flex: 0.6,
-            minWidth: { xs: '100%', lg: 120 },
+            flex: { lg: 0.6 },
+            width: { xs: '100%', lg: 'auto' },
+            minWidth: { lg: 120 },
             '& .MuiOutlinedInput-root': { borderRadius: 2, height: 40, fontSize: '0.85rem' },
           }}
         />
@@ -122,7 +124,8 @@ export default function StayTimeForm({
             textTransform: 'none',
             fontSize: '0.8rem',
             boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}`,
-            minWidth: { xs: '100%', lg: 140 },
+            width: { xs: '100%', lg: 'auto' },
+            minWidth: { lg: 140 },
             height: 40,
             whiteSpace: 'nowrap',
           }}

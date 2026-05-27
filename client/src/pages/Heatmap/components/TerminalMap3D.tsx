@@ -392,7 +392,7 @@ class TerminalScene {
   private phi = 1.05;
   private radius = 80;
   private target = new THREE.Vector3(-2, 0, 0);
-  private clock = new THREE.Clock();
+  private timer = new THREE.Timer();
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -402,7 +402,7 @@ class TerminalScene {
     });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.9;
     this.scene = new THREE.Scene();
@@ -2171,7 +2171,8 @@ class TerminalScene {
 
   animate() {
     this.animId = requestAnimationFrame(() => this.animate());
-    const t = this.clock.getElapsedTime();
+    this.timer.update();
+    const t = this.timer.getElapsed();
 
     if (this.waterMesh) {
       const pos = this.waterMesh.geometry.attributes.position;
@@ -2487,14 +2488,14 @@ export default function TerminalMap3D({
       <Box
         sx={{
           position: "absolute",
-          bottom: 16,
-          left: 16,
+          top: { xs: 88, lg: "auto" }, bottom: { xs: "auto", lg: 24 }, right: { xs: 16, lg: "auto" }, left: { xs: "auto", lg: 24 },
           zIndex: 10,
           display: "flex",
-          alignItems: "center",
-          gap: 1.5,
-          px: 1.2,
-          py: 0.6,
+          alignItems: { xs: "flex-start", lg: "center" },
+          flexDirection: { xs: "column", lg: "row" },
+          gap: { xs: 1.5, lg: 1.2 },
+          px: { xs: 1.5, lg: 1.2 },
+          py: { xs: 1, lg: 0.4 },
           bgcolor: isDark
             ? "rgba(18, 22, 31, 0.9)"
             : "rgba(255, 255, 255, 0.9)",
@@ -2506,12 +2507,13 @@ export default function TerminalMap3D({
       >
         <Typography
           sx={{
-            fontSize: "0.5rem",
+            display: { xs: "none", lg: "block" },
+            fontSize: "0.45rem",
             color: "text.secondary",
             fontWeight: 800,
             letterSpacing: "0.5px",
             textTransform: "uppercase",
-            mr: 0.5,
+            mr: 0.2,
           }}
         >
           Concentration
@@ -2523,11 +2525,11 @@ export default function TerminalMap3D({
         ].map(({ c, l }) => (
           <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <Box
-              sx={{ width: 7, height: 7, bgcolor: c, borderRadius: "1px" }}
+              sx={{ width: { xs: 7, lg: 6 }, height: { xs: 7, lg: 6 }, bgcolor: c, borderRadius: "1px" }}
             />
             <Typography
               sx={{
-                fontSize: "0.6rem",
+                fontSize: { xs: "0.6rem", lg: "0.55rem" },
                 color: "text.secondary",
                 fontWeight: 500,
               }}
@@ -2592,8 +2594,7 @@ export default function TerminalMap3D({
       <Box
         sx={{
           position: "absolute",
-          bottom: 16,
-          right: 64,
+          top: { xs: 52, lg: "auto" }, bottom: { xs: "auto", lg: 16 }, right: 16,
           zIndex: 100,
           display: "flex",
           gap: 1,

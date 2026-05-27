@@ -73,7 +73,7 @@ const Requests: React.FC = () => {
 
     return (
         <Box sx={{ p: 3, width: "100%" }}>
-            <Box sx={{ mb: 2, pb: 1.5, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <Box sx={{ mb: 2, pb: 1.5, display: "flex", flexDirection: { xs: "column", sm: "row" }, justifyContent: "space-between", alignItems: { xs: "stretch", sm: "flex-end" }, gap: 2 }}>
                 <Box>
                     <Typography variant="h6" sx={{ fontSize: "1.1rem", mb: 0.5, color: "text.primary", fontWeight: 700 }}>Operational Requests</Typography>
                     <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", maxWidth: 380 }}>View and execute data uploads, model retrains, and config updates.</Typography>
@@ -83,15 +83,15 @@ const Requests: React.FC = () => {
                         variant="contained" 
                         disableElevation
                         onClick={() => setOpenModal(true)}
-                        sx={{ textTransform: "none", fontWeight: 600, height: 32, fontSize: "0.75rem", px: 2 }}
+                        sx={{ textTransform: "none", fontWeight: 600, height: 32, fontSize: "0.75rem", px: 2, alignSelf: { xs: "flex-start", sm: "auto" } }}
                     >
                         New Request
                     </Button>
                 )}
             </Box>
 
-            <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, overflow: "hidden" }}>
-                <Table size="small" sx={{ "& .MuiTableCell-root": { py: 0.5, px: 1 } }}>
+            <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, overflowX: "auto" }}>
+                <Table size="small" sx={{ minWidth: 800, "& .MuiTableCell-root": { py: 1.5, px: 2 } }}>
                     <TableHead sx={{ backgroundColor: "background.paper" }}>
                         <TableRow>
                             <TableCell>ID</TableCell>

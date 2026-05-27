@@ -100,13 +100,14 @@ export default function StowageHeader({
           {/* Vessel ID search */}
           <TextField
             size="small"
-            placeholder="Search Vessel ID (e.g. VS-PEB-07)"
+            placeholder="Search Vessel ID"
             value={vesselId}
             onChange={(e) => setVesselId(e.target.value.toUpperCase())}
             disabled={loading}
             variant="outlined"
             sx={{
-              flex: { xs: '1 1 100%', sm: '1 1 200px', lg: 2 },
+              flex: { lg: 2 },
+              width: { xs: '100%', lg: 'auto' },
               minWidth: 180,
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
@@ -136,7 +137,8 @@ export default function StowageHeader({
             onChange={(e) => setYardId(e.target.value.toUpperCase())}
             disabled={loading}
             sx={{
-              flex: { xs: '1 1 48%', sm: '1 1 120px', lg: 0.8 },
+              flex: { lg: 0.8 },
+              width: { xs: '100%', lg: 'auto' },
               minWidth: 100,
               '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
             }}
@@ -151,7 +153,8 @@ export default function StowageHeader({
               onChange={(e) => setVisitId(e.target.value.toUpperCase())}
               disabled={loading}
               sx={{
-                flex: { xs: '1 1 48%', sm: '1 1 140px', lg: 0.8 },
+                flex: { lg: 0.8 },
+                width: { xs: '100%', lg: 'auto' },
                 minWidth: 120,
                 '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
               }}
@@ -165,7 +168,8 @@ export default function StowageHeader({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1,
-                flex: { xs: '1 1 100%', sm: 'auto' },
+                flex: { lg: 'auto' },
+                width: { xs: '100%', lg: 'auto' },
               }}
             >
               <Button
@@ -182,6 +186,7 @@ export default function StowageHeader({
                   whiteSpace: 'nowrap',
                   borderColor: globalFile ? 'success.main' : 'divider',
                   color: globalFile ? 'success.main' : 'text.primary',
+                  flex: 1,
                   '&:hover': {
                     borderColor: globalFile ? 'success.dark' : 'primary.main',
                     bgcolor: alpha(theme.palette.primary.main, 0.04),
@@ -236,7 +241,8 @@ export default function StowageHeader({
               value={globalContainerText}
               onChange={(e) => setGlobalContainerText(e.target.value)}
               sx={{
-                flex: { xs: '1 1 100%', lg: 2.5 },
+                flex: { lg: 2.5 },
+                width: { xs: '100%', lg: 'auto' },
                 minWidth: 180,
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
@@ -261,7 +267,7 @@ export default function StowageHeader({
               textTransform: 'none',
               fontSize: '0.8rem',
               boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}`,
-              flex: { xs: '1 1 100%', sm: 'auto' },
+              width: { xs: '100%', lg: 'auto' },
               height: 40,
               whiteSpace: 'nowrap',
             }}
@@ -292,20 +298,25 @@ export default function StowageHeader({
               border: '1px solid',
               borderColor: theme.palette.divider,
               height: 40,
+              display: 'flex',
+              width: { xs: '100%', sm: 'auto' },
               boxSizing: 'border-box',
               '& .MuiToggleButton-root': {
+                flex: 1,
                 borderRadius: 2,
-                px: { xs: 2.5, md: 4 },
+                px: { xs: 1, md: 4 },
                 py: 0,
                 height: '100%',
                 border: 'none',
                 fontWeight: 700,
                 textTransform: 'none',
                 color: 'text.secondary',
-                fontSize: '0.75rem',
+                fontSize: { xs: '0.65rem', sm: '0.75rem' },
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1,
+                justifyContent: 'center',
+                gap: { xs: 0.5, md: 1 },
+                whiteSpace: 'nowrap',
                 '&.Mui-selected': {
                   bgcolor: 'primary.main',
                   color: 'primary.contrastText',
