@@ -492,8 +492,9 @@ def generate_terminal_data(terminal: dict):
     container_rows: List[dict] = []
     crane_rows:     List[dict] = []
     visits          = build_visit_schedule(terminal)
-    active_units:   List[str] = []   # unit IDs currently sitting in the yard
-    inactive_units: List[str] = []
+    # FIXED
+    active_set:   set = set()
+    inactive_set: set = set()
     line_op         = random.choice(LINE_OPS)
 
     # ── Yard-level block state ────────────────────────────────────────────────
@@ -551,7 +552,7 @@ def generate_terminal_data(terminal: dict):
 
     for visit in visits:
         total_rows   = generate_container_count()
-        active_count = len(active_units)
+        active_count = len(active_set)
         load_count, discharge_count, restow_count = choose_operation_mix(
             active_count, TARGET_ACTIVE_PER_TERMINAL_MIN,
             TARGET_ACTIVE_PER_TERMINAL_MAX, total_rows,
@@ -588,28 +589,29 @@ def generate_terminal_data(terminal: dict):
         for idx, move_kind in enumerate(op_kinds):
             # ── Unit ID assignment ────────────────────────────────────────────
             if move_kind == "Load":
-                if active_units:
-                    unit_id = random.choice(active_units)
-                    active_units.remove(unit_id)
-                    inactive_units.append(unit_id)
+                if active_set:
+                    unit_id = random.choice(list(active_set))
+                    active_set.discard(unit_id)
+                    inactive_set.add(unit_id)
                 else:
                     unit_id = next_container_id()
-                    inactive_units.append(unit_id)
+                    inactive_set.add(unit_id)
 
             elif move_kind == "Discharge":
-                if inactive_units and random.random() < 0.75:
-                    unit_id = random.choice(inactive_units)
-                    inactive_units.remove(unit_id)
+                inactive_list = list(inactive_set)
+                if inactive_list and random.random() < 0.75:
+                    unit_id = random.choice(inactive_list)
+                    inactive_set.discard(unit_id)
                 else:
                     unit_id = next_container_id()
-                active_units.append(unit_id)
+                active_set.add(unit_id)
 
             else:  # Restow
-                if active_units:
-                    unit_id = random.choice(active_units)
+                if active_set:
+                    unit_id = random.choice(list(active_set))
                 else:
                     unit_id = next_container_id()
-                    active_units.append(unit_id)
+                    active_set.add(unit_id)
 
             # ── Unique gkey for every (unit, visit) row ───────────────────────
             unit_visit_gkey  = next_unit_visit_gkey()

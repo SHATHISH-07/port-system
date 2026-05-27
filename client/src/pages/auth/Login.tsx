@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Button, TextField, Typography, Alert, useTheme, Paper, Container } from "@mui/material";
+import { Box, Button, TextField, Typography, Alert, useTheme, Paper } from "@mui/material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { api } from "../../api/api";
@@ -62,10 +62,10 @@ const Login: React.FC = () => {
                 py: 4,
             }}
         >
-            <Container maxWidth="xs">
+            <Box sx={{ width: '100%', maxWidth: 340, px: 2 }}>
                 {/* Header */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 4 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 700, color: "text.primary", letterSpacing: "-0.01em" }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: "text.primary", letterSpacing: "-0.01em" }}>
                         Sign in to Deck Optimizer
                     </Typography>
                 </Box>
@@ -74,7 +74,7 @@ const Login: React.FC = () => {
                 <Paper
                     elevation={isDark ? 0 : 1}
                     sx={{
-                        p: { xs: 3, sm: 4 },
+                        p: { xs: 2.5, sm: 3 },
                         borderRadius: 2.5,
                         bgcolor: "background.paper",
                         border: "1px solid",
@@ -83,14 +83,14 @@ const Login: React.FC = () => {
                     }}
                 >
                     {error && (
-                        <Alert severity="error" sx={{ mb: 3, borderRadius: 1.5 }}>
+                        <Alert severity="error" sx={{ mb: 2.5, borderRadius: 1.5 }}>
                             {error}
                         </Alert>
                     )}
 
                     <Box component="form" onSubmit={handleSubmit}>
                         {/* Username */}
-                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: "text.primary" }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.75, color: "text.primary", fontSize: "0.8rem" }}>
                             Username
                         </Typography>
                         <TextField
@@ -103,11 +103,11 @@ const Login: React.FC = () => {
                             size="small"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            sx={{ mb: 3 }}
+                            sx={{ mb: 2.5, '& .MuiInputBase-input': { fontSize: '0.875rem' } }}
                         />
 
                         {/* Password */}
-                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: "text.primary" }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.75, color: "text.primary", fontSize: "0.8rem" }}>
                             Password
                         </Typography>
                         <TextField
@@ -120,7 +120,7 @@ const Login: React.FC = () => {
                             size="small"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            sx={{ mb: 4 }}
+                            sx={{ mb: 3.5, '& .MuiInputBase-input': { fontSize: '0.875rem' } }}
                         />
 
                         {/* Submit Button */}
@@ -131,10 +131,10 @@ const Login: React.FC = () => {
                             disabled={loading}
                             disableElevation
                             sx={{
-                                py: 1.2,
+                                py: 0.8,
                                 fontWeight: 600,
                                 textTransform: "none",
-                                fontSize: "0.95rem",
+                                fontSize: "0.875rem",
                                 borderRadius: 1.5,
                             }}
                         >
@@ -142,7 +142,7 @@ const Login: React.FC = () => {
                         </Button>
                     </Box>
                 </Paper>
-            </Container>
+            </Box>
         </Box>
     );
 };

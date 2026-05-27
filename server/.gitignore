@@ -10,4 +10,10 @@ verification_log.txt
 
 response_logs/
 
-tests/
+# Generated datasets and raw data files
+data/*.csv
+data/*.json
+data/*.xlsx
+data/*.pdf
+data/*.txt
+data/port_coordinates.json

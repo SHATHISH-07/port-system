@@ -52,41 +52,45 @@ def create_features(df: pd.DataFrame) -> dict | None:
         t_end   = df["event_time"].max()
         move_span_hours = max((t_end - t_start).total_seconds() / 3600, 0.1)
 
-    #  Move classification 
-    loaded     = 0
-    discharged = 0
-    restows    = 0
+    #  Move classification (Vectorised)
+    f_str = df.get("crane_from", df.get("ctr_from_position", df.get("from_position", pd.Series(dtype=str, index=df.index)))).fillna("").astype(str).str.upper()
+    t_str = df.get("crane_to", df.get("ctr_to_position", df.get("to_position", pd.Series(dtype=str, index=df.index)))).fillna("").astype(str).str.upper()
+
+    f_is_v = f_str.str.startswith("V-")
+    t_is_v = t_str.str.startswith("V-")
+    f_is_y = (f_str != "") & (~f_is_v)
+    t_is_y = (t_str != "") & (~t_is_v)
+
+    is_load = f_is_y & t_is_v
+    is_disc = f_is_v & t_is_y
+    is_shift = (f_is_y & t_is_y) | (f_is_v & t_is_v)
+
+    move_kind = df.get("crane_move_kind", df.get("move_kind", pd.Series(dtype=str, index=df.index))).fillna("").astype(str).str.upper()
+    unknowns = ~(is_load | is_disc | is_shift)
+
+    is_load = is_load | (unknowns & (move_kind == "LOAD"))
+    is_disc = is_disc | (unknowns & (move_kind == "DISCHARGE"))
+    is_shift = is_shift | (unknowns & move_kind.isin(["SHIFT", "RESTOW"]))
+
+    loaded = int(is_load.sum())
+    discharged = int(is_disc.sum())
+    restows = int(is_shift.sum())
+
     blocks: dict[str, int] = {}
+    
+    def _extract_block(pos):
+        p = parse_position(pos)
+        return p.get("block", "UNKNOWN") if p and p.get("is_yard") else None
 
-    for _, row in df.iterrows():
-        row_d = dict(row)
+    if is_load.any():
+        load_blocks = f_str[is_load & f_is_y].apply(_extract_block).dropna()
+        for b, count in load_blocks.value_counts().items():
+            blocks[str(b)] = blocks.get(str(b), 0) + int(count)
 
-        from_pos  = safe_get_pos(row_d, "crane_from", "ctr_from_position", "from_position")
-        to_pos    = safe_get_pos(row_d, "crane_to",   "ctr_to_position",   "to_position")
-        move_type = classify_move(from_pos, to_pos)
-
-        # Honour explicit move_kind when position-based classification fails
-        if move_type == "UNKNOWN":
-            mk = str(
-                row_d.get("crane_move_kind") or row_d.get("move_kind") or ""
-            ).strip().upper()
-            if mk in ("LOAD", "DISCHARGE", "SHIFT", "RESTOW"):
-                move_type = mk
-
-        if move_type == "LOAD":
-            loaded += 1
-            f_p = parse_position(from_pos)
-            if f_p and f_p["is_yard"]:
-                b = f_p.get("block", "UNKNOWN")
-                blocks[b] = blocks.get(b, 0) + 1
-        elif move_type == "DISCHARGE":
-            discharged += 1
-            t_p = parse_position(to_pos)
-            if t_p and t_p["is_yard"]:
-                b = t_p.get("block", "UNKNOWN")
-                blocks[b] = blocks.get(b, 0) + 1
-        elif move_type in ("SHIFT", "RESTOW"):
-            restows += 1
+    if is_disc.any():
+        disc_blocks = t_str[is_disc & t_is_y].apply(_extract_block).dropna()
+        for b, count in disc_blocks.value_counts().items():
+            blocks[str(b)] = blocks.get(str(b), 0) + int(count)
 
     total_moves = loaded + discharged
 

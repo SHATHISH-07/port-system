@@ -420,43 +420,43 @@ def get_yard_heatmap_data(
     """
     Unified endpoint for all map/heatmap/terminal visualization data.
     """
-    df = load_from_db("current", yard_id=yard_id, vessel_id=vessel_id)
-
-    if df.empty:
-        df = load_from_db("history", yard_id=yard_id, vessel_id=vessel_id)
-
-    if df.empty:
-        return {
-            "vessel": vessel_id,
-            "visit_id": "",
-            "yard_id": yard_id,
-            "blocks": [],
-            "summary": {
-                "total_containers": 0,
-                "total_blocks": 0,
-                "reefer_total": 0,
-                "hazmat_total": 0,
-                "oog_total": 0,
-            },
-            "infrastructure": _get_infrastructure(),
-            "berth_analysis": [],
-            "conflict_table": [],
-            "primary_berth": {},
-        }
-
-    v_id_upper = vessel_id.strip().upper()
-    mask = pd.Series([False] * len(df), index=df.index)
-    if "outbound_service" in df.columns:
-        mask |= (df["outbound_service"].astype(str).str.strip().str.upper() == v_id_upper)
-    if "actual_outbound_carrier_visit_id" in df.columns:
-        mask |= (df["actual_outbound_carrier_visit_id"].astype(str).str.strip().str.upper() == v_id_upper)
-    df = df[mask].copy()
-
     visit_id = ""
-    if not df.empty and "actual_outbound_carrier_visit_id" in df.columns:
-        valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
-        if not valid_visits.empty:
-            visit_id = str(valid_visits.iloc[0])
+
+    if unit_ids:
+        from utils.current_container_lookup import lookup_containers_by_ids
+        df = lookup_containers_by_ids(unit_ids, yard_id)
+        if df is not None and not df.empty:
+            df["unit_id"] = df["unit_id"].astype(str).str.strip().str.upper()
+            if "actual_outbound_carrier_visit_id" in df.columns:
+                valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
+                if not valid_visits.empty:
+                    visit_id = str(valid_visits.iloc[0])
+    else:
+        df = load_from_db("current", yard_id=yard_id, vessel_id=vessel_id)
+
+        if df.empty:
+            df = load_from_db("history", yard_id=yard_id, vessel_id=vessel_id)
+
+        if not df.empty:
+            v_id_upper = vessel_id.strip().upper()
+            mask = pd.Series([False] * len(df), index=df.index)
+            if "outbound_service" in df.columns:
+                mask |= (df["outbound_service"].astype(str).str.strip().str.upper() == v_id_upper)
+            if "actual_outbound_carrier_visit_id" in df.columns:
+                mask |= (df["actual_outbound_carrier_visit_id"].astype(str).str.strip().str.upper() == v_id_upper)
+            df = df[mask].copy()
+
+            if not df.empty and "unit_id" in df.columns:
+                df["unit_id"] = df["unit_id"].astype(str).str.strip().str.upper()
+                sort_cols = [c for c in ["updated_at", "time_in", "created_at"] if c in df.columns]
+                if sort_cols:
+                    df = df.sort_values(sort_cols, ascending=False)
+                df = df.drop_duplicates(subset=["unit_id"], keep="first")
+            
+            if not df.empty and "actual_outbound_carrier_visit_id" in df.columns:
+                valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
+                if not valid_visits.empty:
+                    visit_id = str(valid_visits.iloc[0])
 
     if df.empty:
         return {
@@ -512,7 +512,7 @@ def get_yard_heatmap_data(
         "unit_rows": [],
     })
 
-    for _, row in df.iterrows():
+    for row in df.to_dict('records'):
         pos_str = row.get("current_position") or row.get("ctr_to_position") or row.get("ctr_from_position")
         if not pos_str:
             continue
@@ -541,7 +541,7 @@ def get_yard_heatmap_data(
         except Exception:
             pass
 
-        b["unit_rows"].append(row.to_dict())
+        b["unit_rows"].append(row)
 
     block_list = []
     max_density = max((b["density"] for b in blocks.values()), default=1)
@@ -682,10 +682,10 @@ def get_yard_heatmap_data(
                         "min_time": min_time,
                         "max_time": max_time
                     })
-                    for _, crow in cdf.iterrows():
-                        v_id = crow["actual_outbound_carrier_visit_id"]
+                    for crow in cdf.to_dict('records'):
+                        v_id = crow.get("actual_outbound_carrier_visit_id")
                         if v_id not in concurrent_vessels:
-                            concurrent_vessels[v_id] = {"service": crow["outbound_service"], "blocks": set()}
+                            concurrent_vessels[v_id] = {"service": crow.get("outbound_service"), "blocks": set()}
                         c_pos = crow.get("ctr_from_position")
                         if pd.notna(c_pos):
                             cp_info = parse_position(str(c_pos))
