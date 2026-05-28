@@ -14,6 +14,8 @@ from tests.test_stowage_e2e import test_cases as stowage_tests
 from tests.test_ingest_e2e import test_cases as ingest_tests
 from tests.test_model_e2e import test_cases as model_tests
 from tests.test_system_e2e import test_cases as system_tests
+from tests.test_user_e2e import test_cases as user_tests
+from tests.test_config_e2e import test_cases as config_tests
 
 all_tests = []
 all_tests.extend(auth_tests)
@@ -23,6 +25,8 @@ all_tests.extend(stowage_tests)
 all_tests.extend(ingest_tests)
 all_tests.extend(model_tests)
 all_tests.extend(system_tests)
+all_tests.extend(user_tests)
+all_tests.extend(config_tests)
 
 def run_all():
     results = []

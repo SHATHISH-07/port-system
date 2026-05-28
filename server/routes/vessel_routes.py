@@ -13,11 +13,10 @@ from services.vessel_service import (
     get_yard_heatmap_data,
 )
 
+from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse
+
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/vessel", tags=["Vessel Analytics"])
-
-
-from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse
 
 # GET /vessel/analysis
 @router.get("/analysis", response_model=VesselAnalysisResponse)

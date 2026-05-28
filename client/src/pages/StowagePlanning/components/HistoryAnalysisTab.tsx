@@ -244,7 +244,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
 
       {/* High-Density Chart Grid */}
       <Grid container spacing={2.5}>
-        <Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }} sx={{ minWidth: 0 }}>
           <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, p: 2, height: 320, boxShadow: `0 4px 16px ${alpha('#000', 0.02)}` }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '0.05em' }}>DISCHARGE PORTS</Typography>
             <Box sx={{ mt: 1, height: '85%', overflowY: 'auto' }}>
@@ -262,11 +262,11 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }} sx={{ minWidth: 0 }}>
           <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, p: 2, height: 320, boxShadow: `0 4px 16px ${alpha('#000', 0.02)}` }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '0.05em' }}>EQUIPMENT SIZES</Typography>
             <Box sx={{ mt: 2, height: '85%' }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="99%" height={250}>
                 <PieChart>
                   <Pie data={sizePieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} dataKey="value" paddingAngle={5}>
                     <Cell fill={theme.palette.primary.main} />
@@ -280,11 +280,11 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }} sx={{ minWidth: 0 }}>
           <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, p: 2, height: 320, boxShadow: `0 4px 16px ${alpha('#000', 0.02)}` }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '0.05em' }}>DECK WEIGHT DISTRIBUTION</Typography>
             <Box sx={{ mt: 2, height: '85%' }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="99%" height={250}>
                 <BarChart data={deckWeightData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.palette.divider} />
                   <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} tick={{ fontWeight: 600 }} />
@@ -300,11 +300,11 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }} sx={{ minWidth: 0 }}>
           <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, p: 2, height: 320, boxShadow: `0 4px 16px ${alpha('#000', 0.02)}` }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '0.05em' }}>EQUIPMENT TYPES</Typography>
             <Box sx={{ mt: 2, height: '85%' }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="99%" height={250}>
                 <BarChart layout="vertical" data={equipmentBarData} margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.palette.divider} />
                   <XAxis type="number" fontSize={10} tickLine={false} axisLine={false} />
@@ -331,8 +331,8 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
               </Typography>
             </Box>
           </Box>
-          <TableContainer sx={{ maxHeight: 400, borderRadius: 2, border: `1px solid ${alpha(theme.palette.divider, 0.5)}`, overflowY: "auto" }}>
-            <Table size="medium" stickyHeader>
+          <TableContainer sx={{ maxHeight: 400, borderRadius: 2, border: `1px solid ${alpha(theme.palette.divider, 0.5)}`, overflowX: "auto", overflowY: "auto" }}>
+            <Table size="medium" stickyHeader sx={{ minWidth: 600 }}>
               <TableHead>
                 <TableRow>
                   <TableCell align="left" sx={{ bgcolor: alpha(theme.palette.background.default, 0.8), backdropFilter: 'blur(10px)', fontWeight: 800, fontSize: '0.75rem', py: 2, px: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Visit ID</TableCell>

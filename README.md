@@ -609,10 +609,22 @@ pip install -r requirements.txt
 Create `.env`:
 
 ```env
-DATABASE_URL=postgresql://postgres:password@localhost:5432/portsync
-JWT_SECRET_KEY=super_secret_key
+# Database Configuration
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/portsystem
+
+# Authentication
+JWT_SECRET=super-secret-jwt-key-for-portsync
+DEFAULT_ADMIN_USER=admin
+DEFAULT_ADMIN_PASSWORD=admin123
+
+# Machine Learning & Automated Retraining
 MODEL_PATH=models/stay_model.pkl
 RETRAIN_THRESHOLD_NEW_RECORDS=1000
+RETRAIN_CHECK_INTERVAL_SECONDS=60
+
+# Celery & Redis Background Worker
+REDIS_URL=redis://localhost:6379/0
+REDIS_RESULT_URL=redis://localhost:6379/1
 ```
 
 Run backend:
@@ -635,6 +647,21 @@ npm run dev
 
 ---
 
+# Testing
+
+The backend includes a comprehensive End-to-End (E2E) test suite covering authentication, vessel metrics, heatmaps, stowage planning, ingestion, ML models, configurations, and user management.
+
+To run the automated test suite (36 tests):
+
+```bash
+cd server
+python tests/test_runner.py
+```
+
+Test results are automatically output to the console and saved to `server/tests/test_results.json`.
+
+---
+
 # API Modules
 
 | Module     | Description       |
@@ -646,6 +673,7 @@ npm run dev
 | `/ingest`  | Data ingestion    |
 | `/model`   | ML training       |
 | `/users`   | User management   |
+| `/config`  | Dynamic settings  |
 | `/system`  | Logs & operations |
 
 ---

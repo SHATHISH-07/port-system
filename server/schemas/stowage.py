@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 class CurrentPlanningRequest(BaseModel):
@@ -56,7 +56,7 @@ class HistoricalVisit(BaseModel):
     containerCount: int
     moveCompleteTime: Optional[str] = None
 
-# --- Crane Metrics (for history/analysis response) ---
+# Crane Metrics (for history/analysis response)
 class BlockReshuffleCount(BaseModel):
     block: str
     count: int

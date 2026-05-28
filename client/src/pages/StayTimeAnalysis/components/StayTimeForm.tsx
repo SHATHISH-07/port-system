@@ -41,28 +41,32 @@ export default function StayTimeForm({
       </Box>
       <Box
         sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', lg: 'row' },
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: 'repeat(5, 1fr)',
+            md: 'repeat(5, 1fr)',
+            lg: '2fr 1fr 1fr auto'
+          },
           gap: 1.5,
-          alignItems: { xs: 'stretch', lg: 'center' },
+          alignItems: 'center',
           width: '100%',
         }}
       >
         <TextField
-          fullWidth
           size="small"
-          placeholder="Search Vessel Service (e.g. VS-PEB-07)"
+          placeholder="Search Vessel Service"
           value={value}
           onChange={(e) => onChange(e.target.value.toUpperCase())}
           disabled={loading}
           variant="outlined"
           sx={{
-            flex: 2,
+            width: '100%',
+            gridColumn: { xs: 'span 3', lg: 'auto' },
             '& .MuiOutlinedInput-root': {
               borderRadius: 2,
               bgcolor: 'background.paper',
-              height: 36,
-              fontSize: '0.8rem',
+              height: 40,
+              fontSize: '0.85rem',
               '& fieldset': {
                 borderColor: alpha(theme.palette.divider, 0.8),
               },
@@ -90,9 +94,9 @@ export default function StayTimeForm({
           onChange={(e) => onLoadedChange(e.target.value)}
           disabled={loading}
           sx={{
-            flex: 0.6,
-            minWidth: { xs: '100%', lg: 120 },
-            '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
+            width: '100%',
+            gridColumn: { xs: 'span 2', lg: 'auto' },
+            '& .MuiOutlinedInput-root': { borderRadius: 2, height: 40, fontSize: '0.85rem' },
           }}
         />
 
@@ -104,8 +108,8 @@ export default function StayTimeForm({
           onChange={(e) => onDischargedChange(e.target.value)}
           disabled={loading}
           sx={{
-            flex: 0.6,
-            minWidth: { xs: '100%', lg: 120 },
+            width: '100%',
+            gridColumn: { xs: 'span 2', lg: 'auto' },
             '& .MuiOutlinedInput-root': { borderRadius: 2, height: 40, fontSize: '0.85rem' },
           }}
         />
@@ -116,15 +120,15 @@ export default function StayTimeForm({
           disabled={loading || !value.trim()}
           sx={{
             borderRadius: 2,
-            px: 2.5,
-            py: 0.75,
+            px: 3,
             fontWeight: 700,
             textTransform: 'none',
-            fontSize: '0.8rem',
+            fontSize: '0.85rem',
             boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}`,
-            minWidth: { xs: '100%', lg: 140 },
+            width: '100%',
             height: 40,
             whiteSpace: 'nowrap',
+            gridColumn: { xs: 'span 3', lg: 'auto' },
           }}
         >
           Analyze

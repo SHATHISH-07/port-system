@@ -16,6 +16,8 @@ import {
   Drawer,
   Alert,
   Snackbar,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import {
   FullscreenRounded,
@@ -28,7 +30,7 @@ import { api } from "../../api/api";
 import TerminalMap2D from "./components/TerminalMap2D";
 import TerminalMap3D from "./components/TerminalMap3D";
 import BerthRecommendation from "./components/BerthRecommendation";
-import HeatmapView from "./components/HeatmapView";
+import BlockIllustrator from "./components/BlockIllustrator";
 import ContainerPositionTable from "./components/ContainerPositionTable";
 import type {
   CellData,
@@ -83,24 +85,11 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
   const layoutObj: Record<string, { x: number; y: number }> = {};
 
   const activeBlockIds = [...newData.blocks].map((b) => b.block_id).filter(Boolean);
-  const isPEB = newData.yard_id?.toUpperCase().includes("PEB") || activeBlockIds.some(id => id.toUpperCase().includes("PEB"));
-  const paddingCandidates = isPEB
-    ? ["PEB-3A", "PEB-3B", "PEB-5B", "PEB-4A", "PEB-4B", "PEB-5A"]
-    : ["CWIT-3A", "CWIT-3B", "CWIT-5B", "CWIT-4A", "CWIT-4B", "CWIT-5A"];
   const emptyBlockIds: string[] = [];
 
-  for (const candidate of paddingCandidates) {
-    if (!activeBlockIds.includes(candidate)) {
-      emptyBlockIds.push(candidate);
-    }
-  }
-
   let genIdx = 1;
-  while (emptyBlockIds.length < 3) {
-    const candidate = `${isPEB ? 'PEB' : 'CWIT'}-EXT-${genIdx++}`;
-    if (!activeBlockIds.includes(candidate) && !emptyBlockIds.includes(candidate)) {
-      emptyBlockIds.push(candidate);
-    }
+  while (emptyBlockIds.length < 9 - activeBlockIds.length) {
+    emptyBlockIds.push(`EMPTY-${genIdx++}`);
   }
 
   // Position empty blocks at indices 5, 7, 8 (not in top row 0, 1, 2)
@@ -211,7 +200,7 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
   };
 }
 
-export default function OperationalDashboard() {
+export default function Heatmap() {
   const [searchParams] = useSearchParams();
   const theme = useTheme();
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -341,9 +330,9 @@ export default function OperationalDashboard() {
     <Box
       ref={wrapperRef}
       sx={{
-        width: "calc(100% - 32px)",
-        height: "calc(100% - 32px)",
-        m: 2,
+        width: { xs: "calc(100% - 16px)", md: "calc(100% - 32px)" },
+        height: { xs: "calc(100% - 16px)", md: "calc(100% - 32px)" },
+        m: { xs: 1, md: 2 },
         borderRadius: 2,
         position: "relative",
         overflow: "hidden",
@@ -361,7 +350,7 @@ export default function OperationalDashboard() {
               overflowX: "hidden",
             }}
           >
-            <HeatmapView data={mapData} targetBerthId={mapData?.targetBerthId || ""} loading={loading} />
+            <BlockIllustrator data={mapData} targetBerthId={mapData?.targetBerthId || ""} loading={loading} />
           </Box>
         )}
         {mapView === "MAP2D" && (
@@ -399,41 +388,42 @@ export default function OperationalDashboard() {
           borderRadius: 1,
           overflow: "hidden",
           transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-          width: inputsOpen ? 260 : "auto",
+          width: inputsOpen ? { xs: 200, md: 260 } : "auto",
           border: "1px solid",
           borderColor: theme.palette.divider,
           boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[4],
+          display: mapView === "CONTAINERS" ? { xs: "none", md: "block" } : "block",
         }}
       >
         {!inputsOpen ? (
-          <Box sx={{ px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1, cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }} onClick={() => setInputsOpen(true)}>
-            <SearchRounded fontSize="small" color="primary" />
-            <Typography variant="body2" sx={{ fontSize: "0.75rem", fontWeight: 800, letterSpacing: 0.5 }}>
+          <Box sx={{ px: { xs: 1, md: 1.5 }, py: { xs: 0.6, md: 1 }, display: "flex", alignItems: "center", gap: 1, cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }} onClick={() => setInputsOpen(true)}>
+            <SearchRounded sx={{ fontSize: { xs: 16, md: 20 }, color: "primary.main" }} />
+            <Typography variant="body2" sx={{ fontSize: { xs: "0.65rem", md: "0.75rem" }, fontWeight: 800, letterSpacing: 0.5 }}>
               VESSEL:{" "}
               <Typography
                 component="span"
-                sx={{ fontSize: "0.75rem", color: "primary.main", fontWeight: 900 }}
+                sx={{ fontSize: { xs: "0.65rem", md: "0.75rem" }, color: "primary.main", fontWeight: 900 }}
               >
                 {vesselInput || "NONE"}
               </Typography>
             </Typography>
           </Box>
         ) : (
-          <Box sx={{ p: 1.8 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <Box sx={{ p: { xs: 1, md: 1.8 } }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: { xs: 0.8, md: 1.5 } }}>
+              <Typography variant="subtitle2" sx={{ fontSize: { xs: "0.7rem", md: "0.875rem" }, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Heatmap Analysis
               </Typography>
               <IconButton size="small" onClick={() => setInputsOpen(false)} sx={{ mr: -0.5 }}>
                 <CloseRounded sx={{ fontSize: 16 }} />
               </IconButton>
             </Box>
-            <Stack spacing={1.2}>
-              <TextField size="small" fullWidth label="Vessel ID" value={vesselInput} onChange={(e) => setVesselInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36 } }} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
-              <TextField size="small" fullWidth label="Yard ID (Optional)" value={yardInput} onChange={(e) => setYardInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36 } }} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
+            <Stack spacing={{ xs: 0.6, md: 1.2 }}>
+              <TextField size="small" fullWidth label="Vessel ID" value={vesselInput} onChange={(e) => setVesselInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, height: { xs: 30, md: 36 } } }} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
+              <TextField size="small" fullWidth label="Yard ID (Optional)" value={yardInput} onChange={(e) => setYardInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, height: { xs: 30, md: 36 } } }} slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } }, inputLabel: { style: { fontSize: '0.8rem' } } }} />
               <Box>
-                <Button fullWidth component="label" variant="outlined" startIcon={<UploadFileOutlined sx={{ fontSize: 16 }} />} sx={{ borderRadius: 2, fontSize: '0.75rem', py: 0.6, fontWeight: 500, textTransform: "none", justifyContent: "flex-start", color: 'text.primary', borderColor: 'divider' }}>
-                  <Typography noWrap sx={{ fontSize: '0.75rem', maxWidth: 180 }}>
+                <Button fullWidth component="label" variant="outlined" startIcon={<UploadFileOutlined sx={{ fontSize: { xs: 14, md: 16 } }} />} sx={{ borderRadius: 2, fontSize: { xs: '0.65rem', md: '0.75rem' }, py: { xs: 0.2, md: 0.6 }, fontWeight: 500, textTransform: "none", justifyContent: "flex-start", color: 'text.primary', borderColor: 'divider' }}>
+                  <Typography noWrap sx={{ fontSize: { xs: '0.65rem', md: '0.75rem' }, maxWidth: { xs: 140, md: 180 } }}>
                     {containerFile ? containerFile.name : "Upload Container List"}
                   </Typography>
                   <input ref={fileInputRef} type="file" hidden accept=".txt,.csv,.json" onChange={(e) => setContainerFile(e.target.files?.[0] || null)} />
@@ -444,7 +434,7 @@ export default function OperationalDashboard() {
                   </Button>
                 )}
               </Box>
-              <Button variant="contained" fullWidth onClick={load} disabled={loading} sx={{ borderRadius: 2, fontWeight: 800, py: 1, fontSize: '0.8rem' }}>
+              <Button variant="contained" fullWidth onClick={load} disabled={loading} sx={{ borderRadius: 2, fontWeight: 800, py: { xs: 0.4, md: 1 }, fontSize: { xs: '0.65rem', md: '0.8rem' } }}>
                 {loading ? "Analyzing..." : "Analyze"}
               </Button>
             </Stack>
@@ -523,10 +513,10 @@ export default function OperationalDashboard() {
 
       {/* BOTTOM CENTER: VIEW SWITCHER */}
       <Paper
-        elevation={8}
+        elevation={0}
         sx={{
           position: "absolute",
-          bottom: 16,
+          bottom: { xs: 4, lg: 16 },
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 10,
@@ -536,7 +526,7 @@ export default function OperationalDashboard() {
           p: 0.4,
           border: "1px solid",
           borderColor: theme.palette.divider,
-          boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[10],
+          boxShadow: "none",
           maxWidth: "calc(100% - 32px)",
           overflowX: "auto",
           "&::-webkit-scrollbar": { display: "none" },
@@ -544,7 +534,8 @@ export default function OperationalDashboard() {
           scrollbarWidth: "none",
         }}
       >
-        <ToggleButtonGroup
+        <Box sx={{ display: { xs: "none", lg: "block" } }}>
+          <ToggleButtonGroup
           value={overlayView !== "NONE" ? overlayView : mapView}
           exclusive
           onChange={handleViewToggle}
@@ -565,6 +556,50 @@ export default function OperationalDashboard() {
           <Divider flexItem orientation="vertical" sx={{ mx: 0.5, my: 0.6 }} />
           <ToggleButton value="BERTH">Recommended Berth</ToggleButton>
         </ToggleButtonGroup>
+        </Box>
+        <Box sx={{ display: { xs: "block", lg: "none" } }}>
+          <Select
+            value={overlayView !== "NONE" ? overlayView : mapView}
+            onChange={(e) => handleViewToggle(e as any, e.target.value as any)}
+            size="small"
+            sx={{
+              minWidth: 140,
+              fontSize: "0.65rem",
+              fontWeight: 700,
+              "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+              "& .MuiSelect-select": { py: 0.8, px: 1.5, minHeight: "auto" },
+            }}
+            MenuProps={{
+              container: () => document.fullscreenElement || document.body,
+              slotProps: {
+                paper: {
+                  sx: {
+                    borderRadius: 2,
+                    mt: -1, // Pop up instead of down
+                    boxShadow: "none",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }
+                }
+              },
+              anchorOrigin: {
+                vertical: 'top',
+                horizontal: 'center',
+              },
+              transformOrigin: {
+                vertical: 'bottom',
+                horizontal: 'center',
+              },
+            } as any}
+          >
+            <MenuItem value="HEATMAP" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>Block Illustrator</MenuItem>
+            <MenuItem value="MAP2D" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>2D Heatmap</MenuItem>
+            <MenuItem value="3D" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>3D Heatmap</MenuItem>
+            <MenuItem value="CONTAINERS" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>Container Positions</MenuItem>
+            <Divider sx={{ my: 0.5 }} />
+            <MenuItem value="BERTH" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>Recommended Berth</MenuItem>
+          </Select>
+        </Box>
       </Paper>
 
       {/* BOTTOM SHEET FOR BERTH INTEL */}
@@ -572,6 +607,9 @@ export default function OperationalDashboard() {
         anchor="bottom"
         open={overlayView !== "NONE"}
         onClose={() => setOverlayView("NONE")}
+        ModalProps={{
+          container: () => document.fullscreenElement || document.body,
+        }}
         slotProps={{
           paper: {
             sx: {
@@ -616,6 +654,41 @@ export default function OperationalDashboard() {
         </Box>
 
         <Box sx={{ p: { xs: 2, md: 4, lg: 6 }, pt: 0, height: "100%", overflowY: "auto" }}>
+          {overlayView === "BERTH" && rawApiData && (
+            <Box sx={{ display: { xs: "block", lg: "none" }, mb: 3, p: 2, borderRadius: 3, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", boxShadow: theme.shadows[2] }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, textTransform: "uppercase", color: "text.secondary", mb: 1.5, fontSize: "0.75rem" }}>Analysis Summary</Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                <Box>
+                  <Typography sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase", fontSize: "0.6rem" }}>Primary Block</Typography>
+                  <Typography sx={{ fontSize: "1rem", fontWeight: 900, color: "error.main", fontFamily: "'Inter', monospace" }}>{mapData?.max_block || "-"}</Typography>
+                </Box>
+                <Box>
+                  <Typography sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase", fontSize: "0.6rem" }}>Target Berth</Typography>
+                  <Typography sx={{ fontSize: "1rem", fontWeight: 900, color: "success.main", fontFamily: "'Inter', monospace" }}>{rawApiData?.primary_berth?.berth || rawApiData?.recommended_berth || "-"}</Typography>
+                </Box>
+                <Box>
+                  <Typography sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase", fontSize: "0.6rem" }}>Total Volume</Typography>
+                  <Typography sx={{ fontSize: "1rem", fontWeight: 900, color: "text.primary", fontFamily: "'Inter', monospace" }}>{totalMoves.toLocaleString()} CTN</Typography>
+                </Box>
+                <Box>
+                  <Typography sx={{ display: "block", color: "text.secondary", fontWeight: 800, textTransform: "uppercase", fontSize: "0.6rem" }}>Total Blocks</Typography>
+                  <Typography sx={{ fontSize: "1rem", fontWeight: 900, color: "text.primary", fontFamily: "'Inter', monospace" }}>{totalBlocks}</Typography>
+                </Box>
+                {hazmat > 0 && (
+                  <Box>
+                    <Typography sx={{ display: "block", color: "error.main", fontWeight: 800, textTransform: "uppercase", fontSize: "0.6rem" }}>Hazmat</Typography>
+                    <Typography sx={{ fontSize: "1rem", fontWeight: 900, color: "error.main", fontFamily: "'Inter', monospace" }}>{hazmat}</Typography>
+                  </Box>
+                )}
+                {reefer > 0 && (
+                  <Box>
+                    <Typography sx={{ display: "block", color: "info.main", fontWeight: 800, textTransform: "uppercase", fontSize: "0.6rem" }}>Reefer</Typography>
+                    <Typography sx={{ fontSize: "1rem", fontWeight: 900, color: "info.main", fontFamily: "'Inter', monospace" }}>{reefer}</Typography>
+                  </Box>
+                )}
+              </Box>
+            </Box>
+          )}
           {overlayView === "BERTH" && rawApiData?.berth_analysis && (
             <BerthRecommendation
               analysis={rawApiData.berth_analysis}
@@ -628,7 +701,7 @@ export default function OperationalDashboard() {
 
       <IconButton
         onClick={() => document.fullscreenElement ? document.exitFullscreen() : wrapperRef.current?.requestFullscreen()}
-        sx={{ position: "absolute", bottom: 16, right: 16, zIndex: 10, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", boxShadow: 3, p: 0.6, width: 28, height: 28 }}
+        sx={{ position: "absolute", top: { xs: 16, lg: "auto" }, bottom: { xs: "auto", lg: 56 }, right: 16, zIndex: 10, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", boxShadow: 3, p: 0.6, width: 28, height: 28 }}
         size="small"
       >
         <FullscreenRounded fontSize="small" />

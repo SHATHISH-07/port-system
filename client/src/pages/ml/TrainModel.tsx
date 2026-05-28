@@ -113,7 +113,7 @@ export default function TrainModel() {
             </Typography>
           </Box>
           
-          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
             <Button
               variant={dataSource === "db" ? "contained" : "outlined"}
               onClick={() => {

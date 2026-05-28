@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -7,6 +7,7 @@ import {
   useTheme,
   Button,
   Collapse,
+  useMediaQuery,
 } from "@mui/material";
 import {
   HistoryOutlined,
@@ -34,28 +35,28 @@ const USER_ITEMS: {
   icon?: React.ElementType;
   userOnly?: boolean;
 }[] = [
-  {
-    path: "/stay-analysis",
-    label: "Stay Time Analysis",
-    icon: HistoryOutlined,
-  },
-  {
-    path: "/heatmap",
-    label: "Port Heatmap",
-    icon: WhatshotIcon,
-  },
-  {
-    path: "/stowage-planning",
-    label: "Stowage Planning",
-    icon: WidgetsOutlinedIcon,
-  },
-  {
-    path: "/requests",
-    label: "Request",
-    icon: AssignmentOutlined,
-    userOnly: true,
-  },
-];
+    {
+      path: "/stay-analysis",
+      label: "Stay Time Analysis",
+      icon: HistoryOutlined,
+    },
+    {
+      path: "/heatmap",
+      label: "Port Heatmap",
+      icon: WhatshotIcon,
+    },
+    {
+      path: "/stowage-planning",
+      label: "Stowage Planning",
+      icon: WidgetsOutlinedIcon,
+    },
+    {
+      path: "/requests",
+      label: "Request",
+      icon: AssignmentOutlined,
+      userOnly: true,
+    },
+  ];
 
 const ADMIN_ITEMS = [
   { path: "/requests", label: "Requests" },
@@ -66,11 +67,18 @@ const ADMIN_ITEMS = [
 ];
 
 export default function Sidebar() {
-  const [open, setOpen] = useState(true);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [open, setOpen] = useState(!isMobile);
   const [adminOpen, setAdminOpen] = useState(false);
 
+  useEffect(() => {
+    if (isMobile) {
+      setOpen(false);
+    }
+  }, [isMobile]);
+
   const loc = useLocation();
-  const theme = useTheme();
   const { user, logout } = useAuth();
   const { mode, toggleColorMode } = useColorMode();
 
@@ -107,6 +115,12 @@ export default function Sidebar() {
           <Box
             component={Link}
             to={path}
+            onClick={() => {
+              if (isMobile) {
+                setOpen(false);
+                setAdminOpen(false);
+              }
+            }}
             sx={{
               display: "flex",
               alignItems: "center",
@@ -170,68 +184,151 @@ export default function Sidebar() {
   };
 
   return (
-    <Box
-      component="nav"
-      sx={{
-        width: open ? OPEN : CLOSED,
-        minHeight: "100vh",
-        flexShrink: 0,
-        display: "flex",
-        flexDirection: "column",
-        bgcolor: theme.palette.background.default,
-        transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
-        overflow: "hidden",
-        position: "sticky",
-        top: 0,
-        zIndex: 200,
-      }}
-    >
-      {/* ─── Brand / Title / Toggle ─── */}
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: open ? "space-between" : "center",
-          p: open ? "16px 20px" : "12px 16px",
-          pt: open ? 2.5 : 2,
-          gap: 1.5,
-          flexShrink: 0,
-          mb: 0.5,
-        }}
-      >
-        {open ? (
-          <>
+    <>
+      {/* Mobile Top Bar */}
+      {isMobile && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            p: "12px 16px",
+            bgcolor: theme.palette.background.default,
+            width: "100%",
+            position: "sticky",
+            top: 0,
+            zIndex: 198,
+          }}
+        >
+          <Box
+            onClick={() => {
+              setOpen(true);
+              setAdminOpen(false);
+            }}
+            sx={{
+              width: 34,
+              height: 34,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "8px",
+              "&:hover": { bgcolor: menuIconHover },
+              "& .menu-icon": { display: "none" },
+              "&:hover .logo-icon": { display: "none" },
+              "&:hover .menu-icon": {
+                display: "block",
+                color: textActiveColor,
+              },
+            }}
+          >
             <Box
+              className="logo-icon"
               sx={{
+                width: 30,
+                height: 30,
+                bgcolor: isDark ? "#ffffff" : "#000000",
+                borderRadius: 1.5,
                 display: "flex",
                 alignItems: "center",
-                gap: 1.5,
+                justifyContent: "center",
               }}
-            >
+            />
+            <ViewSidebarOutlined
+              className="menu-icon"
+              sx={{ fontSize: 24, color: menuIconColor }}
+            />
+          </Box>
+          <Typography
+            sx={{
+              fontSize: "1.25rem",
+              fontWeight: 700,
+              color: textColor,
+              textAlign: "right"
+            }}
+          >
+            Deck Optimiser
+          </Typography>
+        </Box>
+      )}
+
+      {/* Mobile Backdrop */}
+      {isMobile && open && (
+        <Box
+          onClick={() => setOpen(false)}
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            bgcolor: "rgba(0,0,0,0.4)",
+            zIndex: 199,
+          }}
+        />
+      )}
+
+      {/* Sidebar Drawer */}
+      <Box
+        component="nav"
+        sx={{
+          width: isMobile ? OPEN : (open ? OPEN : CLOSED),
+          minHeight: "100dvh",
+          height: "100dvh",
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          bgcolor: theme.palette.background.default,
+          transition: "transform 300ms, width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+          overflow: "hidden",
+          position: isMobile ? "fixed" : "sticky",
+          top: 0,
+          left: 0,
+          zIndex: 200,
+          boxShadow: (isMobile && open) ? 24 : 0,
+          transform: isMobile ? (open ? "translateX(0)" : "translateX(-100%)") : "none",
+        }}
+      >
+        {/* ─── Brand / Title / Toggle ─── */}
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: (!isMobile && !open) ? "center" : "space-between",
+            p: (open || isMobile) ? "16px 20px" : "12px 16px",
+            pt: (open || isMobile) ? 2.5 : 2,
+            gap: 1.5,
+            flexShrink: 0,
+            mb: 0.5,
+          }}
+        >
+          {(open || isMobile) ? (
+            <>
               <Box
                 sx={{
-                  width: 30,
-                  height: 30,
-                  bgcolor: isDark ? "#ffffff" : "#000000",
-                  borderRadius: 1.5,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              />
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
+                  gap: 1.5,
                 }}
               >
+                <Box
+                  sx={{
+                    width: 30,
+                    height: 30,
+                    bgcolor: isDark ? "#ffffff" : "#000000",
+                    borderRadius: 1.5,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                />
                 <Typography
                   sx={{
                     fontSize: "0.85rem",
                     fontWeight: 700,
-                    color: "primary",
+                    color: textColor,
                     lineHeight: 1.2,
                     letterSpacing: "0.02em",
                   }}
@@ -239,246 +336,246 @@ export default function Sidebar() {
                   Deck Optimiser
                 </Typography>
               </Box>
-            </Box>
 
-            <Tooltip title="Collapse sidebar" placement="right">
-              <IconButton
-                onClick={() => {
-                  setOpen(false);
-                  setAdminOpen(false);
-                }}
-                size="small"
-                sx={{
-                  width: 32,
-                  height: 32,
-                  flexShrink: 0,
-                  color: menuIconColor,
-                  "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
-                }}
-              >
-                <ViewSidebarOutlined sx={{ fontSize: 20 }} />
-              </IconButton>
-            </Tooltip>
-          </>
-        ) : (
-          <Tooltip title="Expand sidebar" placement="right">
-            <Box
-              onClick={() => setOpen(true)}
-              sx={{
-                width: 34,
-                height: 34,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "8px",
-                "&:hover": { bgcolor: menuIconHover },
-                "& .menu-icon": { display: "none" },
-                "&:hover .logo-icon": { display: "none" },
-                "&:hover .menu-icon": {
-                  display: "block",
-                  color: textActiveColor,
-                },
-              }}
-            >
+              <Tooltip title="Collapse sidebar" placement="right">
+                <IconButton
+                  onClick={() => {
+                    setOpen(false);
+                    if (isMobile) setAdminOpen(false);
+                  }}
+                  size="small"
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    flexShrink: 0,
+                    color: menuIconColor,
+                    "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
+                  }}
+                >
+                  <ViewSidebarOutlined sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Tooltip>
+            </>
+          ) : (
+            <Tooltip title="Expand sidebar" placement="right">
               <Box
-                className="logo-icon"
+                onClick={() => setOpen(true)}
                 sx={{
-                  width: 30,
-                  height: 30,
-                  bgcolor: isDark ? "#ffffff" : "#000000",
-                  borderRadius: 1.5,
+                  width: 34,
+                  height: 34,
+                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                }}
-              />
-              <ViewSidebarOutlined
-                className="menu-icon"
-                sx={{ fontSize: 20, color: menuIconColor }}
-              />
-            </Box>
-          </Tooltip>
-        )}
-      </Box>
-
-      {/* ─── Navigation Items ─── */}
-      <Box sx={{ flex: 1, py: 1, overflowY: "auto", overflowX: "hidden" }}>
-        {renderNavItems(
-          USER_ITEMS.filter(
-            (item) => !(user?.role === "admin" && item.userOnly),
-          ),
-        )}
-
-        {user?.role === "admin" && (
-          <>
-            <Box
-              onClick={() => {
-                if (!open) {
-                  setOpen(true);
-                  setAdminOpen(true);
-                } else {
-                  setAdminOpen(!adminOpen);
-                }
-              }}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.2,
-                height: open ? 38 : 34,
-                px: open ? 1.5 : 0,
-                mx: open ? 1.5 : "auto",
-                width: open ? "auto" : 34,
-                mt: open ? 1.5 : 0.5,
-                mb: open ? 0.25 : 0.5,
-                borderRadius: "8px",
-                cursor: "pointer",
-                justifyContent: open ? "flex-start" : "center",
-                transition: "all 0.2s ease-in-out",
-                color: adminOpen ? textActiveColor : textColor,
-                bgcolor: adminOpen && !open ? menuIconActive : "transparent",
-                "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
-              }}
-            >
-              <SettingsOutlined sx={{ fontSize: 20, color: "inherit" }} />
-              {open && (
-                <>
-                  <Typography
-                    sx={{
-                      flex: 1,
-                      fontSize: 13.5,
-                      fontWeight: 600,
-                      color: "inherit",
-                    }}
-                  >
-                    Operations
-                  </Typography>
-                  {adminOpen ? (
-                    <ExpandLess sx={{ fontSize: 20 }} />
-                  ) : (
-                    <ExpandMore sx={{ fontSize: 20 }} />
-                  )}
-                </>
-              )}
-            </Box>
-
-            <Collapse
-              in={adminOpen && open}
-              timeout="auto"
-              unmountOnExit={false}
-            >
-              <Box sx={{ mt: 0.5 }}>{renderNavItems(ADMIN_ITEMS, true)}</Box>
-            </Collapse>
-          </>
-        )}
-      </Box>
-
-      {/* ─── Bottom Actions (Stacked) ─── */}
-      <Box
-        sx={{
-          p: open ? "12px 16px" : "8px 12px",
-          pb: 2,
-          display: "flex",
-          flexDirection: "column",
-          gap: open ? 0.75 : 0.1,
-          alignItems: open ? "stretch" : "center",
-          width: "100%",
-        }}
-      >
-        {open ? (
-          <>
-            <Button
-              onClick={toggleColorMode}
-              startIcon={
-                isDark ? (
-                  <LightModeOutlined sx={{ fontSize: 20 }} />
-                ) : (
-                  <DarkModeOutlined sx={{ fontSize: 20 }} />
-                )
-              }
-              sx={{
-                justifyContent: "flex-start",
-                height: 38,
-                color: isDark ? "#ffffff" : "#000000",
-                fontSize: "13.5px",
-                px: 1.5,
-                borderRadius: "8px",
-                textTransform: "none",
-                "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
-              }}
-            >
-              <span style={{ fontWeight: 600 }}>
-                {isDark ? "Light Mode" : "Dark Mode"}
-              </span>
-            </Button>
-
-            <Button
-              onClick={logout}
-              startIcon={<LogoutOutlined sx={{ fontSize: 20 }} />}
-              sx={{
-                justifyContent: "flex-start",
-                height: 38,
-                color: isDark ? "#ffffff" : "#000000",
-                fontSize: "13.5px",
-                px: 1.5,
-                borderRadius: "8px",
-                textTransform: "none",
-                "&:hover": {
-                  bgcolor: "transparent",
-                  color: textActiveColor,
-                },
-              }}
-            >
-              <span style={{ fontWeight: 600 }}>Logout</span>
-            </Button>
-          </>
-        ) : (
-          <>
-            <Tooltip
-              title={isDark ? "Light Mode" : "Dark Mode"}
-              placement="right"
-              arrow
-            >
-              <IconButton
-                onClick={toggleColorMode}
-                sx={{
-                  width: 32,
-                  height: 32,
-                  flexShrink: 0,
                   borderRadius: "8px",
-                  color: isDark ? "#ffffff" : "#000000",
+                  "&:hover": { bgcolor: menuIconHover },
+                  "& .menu-icon": { display: "none" },
+                  "&:hover .logo-icon": { display: "none" },
+                  "&:hover .menu-icon": {
+                    display: "block",
+                    color: textActiveColor,
+                  },
+                }}
+              >
+                <Box
+                  className="logo-icon"
+                  sx={{
+                    width: 30,
+                    height: 30,
+                    bgcolor: isDark ? "#ffffff" : "#000000",
+                    borderRadius: 1.5,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                />
+                <ViewSidebarOutlined
+                  className="menu-icon"
+                  sx={{ fontSize: 20, color: menuIconColor }}
+                />
+              </Box>
+            </Tooltip>
+          )}
+        </Box>
+
+        {/* ─── Navigation Items ─── */}
+        <Box sx={{ flex: 1, py: 1, overflowY: "auto", overflowX: "hidden" }}>
+          {renderNavItems(
+            USER_ITEMS.filter(
+              (item) => !(user?.role === "admin" && item.userOnly),
+            ),
+          )}
+
+          {user?.role === "admin" && (
+            <>
+              <Box
+                onClick={() => {
+                  if (!open) {
+                    setOpen(true);
+                    setAdminOpen(true);
+                  } else {
+                    setAdminOpen(!adminOpen);
+                  }
+                }}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.2,
+                  height: open ? 38 : 34,
+                  px: open ? 1.5 : 0,
+                  mx: open ? 1.5 : "auto",
+                  width: open ? "auto" : 34,
+                  mt: open ? 1.5 : 0.5,
+                  mb: open ? 0.25 : 0.5,
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  justifyContent: open ? "flex-start" : "center",
+                  transition: "all 0.2s ease-in-out",
+                  color: adminOpen ? textActiveColor : textColor,
+                  bgcolor: adminOpen && !open ? menuIconActive : "transparent",
                   "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
                 }}
               >
-                {isDark ? (
-                  <LightModeOutlined sx={{ fontSize: 20 }} />
-                ) : (
-                  <DarkModeOutlined sx={{ fontSize: 20 }} />
+                <SettingsOutlined sx={{ fontSize: 20, color: "inherit" }} />
+                {(open || isMobile) && (
+                  <>
+                    <Typography
+                      sx={{
+                        flex: 1,
+                        fontSize: 13.5,
+                        fontWeight: 600,
+                        color: "inherit",
+                      }}
+                    >
+                      Operations
+                    </Typography>
+                    {adminOpen ? (
+                      <ExpandLess sx={{ fontSize: 20 }} />
+                    ) : (
+                      <ExpandMore sx={{ fontSize: 20 }} />
+                    )}
+                  </>
                 )}
-              </IconButton>
-            </Tooltip>
+              </Box>
 
-            <Tooltip title="Logout" placement="right" arrow>
-              <IconButton
-                onClick={logout}
+              <Collapse
+                in={adminOpen && (open || isMobile)}
+                timeout="auto"
+                unmountOnExit={false}
+              >
+                <Box sx={{ mt: 0.5 }}>{renderNavItems(ADMIN_ITEMS, true)}</Box>
+              </Collapse>
+            </>
+          )}
+        </Box>
+
+        {/* ─── Bottom Actions (Stacked) ─── */}
+        <Box
+          sx={{
+            p: (open || isMobile) ? "12px 16px" : "8px 12px",
+            pb: 2,
+            display: "flex",
+            flexDirection: "column",
+            gap: (open || isMobile) ? 0.75 : 0.1,
+            alignItems: (open || isMobile) ? "stretch" : "center",
+            width: "100%",
+          }}
+        >
+          {(open || isMobile) ? (
+            <>
+              <Button
+                onClick={toggleColorMode}
+                startIcon={
+                  isDark ? (
+                    <LightModeOutlined sx={{ fontSize: 20 }} />
+                  ) : (
+                    <DarkModeOutlined sx={{ fontSize: 20 }} />
+                  )
+                }
                 sx={{
-                  width: 32,
-                  height: 32,
-                  flexShrink: 0,
-                  borderRadius: "8px",
+                  justifyContent: "flex-start",
+                  height: 38,
                   color: isDark ? "#ffffff" : "#000000",
+                  fontSize: "13.5px",
+                  px: 1.5,
+                  borderRadius: "8px",
+                  textTransform: "none",
+                  "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>
+                  {isDark ? "Light Mode" : "Dark Mode"}
+                </span>
+              </Button>
+
+              <Button
+                onClick={logout}
+                startIcon={<LogoutOutlined sx={{ fontSize: 20 }} />}
+                sx={{
+                  justifyContent: "flex-start",
+                  height: 38,
+                  color: isDark ? "#ffffff" : "#000000",
+                  fontSize: "13.5px",
+                  px: 1.5,
+                  borderRadius: "8px",
+                  textTransform: "none",
                   "&:hover": {
                     bgcolor: "transparent",
                     color: textActiveColor,
                   },
                 }}
               >
-                <LogoutOutlined sx={{ fontSize: 20 }} />
-              </IconButton>
-            </Tooltip>
-          </>
-        )}
+                <span style={{ fontWeight: 600 }}>Logout</span>
+              </Button>
+            </>
+          ) : (
+            <>
+              <Tooltip
+                title={isDark ? "Light Mode" : "Dark Mode"}
+                placement="right"
+                arrow
+              >
+                <IconButton
+                  onClick={toggleColorMode}
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    flexShrink: 0,
+                    borderRadius: "8px",
+                    color: isDark ? "#ffffff" : "#000000",
+                    "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
+                  }}
+                >
+                  {isDark ? (
+                    <LightModeOutlined sx={{ fontSize: 20 }} />
+                  ) : (
+                    <DarkModeOutlined sx={{ fontSize: 20 }} />
+                  )}
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="Logout" placement="right" arrow>
+                <IconButton
+                  onClick={logout}
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    flexShrink: 0,
+                    borderRadius: "8px",
+                    color: isDark ? "#ffffff" : "#000000",
+                    "&:hover": {
+                      bgcolor: "transparent",
+                      color: textActiveColor,
+                    },
+                  }}
+                >
+                  <LogoutOutlined sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+        </Box>
       </Box>
-    </Box>
+    </>
   );
 }

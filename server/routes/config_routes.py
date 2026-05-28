@@ -9,12 +9,11 @@ from pydantic import BaseModel
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
-# get retraining configuration
 @router.get("/retraining")
-# only admin can access this endpoint
 def get_retraining_config(admin: dict = Depends(require_admin)):
     """
-    Executes get_retraining_config logic and processing.
+    Returns the current retraining configuration and computes the new records
+    accumulated since the last model training.
     """
     data = retraining_config.get()
     
@@ -50,12 +49,10 @@ def get_retraining_config(admin: dict = Depends(require_admin)):
 class ConfigUpdate(BaseModel):
     retrain_threshold: int
 
-# update retraining configuration
 @router.patch("/retraining")
-# only admin can access this endpoint
 def update_retraining_config(payload: ConfigUpdate, admin: dict = Depends(require_admin)):
     """
-    Executes update_retraining_config logic and processing.
+    Updates the retraining threshold configuration dynamically.
     """
     logger.info(f"Updating retraining threshold to {payload.retrain_threshold}")
     new_config = retraining_config.update(threshold=payload.retrain_threshold)

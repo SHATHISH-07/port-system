@@ -185,6 +185,7 @@ export default function HistoryAnalysisTable({
               py: 1,
               px: 2,
               borderBottom: `1px solid ${theme.palette.divider}`,
+              whiteSpace: "nowrap",
             },
           }}
         >

@@ -8,7 +8,7 @@ import Layout from "./layout/Layout";
 import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute, AdminRoute } from "./pages/auth/ProtectedRoute";
 
-const OperationalDashboard = lazy(() => import("./pages/Heatmap"));
+const Heatmap = lazy(() => import("./pages/Heatmap/Heatmap"));
 const StayTimeAnalysis = lazy(
   () => import("./pages/StayTimeAnalysis/StayTimeAnalysis"),
 );
@@ -38,7 +38,7 @@ function PageLoader() {
 export default function App() {
   useEffect(() => {
     const t = setTimeout(() => {
-      import("./pages/Heatmap");
+      import("./pages/Heatmap/Heatmap");
     }, 2000);
     return () => clearTimeout(t);
   }, []);
@@ -67,7 +67,7 @@ export default function App() {
                   path="/heatmap"
                   element={
                     <ProtectedRoute>
-                      <OperationalDashboard />
+                      <Heatmap />
                     </ProtectedRoute>
                   }
                 />
@@ -102,8 +102,8 @@ export default function App() {
                   element={<Navigate to="/stay-analysis" />}
                 />
                 <Route
-                  path="/heatmap"
-                  element={<Navigate to="/operational-dashboard" />}
+                  path="/operational-dashboard"
+                  element={<Navigate to="/heatmap" />}
                 />
 
                 {/* Admin Routes */}

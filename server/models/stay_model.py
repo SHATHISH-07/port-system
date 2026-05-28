@@ -22,8 +22,6 @@ from utils.datetime_utils import parse_datetime
 
 from db.connection import get_engine
 from sqlalchemy import text
-from db.connection import get_engine
-from sqlalchemy import text
 import json as _json
 
 logger = logging.getLogger("port_system")
@@ -282,7 +280,7 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         print(f"     Skipped (> {max_hours}h)   : {skipped_error}")
         print(f"     Target range       : {y.min():.1f}h - {y.max():.1f}h")
         print(f"     Target mean        : {y.mean():.1f}h")
-        print(f"     Model type         : VotingRegressor (Ridge + XGBoost + GBR)")
+        print("     Model type         : VotingRegressor (Ridge + XGBoost + GBR)")
         print(f"     Features           : {list(settings.FEATURE_NAMES)}")
         logger.info("ML training: %s samples, target mean=%.1fh", len(X), y.mean())
 

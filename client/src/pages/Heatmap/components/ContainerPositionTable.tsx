@@ -77,8 +77,8 @@ export default function ContainerPositionTable({ data }: ContainerPositionTableP
   }
 
   return (
-    <Box sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", px: { xs: 2, md: 4 }, pt: { xs: 8, md: 9 }, pb: { xs: 6, md: 7 } }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+    <Box sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", px: { xs: 1.5, md: 4 }, pt: { xs: 4, md: 9 }, pb: { xs: 4, md: 7 } }}>
+      <Box sx={{ display: "flex", flexDirection: { xs: "column", lg: "row" }, justifyContent: "space-between", alignItems: { xs: "stretch", lg: "center" }, gap: 2, mb: 3 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800 }}>Container Yard Positions</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -90,7 +90,7 @@ export default function ContainerPositionTable({ data }: ContainerPositionTableP
           placeholder="Search container, block, category..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-          sx={{ width: 300, "& .MuiOutlinedInput-root": { borderRadius: 3 } }}
+          sx={{ width: { xs: "100%", lg: 300 }, "& .MuiOutlinedInput-root": { borderRadius: 3 } }}
           slotProps={{
             input: {
               startAdornment: <InputAdornment position="start"><SearchRounded fontSize="small" /></InputAdornment>
@@ -154,6 +154,28 @@ export default function ContainerPositionTable({ data }: ContainerPositionTableP
         page={page}
         onPageChange={handleChangePage}
         onRowsPerPageChange={handleChangeRowsPerPage}
+        slotProps={{
+          select: {
+            MenuProps: {
+              container: () => document.fullscreenElement || document.body,
+            },
+          }
+        }}
+        labelRowsPerPage={<Typography variant="body2" component="span" sx={{ display: { xs: 'none', sm: 'block' }, fontSize: 'inherit' }}>Rows per page:</Typography>}
+        sx={{
+          ".MuiTablePagination-toolbar": {
+            px: { xs: 0, sm: 2 },
+          },
+          ".MuiTablePagination-displayedRows": {
+            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+          },
+          ".MuiTablePagination-actions": {
+            ml: { xs: 1, sm: 2 },
+          },
+          ".MuiTablePagination-select": {
+            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+          }
+        }}
       />
     </Box>
   );

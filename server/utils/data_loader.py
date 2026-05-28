@@ -1,16 +1,11 @@
 from __future__ import annotations
-
 from typing import Optional
-
 import pandas as pd
-
-from config import settings
-from utils.datetime_utils import parse_datetime
 
 # Column normalization
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Executes clean_column_names logic and processing.
+    Cleans DataFrame column names by lowercasing and replacing special characters with underscores.
     """
     df = df.copy()
     df.columns = (
@@ -110,7 +105,7 @@ _CRANE_MAPPING: dict[str, str] = {
 
 def _now_utc_naive() -> pd.Timestamp:
     """
-    Executes _now_utc_naive logic and processing.
+    Returns the current UTC time as a timezone-naive Pandas Timestamp.
     """
     return pd.Timestamp.now(tz="UTC").tz_localize(None)
 
@@ -149,7 +144,7 @@ def _add_missing_current_fallbacks(df: pd.DataFrame) -> pd.DataFrame:
 
 def normalize_dataframe(df: pd.DataFrame, dataset_type: Optional[str] = None) -> pd.DataFrame:
     """
-    Executes normalize_dataframe logic and processing.
+    Normalizes a DataFrame's columns and maps them to standard schema names based on dataset type.
     """
     df = clean_column_names(df)
     dataset_type = (dataset_type or "").strip().lower()
@@ -181,7 +176,7 @@ def normalize_dataframe(df: pd.DataFrame, dataset_type: Optional[str] = None) ->
 
 def infer_dataset_type(df: pd.DataFrame) -> str:
     """
-    Executes infer_dataset_type logic and processing.
+    Infers the dataset type (crane, current, or history) based on the presence of specific columns.
     """
     cols = set(df.columns)
 

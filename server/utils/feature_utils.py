@@ -1,21 +1,20 @@
 from __future__ import annotations
 import hashlib
 import pandas as pd
-from config import settings
 from utils.datetime_utils import parse_datetime
-from utils.position_parser import classify_move, parse_position, safe_get_pos
+from utils.position_parser import parse_position
 
 # Small helpers
 def _is_yes(val) -> bool:
     """
-    Executes _is_yes logic and processing.
+    Checks if a string or value represents a 'yes', 'true', or '1' flag.
     """
     return str(val).strip().upper() in ("YES", "Y", "TRUE", "1")
 
 # Feature engineering
 def create_features(df: pd.DataFrame) -> dict | None:
     """
-    Executes create_features logic and processing.
+    Extracts and computes ML features from a vessel's historical container movement dataframe.
     """
     df = df.copy()
 

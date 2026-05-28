@@ -1,8 +1,8 @@
 __pycache__
 .env
-
+.ruff_cache
 test-data/master_test_dataset.csv
-
+.pytest_cache
 scratch/
 
 system_verification_log.txt

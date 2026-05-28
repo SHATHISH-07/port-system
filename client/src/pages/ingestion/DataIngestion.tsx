@@ -156,7 +156,7 @@ export default function DataIngestion() {
               disabled={isLoading}
               sx={{ borderRadius: 2, fontWeight: 700, textTransform: "none", py: 0.75, px: 2, boxShadow: activeType === "history" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none" }}
             >
-              History Ingestion
+              History
             </Button>
             <Button
               variant={activeType === "crane" ? "contained" : "outlined"}
@@ -169,7 +169,7 @@ export default function DataIngestion() {
               disabled={isLoading}
               sx={{ borderRadius: 2, fontWeight: 700, textTransform: "none", py: 0.75, px: 2, boxShadow: activeType === "crane" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none" }}
             >
-              Crane Ingestion
+              Crane
             </Button>
           </Box>
         </Box>

@@ -1,6 +1,5 @@
 from typing import Any, Iterable, Optional
 from fastapi import Request
-
 from utils.file_parser import (
     extract_container_ids_from_file,
     extract_container_ids_from_text,
@@ -8,7 +7,7 @@ from utils.file_parser import (
 
 def clean_text(value: Any) -> Optional[str]:
     """
-    Executes clean_text logic and processing.
+    Cleans and standardizes text input, returning None for empty or null-like values.
     """
     if value is None:
         return None
@@ -19,7 +18,7 @@ def clean_text(value: Any) -> Optional[str]:
 
 def merge_unique(existing: list[str], new_items: Iterable[str]) -> list[str]:
     """
-    Executes merge_unique logic and processing.
+    Merges an iterable of new strings into an existing list while maintaining order and ensuring uniqueness.
     """
     seen = set(existing)
     merged = list(existing)
@@ -32,7 +31,7 @@ def merge_unique(existing: list[str], new_items: Iterable[str]) -> list[str]:
 
 def coerce_container_ids(value: Any) -> list[str]:
     """
-    Executes coerce_container_ids logic and processing.
+    Parses various input formats (strings, lists, JSON) into a flat list of unique container IDs.
     """
     if value is None:
         return []

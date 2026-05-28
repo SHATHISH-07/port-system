@@ -386,10 +386,13 @@ export default function CurrentPlanningTab({
 
   React.useEffect(() => {
     if (recomputeTrigger > 0 && portRotation.length > 0) {
-      setTimeout(() => {
+      // Delay the heavy API calls and React re-renders to allow the Drag-and-Drop
+      // animation in the UI to finish smoothly. This creates a true "optimistic" feel.
+      const timer = setTimeout(() => {
         executeOptimization(portRotation);
         fetchAndOpenVisualization(portRotation);
-      }, 0);
+      }, 400);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recomputeTrigger]);
@@ -628,10 +631,10 @@ export default function CurrentPlanningTab({
 
       {/* Charts Row */}
       <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ minWidth: 0 }}>
           <Card
             {...cardStyles}
-            sx={{ ...cardStyles.sx, p: 2.5, height: 260, position: "relative" }}
+            sx={{ ...cardStyles.sx, p: 2.5, height: 300, position: "relative", minWidth: 0 }}
           >
             <Typography
               variant="overline"
@@ -640,7 +643,7 @@ export default function CurrentPlanningTab({
             >
               DECK DISTRIBUTION
             </Typography>
-            <ResponsiveContainer width="100%" height="90%">
+            <ResponsiveContainer width="99%" height={240}>
               <PieChart>
                 <Pie
                   data={deckPie}
@@ -681,10 +684,10 @@ export default function CurrentPlanningTab({
             </ResponsiveContainer>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ minWidth: 0 }}>
           <Card
             {...cardStyles}
-            sx={{ ...cardStyles.sx, p: 2.5, height: 260, position: "relative" }}
+            sx={{ ...cardStyles.sx, p: 2.5, height: 300, position: "relative", minWidth: 0 }}
           >
             <Typography
               variant="overline"
@@ -693,7 +696,7 @@ export default function CurrentPlanningTab({
             >
               RESHUFFLE RISK
             </Typography>
-            <ResponsiveContainer width="100%" height="90%">
+            <ResponsiveContainer width="99%" height={240}>
               <PieChart>
                 <Pie
                   data={riskPie}
@@ -726,6 +729,7 @@ export default function CurrentPlanningTab({
                     fontSize: "0.7rem",
                     fontWeight: 600,
                     paddingTop: "10px",
+                    paddingBottom: "10px",
                     color: theme.palette.text.secondary,
                   }}
                   iconType="circle"
@@ -734,10 +738,10 @@ export default function CurrentPlanningTab({
             </ResponsiveContainer>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ minWidth: 0 }}>
           <Card
             {...cardStyles}
-            sx={{ ...cardStyles.sx, p: 2.5, height: 260, position: "relative" }}
+            sx={{ ...cardStyles.sx, p: 2.5, height: 300, position: "relative", minWidth: 0 }}
           >
             <Typography
               variant="overline"
@@ -746,8 +750,8 @@ export default function CurrentPlanningTab({
             >
               EQUIPMENT TYPES
             </Typography>
-            <ResponsiveContainer width="100%" height="90%">
-              <BarChart layout="vertical" data={equipBar} margin={{ top: 20, right: 10, left: 10, bottom: 0 }}>
+            <ResponsiveContainer width="99%" height={240}>
+              <BarChart layout="vertical" data={equipBar} margin={{ top: 20, right: 10, left: 10, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={alpha(theme.palette.divider, 0.5)} />
                 <XAxis type="number" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis dataKey="name" type="category" fontSize={10} width={90} tickLine={false} axisLine={false} tick={{ fontWeight: 600 }} stroke={theme.palette.text.secondary} />
@@ -807,6 +811,7 @@ export default function CurrentPlanningTab({
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
+                minWidth: 0,
               }}
             >
               <Box
@@ -850,9 +855,10 @@ export default function CurrentPlanningTab({
                   borderColor: alpha(theme.palette.divider, 0.5),
                   bgcolor: alpha(theme.palette.background.paper, 0.5),
                   borderRadius: 2,
+                  overflowX: "auto",
                 }}
               >
-                <Table>
+                <Table sx={{ minWidth: 300 }}>
                   <TableHead
                     sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}
                   >
@@ -956,6 +962,7 @@ export default function CurrentPlanningTab({
                 zIndex: 1,
                 display: "flex",
                 flexDirection: "column",
+                minWidth: 0,
               }}
             >
               <Box sx={{ mb: 3 }}>
@@ -1043,8 +1050,10 @@ export default function CurrentPlanningTab({
         <Box
           sx={{
             display: "flex",
+            flexDirection: { xs: "column", md: "row" },
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: { xs: "stretch", md: "center" },
+            gap: 2,
             p: 2,
             borderBottom: "1px solid",
             borderColor: "divider",
@@ -1058,7 +1067,7 @@ export default function CurrentPlanningTab({
           >
             Load Sequence Operations
           </Typography>
-          <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+          <Box sx={{ display: "flex", gap: 2, flexDirection: { xs: "column", sm: "row" }, alignItems: { xs: "stretch", sm: "center" } }}>
             <Button
               variant="contained"
               size="small"
@@ -1109,8 +1118,8 @@ export default function CurrentPlanningTab({
             />
           </Box>
         </Box>
-        <TableContainer>
-          <Table size="small">
+        <TableContainer sx={{ overflowX: "auto" }}>
+          <Table size="small" sx={{ minWidth: 900 }}>
             <TableHead>
               <TableRow
                 sx={{

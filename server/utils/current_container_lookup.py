@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from typing import List, Optional
 
+import json
 import pandas as pd
 from sqlalchemy import bindparam, text
 
@@ -17,7 +18,6 @@ _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 # In-memory cache to avoid re-reading the files on every call
 _active_yard_cache: dict[str, pd.DataFrame] = {}
 
-
 def _load_active_yard_df(yard_id: Optional[str] = None) -> pd.DataFrame:
     """
     Load the active yard container data from the JSON files on disk.
@@ -27,8 +27,6 @@ def _load_active_yard_df(yard_id: Optional[str] = None) -> pd.DataFrame:
     cache_key = (yard_id or "ALL").upper()
     if cache_key in _active_yard_cache:
         return _active_yard_cache[cache_key]
-
-    import json
 
     dfs: list[pd.DataFrame] = []
     patterns = [f"{yard_id}_active_yard_containers.json"] if yard_id else ["*_active_yard_containers.json"]
@@ -67,7 +65,7 @@ def _load_active_yard_df(yard_id: Optional[str] = None) -> pd.DataFrame:
 
 def _normalize_column_name(name: str) -> str:
     """
-    Executes _normalize_column_name logic and processing.
+    Normalizes a column name by lowercasing, stripping, and replacing special characters.
     """
     name = str(name).strip().lower()
     name = re.sub(r"[^a-z0-9]+", "_", name)
@@ -75,7 +73,7 @@ def _normalize_column_name(name: str) -> str:
 
 def _normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Executes _normalize_dataframe_columns logic and processing.
+    Normalizes all column names in a DataFrame.
     """
     if df.empty:
         return df

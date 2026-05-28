@@ -31,11 +31,11 @@ def get_model_status(admin: dict = Depends(require_admin)):
     """
     result: dict = {}
 
-    # ── Training progress ────────────────────────────────────────────────
+    # Training progress
     progress = training_status.get()
     result["training"] = progress
 
-    # ── Last completed training run ──────────────────────────────────────
+    # Last completed training run
     try:
         metadata = get_latest_training_metadata()
         if metadata:
@@ -52,7 +52,7 @@ def get_model_status(admin: dict = Depends(require_admin)):
         logger.error("Error fetching training metadata: %s", e)
         result["last_trained"] = None
 
-    # ── Active model version ─────────────────────────────────────────────
+    # Active model version
     try:
         engine = get_engine()
         with engine.connect() as conn:
@@ -75,9 +75,7 @@ def get_model_status(admin: dict = Depends(require_admin)):
 
     return result
 
-
 # POST /model/training  — trigger retraining
-
 @router.post("/training", response_model=ModelTrainingResponse)
 async def trigger_training(
     background_tasks: BackgroundTasks,
@@ -139,9 +137,7 @@ async def trigger_training(
         "records": len(df),
     }
 
-
 # GET /model/versions  — list versions + training history + promote
-
 @router.get("/versions", response_model=ModelVersionsResponse)
 def list_model_versions(
     limit: int = Query(50, alias="limit"),
@@ -175,7 +171,7 @@ def list_model_versions(
         "training_history": history,
     }
 
-
+# Promote specific model version to 'active', retiring the current one
 @router.post("/versions/{version_id}/promote", response_model=PromoteVersionResponse)
 def promote_model_version(version_id: str, admin: dict = Depends(require_admin)):
     """

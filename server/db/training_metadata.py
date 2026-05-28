@@ -7,17 +7,14 @@ from config import settings
 
 logger = logging.getLogger("port_system")
 
-# Checks if the training metadata table exists and creates it if not
 def _ensure_table():
     """
-    Executes _ensure_table logic and processing.
+    Checks if the training metadata table exists and creates it if not.
     """
     engine = get_engine()
     init_training_metadata_schema(engine)
     return engine
 
-
-# Inserts a new row into training_metadata for a completed (or failed) run.
 def save_training_metadata(
     dataset_size: int,
     data_source: str = "db",
@@ -26,7 +23,7 @@ def save_training_metadata(
     notes: str = None,
 ) -> dict:
     """
-    Executes save_training_metadata logic and processing.
+    Inserts a new row into training_metadata for a completed (or failed) run.
     """
     engine = _ensure_table()
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -48,11 +45,9 @@ def save_training_metadata(
         logger.info(f"[DB] training_metadata row inserted: id={row['id']}, size={dataset_size}")
         return dict(row)
 
-
-# Reads the latest training run
 def get_latest_training_metadata() -> dict | None:
     """
-    Executes get_latest_training_metadata logic and processing.
+    Reads the latest training run metadata from the database.
     """
     try:
         engine = _ensure_table()
@@ -66,11 +61,9 @@ def get_latest_training_metadata() -> dict | None:
         logger.error(f"[DB] get_latest_training_metadata failed: {e}")
         return None
 
-
-# Reads all training runs (audit log)
 def get_training_metadata_history(limit: int = settings.DEFAULT_TRAINING_HISTORY_LIMIT) -> list[dict]:
     """
-    Executes get_training_metadata_history logic and processing.
+    Reads all training runs to serve as an audit log.
     """
     try:
         engine = _ensure_table()

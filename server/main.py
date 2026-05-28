@@ -45,6 +45,11 @@ scheduler = AsyncIOScheduler()
 # Lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Manages the application lifecycle.
+    Initializes the database schema, ensures the default admin user exists,
+    preloads the machine learning model, and starts the background task scheduler.
+    """
     engine = get_engine()
 
     try:
@@ -131,6 +136,10 @@ app.add_middleware(
 _LOG_DIR = os.path.join(os.path.dirname(__file__), "response_logs")
 
 async def write_global_response_log(request: Request, response_body: bytes, status_code: int):
+    """
+    Asynchronously logs the incoming request payload and the corresponding API response
+    to the local filesystem for auditing and debugging purposes.
+    """
     try:
         path_str = request.url.path.strip("/")
         if not path_str:
@@ -192,6 +201,10 @@ async def write_global_response_log(request: Request, response_body: bytes, stat
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    """
+    FastAPI middleware to measure request duration, log HTTP status codes,
+    and capture response bodies for global logging.
+    """
     start = time.time()
     try:
         response     = await call_next(request)
