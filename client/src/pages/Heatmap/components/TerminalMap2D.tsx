@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Typography, useTheme, IconButton, Tooltip } from "@mui/material";
+import { Box, Typography, useTheme, IconButton, Tooltip, useMediaQuery } from "@mui/material";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { RestartAltRounded } from "@mui/icons-material";
 
@@ -158,6 +158,7 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
   const [hovered, setHovered] = useState<string | null>(null);
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
 
   let targetBerthId = propTargetBerthId || "R1";
   let computedMaxBlock: string | null = null;
@@ -208,6 +209,9 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
         @keyframes scan { 0% { transform:translateY(-120px) } 100% { transform:translateY(950px) } }
         .zone-block { transition: filter 0.2s; }
         .zone-block:hover { filter: brightness(1.1); }
+        @media (max-width: 900px) {
+          .hide-on-mobile { display: none !important; }
+        }
       `}</style>
 
       {loading && (
@@ -230,22 +234,23 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
         <Box
           sx={{
             position: "absolute",
-            top: "50%",
-            left: 24,
-            transform: "translateY(-50%)",
+            top: { xs: "auto", md: "50%" },
+            bottom: { xs: 48, md: "auto" },
+            left: { xs: 16, md: 24 },
+            transform: { xs: "none", md: "translateY(-50%)" },
             zIndex: 10,
-            px: 2,
-            py: 1.4,
+            px: { xs: 1.25, md: 2 },
+            py: { xs: 0.75, md: 1.4 },
             bgcolor: isDark ? "rgba(18,22,31,0.95)" : "rgba(255,255,255,0.97)",
             border: "1px solid",
             borderColor: "primary.main",
             borderRadius: 1,
-            minWidth: 140,
+            minWidth: { xs: 110, md: 140 },
           }}
         >
-          <Typography sx={{ fontSize: "0.72rem", color: "primary.main", fontWeight: 800 }}>BLOCK {hovered}</Typography>
+          <Typography sx={{ fontSize: { xs: "0.65rem", md: "0.72rem" }, color: "primary.main", fontWeight: 800 }}>BLOCK {hovered}</Typography>
           {data?.blocks?.[hovered] && (
-            <Typography sx={{ fontSize: "0.85rem", color: "text.primary", fontWeight: 700, mt: 0.5 }}>
+            <Typography sx={{ fontSize: { xs: "0.75rem", md: "0.85rem" }, color: "text.primary", fontWeight: 700, mt: 0.5 }}>
               Volume: <span style={{ color: isDark ? "#38bdf8" : "#0284c7" }}>{data.blocks[hovered].count} CTN</span>
             </Typography>
           )}
@@ -264,12 +269,9 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
         {({ resetTransform }) => (
           <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
             <Controls resetTransform={resetTransform} />
-            <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+            <TransformComponent wrapperStyle={{ width: "100%", height: "100%", willChange: "transform" }} contentStyle={{ willChange: "transform" }}>
               <svg width="1250" height="950" viewBox={VIEW_BOX} style={{ display: "block" }}>
                 <defs>
-                  <filter id="heatglow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="28" result="blur" />
-                  </filter>
 
                   <pattern id="asphalt" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
                     <rect width="40" height="40" fill={isDark ? "#0f1219" : "#dde3ec"} />
@@ -305,7 +307,7 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
 
                 <rect x="-200" y="-150" width="1600" height="1200" fill="url(#seaGrad)" />
 
-                <g opacity={isDark ? "0.15" : "0.35"} style={{ pointerEvents: "none" }}>
+                <g opacity={isDark ? "0.15" : "0.35"} style={{ pointerEvents: "none" }} className="hide-on-mobile">
                   {Array.from({ length: 50 }).map((_, i) => (
                     <path
                       key={i}
@@ -318,7 +320,7 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
                 </g>
 
                 <path d="M -200,128 L 966,128 L 966,708 L -200,708 Z" fill={isDark ? "#090d16" : "#94a3b8"} />
-                <path d="M -200,120 L 960,120 L 960,700 L -200,700 Z" fill="url(#asphalt)" stroke={isDark ? "#272e3d" : "#cbd5e1"} strokeWidth="2" />
+                <path d="M -200,120 L 960,120 L 960,700 L -200,700 Z" fill={isDark ? "#0f1219" : "#dde3ec"} stroke={isDark ? "#272e3d" : "#cbd5e1"} strokeWidth="2" />
 
                 <rect x="-200" y="120" width="1160" height="15" fill={roadColor} />
                 <line x1="-200" y1="125" x2="960" y2="125" stroke="#eab308" strokeWidth="2" strokeDasharray="14 7" opacity="0.8" />
@@ -372,6 +374,24 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
                           const maxCols = 4;
                           const maxRows = 7;
                           const loadedCount = isHot ? Math.min(block!.count, maxCols * maxRows) : 0;
+                          
+                          if (isMobile) {
+                            // Simplified mobile render: single progress bar instead of 84+ nodes per block
+                            const fillPct = isHot ? Math.min(1, block!.count / (maxCols * maxRows)) : 0;
+                            return (
+                              <g>
+                                <rect x={z.x + 6} y={z.y + 8} width={140} height={100} fill={isDark ? "#0b0e14" : "#e8edf5"} rx={2} />
+                                {fillPct > 0 && (
+                                  <rect 
+                                    x={z.x + 6} y={z.y + 8 + (100 * (1 - fillPct))} 
+                                    width={140} height={100 * fillPct} 
+                                    fill={isMax ? "#ef4444" : isRec ? "#0284c7" : "#f97316"} 
+                                    rx={2} opacity={0.8}
+                                  />
+                                )}
+                              </g>
+                            );
+                          }
 
                           const cells = [];
                           for (let row = 0; row < maxRows; row++) {
@@ -436,7 +456,6 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
 
                 {data && (
                   <g
-                    filter="url(#heatglow)"
                     style={{ mixBlendMode: isDark ? "screen" : "normal", pointerEvents: "none" }}
                     opacity={isDark ? 0.9 : 0.8}
                   >

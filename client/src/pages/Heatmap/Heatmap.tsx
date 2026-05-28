@@ -392,6 +392,7 @@ export default function Heatmap() {
           border: "1px solid",
           borderColor: theme.palette.divider,
           boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[4],
+          display: mapView === "CONTAINERS" ? { xs: "none", md: "block" } : "block",
         }}
       >
         {!inputsOpen ? (
@@ -512,10 +513,10 @@ export default function Heatmap() {
 
       {/* BOTTOM CENTER: VIEW SWITCHER */}
       <Paper
-        elevation={8}
+        elevation={0}
         sx={{
           position: "absolute",
-          bottom: 16,
+          bottom: { xs: 4, lg: 16 },
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 10,
@@ -525,7 +526,7 @@ export default function Heatmap() {
           p: 0.4,
           border: "1px solid",
           borderColor: theme.palette.divider,
-          boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[10],
+          boxShadow: "none",
           maxWidth: "calc(100% - 32px)",
           overflowX: "auto",
           "&::-webkit-scrollbar": { display: "none" },
@@ -569,12 +570,15 @@ export default function Heatmap() {
               "& .MuiSelect-select": { py: 0.8, px: 1.5, minHeight: "auto" },
             }}
             MenuProps={{
+              container: () => document.fullscreenElement || document.body,
               slotProps: {
                 paper: {
                   sx: {
                     borderRadius: 2,
                     mt: -1, // Pop up instead of down
-                    boxShadow: theme.shadows[8],
+                    boxShadow: "none",
+                    border: "1px solid",
+                    borderColor: "divider",
                   }
                 }
               },
@@ -603,6 +607,9 @@ export default function Heatmap() {
         anchor="bottom"
         open={overlayView !== "NONE"}
         onClose={() => setOverlayView("NONE")}
+        ModalProps={{
+          container: () => document.fullscreenElement || document.body,
+        }}
         slotProps={{
           paper: {
             sx: {

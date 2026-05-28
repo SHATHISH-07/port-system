@@ -2351,6 +2351,84 @@ class TerminalScene {
       }
       this.updateCamera();
     });
+
+    // Touch Support for Mobile
+    let initialPinchDistance = 0;
+    canvas.addEventListener("touchstart", (e) => {
+      e.preventDefault(); // Prevent scrolling
+      if (e.touches.length === 1) {
+        this.isDragging = true;
+        this.isRightDrag = false;
+        this.lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length === 2) {
+        this.isDragging = true;
+        this.isRightDrag = true; // Two fingers to pan
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
+        this.lastMouse = { 
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2, 
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2 
+        };
+      }
+    }, { passive: false });
+
+    window.addEventListener("touchend", () => {
+      this.isDragging = false;
+    });
+
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault(); // Prevent scrolling
+      if (!this.isDragging) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      let clientX = 0;
+      let clientY = 0;
+
+      if (e.touches.length === 1) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        clientX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        clientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        
+        // Handle pinch zoom
+        const tdx = e.touches[0].clientX - e.touches[1].clientX;
+        const tdy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(tdx * tdx + tdy * tdy);
+        const zoomDelta = initialPinchDistance - dist;
+        if (Math.abs(zoomDelta) > 5) {
+          this.radius = Math.max(10, Math.min(120, this.radius + zoomDelta * 0.15));
+          initialPinchDistance = dist;
+        }
+      } else {
+        return;
+      }
+
+      this.mouse.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      );
+
+      const dx = clientX - this.lastMouse.x;
+      const dy = clientY - this.lastMouse.y;
+      this.lastMouse = { x: clientX, y: clientY };
+
+      if (this.isRightDrag && e.touches.length === 2) {
+        const sp = this.radius * 0.0014;
+        const right = new THREE.Vector3()
+          .crossVectors(this.camera.up, this.camera.position.clone().sub(this.target))
+          .normalize();
+        this.target.addScaledVector(right, -dx * sp);
+        const fwd = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.theta);
+        this.target.addScaledVector(fwd, -dy * sp);
+      } else if (e.touches.length === 1) {
+        this.theta -= dx * 0.007;
+        this.phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.01, this.phi - dy * 0.005));
+      }
+      this.updateCamera();
+    }, { passive: false });
+
     canvas.addEventListener(
       "wheel",
       (e) => {
@@ -2545,22 +2623,24 @@ export default function TerminalMap3D({
         <Box
           sx={{
             position: "absolute",
-            top: "50%",
-            left: 24,
-            transform: "translateY(-50%)",
+            top: { xs: "auto", md: "50%" },
+            bottom: { xs: 48, md: "auto" },
+            left: { xs: 16, md: 24 },
+            transform: { xs: "none", md: "translateY(-50%)" },
             zIndex: 10,
-            px: 2,
-            py: 1.4,
+            px: { xs: 1.25, md: 2 },
+            py: { xs: 0.75, md: 1.4 },
             bgcolor: isDark ? "rgba(42,42,42,0.97)" : "rgba(233,238,246,0.97)",
             border: "1px solid",
             borderColor: "primary.main",
             borderRadius: 1,
             boxShadow: `0 0 16px ${alpha(theme.palette.primary.main, 0.22)}`,
+            minWidth: { xs: 110, md: 140 },
           }}
         >
           <Typography
             sx={{
-              fontSize: "0.72rem",
+              fontSize: { xs: "0.65rem", md: "0.72rem" },
               color: "primary.main",
               fontWeight: 800,
               fontFamily: "'Roboto Mono', monospace",
@@ -2572,14 +2652,14 @@ export default function TerminalMap3D({
           {hoveredData && (
             <>
               <Typography
-                sx={{ fontSize: "0.66rem", color: "text.primary", mt: 0.4 }}
+                sx={{ fontSize: { xs: "0.6rem", md: "0.66rem" }, color: "text.primary", mt: 0.4 }}
               >
                 Volume:{" "}
                 <span style={{ color: theme.palette.info.main }}>
                   {hoveredData.count} Units
                 </span>
               </Typography>
-              <Typography sx={{ fontSize: "0.66rem", color: "text.primary" }}>
+              <Typography sx={{ fontSize: { xs: "0.6rem", md: "0.66rem" }, color: "text.primary" }}>
                 Density:{" "}
                 <span style={{ color: theme.palette.info.main }}>
                   {hoveredData.concentration}

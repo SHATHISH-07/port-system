@@ -37,7 +37,7 @@ const UserManagement: React.FC = () => {
 
     const fetchUsers = async () => {
         try {
-            const res = await api.get("/users/");
+            const res = await api.get("/users");
             setUsers(res.data);
         } catch (error) {
             console.error("Failed to fetch users", error);
@@ -51,7 +51,7 @@ const UserManagement: React.FC = () => {
 
     const handleCreateUser = async () => {
         try {
-            await api.post("/users/", { username, password, role });
+            await api.post("/users", { username, password, role });
             setOpenModal(false);
             setUsername("");
             setPassword("");

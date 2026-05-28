@@ -85,11 +85,11 @@ function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockDa
     <Box
       sx={{
         bgcolor: isDark ? alpha("#161b24", 0.9) : alpha("#ffffff", 0.9),
-        backdropFilter: "blur(12px)",
+        backdropFilter: { xs: "none", md: "blur(12px)" },
         border: `1px solid ${isMax ? theme.palette.primary.main : isDark ? alpha("#ffffff", 0.08) : alpha("#000000", 0.08)}`,
         boxShadow: isMax
-          ? `0 0 0 1px ${theme.palette.primary.main}, 0 12px 24px ${alpha(theme.palette.primary.main, 0.2)}`
-          : `0 8px 16px ${alpha("#000", isDark ? 0.2 : 0.03)}`,
+          ? { xs: `0 0 0 1px ${theme.palette.primary.main}`, md: `0 0 0 1px ${theme.palette.primary.main}, 0 12px 24px ${alpha(theme.palette.primary.main, 0.2)}` }
+          : { xs: "none", md: `0 8px 16px ${alpha("#000", isDark ? 0.2 : 0.03)}` },
         borderRadius: 2,
         p: 2.5,
         position: "relative",
@@ -102,12 +102,9 @@ function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockDa
         minWidth: 180,
         maxWidth: 280,
         overflow: "hidden",
-        transition: "transform 250ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 250ms",
+        transition: "transform 250ms cubic-bezier(0.4, 0, 0.2, 1)",
         "&:hover": {
           transform: "translateY(-4px)",
-          boxShadow: isMax
-            ? `0 0 0 1px ${theme.palette.primary.main}, 0 16px 32px ${alpha(theme.palette.primary.main, 0.3)}`
-            : `0 12px 24px ${alpha("#000", isDark ? 0.3 : 0.06)}`,
         },
       }}
     >
@@ -221,7 +218,7 @@ function BerthCard({ id, label, isTarget, vesselName, isDark }: { id: string; la
           height: h,
           border: `1px dashed ${isDark ? alpha("#94a3b8", 0.2) : alpha("#64748b", 0.3)}`,
           bgcolor: isDark ? "#1e293b" : "#e2e8f0",
-          backdropFilter: "blur(4px)",
+          backdropFilter: { xs: "none", md: "blur(4px)" },
           borderRadius: 2,
           display: "flex",
           flexDirection: "column",
@@ -385,7 +382,7 @@ function HeatmapPlaceholder() {
       <TransformWrapper initialScale={0.72} minScale={0.4} maxScale={3} centerOnInit wheel={{ step: 0.002 }} panning={{ disabled: false }}>
         {() => (
           <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
-            <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+            <TransformComponent wrapperStyle={{ width: "100%", height: "100%", willChange: "transform" }} contentStyle={{ willChange: "transform" }}>
               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 1200, p: 4, gap: 5, opacity: 0.5 }}>
                 <Box sx={{ display: "flex", justifyContent: "center", gap: 6 }}>
                   <BerthCard id="T1" label="BERTH T1" isTarget={false} isDark={isDark} />
@@ -452,7 +449,7 @@ export default function BlockIllustrator({ data, loading, targetBerthId }: { dat
         position: "relative",
         overflow: "hidden",
         bgcolor: bgColor,
-        backgroundImage: `radial-gradient(${gridColor} 1.5px, transparent 1.5px)`,
+        backgroundImage: { xs: "none", md: `radial-gradient(${gridColor} 1.5px, transparent 1.5px)` },
         backgroundSize: "28px 28px",
       }}
     >
@@ -528,7 +525,7 @@ export default function BlockIllustrator({ data, loading, targetBerthId }: { dat
             </Box>
 
             {/* Main Canvas */}
-            <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+            <TransformComponent wrapperStyle={{ width: "100%", height: "100%", willChange: "transform" }} contentStyle={{ willChange: "transform" }}>
               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 1200, p: 6, gap: 6 }}>
 
                 {/* TOP BERTHS ROW */}

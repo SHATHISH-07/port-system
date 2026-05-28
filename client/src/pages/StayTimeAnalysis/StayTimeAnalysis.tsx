@@ -239,7 +239,7 @@ export default function StayTimeAnalysis() {
       )}
 
       {/* Main Content Area */}
-      <Box sx={{ flex: 1 }}>
+      <Box sx={{ flex: 1, pb: { xs: 10, sm: 4, md: 2 } }}>
         <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, display: 'flex', flexDirection: 'column', gap: 6 }}>
 
           {/* Stay Time Section */}

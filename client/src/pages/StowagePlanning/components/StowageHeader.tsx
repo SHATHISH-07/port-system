@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Paper,
@@ -7,14 +7,16 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   InputAdornment,
-  Typography,
   alpha,
   useTheme,
+  Popover,
+  ButtonGroup,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import ConstructionIcon from '@mui/icons-material/Construction';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
 interface StowageHeaderProps {
   vesselId: string;
@@ -50,6 +52,7 @@ export default function StowageHeader({
   handleSearchSubmit,
 }: StowageHeaderProps) {
   const theme = useTheme();
+  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
 
   return (
     <Paper
@@ -76,10 +79,8 @@ export default function StowageHeader({
         <Box sx={{ mb: 0.5 }}>
           <Box
             sx={{
-              fontSize: '20px',
-              fontWeight: 800,
-              letterSpacing: '-0.5px',
-              color: 'text.primary',
+              fontSize: '18px',
+              fontWeight: 'bold',
             }}
           >
             Stowage and Yard Planning
@@ -89,11 +90,14 @@ export default function StowageHeader({
         {/* Inputs row */}
         <Box
           sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', lg: 'row' },
-            flexWrap: 'wrap',
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: 'repeat(5, 1fr)',
+              md: 'repeat(5, 1fr)',
+              lg: activeTab === 0 ? '2fr 1fr 1fr auto' : '2fr 1fr auto 2fr auto'
+            },
             gap: 1.5,
-            alignItems: { xs: 'stretch', lg: 'center' },
+            alignItems: 'center',
             width: '100%',
           }}
         >
@@ -106,9 +110,8 @@ export default function StowageHeader({
             disabled={loading}
             variant="outlined"
             sx={{
-              flex: { lg: 2 },
-              width: { xs: '100%', lg: 'auto' },
-              minWidth: 180,
+              width: '100%',
+              gridColumn: { xs: 'span 3', lg: 'auto' },
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
                 bgcolor: 'background.paper',
@@ -137,9 +140,8 @@ export default function StowageHeader({
             onChange={(e) => setYardId(e.target.value.toUpperCase())}
             disabled={loading}
             sx={{
-              flex: { lg: 0.8 },
-              width: { xs: '100%', lg: 'auto' },
-              minWidth: 100,
+              width: '100%',
+              gridColumn: { xs: 'span 2', lg: 'auto' },
               '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
             }}
           />
@@ -153,9 +155,8 @@ export default function StowageHeader({
               onChange={(e) => setVisitId(e.target.value.toUpperCase())}
               disabled={loading}
               sx={{
-                flex: { lg: 0.8 },
-                width: { xs: '100%', lg: 'auto' },
-                minWidth: 120,
+                width: '100%',
+                gridColumn: { xs: 'span 2', lg: 'auto' },
                 '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
               }}
             />
@@ -168,91 +169,117 @@ export default function StowageHeader({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1,
-                flex: { lg: 'auto' },
-                width: { xs: '100%', lg: 'auto' },
+                width: '100%',
+                gridColumn: { xs: 'span 2', lg: 'auto' },
               }}
             >
-              <Button
+              <ButtonGroup
                 variant="outlined"
-                component="label"
-                startIcon={<CloudUploadIcon />}
-                size="small"
                 sx={{
-                  borderRadius: 2,
+                  width: '100%',
                   height: 40,
-                  px: 2,
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  borderColor: globalFile ? 'success.main' : 'divider',
-                  color: globalFile ? 'success.main' : 'text.primary',
-                  flex: 1,
-                  '&:hover': {
-                    borderColor: globalFile ? 'success.dark' : 'primary.main',
-                    bgcolor: alpha(theme.palette.primary.main, 0.04),
+                  borderRadius: 2,
+                  '& .MuiButtonGroup-firstButton': { borderTopLeftRadius: 'inherit', borderBottomLeftRadius: 'inherit' },
+                  '& .MuiButtonGroup-lastButton': { borderTopRightRadius: 'inherit', borderBottomRightRadius: 'inherit' },
+                  '& .MuiButton-root': {
+                    borderColor: globalFile ? 'success.main' : 'divider',
                   },
                 }}
               >
-                {globalFile ? 'File Selected' : 'Upload List'}
-                <input
-                  type="file"
-                  accept=".txt,.json"
-                  hidden
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setGlobalFile(e.target.files[0]);
-                    }
-                  }}
-                />
-              </Button>
-              {globalFile && (
-                <Typography
-                  variant="caption"
+                <Button
+                  component="label"
+                  startIcon={<CloudUploadIcon />}
                   sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    textTransform: 'none',
                     fontWeight: 700,
-                    color: 'success.main',
-                    maxWidth: 100,
-                    textOverflow: 'ellipsis',
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
+                    color: globalFile ? 'success.main' : 'text.primary',
+                    '&:hover': {
+                      borderColor: globalFile ? 'success.dark' : 'primary.main',
+                      bgcolor: alpha(theme.palette.primary.main, 0.04),
+                    },
                   }}
-                  title={globalFile.name}
                 >
-                  {globalFile.name}
+                  <Box component="span" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {globalFile ? globalFile.name : 'Upload List'}
+                  </Box>
+                  <input
+                    type="file"
+                    accept=".txt,.json"
+                    hidden
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setGlobalFile(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </Button>
+
+                {globalFile && (
                   <Button
-                    size="small"
-                    color="error"
-                    variant="text"
                     onClick={() => setGlobalFile(null)}
-                    sx={{ p: 0, minWidth: 0, ml: 0.5, fontWeight: 700, textTransform: 'none', fontSize: '0.7rem' }}
+                    sx={{
+                      minWidth: 32,
+                      px: 0,
+                      color: 'error.main',
+                    }}
                   >
                     ×
                   </Button>
-                </Typography>
-              )}
+                )}
+
+                <Button
+                  onClick={(e) => setAnchorEl(e.currentTarget)}
+                  sx={{
+                    minWidth: 40,
+                    px: 0,
+                  }}
+                >
+                  <KeyboardArrowDownIcon sx={{ color: 'text.secondary' }} />
+                </Button>
+              </ButtonGroup>
+
+              <Popover
+                open={Boolean(anchorEl)}
+                anchorEl={anchorEl}
+                onClose={() => setAnchorEl(null)}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'right',
+                }}
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+                slotProps={{
+                  paper: {
+                    sx: { p: 1.5, mt: 0.5, borderRadius: 2, minWidth: 240, bgcolor: 'background.paper' }
+                  }
+                }}
+              >
+                <TextField
+                  placeholder="Or paste Container IDs..."
+                  size="small"
+                  multiline
+                  maxRows={4}
+                  value={globalContainerText}
+                  onChange={(e) => setGlobalContainerText(e.target.value)}
+                  sx={{
+                    width: '100%',
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      fontSize: '0.85rem',
+                      bgcolor: 'background.paper',
+                      '& fieldset': { borderColor: alpha(theme.palette.divider, 0.8) },
+                      '&:hover fieldset': { borderColor: theme.palette.primary.main },
+                    },
+                  }}
+                />
+              </Popover>
             </Box>
           )}
 
-          {/* Paste Container IDs */}
-          {activeTab >= 1 && (
-            <TextField
-              placeholder="Or paste Container IDs..."
-              size="small"
-              value={globalContainerText}
-              onChange={(e) => setGlobalContainerText(e.target.value)}
-              sx={{
-                flex: { lg: 2.5 },
-                width: { xs: '100%', lg: 'auto' },
-                minWidth: 180,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  height: 40,
-                  fontSize: '0.85rem',
-                  bgcolor: alpha(theme.palette.background.paper, 0.4),
-                },
-              }}
-            />
-          )}
 
           {/* Action Submit Button */}
           <Button
@@ -267,12 +294,13 @@ export default function StowageHeader({
               textTransform: 'none',
               fontSize: '0.8rem',
               boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}`,
-              width: { xs: '100%', lg: 'auto' },
+              width: '100%',
+              gridColumn: { xs: 'span 3', lg: 'auto' },
               height: 40,
               whiteSpace: 'nowrap',
             }}
           >
-            {activeTab === 0 ? 'Sync Stowage' : 'Run Optimizer'}
+            Analyze
           </Button>
         </Box>
 
@@ -337,7 +365,7 @@ export default function StowageHeader({
             </ToggleButton>
             <ToggleButton value={1}>
               <ConstructionIcon sx={{ fontSize: 16 }} />
-              Planning & Ingestion
+              Current Planning
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>

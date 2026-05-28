@@ -244,7 +244,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
 
       {/* High-Density Chart Grid */}
       <Grid container spacing={2.5}>
-        <Grid size={{ xs: 12, md: 3 }} sx={{ minWidth: 0 }}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }} sx={{ minWidth: 0 }}>
           <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, p: 2, height: 320, boxShadow: `0 4px 16px ${alpha('#000', 0.02)}` }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '0.05em' }}>DISCHARGE PORTS</Typography>
             <Box sx={{ mt: 1, height: '85%', overflowY: 'auto' }}>
@@ -262,7 +262,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }} sx={{ minWidth: 0 }}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }} sx={{ minWidth: 0 }}>
           <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, p: 2, height: 320, boxShadow: `0 4px 16px ${alpha('#000', 0.02)}` }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '0.05em' }}>EQUIPMENT SIZES</Typography>
             <Box sx={{ mt: 2, height: '85%' }}>
@@ -280,7 +280,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }} sx={{ minWidth: 0 }}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }} sx={{ minWidth: 0 }}>
           <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, p: 2, height: 320, boxShadow: `0 4px 16px ${alpha('#000', 0.02)}` }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '0.05em' }}>DECK WEIGHT DISTRIBUTION</Typography>
             <Box sx={{ mt: 2, height: '85%' }}>
@@ -300,7 +300,7 @@ export default function HistoryAnalysisTab({ vesselId, yardId, visitId }: Histor
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }} sx={{ minWidth: 0 }}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }} sx={{ minWidth: 0 }}>
           <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, p: 2, height: 320, boxShadow: `0 4px 16px ${alpha('#000', 0.02)}` }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '0.05em' }}>EQUIPMENT TYPES</Typography>
             <Box sx={{ mt: 2, height: '85%' }}>

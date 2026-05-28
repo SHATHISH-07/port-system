@@ -386,10 +386,13 @@ export default function CurrentPlanningTab({
 
   React.useEffect(() => {
     if (recomputeTrigger > 0 && portRotation.length > 0) {
-      setTimeout(() => {
+      // Delay the heavy API calls and React re-renders to allow the Drag-and-Drop
+      // animation in the UI to finish smoothly. This creates a true "optimistic" feel.
+      const timer = setTimeout(() => {
         executeOptimization(portRotation);
         fetchAndOpenVisualization(portRotation);
-      }, 0);
+      }, 400);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recomputeTrigger]);

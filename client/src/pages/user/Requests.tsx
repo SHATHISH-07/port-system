@@ -35,7 +35,7 @@ const Requests: React.FC = () => {
 
     const fetchRequests = async () => {
         try {
-            const res = await api.get("/requests/");
+            const res = await api.get("/requests");
             setRequests(res.data);
         } catch (error) {
             console.error("Failed to fetch requests", error);
@@ -49,7 +49,7 @@ const Requests: React.FC = () => {
 
     const handleCreateRequest = async () => {
         try {
-            await api.post("/requests/", { type, payload });
+            await api.post("/requests", { type, payload });
             setOpenModal(false);
             setPayload("");
             fetchRequests();

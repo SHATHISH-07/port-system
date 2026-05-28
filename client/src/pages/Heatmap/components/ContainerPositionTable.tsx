@@ -154,6 +154,28 @@ export default function ContainerPositionTable({ data }: ContainerPositionTableP
         page={page}
         onPageChange={handleChangePage}
         onRowsPerPageChange={handleChangeRowsPerPage}
+        slotProps={{
+          select: {
+            MenuProps: {
+              container: () => document.fullscreenElement || document.body,
+            },
+          }
+        }}
+        labelRowsPerPage={<Typography variant="body2" component="span" sx={{ display: { xs: 'none', sm: 'block' }, fontSize: 'inherit' }}>Rows per page:</Typography>}
+        sx={{
+          ".MuiTablePagination-toolbar": {
+            px: { xs: 0, sm: 2 },
+          },
+          ".MuiTablePagination-displayedRows": {
+            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+          },
+          ".MuiTablePagination-actions": {
+            ml: { xs: 1, sm: 2 },
+          },
+          ".MuiTablePagination-select": {
+            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+          }
+        }}
       />
     </Box>
   );

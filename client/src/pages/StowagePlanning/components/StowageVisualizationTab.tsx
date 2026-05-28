@@ -19,13 +19,16 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import { restrictToHorizontalAxis, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
   horizontalListSortingStrategy,
+  verticalListSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
   arrayMove,
@@ -56,11 +59,13 @@ const SortablePortPill = ({
   index,
   color,
   isActive,
+  isMobile,
 }: {
   id: string;
   index: number;
   color: string;
   isActive: boolean;
+  isMobile?: boolean;
 }) => {
   const {
     attributes,
@@ -76,13 +81,17 @@ const SortablePortPill = ({
       {...attributes}
       {...listeners}
       sx={{
-        transform: CSS.Transform.toString(transform),
+        transform: CSS.Transform.toString(
+          isMobile && transform
+            ? { ...transform, x: -transform.y, y: 0 }
+            : transform
+        ),
         transition,
         display: "flex",
         alignItems: "center",
-        gap: 0.75,
-        px: 1.5,
-        py: 0.6,
+        gap: { xs: 0.5, md: 0.75 },
+        px: { xs: 1, md: 1.5 },
+        py: { xs: 0.4, md: 0.6 },
         borderRadius: "6px",
         cursor: isDragging ? "grabbing" : "grab",
         border: `1px solid ${isDragging ? color : alpha(color, 0.5)}`,
@@ -94,14 +103,15 @@ const SortablePortPill = ({
         boxShadow: isDragging ? `0 8px 24px ${alpha(color, 0.35)}` : "none",
         zIndex: isDragging ? 999 : 1,
         userSelect: "none",
+        touchAction: "none",
         whiteSpace: "nowrap",
         flexShrink: 0,
       }}
     >
       <Box
         sx={{
-          width: 18,
-          height: 18,
+          width: { xs: 14, md: 18 },
+          height: { xs: 14, md: 18 },
           borderRadius: "50%",
           bgcolor: color,
           display: "flex",
@@ -112,7 +122,7 @@ const SortablePortPill = ({
       >
         <Typography
           sx={{
-            fontSize: "0.6rem",
+            fontSize: { xs: "0.5rem", md: "0.6rem" },
             fontWeight: 900,
             color: "#fff",
             lineHeight: 1,
@@ -123,7 +133,7 @@ const SortablePortPill = ({
       </Box>
       <Typography
         sx={{
-          fontSize: "0.72rem",
+          fontSize: { xs: "0.6rem", md: "0.72rem" },
           fontWeight: 700,
           color,
           letterSpacing: "0.03em",
@@ -141,14 +151,150 @@ const ContainerCell = ({
   color,
   isHazmat,
   onHover,
+  onClick,
+  isMobile,
 }: {
   unit: StepData;
   color: string;
   isHazmat?: boolean;
   onHover?: (unit: StepData | null) => void;
+  onClick?: (unit: StepData) => void;
+  isMobile?: boolean;
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
+
+  // ─── HIGH PERFORMANCE MOBILE RENDERING ───
+  if (isMobile) {
+    return (
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onClick) {
+            onClick(unit);
+          } else if (onHover) {
+            onHover(unit);
+          }
+        }}
+        style={{
+          width: 16,
+          height: 8,
+          borderRadius: "1.5px",
+          backgroundColor: color,
+          opacity: 0.85,
+          border: `1px solid ${isDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.3)"}`,
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "0.28rem",
+            fontWeight: 900,
+            color: "#fff",
+          }}
+        >
+          {unit.recommendedTier ?? "?"}
+        </div>
+        {isHazmat && (
+          <div
+            style={{
+              position: "absolute",
+              top: -1,
+              right: -1,
+              width: 3,
+              height: 3,
+              borderRadius: "50%",
+              backgroundColor: "#ef4444",
+              border: `1px solid ${isDark ? "#1a1a1a" : "#fff"}`,
+              zIndex: 3,
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ─── RICH DESKTOP RENDERING ───
+  const content = (
+    <Box
+      onMouseEnter={() => onHover?.(unit)}
+      onMouseLeave={() => onHover?.(null)}
+      onClick={() => onClick?.(unit)}
+      sx={{
+        width: 22,
+        height: 11,
+        borderRadius: "1.5px",
+        bgcolor: alpha(color, 0.85),
+        border: `1px solid ${isDark ? alpha("#000", 0.5) : alpha("#000", 0.3)}`,
+        position: "relative",
+        cursor: "pointer",
+        transition: "transform 0.12s, box-shadow 0.12s",
+        "&:hover": {
+          transform: "scale(1.35)",
+          zIndex: 20,
+          boxShadow: `0 3px 10px ${alpha(color, 0.55)}`,
+        },
+        backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 2.5px, ${alpha("#000", 0.12)} 2.5px, ${alpha("#000", 0.12)} 3px)`,
+      }}
+    >
+      {[
+        [0.5, 0.5],
+        [0.5, "auto"],
+        ["auto", 0.5],
+        ["auto", "auto"],
+      ].map(([t, l], i) => (
+        <Box
+          key={i}
+          sx={{
+            position: "absolute",
+            top: t === "auto" ? "auto" : t,
+            bottom: t === "auto" ? 0.5 : "auto",
+            left: l === "auto" ? "auto" : l,
+            right: l === "auto" ? 0.5 : "auto",
+            width: 1.5,
+            height: 1.5,
+            borderRadius: "50%",
+            bgcolor: alpha("#fff", 0.55),
+          }}
+        />
+      ))}
+      <Typography
+        sx={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "0.35rem",
+          fontWeight: 900,
+          color: "#fff",
+          textShadow: "0 0 3px rgba(0,0,0,0.8)",
+        }}
+      >
+        {unit.recommendedTier ?? "?"}
+      </Typography>
+      {isHazmat && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: -3,
+            right: -3,
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            bgcolor: "#ef4444",
+            border: `1px solid ${isDark ? "#1a1a1a" : "#fff"}`,
+            zIndex: 3,
+          }}
+        />
+      )}
+    </Box>
+  );
 
   return (
     <Tooltip
@@ -191,78 +337,7 @@ const ContainerCell = ({
       enterNextDelay={80}
       slotProps={{ popper: { sx: { zIndex: 99999 } } }}
     >
-      <Box
-        onMouseEnter={() => onHover?.(unit)}
-        onMouseLeave={() => onHover?.(null)}
-        sx={{
-          width: 22,
-          height: 11,
-          borderRadius: "1.5px",
-          bgcolor: alpha(color, 0.85),
-          border: `1px solid ${isDark ? alpha("#000", 0.5) : alpha("#000", 0.3)}`,
-          position: "relative",
-          cursor: "pointer",
-          transition: "transform 0.12s, box-shadow 0.12s",
-          "&:hover": {
-            transform: "scale(1.35)",
-            zIndex: 20,
-            boxShadow: `0 3px 10px ${alpha(color, 0.55)}`,
-          },
-          backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 2.5px, ${alpha("#000", 0.12)} 2.5px, ${alpha("#000", 0.12)} 3px)`,
-        }}
-      >
-        {[
-          [0.5, 0.5],
-          [0.5, "auto"],
-          ["auto", 0.5],
-          ["auto", "auto"],
-        ].map(([t, l], i) => (
-          <Box
-            key={i}
-            sx={{
-              position: "absolute",
-              top: t === "auto" ? "auto" : t,
-              bottom: t === "auto" ? 0.5 : "auto",
-              left: l === "auto" ? "auto" : l,
-              right: l === "auto" ? 0.5 : "auto",
-              width: 1.5,
-              height: 1.5,
-              borderRadius: "50%",
-              bgcolor: alpha("#fff", 0.55),
-            }}
-          />
-        ))}
-        <Typography
-          sx={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "0.35rem",
-            fontWeight: 900,
-            color: "#fff",
-            textShadow: "0 0 3px rgba(0,0,0,0.8)",
-          }}
-        >
-          {unit.recommendedTier ?? "?"}
-        </Typography>
-        {isHazmat && (
-          <Box
-            sx={{
-              position: "absolute",
-              top: -3,
-              right: -3,
-              width: 5,
-              height: 5,
-              borderRadius: "50%",
-              bgcolor: "#ef4444",
-              border: `1px solid ${isDark ? "#1a1a1a" : "#fff"}`,
-              zIndex: 3,
-            }}
-          />
-        )}
-      </Box>
+      {content}
     </Tooltip>
   );
 };
@@ -273,13 +348,17 @@ const BayColumn = ({
   portColors,
   hazmatIds,
   onHover,
+  onClick,
   isHighlighted,
+  isMobile,
 }: {
   group: VisualizationGroup;
   portColors: Record<string, string>;
   hazmatIds: Set<string>;
   onHover?: (unit: StepData | null) => void;
+  onClick?: (unit: StepData) => void;
   isHighlighted?: boolean;
+  isMobile?: boolean;
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -303,8 +382,8 @@ const BayColumn = ({
       }
     );
   const colWidth = Math.max(
-    44,
-    Math.ceil(Math.max(above.length, below.length) / 7) * 28 + 16,
+    isMobile ? 32 : 44,
+    Math.ceil(Math.max(above.length, below.length) / 7) * (isMobile ? 20 : 28) + 16,
   );
 
   return (
@@ -363,6 +442,8 @@ const BayColumn = ({
             color={portColors[p.portOfDischarge as string] || portColor}
             isHazmat={hazmatIds.has(p.unitId as string)}
             onHover={onHover}
+            onClick={onClick}
+            isMobile={isMobile}
           />
         ))}
         {above.length === 0 && (
@@ -422,6 +503,8 @@ const BayColumn = ({
             color={portColors[p.portOfDischarge as string] || portColor}
             isHazmat={hazmatIds.has(p.unitId as string)}
             onHover={onHover}
+            onClick={onClick}
+            isMobile={isMobile}
           />
         ))}
         {below.length === 0 && (
@@ -463,15 +546,28 @@ export default function StowageVisualizationTab({
     React.useState<StepData | null>(null);
   const [activePort] = React.useState<string | null>(null);
 
+  // Maintain local state for the rotation so we can update the pill sequence instantly
+  // without triggering a massive synchronous re-render in the parent component.
+  const [localRotation, setLocalRotation] = React.useState<string[]>(portRotation || []);
+
+  React.useEffect(() => {
+    setLocalRotation(portRotation || []);
+  }, [portRotation]);
+
+  // Defer the port rotation used for sorting the ship so that the fast Drag-and-Drop
+  // UI in the sequence bar updates instantly without waiting for the heavy ship DOM to reorder.
+  const deferredPortRotation = React.useDeferredValue(localRotation);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
 
   const portColorMap: Record<string, string> = {};
-  (portRotation || []).forEach((port: string, i: number) => {
+  (localRotation || []).forEach((port: string, i: number) => {
     portColorMap[port] = PORT_PALETTE[i % PORT_PALETTE.length];
   });
 
@@ -483,20 +579,29 @@ export default function StowageVisualizationTab({
   );
 
   const groups: VisualizationGroup[] = visualizationData?.map?.groups || [];
-  const sortedGroups = [...groups].sort((a, b) => {
-    const idxA = (portRotation || []).indexOf(a.groupId);
-    const idxB = (portRotation || []).indexOf(b.groupId);
-    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
-  });
+  const sortedGroups = React.useMemo(() => {
+    return [...groups].sort((a, b) => {
+      const idxA = (deferredPortRotation || []).indexOf(a.groupId);
+      const idxB = (deferredPortRotation || []).indexOf(b.groupId);
+      return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+    });
+  }, [groups, deferredPortRotation]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = portRotation.indexOf(active.id as string);
-      const newIndex = portRotation.indexOf(over.id as string);
-      const newRotation = arrayMove(portRotation, oldIndex, newIndex);
-      onPortRotationChange?.(newRotation);
-      onDragEndExternal?.(newRotation);
+      const oldIndex = localRotation.indexOf(active.id as string);
+      const newIndex = localRotation.indexOf(over.id as string);
+      const newRotation = arrayMove(localRotation, oldIndex, newIndex);
+      
+      // Instantly update the local UI to make the pill snap into place
+      setLocalRotation(newRotation);
+
+      // Delay notifying the parent to avoid massive re-renders freezing the drop animation
+      setTimeout(() => {
+        onPortRotationChange?.(newRotation);
+        onDragEndExternal?.(newRotation);
+      }, 300);
     }
   };
 
@@ -524,8 +629,9 @@ export default function StowageVisualizationTab({
     };
 
     const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
       const dy = e.touches[0].clientY - startY;
-      el.scrollLeft = scrollLeftStart - (dy * 1.5);
+      el.scrollLeft = scrollLeftStart + (dy * 1.5);
     };
 
     const onWheel = (e: WheelEvent) => {
@@ -537,7 +643,7 @@ export default function StowageVisualizationTab({
     };
 
     el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("wheel", onWheel, { passive: false });
 
     return () => {
@@ -613,6 +719,7 @@ export default function StowageVisualizationTab({
             alignItems: "flex-end",
             p: { xs: 1, md: 2 },
             pb: { xs: 2, md: 4 },
+            willChange: "transform, scroll-position",
             "&::-webkit-scrollbar": { display: "none" },
             scrollbarWidth: "none",
           }}
@@ -969,7 +1076,9 @@ export default function StowageVisualizationTab({
                       portColors={portColorMap}
                       hazmatIds={hazmatIds}
                       onHover={setHoveredContainer}
+                      onClick={(unit) => setHoveredContainer(prev => prev?.unitId === unit.unitId ? null : unit)}
                       isHighlighted={getBayHighlight(group)}
+                      isMobile={isMobile}
                     />
                   ))}
                 </Box>
@@ -1013,25 +1122,27 @@ export default function StowageVisualizationTab({
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
+            modifiers={[isMobile ? restrictToVerticalAxis : restrictToHorizontalAxis]}
           >
             <SortableContext
-              items={portRotation || []}
-              strategy={horizontalListSortingStrategy}
+              items={localRotation || []}
+              strategy={isMobile ? verticalListSortingStrategy : horizontalListSortingStrategy}
             >
               <Box
                 sx={{
                   display: "flex",
                   gap: 0.6,
                   alignItems: "center",
-                  justifyContent: "center", // Center the pills
+                  justifyContent: "center",
+                  flexDirection: "row",
                   overflowX: "auto",
                   WebkitOverflowScrolling: "touch",
                   pb: 0.5,
-                  scrollbarWidth: "thin",
+                  scrollbarWidth: "none",
                 }}
               >
-                {(portRotation || []).map((portId: string, i: number) => {
-                  const isLast = i < portRotation.length - 1;
+                {(localRotation || []).map((portId: string, i: number) => {
+                  const isLast = i < localRotation.length - 1;
                   return (
                     <React.Fragment key={portId}>
                       <SortablePortPill
@@ -1039,8 +1150,9 @@ export default function StowageVisualizationTab({
                         index={i}
                         color={portColorMap[portId] || theme.palette.primary.main}
                         isActive={activePort === portId}
+                        isMobile={isMobile}
                       />
-                      {isLast && (
+                      {!isMobile && isLast && (
                         <Typography
                           sx={{
                             color: "text.disabled",
@@ -1066,15 +1178,15 @@ export default function StowageVisualizationTab({
           elevation={0}
           sx={{
             position: "absolute",
-            top: 64,
-            right: 16,
-            width: 580,
-            borderRadius: "12px",
+            top: { xs: 8, md: 64 },
+            right: { xs: 8, md: 16 },
+            width: { xs: 360, md: 580 },
+            borderRadius: { xs: "8px", md: "12px" },
             bgcolor: isDark ? alpha("#1a1d26", 0.97) : alpha("#fff", 0.97),
             backdropFilter: "blur(16px)",
             border: `1px solid ${isDark ? alpha("#fff", 0.1) : alpha("#000", 0.1)}`,
             overflow: "hidden",
-            pointerEvents: "none",
+            pointerEvents: isMobile ? "auto" : "none",
             zIndex: 99999,
             boxShadow: `0 8px 32px ${alpha("#000", isDark ? 0.5 : 0.15)}`,
           }}
@@ -1082,8 +1194,8 @@ export default function StowageVisualizationTab({
           {/* Header strip */}
           <Box
             sx={{
-              px: 2,
-              py: 1.25,
+              px: { xs: 1, md: 2 },
+              py: { xs: 0.5, md: 1.25 },
               background: isDark
                 ? `linear-gradient(135deg, ${alpha(portColorMap[hoveredContainer.portOfDischarge as string] || "#3b82f6", 0.2)} 0%, transparent 70%)`
                 : `linear-gradient(135deg, ${alpha(portColorMap[hoveredContainer.portOfDischarge as string] || "#3b82f6", 0.08)} 0%, transparent 70%)`,
@@ -1096,7 +1208,7 @@ export default function StowageVisualizationTab({
             <Box>
               <Typography
                 sx={{
-                  fontSize: "0.9rem",
+                  fontSize: { xs: "0.75rem", md: "0.9rem" },
                   fontWeight: 800,
                   letterSpacing: "0.02em",
                   color: "text.primary",
@@ -1105,7 +1217,7 @@ export default function StowageVisualizationTab({
                 {hoveredContainer.unitId}
               </Typography>
               <Typography
-                sx={{ fontSize: "0.65rem", color: "text.secondary", mt: 0.1 }}
+                sx={{ fontSize: { xs: "0.55rem", md: "0.65rem" }, color: "text.secondary", mt: 0.1 }}
               >
                 {hoveredContainer.freightKind} ·{" "}
                 {hoveredContainer.containerLength?.replace("BASIC", "")}'
@@ -1123,6 +1235,21 @@ export default function StowageVisualizationTab({
                 gap: 0.5,
               }}
             >
+              {isMobile && (
+                <IconButton
+                  size="small"
+                  onClick={() => setHoveredContainer(null)}
+                  sx={{
+                    p: 0.25,
+                    mt: -0.25,
+                    mr: -0.25,
+                    color: "text.secondary",
+                    "&:hover": { color: "text.primary" }
+                  }}
+                >
+                  <CloseIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              )}
               {hazmatIds.has(hoveredContainer.unitId as string) && (
                 <Chip
                   icon={
@@ -1131,14 +1258,14 @@ export default function StowageVisualizationTab({
                   label="HAZMAT"
                   size="small"
                   sx={{
-                    height: 18,
-                    fontSize: "0.58rem",
+                    height: { xs: 14, md: 18 },
+                    fontSize: { xs: "0.5rem", md: "0.58rem" },
                     fontWeight: 800,
                     borderRadius: "4px",
                     bgcolor: alpha("#ef4444", 0.15),
                     color: "#ef4444",
                     border: `1px solid ${alpha("#ef4444", 0.35)}`,
-                    "& .MuiChip-icon": { color: "#ef4444" },
+                    "& .MuiChip-icon": { color: "#ef4444", fontSize: { xs: "8px !important", md: "10px !important" } },
                   }}
                 />
               )}
@@ -1146,13 +1273,13 @@ export default function StowageVisualizationTab({
           </Box>
 
           {/* Detail fields */}
-          <Box sx={{ px: 2, py: 1.5 }}>
+          <Box sx={{ px: { xs: 1, md: 2 }, py: { xs: 0.5, md: 1.5 } }}>
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
-                gap: 1.5,
-                mb: 0.5,
+                gridTemplateColumns: { xs: "repeat(4, 1fr)", md: "repeat(4, 1fr)" },
+                gap: { xs: 0.75, md: 1.5 },
+                mb: 0.25,
               }}
             >
               {[
@@ -1181,7 +1308,7 @@ export default function StowageVisualizationTab({
                     3,
                   ),
                 },
-                { label: "Service", value: hoveredContainer.outboundService },
+
                 {
                   label: "Yard slot",
                   value: hoveredContainer.currentSlotPosition,
@@ -1206,24 +1333,29 @@ export default function StowageVisualizationTab({
                   value: string | number | null | undefined;
                   accent?: string;
                 }) => (
-                  <Box key={label} sx={{ py: 0.5, px: 0 }}>
+                  <Box key={label} sx={{ py: { xs: 0.25, md: 0.5 }, px: 0 }}>
                     <Typography
                       sx={{
-                        fontSize: "0.58rem",
+                        fontSize: { xs: "0.5rem", md: "0.58rem" },
                         color: "text.disabled",
                         fontWeight: 600,
                         textTransform: "uppercase",
                         letterSpacing: "0.06em",
+                        lineHeight: 1,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
                       }}
                     >
                       {label}
                     </Typography>
                     <Typography
                       sx={{
-                        fontSize: "0.72rem",
+                        fontSize: { xs: "0.65rem", md: "0.72rem" },
                         fontWeight: 700,
                         color: accent || "text.primary",
-                        mt: 0.1,
+                        mt: 0.25,
+                        lineHeight: 1,
                       }}
                     >
                       {value || "—"}
