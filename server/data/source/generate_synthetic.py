@@ -82,6 +82,28 @@ _unit_visit_seq = 3_000_000
 # Tracks all generated container IDs to guarantee uniqueness within a session
 _all_container_ids: set = set()
 
+class YardSlotRegistry:
+    """
+    Tracks tier occupancy per (block, bay, row) cell.
+    Guarantees stacked containers share the same bay+row but increment tier.
+    Max tier is 6 (real-world terminal standard).
+    """
+    MAX_TIER = 6
+
+    def __init__(self):
+        # key: (block, bay, row) -> next available tier (1-based)
+        self._next_tier: Dict[tuple, int] = {}
+
+    def next_tier_for(self, block: str, bay: int, row) -> int:
+        key = (block, bay, row)
+        tier = self._next_tier.get(key, 1)
+        if tier > self.MAX_TIER:
+            return None  # slot column is full
+        self._next_tier[key] = tier + 1
+        return tier
+
+    def reset(self):
+        self._next_tier.clear()
 
 def next_container_id() -> str:
     """Return a globally unique container ID."""
@@ -154,32 +176,47 @@ def generate_hazard_fields():
 
 # ── Position generators ───────────────────────────────────────────────────────
 
-def generate_peb_position(block: str) -> str:
-    bay  = random.randint(100, 999)
-    row  = random.randint(10, 99)
+def generate_peb_position(block: str, registry: 'YardSlotRegistry' = None) -> str:
+    # BETTER — denser stacking like real terminals
+    bay = random.randint(1, 30)   # ~30 bays per block
+    row = random.randint(1, 10)   # ~10 rows per bay
+    if registry:
+        for _ in range(20):  # try up to 20 times to find an open slot
+            tier = registry.next_tier_for(block, bay, row)
+            if tier is not None:
+                return f"Y-PEB-{block}{bay:03d}{row:02d}C{tier}"
+            bay = random.randint(1, 30)
+            row = random.randint(1, 10)
     tier = random.randint(1, 6)
     return f"Y-PEB-{block}{bay:03d}{row:02d}C{tier}"
 
 
-def generate_cwit_position(block: str) -> str:
+def generate_cwit_position(block: str, registry: 'YardSlotRegistry' = None) -> str:
     section = block[0]
     blk     = block[1]
-    bay  = random.randint(1, 999)
+    bay  = random.randint(1, 99)   # narrowed from 999 → improves stacking density
     row  = random.choice(list("ABCDEFGHJKLMN"))
+    if registry:
+        for _ in range(20):
+            tier = registry.next_tier_for(block, bay, row)
+            if tier is not None:
+                return f"Y-CWIT-{section}{blk}{bay:03d}{row}.{tier}"
+            bay = random.randint(1, 99)
+            row = random.choice(list("ABCDEFGHJKLMN"))
     tier = random.randint(1, 6)
     return f"Y-CWIT-{section}{blk}{bay:03d}{row}.{tier}"
 
 
-def generate_position_in_block(yard_id: str, yard_format: str, block: str) -> str:
+def generate_position_in_block(yard_id: str, yard_format: str, block: str,
+                                registry: 'YardSlotRegistry' = None) -> str:
     if yard_id == "PEB"  or yard_format == "PEB":
-        return generate_peb_position(block)
+        return generate_peb_position(block, registry)
     if yard_id == "CWIT" or yard_format == "CWIT":
-        return generate_cwit_position(block)
+        return generate_cwit_position(block, registry)
     bay  = random.randint(100, 999)
     row  = random.randint(10, 99)
     tier = random.randint(1, 6)
     return f"Y-{yard_id}-{block}{bay:03d}{row:02d}C{tier}"
-
 
 def blocks_needed_for(n_containers: int) -> int:
     return max(1, math.ceil(n_containers / SLOTS_PER_BLOCK))
@@ -499,6 +536,7 @@ def generate_terminal_data(terminal: dict):
 
     # ── Yard-level block state ────────────────────────────────────────────────
     occupied_blocks: Dict[str, int] = {}   # block_label -> container count
+    slot_registry = YardSlotRegistry()
 
     _all_pool  = (PEB_BLOCKS  if terminal["format"] == "PEB"  else
                   CWIT_BLOCKS if terminal["format"] == "CWIT" else list("ABCDEFG"))
@@ -551,6 +589,7 @@ def generate_terminal_data(terminal: dict):
                                   else CWIT_BLOCKS[:2])
 
     for visit in visits:
+        slot_registry.reset()
         total_rows   = generate_container_count()
         active_count = len(active_set)
         load_count, discharge_count, restow_count = choose_operation_mix(
@@ -642,7 +681,7 @@ def generate_terminal_data(terminal: dict):
                 _update_occupied_discharge([yard_block])
                 from_pos         = vessel_side_position(visit["visit_id"])
                 to_pos           = generate_position_in_block(
-                                       terminal["yard_id"], terminal["format"], yard_block)
+                                       terminal["yard_id"], terminal["format"], yard_block, registry=slot_registry)
                 current_position = to_pos
                 inbound_id       = visit["visit_id"]
                 inbound_service  = visit["service"]
@@ -652,7 +691,7 @@ def generate_terminal_data(terminal: dict):
                 yard_block       = random.choice(live)
                 _update_occupied_load(yard_block)
                 from_pos         = generate_position_in_block(
-                                       terminal["yard_id"], terminal["format"], yard_block)
+                                       terminal["yard_id"], terminal["format"], yard_block, registry=slot_registry)
                 to_pos           = vessel_side_position(visit["visit_id"])
                 current_position = to_pos
 
@@ -661,9 +700,9 @@ def generate_terminal_data(terminal: dict):
                 b1       = random.choice(live)
                 b2       = random.choice(live)
                 from_pos         = generate_position_in_block(
-                                       terminal["yard_id"], terminal["format"], b1)
+                                       terminal["yard_id"], terminal["format"], b1, registry=slot_registry)
                 to_pos           = generate_position_in_block(
-                                       terminal["yard_id"], terminal["format"], b2)
+                                       terminal["yard_id"], terminal["format"], b2, registry=slot_registry)
                 current_position = to_pos
 
             # ── Time In / Time Out ────────────────────────────────────────────
@@ -781,6 +820,21 @@ def write_json(path: Path, rows: List[dict]):
     with path.open("w", encoding="utf-8") as f:
         json.dump(rows, f, indent=2)
 
+def build_block_grouped_json(active_rows: List[dict]) -> List[dict]:
+    """
+    Group active containers by yard block.
+    Output: [{"block": "PEB-A", "unit_ids": ["GCXU...", ...]}, ...]
+    """
+    from collections import defaultdict
+    block_map: Dict[str, List[str]] = defaultdict(list)
+    for row in active_rows:
+        block = row["Current Yard Block"]
+        if block:
+            block_map[block].append(row["Unit ID"])
+    return [
+        {"block": block, "unit_ids": unit_ids}
+        for block, unit_ids in sorted(block_map.items())
+    ]
 
 def main():
     from collections import Counter
@@ -811,7 +865,7 @@ def main():
         write_csv(out_c,  CONTAINER_HEADERS,  container_rows)
         write_csv(out_cr, CRANE_HEADERS,       crane_rows)
         write_csv(out_a,  ACTIVE_LIST_HEADERS, active_rows)
-        write_json(out_aj, active_rows)
+        write_json(out_aj, build_block_grouped_json(active_rows))
 
         print(f"  -> {out_c.name}  ({len(container_rows):,} rows)")
         print(f"  -> {out_cr.name}  ({len(crane_rows):,} rows)")
