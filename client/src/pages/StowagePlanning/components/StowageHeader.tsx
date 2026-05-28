@@ -14,8 +14,6 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import AssessmentIcon from '@mui/icons-material/Assessment';
-import ConstructionIcon from '@mui/icons-material/Construction';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
 interface StowageHeaderProps {
@@ -360,11 +358,9 @@ export default function StowageHeader({
             }}
           >
             <ToggleButton value={0}>
-              <AssessmentIcon sx={{ fontSize: 16 }} />
               Historical Analysis
             </ToggleButton>
             <ToggleButton value={1}>
-              <ConstructionIcon sx={{ fontSize: 16 }} />
               Current Planning
             </ToggleButton>
           </ToggleButtonGroup>

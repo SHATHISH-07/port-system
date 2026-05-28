@@ -44,4 +44,48 @@ export interface OptimizedData {
   strategyInsights: string[];
   dischargePortGrouping?: { port: string; count: number; percentage: number }[];
   equipmentClassDistribution?: { equipmentClass: string; count: number; percentage: number }[];
+  housekeepingPlan?: PreConsolidationData | null;
+}
+
+export interface HousekeepingMove {
+  unitId: string;
+  fromPosition: string;
+  block: string;
+  bay: string;
+  row: string;
+  tier: string;
+  weightBand: string;
+  portOfDischarge: string | null;
+  dischargeOrder: number | null;
+  reason: string;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+  priorityScore: number;
+}
+
+export interface StackViolation {
+  block: string;
+  bay: string;
+  row: string;
+  totalContainers: number;
+  weightInversions: number;
+  dischargeInversions: number;
+  combinedViolations: number;
+}
+
+export interface PreConsolidationSummary {
+  totalContainersAnalyzed: number;
+  totalStacksAnalyzed: number;
+  totalMovesRequired: number;
+  highPriorityMoves: number;
+  mediumPriorityMoves: number;
+  lowPriorityMoves: number;
+  weightInversionsFound: number;
+  dischargeInversionsFound: number;
+}
+
+export interface PreConsolidationData {
+  vesselId: string;
+  summary: PreConsolidationSummary;
+  moves: HousekeepingMove[];
+  stackViolations: StackViolation[];
 }
