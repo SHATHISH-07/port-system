@@ -733,26 +733,10 @@ def predict_stay_duration_from_metrics(
 
     avg_hours = round(float(max(float(settings.TRAIN_MIN_HOURS), avg_hours)), 2)
 
-    suitable_berth = (
-        settings.BERTH_HIGH_LABEL if total_moves > settings.BERTH_HIGH_VOLUME_THRESHOLD
-        else settings.BERTH_MED_LABEL if total_moves > settings.BERTH_MED_VOLUME_THRESHOLD
-        else settings.BERTH_LOW_LABEL
-    )
-    cargo_concentration = (
-        "100.0%" if total_moves > settings.BERTH_HIGH_VOLUME_THRESHOLD else "50.0%"
-    )
-
     return {
         "mode":     "manual",
         "vessel":   None,
         "actual":   {"visits": {}, "avg_hours": None},
         "predicted": {"avg_hours": avg_hours, "visits": 1},
-        "berth_analysis": [{
-            "berth":               suitable_berth,
-            "block":               "A",
-            "cargo_concentration": cargo_concentration,
-            "total_travel_distance": "Low",
-            "congestion_risk":     "Low",
-        }],
         "input": {"loaded": loaded, "discharged": discharged},
     }

@@ -44,6 +44,7 @@ import type {
   OptimizedData,
   VisualizationData,
 } from "../../../types/stowage";
+import HousekeepingTable from "./HousekeepingTable";
 
 const cardStyles = {
   elevation: 0,
@@ -1173,6 +1174,19 @@ export default function CurrentPlanningTab({
           }}
         />
       </Card>
+
+      {/* Embedded Housekeeping Plan (Pre-Consolidation) */}
+      <Card {...cardStyles}>
+        <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider", bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.primary", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Yard Preparation Plan
+          </Typography>
+        </Box>
+        <Box sx={{ p: 3 }}>
+          <HousekeepingTable data={optimizedData?.housekeepingPlan || null} />
+        </Box>
+      </Card>
+
     </Box>
   );
 }

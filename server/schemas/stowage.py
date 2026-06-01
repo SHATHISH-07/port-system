@@ -161,6 +161,7 @@ class CurrentPlanningResponse(BaseModel):
     dischargeSequence: List[DischargeSequenceEntry] = Field(default_factory=list)
     strategyInsights: List[str]
     equipmentClassDistribution: List[EquipmentClassDistribution] = Field(default_factory=list)
+    housekeepingPlan: Optional['PreConsolidationResponse'] = None
 
 # Visualization Schemas
 class MapPosition(BaseModel):
@@ -245,3 +246,46 @@ class StowageVisualizationResponse(BaseModel):
     yardGrid: Optional[YardGrid] = None     # NEW
     summary: VisualizationSummary
     dischargeSequence: List[DischargeSequenceEntry] = Field(default_factory=list)
+
+
+# ─── Pre-Consolidation / Housekeeping Schemas ────────────────────────────────
+
+class HousekeepingMove(BaseModel):
+    unitId: str
+    fromPosition: str
+    block: str
+    bay: str
+    row: str
+    tier: str
+    weightBand: str
+    portOfDischarge: Optional[str] = None
+    dischargeOrder: Optional[int] = None
+    reason: str                  # e.g. "Weight Inversion", "Discharge Inversion"
+    priority: str                # "HIGH" | "MEDIUM" | "LOW"
+    priorityScore: int           # raw numeric score for sorting
+
+class StackViolationSummary(BaseModel):
+    block: str
+    bay: str
+    row: str
+    totalContainers: int
+    weightInversions: int
+    dischargeInversions: int
+    combinedViolations: int
+
+class PreConsolidationSummary(BaseModel):
+    totalContainersAnalyzed: int
+    totalStacksAnalyzed: int
+    totalMovesRequired: int
+    highPriorityMoves: int
+    mediumPriorityMoves: int
+    lowPriorityMoves: int
+    weightInversionsFound: int
+    dischargeInversionsFound: int
+
+class PreConsolidationResponse(BaseModel):
+    vesselId: str
+    yardId: Optional[str] = None
+    summary: PreConsolidationSummary
+    moves: List[HousekeepingMove]
+    stackViolations: List[StackViolationSummary]
