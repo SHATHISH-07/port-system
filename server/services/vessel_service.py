@@ -469,7 +469,7 @@ def get_yard_heatmap_data(
                 "hazmat_total": 0,
                 "oog_total": 0,
             },
-            "infrastructure": _get_infrastructure(),
+            "infrastructure": _get_infrastructure([]),
             "berth_analysis": [],
             "conflict_table": [],
             "primary_berth": {},
@@ -493,7 +493,7 @@ def get_yard_heatmap_data(
                 "hazmat_total": 0,
                 "oog_total": 0,
             },
-            "infrastructure": _get_infrastructure(),
+            "infrastructure": _get_infrastructure([]),
             "berth_analysis": [],
             "conflict_table": [],
             "primary_berth": {},
@@ -749,26 +749,39 @@ def get_yard_heatmap_data(
         "yard_id": yard_id,
         "blocks": block_list,
         "summary": summary,
-        "infrastructure": _get_infrastructure(),
+        "infrastructure": _get_infrastructure(block_list),
         "berth_analysis": berth_analysis,
         "conflict_table": conflict_table,
         "primary_berth": primary_berth,
         "timestamp": pd.Timestamp.now().isoformat(),
     }
 
-def _get_infrastructure() -> dict:
-    """Terminal infrastructure data for berths and lanes."""
+def _get_infrastructure(block_list: list = None) -> dict:
+    """Terminal infrastructure data dynamically constructed from block list."""
+    if not block_list:
+        return {"berths": [], "lanes": []}
+    
+    # Generate abstract berths based on the active blocks (e.g. A, B, C)
+    berths = []
+    lanes = []
+    
+    block_letters = list(dict.fromkeys(b["block_id"][0] if b["block_id"] else "Z" for b in block_list))
+    for i, letter in enumerate(block_letters[:3]):  # Show up to 3 berths for visualization
+        berths.append({
+            "id": f"Berth-{letter}",
+            "slots": [1, 2, 3],
+            "status": "available" if i % 2 == 0 else "occupied"
+        })
+        
+    for i, b in enumerate(block_list[:3]):
+        lanes.append({
+            "id": f"Lane-{b['block_id']}",
+            "occupancy": round(b.get("density_pct", 0.0), 2)
+        })
+        
     return {
-        "berths": [
-            {"id": "B1", "slots": [1, 2, 3], "status": "available"},
-            {"id": "B2", "slots": [4, 5, 6], "status": "occupied"},
-            {"id": "B3", "slots": [7, 8, 9], "status": "available"},
-        ],
-        "lanes": [
-            {"id": "L1", "occupancy": 0.2},
-            {"id": "L2", "occupancy": 0.5},
-            {"id": "L3", "occupancy": 0.8},
-        ],
+        "berths": berths,
+        "lanes": lanes,
     }
 
 # Main dashboard entry point

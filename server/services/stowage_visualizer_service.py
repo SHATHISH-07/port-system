@@ -7,7 +7,7 @@ from utils.current_container_lookup import lookup_containers_by_ids
 from utils.position_decoder import parse_vessel_slot
 from utils.position_parser import parse_position
 from utils.stowage_rules import generate_recommendation, classify_weight_band, predict_reshuffle_risk
-from services.stowage_service import _CWIT_PROXIMITY, _PEB_PROXIMITY
+
 from utils.stowage_rules import PositionAllocator
 
 # Internal helpers
@@ -244,7 +244,8 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
     """
     Constructs a grid summary of the yard block capacities, proximities, and weight distributions.
     """
-    proximity_map = _PEB_PROXIMITY if terminal == "PEB" else _CWIT_PROXIMITY
+    from services.heatmap_service import _deterministic_layout
+    
     
     blocks = {}
     for _, row in df.iterrows():
@@ -283,7 +284,7 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
                 "zone": "",
                 "blockLetter": blk,
                 "terminal": terminal,
-                "berthProximity": proximity_map.get(blk, "MID"),
+                "berthProximity": "MID",
                 "cols": set(),
                 "tierMax": 0,
                 "loaded": 0, "in_yard": 0,
@@ -306,6 +307,29 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
             predict_reshuffle_risk(blk, yard_pos, "BELOW_DECK")
         )
     
+    unique_blocks = [blk for blk in blocks if blk != "UNKNOWN"]
+    proximity_map = {}
+    if unique_blocks:
+        block_scores = {blk: b["loaded"] + b["in_yard"] + (b["weight_counts"].get("HEAVY", 0) * 2) for blk, b in blocks.items() if blk != "UNKNOWN"}
+        max_block = max(block_scores, key=block_scores.get) if block_scores else unique_blocks[0]
+        layout = _deterministic_layout(unique_blocks)
+        max_pos = layout.get(max_block, {"x": 0, "y": 0})
+        
+        distances = {}
+        for blk in unique_blocks:
+            pos = layout.get(blk, {"x": 0, "y": 0})
+            distances[blk] = abs(pos["x"] - max_pos["x"]) + abs(pos["y"] - max_pos["y"])
+            
+        if distances:
+            min_dist = min(distances.values())
+            for blk, dist in distances.items():
+                if dist == min_dist:
+                    proximity_map[blk] = "CLOSE"
+                elif dist <= min_dist + 1:
+                    proximity_map[blk] = "MID"
+                else:
+                    proximity_map[blk] = "FAR"
+
     block_summaries = []
     loaded_total = 0
     in_yard_total = 0
@@ -325,7 +349,7 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
             "zone": b["zone"],
             "blockLetter": b["blockLetter"],
             "terminal": b["terminal"],
-            "berthProximity": b["berthProximity"],
+            "berthProximity": proximity_map.get(blk, "MID"),
             "colLabels": sorted(b["cols"]),
             "tierMax": b["tierMax"],
             "containerCount": total_in_block,

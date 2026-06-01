@@ -136,6 +136,7 @@ def lookup_containers_by_ids(container_ids: List[str], yard_id: Optional[str] = 
                 WHERE unit_id = ANY(:ids)
                 ORDER BY unit_id,
                          CASE WHEN visit_state = '3DEPARTED' THEN 1 ELSE 0 END,
+                         time_in DESC NULLS LAST,
                          updated_at DESC NULLS LAST,
                          created_at DESC NULLS LAST
             """)
@@ -152,6 +153,7 @@ def lookup_containers_by_ids(container_ids: List[str], yard_id: Optional[str] = 
                     WHERE unit_id IN :ids
                     ORDER BY unit_id,
                              CASE WHEN visit_state = '3DEPARTED' THEN 1 ELSE 0 END,
+                             time_in DESC NULLS LAST,
                              updated_at DESC NULLS LAST,
                              created_at DESC NULLS LAST
                 """).bindparams(bindparam("ids", expanding=True))
@@ -177,6 +179,9 @@ def lookup_containers_by_ids(container_ids: List[str], yard_id: Optional[str] = 
             lambda v: 1 if str(v).strip() == "3DEPARTED" else 0
         )
         sort_cols = ["_departed_rank"]
+        if "time_in" in df.columns:
+            df["time_in"] = pd.to_datetime(df["time_in"], errors="coerce")
+            sort_cols.append("time_in")
         if "updated_at" in df.columns:
             df["updated_at"] = pd.to_datetime(df["updated_at"], errors="coerce")
             sort_cols.append("updated_at")

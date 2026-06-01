@@ -7,21 +7,9 @@ from utils.current_container_lookup import lookup_containers_by_ids
 from utils.position_decoder import parse_vessel_slot
 from utils.position_parser import parse_position
 from utils.stowage_rules import generate_recommendation, classify_weight_band, classify_deck_position, predict_reshuffle_risk
-from services.heatmap_service import _deterministic_layout
+from services.heatmap_service import _deterministic_layout, calculate_dynamic_proximity
 from db.connection import get_engine
 
-
-_CWIT_PROXIMITY = {
-    "1A": "CLOSE", "1C": "CLOSE",
-    "2B": "MID",   "2C": "MID",
-    "3D": "MID",
-    "4D": "FAR",   "5D": "FAR",
-}
-_PEB_PROXIMITY = {
-    "A": "CLOSE",
-    "C": "MID",   "D": "MID",
-    "F": "FAR",   "G": "FAR",  "H": "FAR",
-}
 
 def _normalize_column_name(name: str) -> str:
     """
@@ -747,35 +735,7 @@ def process_current_planning_and_yard_strategy(
     if "UNKNOWN" in unique_blocks:
         unique_blocks.remove("UNKNOWN")
         
-    proximity_map = {}
-    if unique_blocks:
-        # Fallback local calculation
-        block_scores = {}
-        for blk, grp in df[df["yard_block"] != "UNKNOWN"].groupby("yard_block"):
-            count = len(grp)
-            heavy = (grp["weight_band"] == "HEAVY").sum()
-            block_scores[blk] = count + (heavy * 2)
-            
-        max_block = max(block_scores, key=block_scores.get) if block_scores else unique_blocks[0]
-        layout = _deterministic_layout(unique_blocks)
-        
-
-        max_pos = layout.get(max_block, {"x": 0, "y": 0})
-        
-        distances = {}
-        for blk in unique_blocks:
-            pos = layout.get(blk, {"x": 0, "y": 0})
-            distances[blk] = abs(pos["x"] - max_pos["x"]) + abs(pos["y"] - max_pos["y"])
-            
-        if distances:
-            min_dist = min(distances.values())
-            for blk, dist in distances.items():
-                if dist == min_dist:
-                    proximity_map[blk] = "CLOSE"
-                elif dist <= min_dist + 1:
-                    proximity_map[blk] = "MID"
-                else:
-                    proximity_map[blk] = "FAR"
+    proximity_map = calculate_dynamic_proximity(df, block_col="yard_block", weight_col="weight_band")
 
     block_strategies = []
     
