@@ -112,6 +112,39 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
 
   const maxCount = Math.max(...newData.blocks.map(b => b.total_containers || 0), 1);
   let computedMaxBlockId: string | null = null;
+  
+  const validBlocks = newData.blocks.filter(b => (b.total_containers || 0) > 0);
+  validBlocks.sort((a, b) => (b.total_containers || 0) - (a.total_containers || 0));
+  const blockConcentrationMap: Record<string, "High" | "Medium" | "Low"> = {};
+  
+  if (validBlocks.length === 1) {
+    blockConcentrationMap[validBlocks[0].block_id] = "High";
+  } else if (validBlocks.length === 2) {
+    blockConcentrationMap[validBlocks[0].block_id] = "High";
+    blockConcentrationMap[validBlocks[1].block_id] = "Medium";
+  } else if (validBlocks.length === 3) {
+    blockConcentrationMap[validBlocks[0].block_id] = "High";
+    blockConcentrationMap[validBlocks[1].block_id] = "Medium";
+    blockConcentrationMap[validBlocks[2].block_id] = "Low";
+  } else if (validBlocks.length === 4) {
+    blockConcentrationMap[validBlocks[0].block_id] = "High";
+    blockConcentrationMap[validBlocks[1].block_id] = "Medium";
+    blockConcentrationMap[validBlocks[2].block_id] = "Low";
+    blockConcentrationMap[validBlocks[3].block_id] = "Low";
+  } else if (validBlocks.length === 5) {
+    blockConcentrationMap[validBlocks[0].block_id] = "High";
+    blockConcentrationMap[validBlocks[1].block_id] = "Medium";
+    blockConcentrationMap[validBlocks[2].block_id] = "Medium";
+    blockConcentrationMap[validBlocks[3].block_id] = "Low";
+    blockConcentrationMap[validBlocks[4].block_id] = "Low";
+  } else if (validBlocks.length > 5) {
+    const chunk = Math.floor(validBlocks.length / 3);
+    validBlocks.forEach((b, idx) => {
+      if (idx < chunk) blockConcentrationMap[b.block_id] = "High";
+      else if (idx >= validBlocks.length - chunk - 1) blockConcentrationMap[b.block_id] = "Low";
+      else blockConcentrationMap[b.block_id] = "Medium";
+    });
+  }
 
   const totalContainersFromBlocks = newData.blocks.reduce((sum, b) => sum + (b.total_containers || 0), 0);
   const totalBlocksFromBlocks = newData.blocks.length;
@@ -126,7 +159,7 @@ function adaptDataForMaps(newData: ApiHeatmapResponse): VesselHeatmapViewData | 
       let intensity = b.intensity;
       if (typeof intensity !== 'number' || intensity === 0) intensity = count / maxCount;
       let concentration = b.concentration;
-      if (!concentration) concentration = intensity > 0.65 ? "High" : intensity > 0.3 ? "Medium" : "Low";
+      if (!concentration) concentration = blockConcentrationMap[bId] || "Low";
 
       blocksObj[bId] = {
         count: count,

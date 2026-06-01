@@ -3,7 +3,7 @@ import { Box, Typography, useTheme, IconButton, Tooltip, useMediaQuery } from "@
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { RestartAltRounded } from "@mui/icons-material";
 
-import type { VesselHeatmapViewData, BlockData } from "../../../types/heatmap";
+import type { VesselHeatmapViewData } from "../../../types/heatmap";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -190,15 +190,7 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
     }
   }
 
-  const allBlocks = data
-    ? Object.entries(data.blocks)
-      .filter(([, b]) => b.count > 0)
-      .sort((a, b) => b[1].count - a[1].count)
-    : [];
-
-  const maxCount = allBlocks.length > 0 ? allBlocks[0][1].count : 0;
-  const highCountIds = allBlocks.filter(([, b]) => b.count === maxCount).map(([id]) => id);
-  const mediumIds = allBlocks.filter(([id]) => !highCountIds.includes(id)).slice(0, 3).map(([id]) => id);
+  // unused variables removed
 
   const bgColor = isDark ? "#061324" : "#e0f2fe";
   const roadColor = isDark ? "#1e2433" : "#b4bfce";
@@ -344,8 +336,12 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
 
                 {data &&
                   getZones(data.layout).map((z) => {
-                    const block = data.blocks[z.id] as BlockData | undefined;
+                    const block = data.blocks[z.id];
                     const isHot = !!block && block.count > 0;
+                    const conc = block?.concentration || "Low";
+                    const isHigh = conc === "High";
+                    const isMed = conc === "Medium";
+
                     const isMax = z.id === (computedMaxBlock ?? data.max_block);
                     const isRec = data.recommended_berth?.includes(z.id) ?? false;
                     const isHover = hovered === z.id;
@@ -367,8 +363,8 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
                         <rect
                           x={z.x} y={z.y} width={z.w} height={z.h}
                           fill={isDark ? "#161b24" : "#ffffff"}
-                          stroke={isHover ? "#fcd34d" : isMax ? "#ef4444" : isRec ? "#38bdf8" : isDark ? "#334155" : "#cbd5e1"}
-                          strokeWidth={isHover || isMax ? 2.5 : isRec ? 2 : 1} rx="3"
+                          stroke={isHover ? "#fcd34d" : isHot ? (isHigh ? "#ef4444" : isMed ? "#f97316" : "#10b981") : isRec ? "#38bdf8" : isDark ? "#334155" : "#cbd5e1"}
+                          strokeWidth={isHover || isHigh ? 2.5 : isHot ? 1.5 : isRec ? 2 : 1} rx="3"
                         />
                         {(() => {
                           const maxCols = 4;
@@ -385,7 +381,7 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
                                   <rect 
                                     x={z.x + 6} y={z.y + 8 + (100 * (1 - fillPct))} 
                                     width={140} height={100 * fillPct} 
-                                    fill={isMax ? "#ef4444" : isRec ? "#0284c7" : "#f97316"} 
+                                    fill={isHigh ? "#ef4444" : isMed ? "#f97316" : "#10b981"} 
                                     rx={2} opacity={0.8}
                                   />
                                 )}
@@ -425,8 +421,8 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
                         })()}
                         <rect
                           x={z.x + 4} y={z.y + 4} width={36} height={16} rx="3"
-                          fill={isMax ? "rgba(239,68,68,0.95)" : isRec ? "rgba(14,165,233,0.9)" : isDark ? "rgba(30,36,51,0.95)" : "rgba(241,245,249,0.95)"}
-                          stroke={isMax ? "#ef4444" : isRec ? "#38bdf8" : isDark ? "#475569" : "#cbd5e1"} strokeWidth="1"
+                          fill={isHot ? (isHigh ? "rgba(239,68,68,0.95)" : isMed ? "rgba(249,115,22,0.95)" : "rgba(16,185,129,0.95)") : isRec ? "rgba(14,165,233,0.9)" : isDark ? "rgba(30,36,51,0.95)" : "rgba(241,245,249,0.95)"}
+                          stroke={isHot ? (isHigh ? "#ef4444" : isMed ? "#f97316" : "#10b981") : isRec ? "#38bdf8" : isDark ? "#475569" : "#cbd5e1"} strokeWidth="1"
                         />
                         <text
                           x={z.x + 22} y={z.y + 15}
@@ -463,16 +459,16 @@ export default function TerminalMap2D({ data, loading, targetBerthId: propTarget
                       .map((z: ZoneData) => {
                         const block = data.blocks[z.id];
                         if (!block || block.count === 0) return null;
-                        const tier = highCountIds.includes(z.id) ? "High" : mediumIds.includes(z.id) ? "Medium" : "Low";
+                        const tier = block.concentration || "Low";
                         return { z, tier };
                       })
-                      .filter((item): item is { z: ZoneData; tier: string } => item !== null)
+                      .filter((item): item is { z: ZoneData; tier: "High" | "Medium" | "Low" } => item !== null)
                       .sort((a, b) => {
                         const idx: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
                         return (idx[a.tier] ?? 0) - (idx[b.tier] ?? 0);
                       })
                       .map(({ z, tier }) => {
-                        const scale = tier === "High" ? 2.0 : tier === "Medium" ? 1.65 : 1.3;
+                        const scale = tier === "High" ? 1.4 : tier === "Medium" ? 1.25 : 1.1;
                         const gradId = tier === "High" ? "gradHigh" : tier === "Medium" ? "gradMedium" : "gradLow";
                         return <ellipse key={`heat-${z.id}`} cx={z.x + z.w / 2} cy={z.y + z.h / 2} rx={z.w * scale} ry={z.h * scale} fill={`url(#${gradId})`} />;
                       })}

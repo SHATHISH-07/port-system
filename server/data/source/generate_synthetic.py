@@ -445,7 +445,7 @@ CRANE_HEADERS = [
 ]
 
 ACTIVE_LIST_HEADERS = [
-    "Unit ID","Unit Visit Gkey","Actual Outbound Carrier visit ID",
+    "Unit ID","Unit Visit Gkey","Outbound Service",
     "Current Yard Block","Current Slot Position","Move Complete Time",
 ]
 
@@ -771,6 +771,42 @@ def generate_terminal_data(terminal: dict):
     container_rows.sort(key=sort_key_move)
     crane_rows.sort(key=sort_key_crane)
     active_rows = derive_active_yard_containers(container_rows, terminal["yard_id"])
+    
+    if terminal["yard_id"] == "PEB":
+        target_service = "VS-PEB-07"
+        target_blocks = ["PEB-A", "PEB-D", "PEB-G"]
+        vs_active = [r for r in active_rows if r.get("Outbound Service") == target_service]
+        needed = 400 - len(vs_active)
+        
+        if needed > 0:
+            other_active = [r for r in active_rows if r.get("Outbound Service") != target_service]
+            converted = other_active[:needed]
+            for r in converted:
+                r["Outbound Service"] = target_service
+                uid = r["Unit ID"]
+                for cr in reversed(container_rows):
+                    if cr["Unit ID"] == uid:
+                        cr["Outbound Service"] = target_service
+                        break
+                        
+        vs_active = [r for r in active_rows if r.get("Outbound Service") == target_service][:400]
+        
+        for i, r in enumerate(vs_active):
+            block = target_blocks[i % 3]
+            r["Current Yard Block"] = block
+            bay = random.randint(1, 30)
+            row_idx = random.randint(1, 10)
+            tier = random.randint(1, 6)
+            blk_char = block[-1]
+            pos = f"Y-PEB-{blk_char}{bay:03d}{row_idx:02d}C{tier}"
+            r["Current Slot Position"] = pos
+            uid = r["Unit ID"]
+            for cr in reversed(container_rows):
+                if cr["Unit ID"] == uid:
+                    cr["Current Position"] = pos
+                    cr["Ctr To Position"] = pos
+                    break
+
     return container_rows, crane_rows, active_rows
 
 
@@ -796,7 +832,7 @@ def derive_active_yard_containers(container_rows: List[dict], yard_id: str) -> L
         active_rows.append({
             "Unit ID":                          row["Unit ID"],
             "Unit Visit Gkey":                  row["Unit Visit Gkey"],
-            "Actual Outbound Carrier visit ID": row["Actual Outbound Carrier visit ID"],
+            "Outbound Service":                 row["Outbound Service"],
             "Current Yard Block":               derive_yard_block(pos, yard_id),
             "Current Slot Position":            pos,
             "Move Complete Time":               row["Move Complete Time"],
@@ -877,7 +913,7 @@ def main():
         print(f"  Duplicate Unit Visit Gkeys : {dup_gkeys}  (should be 0)")
 
         # ── Stay time sample ──────────────────────────────────────────────────
-        print(f"  Move-span check           : multi-batch sequence scaled across 20 h → 80 h")
+        print(f"  Move-span check           : multi-batch sequence scaled across 20 h -> 80 h")
 
         # ── Block distribution ────────────────────────────────────────────────
         block_counts = Counter(r["Current Yard Block"] for r in active_rows)

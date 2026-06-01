@@ -3,7 +3,7 @@ import { Box, Typography, useTheme, IconButton, Tooltip } from "@mui/material";
 import { RestartAltRounded } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 import * as THREE from "three";
-import type { VesselHeatmapViewData, BlockData } from "../../../types/heatmap";
+import type { VesselHeatmapViewData } from "../../../types/heatmap";
 
 // ─── Scale & Coordinate System ────────────────────────────────────────────────
 const S = 0.028;
@@ -2042,29 +2042,17 @@ class TerminalScene {
       },
     );
 
-    const allBlocks = (
-      Object.entries(data.blocks || {}) as [string, BlockData][]
-    )
-      .filter(([, b]) => b.count > 0)
-      .sort((a, b) => b[1].count - a[1].count);
-    const maxCount = allBlocks.length > 0 ? allBlocks[0][1].count : 0;
-    const highCountIds = allBlocks
-      .filter(([, b]) => b.count === maxCount)
-      .map(([id]) => id);
-    const mediumCandidates = allBlocks.filter(
-      ([id]) => !highCountIds.includes(id),
-    );
-    const mediumIds = mediumCandidates.slice(0, 3).map(([id]) => id);
+
 
     heatGroups.sort((a, b) => {
-      const order = (id: string) =>
-        highCountIds.includes(id) ? 3 : mediumIds.includes(id) ? 2 : 1;
-      return order(a.id) - order(b.id);
+      const order = (conc: string) =>
+        conc === "High" ? 3 : conc === "Medium" ? 2 : 1;
+      return order(a.conc || "Low") - order(b.conc || "Low");
     });
 
-    heatGroups.forEach(({ id, cx, cz, bw, bd }) => {
-      const isHigh = highCountIds.includes(id);
-      const isMed = mediumIds.includes(id);
+    heatGroups.forEach(({ cx, cz, bw, bd, conc }) => {
+      const isHigh = conc === "High";
+      const isMed = conc === "Medium";
       const col = isHigh ? "#c30010" : isMed ? "#fe6a03" : "#008000";
       const spread = isHigh ? 2.6 : isMed ? 2.2 : 1.6;
       const peakOp = isHigh ? 1.0 : isMed ? 0.85 : 0.75;
