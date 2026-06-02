@@ -67,23 +67,6 @@ def _extract_move_side(row) -> Tuple[str, Optional[dict]]:
 
     return move_type, yard_pos
 
-# Vessel summary fetch  (fast-path from vessel_visits table)
-def _fetch_vessel_summary(vessel_id: str) -> Optional[dict]:
-    """
-    Fetches the latest summary record for a vessel visit from the database.
-    """
-    try:
-        df = load_from_db("vessel_visits", vessel_id=vessel_id)
-        if df.empty:
-            return None
-        if "last_move_time" in df.columns:
-            df = df.sort_values("last_move_time", ascending=False)
-        elif "updated_at" in df.columns:
-            df = df.sort_values("updated_at", ascending=False)
-        return df.iloc[0].to_dict()
-    except Exception as exc:
-        logger.warning("vessel summary fetch failed for %s: %s", vessel_id, exc)
-    return None
 
 # Crane data fetching
 def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
@@ -124,11 +107,11 @@ def _fetch_crane_counts_batch(visit_ids: list[str]) -> dict[str, int]:
 
         # Filter out excludes
         valid = df[df["exclude"] != "Yes"] if "exclude" in df.columns else df
-        if valid.empty or "crane_id" not in valid.columns or "vessel_id" not in valid.columns:
+        if valid.empty or "crane_id" not in valid.columns or "carrier_visit" not in valid.columns:
             return {vid: 0 for vid in visit_ids}
 
-        # Group by vessel_id and count unique cranes
-        counts = valid.groupby("vessel_id")["crane_id"].nunique().to_dict()
+        # Group by carrier_visit and count unique cranes
+        counts = valid.groupby("carrier_visit")["crane_id"].nunique().to_dict()
         return {str(vid): int(counts.get(vid, 0)) for vid in visit_ids}
     except Exception as exc:
         logger.warning("Batch crane fetch failed: %s", exc)
@@ -283,6 +266,10 @@ def _visit_details(visit_groups: dict) -> dict:
             restow_count += int((unknowns & move_kind.isin(["SHIFT", "RESTOW"])).sum())
 
         total_units = int(vdf["unit_id"].nunique()) if "unit_id" in vdf.columns else len(vdf)
+
+        if loads == 0 and discharges == 0 and total_units > 0:
+            # Fallback: If no positional move data is present but we have outbound units, assume they are all loads
+            loads = total_units
         w_col = (
             "unit_weight_in_kg" if "unit_weight_in_kg" in vdf.columns
             else "verified_gross_mass_kg" if "verified_gross_mass_kg" in vdf.columns
@@ -661,34 +648,32 @@ def get_yard_heatmap_data(
         concurrent_vessels = {}  # visit_id -> {"service": str, "blocks": set()}
         if pd.notna(min_time) and pd.notna(max_time):
             try:
-                from db.queries import get_engine, _discover_tables
+                from db.queries import get_engine
                 from sqlalchemy import text
                 engine = get_engine()
-                tables = _discover_tables(engine, "container_operations", yard_id)
-                for tbl in tables:
-                    query = text(f"""
-                        SELECT actual_outbound_carrier_visit_id, outbound_service, ctr_from_position
-                        FROM {tbl}
-                        WHERE actual_outbound_carrier_visit_id != :visit_id
-                          AND actual_outbound_carrier_visit_id IS NOT NULL
-                          AND move_complete_time BETWEEN :min_time AND :max_time
-                    """)
-                    cdf = pd.read_sql(query, engine, params={
-                        "visit_id": target_visit_id,
-                        "min_time": min_time,
-                        "max_time": max_time
-                    })
-                    for crow in cdf.to_dict('records'):
-                        v_id = crow.get("actual_outbound_carrier_visit_id")
-                        if v_id not in concurrent_vessels:
-                            concurrent_vessels[v_id] = {"service": crow.get("outbound_service"), "blocks": set()}
-                        c_pos = crow.get("ctr_from_position")
-                        if pd.notna(c_pos):
-                            cp_info = parse_position(str(c_pos))
-                            if cp_info and cp_info.get("is_yard"):
-                                cbk = block_label(cp_info)
-                                if cbk:
-                                    concurrent_vessels[v_id]["blocks"].add(cbk)
+                query = text("""
+                    SELECT visit_id as actual_outbound_carrier_visit_id, outbound_service, ctr_from_position
+                    FROM containers
+                    WHERE visit_id != :visit_id
+                        AND visit_id IS NOT NULL
+                        AND move_complete_time BETWEEN :min_time AND :max_time
+                """)
+                cdf = pd.read_sql(query, engine, params={
+                    "visit_id": target_visit_id,
+                    "min_time": min_time,
+                    "max_time": max_time
+                })
+                for crow in cdf.to_dict('records'):
+                    v_id = crow.get("actual_outbound_carrier_visit_id")
+                    if v_id not in concurrent_vessels:
+                        concurrent_vessels[v_id] = {"service": crow.get("outbound_service"), "blocks": set()}
+                    c_pos = crow.get("ctr_from_position")
+                    if pd.notna(c_pos):
+                        cp_info = parse_position(str(c_pos))
+                        if cp_info and cp_info.get("is_yard"):
+                            cbk = block_label(cp_info)
+                            if cbk:
+                                concurrent_vessels[v_id]["blocks"].add(cbk)
             except Exception as e:
                 print(f"Error querying concurrent vessels: {e}")
 
@@ -797,7 +782,16 @@ def analyze_vessel_dashboard(
     Analyzes vessel data to predict stay durations, identify bottlenecks, and synthesize operational dashboards.
     """
     if df is None or df.empty:
-        return {"error": "No data available", "vessel": vessel_service}
+        return {
+            "error": "No data available",
+            "vessel": vessel_service,
+            "vessel_service": vessel_service,
+            "mode": "vessel",
+            "actual": {"visits": {}, "avg_hours": 0.0, "max_hours": 0.0, "min_hours": 0.0, "avg_restows": 0.0},
+            "predicted": None,
+            "delay_analysis": [],
+            "suggestions": []
+        }
 
     search_key = str(vessel_service).strip().upper()
 
@@ -835,6 +829,11 @@ def analyze_vessel_dashboard(
         return {
             "error": f"No data found for vessel '{vessel_service}'.{hint}",
             "vessel": vessel_service,
+            "vessel_service": vessel_service,
+            "mode": "vessel",
+            "actual": {"visits": {}, "avg_hours": 0.0, "max_hours": 0.0, "min_hours": 0.0, "avg_restows": 0.0},
+            "predicted": None,
+            "delay_analysis": [],
             "suggestions": suggestions,
         }
 
@@ -1061,6 +1060,10 @@ def analyze_vessel_dashboard(
     if unknowns.any():
         total_loaded += int((unknowns & (move_kind == "LOAD")).sum())
         total_discharged += int((unknowns & (move_kind == "DISCHARGE")).sum())
+
+    total_visit_units = int(visit_df["unit_id"].nunique()) if "unit_id" in visit_df.columns else len(visit_df)
+    if total_loaded == 0 and total_discharged == 0 and total_visit_units > 0:
+        total_loaded = total_visit_units
 
     # Removed unused local variables for hazardous, reefer, oog, total_units, avg_hours, and restow_count
     actual.get("visits", {}).get(str(top_visit_id), {})

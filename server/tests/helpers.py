@@ -33,7 +33,11 @@ def get_test_container_ids(limit=100) -> str:
     for record in data:
         if "Unit ID" in record:
             ids.append(str(record["Unit ID"]))
+        elif "unit_ids" in record and isinstance(record["unit_ids"], list):
+            ids.extend([str(u) for u in record["unit_ids"]])
+        
         if len(ids) >= limit:
+            ids = ids[:limit]
             break
             
     return ", ".join(ids)

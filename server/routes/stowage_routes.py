@@ -31,7 +31,12 @@ def history_analysis(
     Fetches historical container stowage patterns, groupings, and distributions.
     """
     try:
-        return get_historical_stowage_analysis(vessel_id=vesselId, yard_id=yardId, visit_id=visitId)
+        res = get_historical_stowage_analysis(vessel_id=vesselId, yard_id=yardId, visit_id=visitId)
+        if not res or res.get("summary", {}).get("totalContainers", 0) == 0:
+            raise HTTPException(status_code=404, detail="No historical stowage data found")
+        return res
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error in history_analysis: %s", e)
         raise HTTPException(status_code=500, detail="Failed to aggregate historical stowage")
@@ -67,12 +72,16 @@ async def current_planning(
         if not container_ids:
             raise HTTPException(status_code=400, detail="No valid container IDs were provided")
 
-        return process_current_planning_and_yard_strategy(
+        res = process_current_planning_and_yard_strategy(
             vessel_id=vessel_id,
             yard_id=yard_id,
             container_ids=container_ids,
             port_rotation=req_data.get("port_rotation")
         )
+        # For planning, it might return empty summary if no containers resolved
+        if not res or res.get("summary", {}).get("totalContainers", 0) == 0 and res.get("summary", {}).get("resolvedCount", 0) == 0:
+            raise HTTPException(status_code=404, detail="No current planning data found")
+        return res
 
     except HTTPException:
         raise
@@ -115,13 +124,16 @@ async def stowage_visualization(
         if not visit_id and not container_ids:
             raise HTTPException(status_code=400, detail="containerIds are required for current visualization")
 
-        return get_stowage_visualization(
+        res = get_stowage_visualization(
             vessel_id=vessel_id,
             yard_id=yard_id,
             visit_id=visit_id,
             container_ids=container_ids,
             port_rotation=req_data.get("port_rotation")
         )
+        if not res or res.get("summary", {}).get("resolvedCount", 0) == 0:
+            raise HTTPException(status_code=404, detail="No visualization data found")
+        return res
 
     except HTTPException:
         raise

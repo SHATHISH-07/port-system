@@ -220,15 +220,17 @@ def get_historical_stowage_analysis(
     if df is None or df.empty:
         return _empty_history_response()
 
+    import logging
+    logger = logging.getLogger("port_system")
+    logger.info(f"[DEBUG] After load_from_db: {len(df)} rows")
     df = _normalize_dataframe_columns(df)
 
-    if "record_type" in df.columns:
-        df = df[df["record_type"].astype(str).str.lower() == "history"].copy()
-
-    if "visit_state" in df.columns:
+    if "visit_state" in df.columns and df["visit_state"].notna().any():
         df = df[df["visit_state"].notna()].copy()
+        logger.info(f"[DEBUG] After visit_state filter: {len(df)} rows")
 
     if df.empty:
+        logger.info(f"[DEBUG] Returning empty because df is empty here")
         return _empty_history_response()
 
     visits = []
@@ -251,9 +253,12 @@ def get_historical_stowage_analysis(
         visits.sort(key=lambda x: x["moveCompleteTime"] or "", reverse=True)
 
     if visit_id and "actual_outbound_carrier_visit_id" in df.columns:
+        logger.info(f"[DEBUG] visit_id param: '{visit_id}'")
+        logger.info(f"[DEBUG] Unique values in df: {df['actual_outbound_carrier_visit_id'].unique()}")
         df = df[df["actual_outbound_carrier_visit_id"].astype(str) == str(visit_id)].copy()
 
     if df.empty:
+        logger.info(f"[DEBUG] Returning empty because df is empty after actual_outbound_carrier_visit_id filter")
         return _empty_history_response()
 
     # When querying all history, dedupe by unit_id AND visit_id so containers that visited multiple times are counted for each visit.
@@ -277,6 +282,7 @@ def get_historical_stowage_analysis(
             unique_df = _dedupe_latest_per_unit(df)
 
     if unique_df.empty:
+        logger.info(f"[DEBUG] Returning empty because unique_df is empty")
         return _empty_history_response()
 
     def _resolve_attributes(row: pd.Series) -> pd.Series:
@@ -452,7 +458,12 @@ def get_historical_stowage_analysis(
         "equipmentClassDistribution": equip_class_dist,
         "historicalVisits": visits,
         "dischargeSequence": discharge_sequence,
-        "craneMetrics": crane_metrics,
+        "craneMetrics": crane_metrics or {
+            "totalMoves": 0, "loadMoves": 0, "dischargeMoves": 0,
+            "restowMoves": 0, "reshuffleRate": 0.0,
+            "dualCycleCount": 0, "dualCycleRate": 0.0,
+            "avgMoveGapMinutes": 0.0, "reshuffleByBlock": []
+        },
     }
 
 def _generate_current_planning_insights(block_strategies, pod_groups, baseline_reshuffle, pod_conc, proj_reduction, crane_metrics=None) -> list[str]:
@@ -682,13 +693,13 @@ def process_current_planning_and_yard_strategy(
         rec["recommendedBay"] = bay
         rec["recommendedRow"] = row_str
         rec["recommendedTier"] = tier_str
-        rec["actualOutboundCarrierVisitId"] = actual_visit
-        rec["outboundService"] = outbound_svc
-        rec["equipmentClass"] = eq_class
+        rec["actualOutboundCarrierVisitId"] = actual_visit or "UNASSIGNED"
+        rec["outboundService"] = outbound_svc or vessel_id
+        rec["equipmentClass"] = eq_class if eq_class != "unknownEquipmentClass" else "UNKNOWN"
         rec["weightCategory"] = weight_band
-        rec["portOfDischarge"] = port if port else None
-        rec["currentYardBlock"] = current_yard_block
-        rec["currentSlotPosition"] = current_slot_position
+        rec["portOfDischarge"] = port if port else "UNKNOWN"
+        rec["currentYardBlock"] = current_yard_block or "UNKNOWN"
+        rec["currentSlotPosition"] = current_slot_position or "UNKNOWN"
 
         recommendations.append(rec)
 
@@ -891,7 +902,7 @@ def process_current_planning_and_yard_strategy(
     return {
         "vesselId": vessel_id,
         "outboundService": outbound_service or vessel_id,
-        "visitId": visit_id,
+        "visitId": visit_id or "UNASSIGNED",
         "terminal": terminal,
         "summary": {
             "totalRequested": int(len(cleaned_ids)),
@@ -927,6 +938,12 @@ def _empty_history_response() -> dict:
         "equipmentClassDistribution": [],
         "historicalVisits": [],
         "dischargeSequence": [],
+        "craneMetrics": {
+            "totalMoves": 0, "loadMoves": 0, "dischargeMoves": 0,
+            "restowMoves": 0, "reshuffleRate": 0.0,
+            "dualCycleCount": 0, "dualCycleRate": 0.0,
+            "avgMoveGapMinutes": 0.0, "reshuffleByBlock": []
+        },
     }
 
 def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
@@ -936,7 +953,7 @@ def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
     return {
         "vesselId": vessel_id,
         "outboundService": vessel_id,
-        "visitId": None,
+        "visitId": "UNASSIGNED",
         "terminal": "CWIT",
         "summary": {
             "totalRequested": total_requested,
@@ -947,7 +964,7 @@ def _empty_planning_response(vessel_id: str, total_requested: int) -> dict:
         "dischargePortGrouping": [],
         "yardBlockSummary": [],
         "dischargePortStrategy": [],
-        "reshuffleStats": {},
+        "reshuffleStats": {"baselineRate": 0.0, "podConcentration": 0.0, "projectedReduction": 0.0},
         "dischargeSequence": [],
         "strategyInsights": [],
         "equipmentClassDistribution": [],

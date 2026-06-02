@@ -14,31 +14,15 @@ import {
 import { api } from "../../api/api";
 import FileUpload from "./FileUpload";
 
-type IngestType = "history" | "crane";
-
 interface UploadResponse {
   status: string;           // "success" | "partial" | "failed"
-  dataset_type: string;
-  accepted_count: number;
-  rejected_count: number;
+  dataset_type?: string;
+  accepted_count?: number;
+  rejected_count?: number;
   ingestion_id: string;
   message?: string;
   errors?: string[] | null;
 }
-
-const SCHEMAS: Record<IngestType, string[]> = {
-  history: [
-    "unit_id", "actual_outbound_carrier_visit_id", "outbound_service",
-    "move_complete_time", "time_in", "time_out",
-    "ctr_from_position", "ctr_to_position",
-    "unit_weight_in_kg", "verified_gross_mass_kg",
-    "reefer", "hazardous_flag", "oog_unit", "port_of_discharge",
-  ],
-  crane: [
-    "crane_id", "unit_id", "carrier_visit", "move_kind",
-    "from_position", "to_position", "time_completed", "line_op",
-  ],
-};
 
 function StatusChip({ status }: { status: string }) {
   const map: Record<string, { color: "success" | "error" | "warning" | "default"; icon: React.ReactElement }> = {
@@ -62,7 +46,6 @@ function StatusChip({ status }: { status: string }) {
 export default function DataIngestion() {
   const theme = useTheme();
 
-  const [activeType, setActiveType] = useState<IngestType>("history");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [statusData, setStatusData] = useState<UploadResponse | null>(null);
@@ -83,14 +66,25 @@ export default function DataIngestion() {
       const form = new FormData();
       form.append("file", file);
 
-      // Pass the explicit type as a query param so auto-detect is skipped
+      // Unified upload endpoint — dataset type is auto-detected
       const res = await api.post<UploadResponse>(
-        `/ingest/upload?datasetType=${activeType}`,
+        `/ingest/upload`,
         form,
         { headers: { "Content-Type": "multipart/form-data" } },
       );
 
-      const data = res.data;
+      let data = res.data;
+
+      if (data.status === "processing" && data.ingestion_id) {
+        showToast(`Ingestion queued and is processing in the background...`, "info");
+        // Poll for completion
+        while (data.status === "processing") {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const statusRes = await api.get<UploadResponse>(`/ingest/status/${data.ingestion_id}`);
+          data = statusRes.data;
+        }
+      }
+
       setStatusData(data);
 
       if (data.status === "failed") {
@@ -137,40 +131,11 @@ export default function DataIngestion() {
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 2, width: '100%' }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.5px', mb: 0.5 }}>
-              Data Ingestion & Integration
+              Unified Data Ingestion
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-              Upload raw dataset files to keep the history logs and crane operations updated.
+              Upload raw dataset files (History, Crane, or ITV). The system will automatically detect the dataset type.
             </Typography>
-          </Box>
-
-          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
-            <Button
-              variant={activeType === "history" ? "contained" : "outlined"}
-              onClick={() => {
-                if (isLoading) return;
-                setActiveType("history");
-                setFile(null);
-                setStatusData(null);
-              }}
-              disabled={isLoading}
-              sx={{ borderRadius: 2, fontWeight: 700, textTransform: "none", py: 0.75, px: 2, boxShadow: activeType === "history" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none" }}
-            >
-              History
-            </Button>
-            <Button
-              variant={activeType === "crane" ? "contained" : "outlined"}
-              onClick={() => {
-                if (isLoading) return;
-                setActiveType("crane");
-                setFile(null);
-                setStatusData(null);
-              }}
-              disabled={isLoading}
-              sx={{ borderRadius: 2, fontWeight: 700, textTransform: "none", py: 0.75, px: 2, boxShadow: activeType === "crane" ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}` : "none" }}
-            >
-              Crane
-            </Button>
           </Box>
         </Box>
       </Paper>
@@ -178,31 +143,6 @@ export default function DataIngestion() {
       {/* Main Content Area */}
       <Box sx={{ flex: 1, overflowY: 'auto', scrollBehavior: 'smooth', p: { xs: 2, md: 3 } }}>
         <Box sx={{ maxWidth: 1000, mx: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-
-          {/* Expected Headers Section */}
-          <Box sx={{ px: 1 }}>
-            <Typography variant="caption" sx={{ fontWeight: 800, color: "text.secondary", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", mb: 1.5 }}>
-              Expected {activeType} dataset headers
-            </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-              {SCHEMAS[activeType].map((h) => (
-                <Chip
-                  key={h}
-                  label={h}
-                  size="small"
-                  variant="outlined"
-                  sx={{
-                    fontSize: "11px",
-                    borderRadius: 1.5,
-                    fontWeight: 600,
-                    borderColor: alpha(theme.palette.divider, 0.8),
-                    bgcolor: alpha(theme.palette.background.paper, 0.6),
-                    backdropFilter: "blur(10px)",
-                  }}
-                />
-              ))}
-            </Box>
-          </Box>
 
           {/* Upload Area Card */}
           <Grid container spacing={2} sx={{ maxWidth: 750, mx: "auto", width: "100%" }}>
@@ -225,8 +165,8 @@ export default function DataIngestion() {
                       setFile(f);
                       setStatusData(null);
                     }}
-                    acceptedTypes=".csv,.xlsx,.xls"
-                    label={`Upload ${activeType === "history" ? "vessel stay history" : "crane operations"} dataset`}
+                    acceptedTypes=".csv,.xlsx,.xls,.json"
+                    label={`Upload dataset (CSV, Excel, JSON)`}
                   />
                 </Box>
 
@@ -286,7 +226,7 @@ export default function DataIngestion() {
                           DATASET
                         </Typography>
                         <Typography variant="body1" sx={{ fontWeight: 800, textTransform: "uppercase", color: "text.primary" }}>
-                          {statusData.dataset_type}
+                          {statusData.dataset_type || "PROCESSING"}
                         </Typography>
                       </Box>
 
@@ -295,7 +235,7 @@ export default function DataIngestion() {
                           TOTAL ROWS
                         </Typography>
                         <Typography variant="h5" sx={{ fontWeight: 900, fontFamily: "monospace", color: "text.primary" }}>
-                          {(statusData.accepted_count + statusData.rejected_count).toLocaleString()}
+                          {((statusData.accepted_count || 0) + (statusData.rejected_count || 0)).toLocaleString()}
                         </Typography>
                       </Box>
 
@@ -304,16 +244,16 @@ export default function DataIngestion() {
                           ACCEPTED
                         </Typography>
                         <Typography variant="h5" sx={{ fontWeight: 900, color: "success.main", fontFamily: "monospace" }}>
-                          {statusData.accepted_count.toLocaleString()}
+                          {(statusData.accepted_count || 0).toLocaleString()}
                         </Typography>
                       </Box>
 
                       <Box sx={{ p: 2, borderRadius: 3, bgcolor: statusData.rejected_count > 0 ? alpha(theme.palette.error.main, 0.1) : alpha(theme.palette.divider, 0.05), border: `1px solid ${statusData.rejected_count > 0 ? alpha(theme.palette.error.main, 0.2) : alpha(theme.palette.divider, 0.1)}` }}>
-                        <Typography variant="caption" sx={{ color: statusData.rejected_count > 0 ? "error.main" : "text.secondary", fontWeight: 800, display: "block", mb: 0.5, letterSpacing: "0.1em" }}>
+                        <Typography variant="caption" sx={{ color: (statusData.rejected_count || 0) > 0 ? "error.main" : "text.secondary", fontWeight: 800, display: "block", mb: 0.5, letterSpacing: "0.1em" }}>
                           REJECTED
                         </Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 900, color: statusData.rejected_count > 0 ? "error.main" : "text.secondary", fontFamily: "monospace" }}>
-                          {statusData.rejected_count.toLocaleString()}
+                        <Typography variant="h5" sx={{ fontWeight: 900, color: (statusData.rejected_count || 0) > 0 ? "error.main" : "text.secondary", fontFamily: "monospace" }}>
+                          {(statusData.rejected_count || 0).toLocaleString()}
                         </Typography>
                       </Box>
                     </Box>

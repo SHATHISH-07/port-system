@@ -8,7 +8,6 @@ import pandas as pd
 from sqlalchemy import bindparam, text
 
 from db.connection import get_engine
-from db.queries import _discover_tables
 
 logger = logging.getLogger("port_system")
 
@@ -118,58 +117,43 @@ def lookup_containers_by_ids(container_ids: List[str], yard_id: Optional[str] = 
 
     # ── Step 2: Query DB for full metadata ────────────────────────────────
     engine = get_engine()
-    tables = _discover_tables(engine, "container_operations", yard_id)
 
-    if not tables:
-        # No DB tables — return what we have from active yard
-        if not active_matches.empty:
-            return active_matches.reset_index(drop=True)
-        logger.warning("No container_operations tables found for yard_id=%s", yard_id)
-        return pd.DataFrame()
-
-    collected = []
-    for tbl in tables:
+    try:
+        q = text("""
+            SELECT DISTINCT ON (unit_id) *
+            FROM containers
+            WHERE unit_id = ANY(:ids)
+            ORDER BY unit_id,
+                     CASE WHEN visit_state = '3DEPARTED' THEN 1 ELSE 0 END,
+                     time_in DESC NULLS LAST,
+                     updated_at DESC NULLS LAST,
+                     created_at DESC NULLS LAST
+        """)
+        with engine.connect() as conn:
+            df = pd.read_sql_query(q, conn, params={"ids": unique_ids})
+    except Exception as first_err:
+        logger.debug("ANY() lookup failed on containers: %s", first_err)
         try:
-            q = text(f"""
+            q_fallback = text("""
                 SELECT DISTINCT ON (unit_id) *
-                FROM {tbl}
-                WHERE unit_id = ANY(:ids)
+                FROM containers
+                WHERE unit_id IN :ids
                 ORDER BY unit_id,
                          CASE WHEN visit_state = '3DEPARTED' THEN 1 ELSE 0 END,
                          time_in DESC NULLS LAST,
                          updated_at DESC NULLS LAST,
                          created_at DESC NULLS LAST
-            """)
+            """).bindparams(bindparam("ids", expanding=True))
             with engine.connect() as conn:
-                df_tbl = pd.read_sql_query(q, conn, params={"ids": unique_ids})
-            if not df_tbl.empty:
-                collected.append(df_tbl)
-        except Exception as first_err:
-            logger.debug("ANY() lookup failed on %s: %s", tbl, first_err)
-            try:
-                q_fallback = text(f"""
-                    SELECT DISTINCT ON (unit_id) *
-                    FROM {tbl}
-                    WHERE unit_id IN :ids
-                    ORDER BY unit_id,
-                             CASE WHEN visit_state = '3DEPARTED' THEN 1 ELSE 0 END,
-                             time_in DESC NULLS LAST,
-                             updated_at DESC NULLS LAST,
-                             created_at DESC NULLS LAST
-                """).bindparams(bindparam("ids", expanding=True))
-                with engine.connect() as conn:
-                    df_tbl = pd.read_sql_query(q_fallback, conn, params={"ids": tuple(unique_ids)})
-                if not df_tbl.empty:
-                    collected.append(df_tbl)
-            except Exception as second_err:
-                logger.warning("Failed to lookup containers in %s: %s", tbl, second_err)
+                df = pd.read_sql_query(q_fallback, conn, params={"ids": tuple(unique_ids)})
+        except Exception as second_err:
+            logger.warning("Failed to lookup containers: %s", second_err)
+            df = pd.DataFrame()
 
-    if not collected:
+    if df.empty:
         if not active_matches.empty:
             return active_matches.reset_index(drop=True)
         return pd.DataFrame()
-
-    df = pd.concat(collected, ignore_index=True)
     df = _normalize_dataframe_columns(df)
 
     # Dedup: prefer IN_YARD, then latest

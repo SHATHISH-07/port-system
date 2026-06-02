@@ -128,6 +128,19 @@ class Settings:
             "exclude",
             "yard_id",
         ],
+        "itv": [
+            "itv_id",
+            "unit_id",
+            "carrier_visit",
+            "move_task_id",
+            "driver_id",
+            "status",
+            "dispatch_time",
+            "arrival_time",
+            "from_position",
+            "to_position",
+            "yard_id",
+        ],
     }
 
     # Required columns per dataset type
@@ -135,6 +148,7 @@ class Settings:
         "history": ["unit_id", "actual_outbound_carrier_visit_id"],
         "current": ["unit_id", "actual_outbound_carrier_visit_id"],
         "crane": ["crane_id", "carrier_visit", "move_kind"],
+        "itv": ["itv_id", "unit_id", "carrier_visit"],
     }
 
     REQUIRED_COLS: list[str] = [
@@ -265,37 +279,22 @@ class Settings:
     
     QUERY_ENSURE_PGCRYPTO = 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";'
     
-    QUERY_CREATE_VESSEL_VISITS = """
-        CREATE TABLE IF NOT EXISTS {vv_tbl} (
-            id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-            vessel_visit_id                  TEXT        UNIQUE NOT NULL,
-            outbound_service                 TEXT,
-            total_containers                 INTEGER     DEFAULT 0,
-            total_loaded                     INTEGER     DEFAULT 0,
-            total_discharged                 INTEGER     DEFAULT 0,
-            avg_crane_count                  FLOAT       DEFAULT 0,
-            avg_mphc                         FLOAT       DEFAULT 0,
-            stay_hours                       FLOAT,
-            first_move_time                  TIMESTAMP,
-            last_move_time                   TIMESTAMP,
-            vessel_arrival                   TIMESTAMP,
-            vessel_departure                 TIMESTAMP,
-            yard_id                          TEXT,
-            ingestion_id                     TEXT,
-            created_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
-            updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
-        );
+    QUERY_ADD_RECORD_TYPE_COL = 'ALTER TABLE "{co_tbl}" ADD COLUMN IF NOT EXISTS record_type TEXT DEFAULT \'history\''
+    QUERY_BACKFILL_RECORD_TYPE = 'UPDATE "{co_tbl}" SET record_type = \'history\' WHERE record_type IS NULL'
+    QUERY_CREATE_CO_UNIQUE_INDEX = """
+        CREATE UNIQUE INDEX IF NOT EXISTS "uq_{yard_id}_co_unit_yard_current"
+        ON "{co_tbl}" (unit_id, yard_id)
+        WHERE record_type = 'history';
     """
     
-    QUERY_CREATE_CONTAINER_OPERATIONS = """
-        CREATE TABLE IF NOT EXISTS {co_tbl} (
-            id                               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    QUERY_CREATE_GLOBAL_CONTAINERS = """
+        CREATE TABLE IF NOT EXISTS containers (
             unit_id                          TEXT        NOT NULL,
+            visit_id                         TEXT        NOT NULL,
             unit_visit_gkey                  TEXT,
             outbound_service                 TEXT,
-            actual_outbound_carrier_visit_id TEXT        NOT NULL,
-            inbound_service                  TEXT,
             actual_inbound_carrier_visit_id  TEXT,
+            inbound_service                  TEXT,
             facility_id                      TEXT,
             yard_id                          TEXT,
             complex_id                       TEXT,
@@ -325,27 +324,19 @@ class Settings:
             stow_code_1                      TEXT,
             stow_code_2                      TEXT,
             stow_code_3                      TEXT,
-            record_type                      TEXT        DEFAULT 'history',
             ingestion_id                     TEXT,
             created_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
-            updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW()
+            updated_at                       TIMESTAMP   NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (unit_id, visit_id)
         );
     """
-    
-    QUERY_ADD_RECORD_TYPE_COL = "ALTER TABLE {co_tbl} ADD COLUMN IF NOT EXISTS record_type TEXT DEFAULT 'history'"
-    QUERY_BACKFILL_RECORD_TYPE = "UPDATE {co_tbl} SET record_type = 'history' WHERE record_type IS NULL"
-    QUERY_CREATE_CO_UNIQUE_INDEX = """
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_{yard_id}_co_unit_yard_current
-        ON {co_tbl} (unit_id, yard_id)
-        WHERE record_type = 'current';
-    """
-    
-    QUERY_CREATE_CRANE_OPERATIONS = """
-        CREATE TABLE IF NOT EXISTS {cro_tbl} (
+
+    QUERY_CREATE_GLOBAL_CRANES = """
+        CREATE TABLE IF NOT EXISTS cranes (
             id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            unit_id        TEXT        NOT NULL,
+            visit_id       TEXT        NOT NULL,
             crane_id       TEXT,
-            unit_id        TEXT,
-            carrier_visit  TEXT        NOT NULL,
             event_type     TEXT,
             move_kind      TEXT,
             line_op        TEXT,
@@ -356,8 +347,34 @@ class Settings:
             to_position    TEXT,
             yard_id        TEXT,
             ingestion_id   TEXT,
-            created_at     TIMESTAMP   NOT NULL DEFAULT NOW()
+            created_at     TIMESTAMP   NOT NULL DEFAULT NOW(),
+            FOREIGN KEY (unit_id, visit_id) REFERENCES containers(unit_id, visit_id) ON DELETE CASCADE
         );
+    """
+
+    QUERY_CREATE_GLOBAL_ITVS = """
+        CREATE TABLE IF NOT EXISTS itvs (
+            id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            unit_id        TEXT        NOT NULL,
+            visit_id       TEXT        NOT NULL,
+            itv_id         TEXT,
+            move_task_id   TEXT,
+            driver_id      TEXT,
+            status         TEXT,
+            dispatch_time  TIMESTAMP,
+            arrival_time   TIMESTAMP,
+            from_position  TEXT,
+            to_position    TEXT,
+            yard_id        TEXT,
+            ingestion_id   TEXT,
+            created_at     TIMESTAMP   NOT NULL DEFAULT NOW(),
+            FOREIGN KEY (unit_id, visit_id) REFERENCES containers(unit_id, visit_id) ON DELETE CASCADE
+        );
+    """
+    
+    QUERY_CREATE_CONTAINERS_CURRENT_INDEX = """
+        CREATE INDEX IF NOT EXISTS idx_containers_current 
+        ON containers (unit_id) WHERE time_out IS NULL;
     """
     
     QUERY_CREATE_INGESTION_LOGS = """

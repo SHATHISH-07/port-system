@@ -233,7 +233,7 @@ def generate_recommendation(
     return {
         "unitId": unit_id,
         "recommendedDeck": recommended_deck,
-        "recommendedTier": None,
+        "recommendedTier": "02",
         "loadingPriority": final_priority,
         "reshuffleRisk": reshuffle_risk,
         "recommendedReason": " ".join(reasons),

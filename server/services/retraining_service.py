@@ -97,22 +97,11 @@ def check_and_trigger_retraining(background_tasks=None) -> None:
 
         total_history_rows = 0
         with engine.connect() as conn:
-            tbls = conn.execute(text("""
-                SELECT relname FROM pg_class
-                WHERE relkind IN ('r', 'p')
-                  AND relname LIKE '%_container_operations'
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-                ORDER BY relname
-            """)).fetchall()
-
-            for (tbl,) in tbls:
-                try:
-                    n = conn.execute(
-                        text(f"SELECT COUNT(*) FROM {tbl} WHERE record_type = 'history'")
-                    ).scalar()
-                    total_history_rows += (n or 0)
-                except Exception:
-                    pass
+            try:
+                n = conn.execute(text("SELECT COUNT(*) FROM containers")).scalar()
+                total_history_rows = n or 0
+            except Exception as e:
+                logger.error("[Retraining] Failed to count global containers: %s", e)
 
         latest = get_latest_training_metadata()
         last_trained_size = latest.get("dataset_size", 0) if latest else 0
