@@ -620,12 +620,7 @@ def predict_vessel_stay_duration(
         if pred is None:
             continue
 
-        weight = (
-            int(visit_df["unit_id"].nunique())
-            if "unit_id" in visit_df.columns
-            else len(visit_df)
-        )
-        weight = max(weight, 1)
+        weight = 1
 
         visit_preds[str(visit_id)] = float(pred)
         weighted_sum += float(pred) * weight
@@ -634,11 +629,11 @@ def predict_vessel_stay_duration(
     if not visit_preds:
         return {"error": "No prediction data available"}
 
-    weighted_avg = round(weighted_sum / total_weight, 2)
+    avg_hours = round(weighted_sum / total_weight, 2)
     vals = list(visit_preds.values())
 
     return {
-        "avg_hours": weighted_avg,
+        "avg_hours": avg_hours,
         "visits":    len(visit_preds),
         "max_hours": round(max(vals), 2),
         "min_hours": round(min(vals), 2),
