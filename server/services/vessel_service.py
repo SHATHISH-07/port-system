@@ -568,6 +568,23 @@ def get_yard_heatmap_data(
         "oog_total": sum(b["oog_count"] for b in block_list),
     }
 
+    unique_blocks = [b["block_id"] for b in block_list]
+    is_aecy = (
+        str(yard_id).upper() == "AECY" or 
+        "AECY" in str(vessel_id).upper() or 
+        any(b.startswith("1") or b in ["DMY", "WB"] for b in unique_blocks)
+    )
+
+    full_layout = None
+    if is_aecy:
+        import os
+        xml_path = os.path.join(os.path.dirname(__file__), "..", "data", "source", "ENNORE_OPT_V1.0.xml")
+        try:
+            from services.xml_layout_service import xml_layout_service
+            full_layout = xml_layout_service.parse(xml_path)
+        except Exception:
+            pass
+
     berth_analysis: list[dict] = []
     conflict_table: list[dict] = []
     primary_berth: dict = {}
@@ -597,7 +614,28 @@ def get_yard_heatmap_data(
         oog = block_data["oog_count"]
 
         impact_score = round(share + haz * 2 + ref + oog, 2)
-        travel_score = int((hash(bk) % 90) + 10)
+        
+        if full_layout and bk in full_layout.get("blocks", {}):
+            b_cx, b_cy = full_layout["blocks"][bk]["center"]
+            berth_cx, berth_cy = 0.185, 0.55
+            if full_layout.get("berths"):
+                berth = list(full_layout["berths"].values())[0]
+                if "center" in berth:
+                    berth_cx, berth_cy = berth["center"]
+            
+            dx_norm = abs(b_cx - berth_cx)
+            dy_norm = abs(b_cy - berth_cy)
+            yard_w = full_layout.get("bbox", {}).get("width", 1500)
+            yard_h = full_layout.get("bbox", {}).get("height", 800)
+            dist_m = int(dx_norm * yard_w + dy_norm * yard_h)
+            travel_score = dist_m
+        else:
+            travel_score = int((hash(bk) % 90) + 10)
+            dist_m = travel_score * 10
+            
+        travel_distance_label = "Short" if dist_m < 500 else "Moderate" if dist_m < 1200 else "Long"
+        laden_travel = total * dist_m
+        unladen_travel = int(laden_travel * 0.8)
 
         berth_analysis.append({
             "rank":                    idx,
@@ -616,12 +654,10 @@ def get_yard_heatmap_data(
             "oog":                     oog,
             "unique_containers":       total,
             "impact_score":            impact_score,
-            "travel_distance_score":   travel_score,
-            "travel_distance_label": (
-                "Short" if travel_score < 30
-                else "Moderate" if travel_score < 70
-                else "Long"
-            ),
+            "travel_distance_score":   dist_m,
+            "travel_distance_label":   travel_distance_label,
+            "laden_travel_distance_m": laden_travel,
+            "unladen_travel_distance_m": unladen_travel,
             "corridor_congestion": (
                 "High" if intensity > 0.8
                 else "Moderate" if intensity > 0.4
@@ -728,6 +764,25 @@ def get_yard_heatmap_data(
             f"{primary_berth['congestion_risk']} congestion expected."
         )
 
+    from services.heatmap_service import _deterministic_layout
+    from services.xml_layout_service import xml_layout_service
+
+    if is_aecy:
+        # For AECY, we only return the normalized block layout for backward compatibility
+        layout = xml_layout_service.get_normalized_layout(unique_blocks, cached=full_layout)
+    else:
+        layout = _deterministic_layout(unique_blocks)
+
+    terminal_layout = None
+    if is_aecy:
+        try:
+            import os
+            from services.xml_layout_service import xml_layout_service
+            xml_path = os.path.join(os.path.dirname(__file__), "..", "data", "source", "ENNORE_OPT_V1.0.xml")
+            terminal_layout = xml_layout_service.parse(xml_path)
+        except Exception as e:
+            logger.warning(f"Failed to parse XML layout: {e}")
+
     return {
         "vessel": vessel_id,
         "visit_id": visit_id,
@@ -738,6 +793,8 @@ def get_yard_heatmap_data(
         "berth_analysis": berth_analysis,
         "conflict_table": conflict_table,
         "primary_berth": primary_berth,
+        "layout": layout,
+        "terminal_layout": terminal_layout,
         "timestamp": pd.Timestamp.now().isoformat(),
     }
 

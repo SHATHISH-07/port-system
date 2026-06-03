@@ -82,6 +82,29 @@ export interface ConflictEntry {
     reason: string;
 }
 
+export interface TerminalLayout {
+    yard_code: string;
+    model_name: string;
+    bbox: { min_x: number; max_x: number; min_y: number; max_y: number };
+    yard_polygon: [number, number][];
+    blocks: Record<string, {
+        name: string;
+        type: string;
+        purpose: string;
+        polygon: [number, number][];
+        center: [number, number];
+        bbox: { width: number; height: number; min_x: number; max_x: number; min_y: number; max_y: number };
+        rotation_rad: number;
+    }>;
+    berths: Record<string, {
+        name: string;
+        polygon: [number, number][];
+        center: [number, number];
+        facing_deg: number;
+        bollards: [number, number][];
+    }>;
+}
+
 export interface VesselHeatmapResponse {
     vessel: string;
     yard_id?: string;
@@ -89,7 +112,10 @@ export interface VesselHeatmapResponse {
     recommended_berth?: string;
     max_block?: string;
     summary: Summary;
-    layout: Record<string, { x: number; y: number }>;
+    layout: Record<string, { x: number; y: number; w?: number; h?: number }>;
+    terminal_layout?: TerminalLayout;
+    shapes?: { type: string; name: string; points: { x: number; y: number }[] }[];
+    berths?: Record<string, { x: number; y: number }[]>;
     blocks: Record<string, BlockData>;
     primary_berth?: BerthAnalysis;
     berth_analysis?: BerthAnalysis[];
@@ -100,4 +126,6 @@ export interface VesselHeatmapResponse {
 export type VesselHeatmapViewData = VesselHeatmapResponse & {
     targetBerthId?: string;
     computedMaxBlock?: string | null;
+    terminalLayout?: any;
+    terminalGeo?: any;
 };

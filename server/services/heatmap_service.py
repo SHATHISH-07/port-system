@@ -14,15 +14,18 @@ def _first_existing_value(row: dict, candidates: list[str]) -> any:
     return None
 
 # Block helpers
+from services.xml_layout_service import xml_layout_service
+
 def _deterministic_layout(blocks: list[str]) -> dict:
     """
-    Build a stable (x, y) grid layout from block labels using the parsed
-    position metadata rather than Python's hash().
-
-    Layout rules (same across all process restarts):
-    Returns a strict 3-column wrapping grid for blocks to ensure 
-    organized visualization without horizontal overflow.
+    Build a layout using the XML service if they are AECY blocks (they start with numbers or DMY/WB etc).
+    Fallback to simple grid for PEB/CWIT to not break existing components.
     """
+    is_aecy = any(b in ["1A", "1B", "1H", "DMY", "WB"] for b in blocks)
+    
+    if is_aecy:
+        return xml_layout_service.get_normalized_layout(blocks)
+        
     layout: dict = {}
     # Sort alphabetically to ensure stable positions
     sorted_blocks = sorted(blocks)

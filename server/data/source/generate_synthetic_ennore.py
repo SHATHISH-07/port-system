@@ -12,8 +12,7 @@ from typing import Dict, List, Optional, Tuple
 random.seed(42)
 
 TERMINALS = [
-    {"terminal_id": "PEB",  "complex_id": "USPEB", "facility_id": "PEB", "yard_id": "PEB",  "format": "PEB",  "berth_count": 3},
-    {"terminal_id": "CWIT", "complex_id": "USPEB", "facility_id": "CWF", "yard_id": "CWIT", "format": "CWIT", "berth_count": 3},
+    {"terminal_id": "AECY", "complex_id": "USAEC", "facility_id": "AEC", "yard_id": "AECY", "format": "AECY", "berth_count": 1},
 ]
 
 HISTORY_VESSELS_PER_TERMINAL = 16
@@ -73,6 +72,7 @@ CRANE_ACTIVE_MPH_MAX = 35
 # ── Block pools ───────────────────────────────────────────────────────────────
 PEB_BLOCKS  = list("ABCDEFGH")                                    #  8 blocks
 CWIT_BLOCKS = [f"{s}{b}" for s in "12345" for b in "ABCD"]       # 20 blocks
+AECY_BLOCKS = ["1A", "1L", "1B", "1K", "1J", "1H", "1E", "1F", "1G", "1D", "1C", "DMY", "1R", "2R", "3R", "WB", "1M"]
 
 # ── Global sequences — each is strictly monotonically increasing ──────────────
 _container_seq  = 6_000_000
@@ -207,8 +207,23 @@ def generate_cwit_position(block: str, registry: 'YardSlotRegistry' = None) -> s
     return f"Y-CWIT-{section}{blk}{bay:03d}{row}.{tier}"
 
 
+def generate_aecy_position(block: str, registry: 'YardSlotRegistry' = None) -> str:
+    bay = random.randint(1, 40)
+    row = random.randint(1, 10)
+    if registry:
+        for _ in range(20):
+            tier = registry.next_tier_for(block, bay, row)
+            if tier is not None:
+                return f"Y-AECY-{block}{bay:03d}{row:02d}C{tier}"
+            bay = random.randint(1, 40)
+            row = random.randint(1, 10)
+    tier = random.randint(1, 6)
+    return f"Y-AECY-{block}{bay:03d}{row:02d}C{tier}"
+
 def generate_position_in_block(yard_id: str, yard_format: str, block: str,
                                 registry: 'YardSlotRegistry' = None) -> str:
+    if yard_id == "AECY" or yard_format == "AECY":
+        return generate_aecy_position(block, registry)
     if yard_id == "PEB"  or yard_format == "PEB":
         return generate_peb_position(block, registry)
     if yard_id == "CWIT" or yard_format == "CWIT":
@@ -224,7 +239,9 @@ def blocks_needed_for(n_containers: int) -> int:
 
 def pick_blocks_for_count(yard_id: str, yard_format: str, n_containers: int,
                           preferred: List[str]) -> List[str]:
-    if yard_id == "PEB"  or yard_format == "PEB":
+    if yard_id == "AECY" or yard_format == "AECY":
+        pool = AECY_BLOCKS
+    elif yard_id == "PEB"  or yard_format == "PEB":
         pool = PEB_BLOCKS
     elif yard_id == "CWIT" or yard_format == "CWIT":
         pool = CWIT_BLOCKS
@@ -241,6 +258,7 @@ def pick_blocks_for_count(yard_id: str, yard_format: str, n_containers: int,
 
 
 def choose_berth(terminal: dict) -> str:
+    if terminal.get("yard_id") == "AECY": return "AECT1"
     return f"B{random.randint(1, terminal['berth_count'])}"
 
 
@@ -416,6 +434,9 @@ def sort_key_crane(row: dict) -> datetime:
 def derive_yard_block(position: str, yard_id: str) -> Optional[str]:
     if not position.startswith("Y-"):
         return None
+    if position.startswith("Y-AECY-"):
+        m = re.match(r"^Y-AECY-(.+?)\d{5}C\d", position)
+        return f"{m.group(1)}" if m else "AECY-UNK"
     if position.startswith("Y-PEB-"):
         m = re.match(r"^Y-PEB-([A-H])", position)
         return f"PEB-{m.group(1)}" if m else "PEB-UNK"
@@ -538,9 +559,11 @@ def generate_terminal_data(terminal: dict):
     occupied_blocks: Dict[str, int] = {}   # block_label -> container count
     slot_registry = YardSlotRegistry()
 
-    _all_pool  = (PEB_BLOCKS  if terminal["format"] == "PEB"  else
+    _all_pool  = (AECY_BLOCKS if terminal["format"] == "AECY" else
+                  PEB_BLOCKS  if terminal["format"] == "PEB"  else
                   CWIT_BLOCKS if terminal["format"] == "CWIT" else list("ABCDEFG"))
-    _zone_size = (6 if terminal["format"] == "PEB" else
+    _zone_size = (5 if terminal["format"] == "AECY" else
+                  6 if terminal["format"] == "PEB" else
                   7 if terminal["format"] == "CWIT" else 5)
     _zone_pool = random.sample(_all_pool, min(_zone_size, len(_all_pool)))
 
@@ -772,9 +795,9 @@ def generate_terminal_data(terminal: dict):
     crane_rows.sort(key=sort_key_crane)
     active_rows = derive_active_yard_containers(container_rows, terminal["yard_id"])
     
-    if terminal["yard_id"] == "PEB":
-        target_service = "VS-PEB-07"
-        target_blocks = ["PEB-A", "PEB-D", "PEB-G"]
+    if terminal["yard_id"] == "AECY":
+        target_service = "VS-AECY-07"
+        target_blocks = ["1A", "1B", "1C"]
         vs_active = [r for r in active_rows if r.get("Outbound Service") == target_service]
         needed = 400 - len(vs_active)
         
@@ -799,11 +822,10 @@ def generate_terminal_data(terminal: dict):
         for i, r in enumerate(vs_active):
             block = target_blocks[i % 3]
             r["Current Yard Block"] = block
-            bay = random.randint(1, 30)
+            bay = random.randint(1, 40)
             row_idx = random.randint(1, 10)
             tier = random.randint(1, 6)
-            blk_char = block[-1]
-            pos = f"Y-PEB-{blk_char}{bay:03d}{row_idx:02d}C{tier}"
+            pos = f"Y-AECY-{block}{bay:03d}{row_idx:02d}C{tier}"
             r["Current Slot Position"] = pos
             uid = r["Unit ID"]
             for cr in reversed(container_rows):

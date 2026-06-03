@@ -18,6 +18,8 @@ export interface BerthAnalysis {
   cargo_concentration_pct?: number;
   impact_score?: number | string;
   travel_distance_label?: string;
+  laden_travel_distance_m?: number;
+  unladen_travel_distance_m?: number;
   hazardous?: number;
   reefer?: number;
 }
@@ -239,10 +241,18 @@ export default function BerthRecommendation({
                   <Typography sx={{ fontWeight: 900, fontSize: "1.1rem", mb: 0.5, fontFamily: "'Outfit', sans-serif" }}>
                     {b.berth}
                   </Typography>
-                  <Stack direction="row" spacing={1.5}>
+                  <Stack direction="row" spacing={2.5}>
                     <Box>
                       <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>LOAD</Typography>
                       <Typography sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{b.cargo_concentration_pct}%</Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>LADEN DIST.</Typography>
+                      <Typography sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{b.laden_travel_distance_m ? `${b.laden_travel_distance_m}m` : 'N/A'}</Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>EMPTY DIST.</Typography>
+                      <Typography sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{b.unladen_travel_distance_m ? `${b.unladen_travel_distance_m}m` : 'N/A'}</Typography>
                     </Box>
                   </Stack>
                 </Box>

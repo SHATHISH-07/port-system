@@ -195,29 +195,75 @@ def parse_position(raw) -> dict | None:
 
     # Generic Y-<TERMINAL>-<...>
     if su.startswith("Y-"):
-        parts = s.split("-")
-        terminal = parts[1].upper() if len(parts) >= 2 else "YARD"
-        token = parts[2] if len(parts) >= 3 else ""
-        # Example: 1A003C.5
-        m = re.match(r"^([A-Z0-9]+?)(\d{2,4})([A-Z]|\d{2})\.?(\d+)$", token, re.IGNORECASE)
+        return _parse_generic_yard(s, su)
+
+_KNOWN_BLOCKS = set()
+def _get_known_blocks():
+    global _KNOWN_BLOCKS
+    if not _KNOWN_BLOCKS:
+        try:
+            import os
+            from services.xml_layout_service import xml_layout_service
+            xml_path = os.path.join(os.path.dirname(__file__), "..", "data", "source", "ENNORE_OPT_V1.0.xml")
+            layout = xml_layout_service.parse(xml_path)
+            _KNOWN_BLOCKS = set(layout.get("blocks", {}).keys())
+        except Exception as e:
+            print(f"Warning: Failed to load XML blocks: {e}")
+            _KNOWN_BLOCKS = {"1A", "1B", "1H", "DMY", "WB"} # fallback
+    return _KNOWN_BLOCKS
+
+def _parse_generic_yard(s: str, su: str) -> dict | None:
+    parts = s.split("-")
+    terminal = parts[1].upper() if len(parts) >= 2 else "YARD"
+    token = parts[2] if len(parts) >= 3 else ""
+    
+    known = _get_known_blocks()
+    matched_block = None
+    for b in sorted(known, key=len, reverse=True):
+        if token.upper().startswith(b.upper()):
+            matched_block = b.upper()
+            break
+            
+    if matched_block:
+        rest = token[len(matched_block):]
+        m = re.match(r"^(\d{2,4})([A-Z]|\d{2})(?:\.?(\d+))?$", rest, re.IGNORECASE)
         if m:
-            block, bay, row, tier = m.groups()
-            return {
-                "raw": s,
-                "is_vessel": False,
-                "is_yard": True,
-                "terminal": terminal,
-                "block": block.upper(),
-                "bay": bay,
-                "row": row.upper() if isinstance(row, str) else str(row),
-                "tier": tier,
-            }
-        # Fallback
+            bay, row, tier = m.groups()
+            tier = tier or "1"
+        else:
+            bay, row, tier = "0", "0", "1"
         return {
             "raw": s,
             "is_vessel": False,
             "is_yard": True,
             "terminal": terminal,
+            "block": matched_block,
+            "bay": bay,
+            "row": row.upper() if isinstance(row, str) else str(row),
+            "tier": tier,
+        }
+
+    # Fallback to older generic regex
+    m = re.match(r"^([A-Z0-9]+?)(\d{2,4})([A-Z]|\d{2})\.?(\d+)$", token, re.IGNORECASE)
+    if m:
+        block, bay, row, tier = m.groups()
+        return {
+            "raw": s,
+            "is_vessel": False,
+            "is_yard": True,
+            "terminal": terminal,
+            "block": block.upper(),
+            "bay": bay,
+            "row": row.upper() if isinstance(row, str) else str(row),
+            "tier": tier,
+        }
+    
+    # Fallback completely
+    return {
+        "raw": s,
+        "is_vessel": False,
+        "is_yard": True,
+        "terminal": terminal,
             "block": token[:6] if token else terminal,
             "row": "0",
             "bay": "0",
@@ -365,4 +411,6 @@ def block_label(parsed: dict | None) -> str | None:
     terminal = parsed.get("terminal") or "YARD"
     block = parsed.get("block") or "UNKNOWN"
     # return the block label
-    return block if terminal in ("YARD", "UNKNOWN") else f"{terminal}-{block}"
+    if terminal in ("YARD", "UNKNOWN", "AECY"):
+        return block
+    return f"{terminal}-{block}"

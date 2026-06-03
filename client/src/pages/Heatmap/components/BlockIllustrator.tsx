@@ -430,6 +430,9 @@ export default function BlockIllustrator({ data, loading, targetBerthId }: { dat
   if (loading || !data) return <HeatmapPlaceholder />;
 
   const blockIds = Object.keys(data.blocks || {});
+  const sampleLayout = data.layout && Object.values(data.layout)[0];
+  const isAECY = sampleLayout && sampleLayout.w !== undefined;
+
   const sortedBlockIds = [...blockIds].sort((a, b) => {
     const posA = data.layout[a] || { x: 0, y: 0 };
     const posB = data.layout[b] || { x: 0, y: 0 };
@@ -528,42 +531,103 @@ export default function BlockIllustrator({ data, loading, targetBerthId }: { dat
             <TransformComponent wrapperStyle={{ width: "100%", height: "100%", willChange: "transform" }} contentStyle={{ willChange: "transform" }}>
               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 1200, p: 6, gap: 6 }}>
 
-                {/* TOP BERTHS ROW */}
-                <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
-                  <BerthCard id="T1" label="BERTH T1" isTarget={targetBerthId === "T1"} vesselName={data.vessel} isDark={isDark} />
-                  <BerthCard id="T2" label="BERTH T2" isTarget={targetBerthId === "T2"} vesselName={data.vessel} isDark={isDark} />
-                </Box>
-
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 6, alignItems: "center", width: "100%", maxWidth: 1100 }}>
-
-                  {/* Yards 3x3 Grid */}
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", alignItems: "center" }}>
-                    {chunkedRows.map((rowBlockIds, rowIdx) => (
-                      <Box key={rowIdx} sx={{ position: "relative", width: "100%", maxWidth: 900 }}>
-                        <Typography sx={{ position: "absolute", left: -40, top: "50%", transform: "translateY(-50%) rotate(-90deg)", fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#94a3b8" : "#64748b", letterSpacing: "0.2em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                          {ROW_LABELS[rowIdx]}
-                        </Typography>
-                        <Box sx={{ display: "flex", justifyContent: "center", gap: 4 }}>
-                          {rowBlockIds.map((blockId) => (
-                            <BlockTile key={blockId} blockId={blockId} block={data.blocks[blockId]} isMax={blockId === data.max_block} />
-                          ))}
+                {isAECY ? (
+                  <Box sx={{ position: "relative", width: 1200, height: 900, mx: "auto" }}>
+                    {data.shapes && data.shapes.length > 0 && (
+                      <svg width="100%" height="100%" style={{ position: "absolute", top: 0, left: 0, zIndex: 0 }}>
+                        {data.shapes.map((s, i) => {
+                          const pts = s.points.map(p => `${p.x * 1200},${p.y * 900}`).join(" ");
+                          const isBoundary = s.type === 'boundary';
+                          return (
+                            <polygon
+                              key={`shape-${i}`}
+                              points={pts}
+                              fill={isBoundary ? (isDark ? "#161b22" : "#e2e8f0") : (isDark ? "#21262d" : "#cbd5e1")}
+                              stroke={isBoundary ? (isDark ? "#30363d" : "#94a3b8") : (isDark ? "#30363d" : "#94a3b8")}
+                              strokeWidth={isBoundary ? 2 : 1}
+                            />
+                          );
+                        })}
+                      </svg>
+                    )}
+                    {Object.keys(data.layout).map((blockId) => {
+                      const pos = data.layout[blockId];
+                      if (!pos) return null;
+                      return (
+                        <Box
+                          key={blockId}
+                          sx={{
+                            position: "absolute",
+                            left: `${pos.x * 100}%`,
+                            top: `${pos.y * 100}%`,
+                            width: `${(pos.w || 0.1) * 100}%`,
+                            height: `${(pos.h || 0.1) * 100}%`,
+                            transform: "translate(-50%, -50%)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Box sx={{ transform: "scale(0.65)" }}>
+                            <BlockTile blockId={blockId} block={data.blocks[blockId]} isMax={blockId === data.max_block} />
+                          </Box>
                         </Box>
+                      );
+                    })}
+                    {(data.berths && Object.keys(data.berths).length > 0) ? (
+                      Object.entries(data.berths).map(([bId, pts]) => {
+                        let cx = 0, cy = 0;
+                        pts.forEach(p => { cx += p.x; cy += p.y; });
+                        cx /= pts.length;
+                        cy /= pts.length;
+                        return (
+                          <Box key={bId} sx={{ position: "absolute", left: `${cx * 100}%`, top: `${cy * 100}%`, transform: "translate(-50%, -50%)" }}>
+                            <BerthCard id={bId} label={`BERTH ${bId}`} isTarget={targetBerthId === bId} vesselName={data.vessel} isDark={isDark} />
+                          </Box>
+                        );
+                      })
+                    ) : (
+                      <Box sx={{ position: "absolute", left: -100, top: "50%", transform: "translateY(-50%)" }}>
+                        <BerthCard id="T1" label="BERTH AECT1" isTarget={targetBerthId === "AECT1"} vesselName={data.vessel} isDark={isDark} />
                       </Box>
-                    ))}
+                    )}
                   </Box>
+                ) : (
+                  <>
+                    <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
+                      <BerthCard id="T1" label="BERTH T1" isTarget={targetBerthId === "T1"} vesselName={data.vessel} isDark={isDark} />
+                      <BerthCard id="T2" label="BERTH T2" isTarget={targetBerthId === "T2"} vesselName={data.vessel} isDark={isDark} />
+                    </Box>
 
-                  {/* Right Side Berths */}
-                  <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
-                    <BerthCard id="R1" label="BERTH R1" isTarget={targetBerthId === "R1"} vesselName={data.vessel} isDark={isDark} />
-                    <BerthCard id="R2" label="BERTH R2" isTarget={targetBerthId === "R2"} vesselName={data.vessel} isDark={isDark} />
-                  </Box>
-                </Box>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 6, alignItems: "center", width: "100%", maxWidth: 1100 }}>
 
-                {/* BOTTOM BERTHS ROW */}
-                <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
-                  <BerthCard id="B1" label="BERTH B1" isTarget={targetBerthId === "B1"} vesselName={data.vessel} isDark={isDark} />
-                  <BerthCard id="B2" label="BERTH B2" isTarget={targetBerthId === "B2"} vesselName={data.vessel} isDark={isDark} />
-                </Box>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", alignItems: "center" }}>
+                        {chunkedRows.map((rowBlockIds, rowIdx) => (
+                          <Box key={rowIdx} sx={{ position: "relative", width: "100%", maxWidth: 900 }}>
+                            <Typography sx={{ position: "absolute", left: -40, top: "50%", transform: "translateY(-50%) rotate(-90deg)", fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#94a3b8" : "#64748b", letterSpacing: "0.2em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                              {ROW_LABELS[rowIdx]}
+                            </Typography>
+                            <Box sx={{ display: "flex", justifyContent: "center", gap: 4 }}>
+                              {rowBlockIds.map((blockId) => (
+                                <BlockTile key={blockId} blockId={blockId} block={data.blocks[blockId]} isMax={blockId === data.max_block} />
+                              ))}
+                            </Box>
+                          </Box>
+                        ))}
+                      </Box>
+
+                      <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
+                        <BerthCard id="R1" label="BERTH R1" isTarget={targetBerthId === "R1"} vesselName={data.vessel} isDark={isDark} />
+                        <BerthCard id="R2" label="BERTH R2" isTarget={targetBerthId === "R2"} vesselName={data.vessel} isDark={isDark} />
+                      </Box>
+                    </Box>
+
+                    <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
+                      <BerthCard id="B1" label="BERTH B1" isTarget={targetBerthId === "B1"} vesselName={data.vessel} isDark={isDark} />
+                      <BerthCard id="B2" label="BERTH B2" isTarget={targetBerthId === "B2"} vesselName={data.vessel} isDark={isDark} />
+                    </Box>
+                  </>
+                )}
 
               </Box>
             </TransformComponent>

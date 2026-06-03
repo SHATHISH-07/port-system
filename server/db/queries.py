@@ -386,7 +386,7 @@ def _load_crane_ops_global(
                 df[col] = None
                 
         # Backward compatibility aliases
-        if "carrier_visit" not in df.columns:
+        if "visit_id" in df.columns:
             df["carrier_visit"] = df["visit_id"]
                 
         return _parse_datetime_columns(df).copy()
