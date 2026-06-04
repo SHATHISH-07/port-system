@@ -271,6 +271,9 @@ export default function Sidebar() {
       {/* Sidebar Drawer */}
       <Box
         component="nav"
+        onClick={() => {
+          if (!open && !isMobile) setOpen(true);
+        }}
         sx={{
           width: isMobile ? OPEN : (open ? OPEN : CLOSED),
           minHeight: "100dvh",
@@ -287,6 +290,12 @@ export default function Sidebar() {
           zIndex: 200,
           boxShadow: (isMobile && open) ? 24 : 0,
           transform: isMobile ? (open ? "translateX(0)" : "translateX(-100%)") : "none",
+          cursor: (!open && !isMobile) ? "e-resize" : "default",
+          "&:hover .logo-icon": { display: "none" },
+          "&:hover .menu-icon": {
+            display: "block",
+            color: textActiveColor,
+          },
         }}
       >
         {/* ─── Brand / Title / Toggle ─── */}
@@ -363,18 +372,13 @@ export default function Sidebar() {
                 sx={{
                   width: 34,
                   height: 34,
-                  cursor: "pointer",
+                  cursor: "e-resize",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   borderRadius: "8px",
                   "&:hover": { bgcolor: menuIconHover },
                   "& .menu-icon": { display: "none" },
-                  "&:hover .logo-icon": { display: "none" },
-                  "&:hover .menu-icon": {
-                    display: "block",
-                    color: textActiveColor,
-                  },
                 }}
               >
                 <Box

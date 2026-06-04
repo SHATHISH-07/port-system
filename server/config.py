@@ -11,6 +11,12 @@ class Settings:
     API_VERSION = "2.0.0"
     CORS_ORIGINS = ["*"]
 
+    # Terminal Layout
+    TERMINAL_XML_PATH = os.getenv(
+        "TERMINAL_XML_PATH",
+        os.path.join(os.path.dirname(__file__), "data", "source", "ENNORE_OPT_V1.0.xml")
+    )
+
     # Database
     DATABASE_URL = os.getenv(
         "DATABASE_URL",

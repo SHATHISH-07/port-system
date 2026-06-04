@@ -176,7 +176,7 @@ function adaptDataForMaps(
         type: "boundary",
         name: "yard",
         points: (terminalLayout.yard_polygon as [number, number][]).map(
-          ([x, y]) => ({ x, y }),
+          ([x, y]) => ({ x, y: 1 - y }),
         ),
       });
     }
@@ -186,7 +186,7 @@ function adaptDataForMaps(
         shapes.push({
           type: "block",
           name: b.name,
-          points: (b.polygon as [number, number][]).map(([x, y]) => ({ x, y })),
+          points: (b.polygon as [number, number][]).map(([x, y]) => ({ x, y: 1 - y })),
         });
       }
     });
@@ -206,14 +206,18 @@ function adaptDataForMaps(
 
   const blockConcentrationMap: Record<string, "High" | "Medium" | "Low"> = {};
 
-  const assign = (idx: number): "High" | "Medium" | "Low" => {
-    const pct = idx / Math.max(validBlocks.length - 1, 1);
-    if (pct < 0.34) return "High";
-    if (pct < 0.67) return "Medium";
-    return "Low";
+  const assign = (idx: number, count: number): "High" | "Medium" | "Low" => {
+    if (idx === 0) return "High";
+    
+    // If the container count is 20% or less of the max block count, it's Low (Green)
+    // Otherwise it's Medium (Orange)
+    const ratio = count / maxCount;
+    if (ratio <= 0.20) return "Low";
+    
+    return "Medium";
   };
   validBlocks.forEach((b, idx) => {
-    blockConcentrationMap[b.block_id] = assign(idx);
+    blockConcentrationMap[b.block_id] = assign(idx, b.total_containers || 0);
   });
 
   // ── Build blocks object ───────────────────────────────────────────────────
@@ -473,6 +477,7 @@ export default function Heatmap() {
           <Box sx={{ width: "100%", height: "100%", overflow: "hidden" }}>
             <TerminalMap2D
               data={mapData}
+              terminalLayout={terminalLayout}
               targetBerthId={mapData?.targetBerthId || ""}
               loading={loading}
             />
@@ -482,6 +487,7 @@ export default function Heatmap() {
           <Box sx={{ width: "100%", height: "100%", overflow: "hidden" }}>
             <TerminalMap3D
               data={mapData}
+              terminalLayout={terminalLayout}
               targetBerthId={mapData?.targetBerthId || ""}
               computedMaxBlock={mapData?.computedMaxBlock || null}
               loading={loading}

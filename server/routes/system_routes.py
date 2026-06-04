@@ -33,15 +33,15 @@ def get_audit_logs(admin: dict = Depends(require_admin)):
     return [dict(r._mapping) for r in result]
 
 @router.get("/terminal-layout")
-def get_terminal_layout():
+def get_terminal_layout(current_user: dict = Depends(get_current_user)):
     """
     Returns the static physical layout of the terminal (shapes, berths, boundaries, blocks)
     parsed directly from the XML configuration.
     """
     from services.xml_layout_service import xml_layout_service
-    import os
+    from config import settings
     
-    xml_path = os.path.join(os.path.dirname(__file__), "..", "data", "source", "ENNORE_OPT_V1.0.xml")
+    xml_path = settings.TERMINAL_XML_PATH
     try:
         layout_data = xml_layout_service.parse(xml_path)
         return {"status": "success", "data": layout_data}

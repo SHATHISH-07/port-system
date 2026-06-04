@@ -21,10 +21,12 @@ def _deterministic_layout(blocks: list[str]) -> dict:
     Build a layout using the XML service if they are AECY blocks (they start with numbers or DMY/WB etc).
     Fallback to simple grid for PEB/CWIT to not break existing components.
     """
-    is_aecy = any(b in ["1A", "1B", "1H", "DMY", "WB"] for b in blocks)
-    
-    if is_aecy:
-        return xml_layout_service.get_normalized_layout(blocks)
+    # Always try XML layout first
+    from config import settings
+    try:
+        return xml_layout_service.get_normalized_layout(blocks, xml_path=settings.TERMINAL_XML_PATH)
+    except Exception:
+        pass  # Fall through to grid layout
         
     layout: dict = {}
     # Sort alphabetically to ensure stable positions

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Box, Typography, useTheme, IconButton, Tooltip, useMediaQuery } from "@mui/material";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { RestartAltRounded } from "@mui/icons-material";
@@ -9,6 +9,7 @@ import {
   polygonToSvgPoints,
   n2svg,
   berthRotationDeg,
+  getSeaPoint,
   type BerthInfo,
   type RawTerminalLayout,
 } from "../utils/terminalGeometry";
@@ -19,8 +20,8 @@ import {
 const SVG_W = 1100;
 const SVG_H = 900;
 /** Padding so the yard boundary isn't flush with the edge */
-const PAD_X = 60;
-const PAD_Y = 60;
+const PAD_X = 120;
+const PAD_Y = 120;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -120,8 +121,9 @@ const STS = ({
 interface ShipProps {
   x: number;
   y: number;
-  w: number;
-  h: number;
+  w?: number;
+  h?: number;
+  scale?: number;
   name: string;
   color: string;
   rot?: number;
@@ -132,100 +134,62 @@ interface ShipProps {
 const Ship = ({
   x,
   y,
-  w,
-  h,
+  w = 340,
+  h = 70,
+  scale = 1,
   name,
   color,
   rot = 0,
   isTarget = false,
   isDark,
-}: ShipProps) => (
-  <g
-    transform={`translate(${x}, ${y}) rotate(${rot})`}
-    style={{ pointerEvents: "none" }}
-  >
-    {isTarget && (
-      <ellipse cx="0" cy="0" rx="145" ry="35" fill="none" stroke={color} strokeWidth="2">
-        <animate attributeName="rx" values="145; 170" dur="2s" repeatCount="indefinite" />
-        <animate attributeName="ry" values="35; 60" dur="2s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="0.8; 0" dur="2s" repeatCount="indefinite" />
-      </ellipse>
-    )}
-    <g transform={`translate(${-w / 2}, ${-h / 2})`}>
-      <path
-        d={`M 0,${h / 2} L 40,2 L ${w - 15},2 Q ${w},2 ${w},10 L ${w},${h - 10} Q ${w},${h - 2} ${w - 15},${h - 2} L 40,${h - 2} Z`}
-        fill={isTarget ? (isDark ? "#0f172a" : "#ffffff") : color}
-        stroke={isTarget ? "#0ea5e9" : isDark ? "#0f172a" : "#94a3b8"}
-        strokeWidth={isTarget ? 3 : 1.5}
-      />
-      <path
-        d={`M 45,6 L ${w - 20},6 L ${w - 20},${h - 6} L 45,${h - 6} Z`}
-        fill="rgba(0,0,0,0.15)"
-      />
-      {Array.from({ length: Math.floor(w / 35) }).map((_, i) => (
-        <g key={i} transform={`translate(${45 + i * 28}, 8)`}>
-          <rect
-            width={24}
-            height={h - 16}
-            rx={1}
-            fill={isDark ? "#334155" : "#94a3b8"}
-            opacity="0.8"
-          />
-          <line
-            x1={12}
-            y1={2}
-            x2={12}
-            y2={h - 18}
-            stroke="rgba(255,255,255,0.2)"
-            strokeWidth={1}
-          />
+}: ShipProps) => {
+  const hullFill = isTarget ? (isDark ? "#1e293b" : "#f1f5f9") : color;
+  const strokeColor = isTarget ? "#0ea5e9" : isDark ? "#0f172a" : "#94a3b8";
+  return (
+    <g
+      transform={`translate(${x}, ${y}) rotate(${rot}) scale(${scale})`}
+      style={{ pointerEvents: "none" }}
+    >
+      <g transform={`translate(${-w / 2}, ${-h / 2})`}>
+        {/* Main Hull */}
+        <path
+          d={`M 0,${h / 2} Q 15,2 45,2 L ${w - 5},2 Q ${w},2 ${w},8 L ${w},${h - 8} Q ${w},${h - 2} ${w - 5},${h - 2} L 45,${h - 2} Q 15,${h - 2} 0,${h / 2} Z`}
+          fill={hullFill}
+          stroke={strokeColor}
+          strokeWidth={isTarget ? 3 : 1.5}
+        />
+        {/* Bridge / Superstructure */}
+        <rect x={w - 70} y={h / 2 - 18} width={45} height={36} fill="#64748b" rx="2" />
+        <rect x={w - 60} y={h / 2 - 12} width={25} height={24} fill="#94a3b8" />
+        <rect x={w - 50} y={h / 2 - 6} width={12} height={12} fill="#ef4444" rx="6" />
+
+        {/* Containers */}
+        <g transform={`translate(55, ${h / 2 - 22})`}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <rect key={`c1-${i}`} x={i * 24} y={0} width={22} height={20} fill="#ef4444" rx="1" />
+          ))}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <rect key={`c2-${i}`} x={i * 24} y={24} width={22} height={20} fill="#3b82f6" rx="1" />
+          ))}
         </g>
-      ))}
-      <g transform={`translate(${w - 65}, ${h / 2 - 18})`}>
-        <rect
-          width={35}
-          height={36}
-          rx={2}
-          fill={isDark ? "#f8fafc" : "#ffffff"}
-          stroke="#64748b"
-          strokeWidth={0.5}
-        />
-        <rect x={2} y={5} width={8} height={26} rx={1} fill="#0ea5e9" opacity={0.6} />
-        <rect
-          x={12}
-          y={10}
-          width={15}
-          height={16}
-          rx={1}
-          fill={isDark ? "#e2e8f0" : "#f1f5f9"}
-        />
-        <line x1={20} y1={5} x2={20} y2={10} stroke="#475569" strokeWidth={2} />
-        <line x1={15} y1={5} x2={25} y2={5} stroke="#475569" strokeWidth={1} />
-      </g>
-      <rect
-        x={w - 25}
-        y={h / 2 - 6}
-        width={12}
-        height={12}
-        rx={2}
-        fill="#ef4444"
-      />
-      <circle cx={w - 19} cy={h / 2} r={3} fill="#1e293b" />
-      <g transform={`translate(${w / 2 - 10}, ${h + 12})`}>
+
+        {/* Text */}
         <text
-          fill={isTarget ? "#0ea5e9" : isDark ? "#94a3b8" : "#475569"}
-          fontSize="11"
-          fontWeight="800"
-          fontFamily="'Roboto Mono', monospace"
+          x={w / 2}
+          y={h / 7}
+          fill={isDark ? "#f8fafc" : "#0f172a"}
+          fontSize="10"
+          fontWeight="bold"
+          fontFamily="sans-serif"
           textAnchor="middle"
-          letterSpacing="1px"
+          dominantBaseline="middle"
         >
-          {name.toUpperCase()}
+          {name}
         </text>
       </g>
     </g>
-  </g>
-);
+  );
+};
 
 // ── Block zone helpers ────────────────────────────────────────────────────────
 
@@ -236,6 +200,9 @@ interface ZoneData {
   y: number;
   w: number;
   h: number;
+  polygon?: { x: number; y: number }[];
+  cx?: number;
+  cy?: number;
 }
 
 /**
@@ -266,12 +233,14 @@ function getZones(layout: Record<string, any>): ZoneData[] {
 
 interface TerminalMap2DProps {
   data: VesselHeatmapViewData | null;
+  terminalLayout?: any;
   loading: boolean;
   targetBerthId?: string;
 }
 
 export default function TerminalMap2D({
   data,
+  terminalLayout: terminalLayoutProp,
   loading,
   targetBerthId: propTargetBerthId,
 }: TerminalMap2DProps) {
@@ -281,8 +250,9 @@ export default function TerminalMap2D({
   const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
 
   // ── Derive geometry from XML ────────────────────────────────────────────
+  const effectiveLayout = terminalLayoutProp ?? (data as any)?.terminalLayout;
   const geo = buildTerminalGeometry(
-    (data as any)?.terminalLayout as RawTerminalLayout | null,
+    effectiveLayout as RawTerminalLayout | null,
   );
 
   // Use XML berths when available; the IDs come directly from the XML berth names
@@ -302,21 +272,49 @@ export default function TerminalMap2D({
   // ── Target berth ────────────────────────────────────────────────────────
   const targetBerthId = propTargetBerthId ?? (data as any)?.targetBerthId ?? null;
 
-  // ── Compute max block (for tooltip / highlight) ──────────────────────────
-  let computedMaxBlock: string | null = null;
-  if (data) {
-    let maxCount = -1;
-    Object.entries(data.blocks).forEach(([id, b]) => {
-      if (b.count > maxCount) {
-        maxCount = b.count;
-        computedMaxBlock = id;
-      }
-    });
-  }
-
   // ── Yard boundary and block-outline shapes from XML ──────────────────────
   const yardPolygon = geo.yardPolygon;
   const blockOutlines = geo.blocks; // use for background outlines
+
+  // ── Unified Zones (XML geometry or fallback) ─────────────────────────────
+  const zones: ZoneData[] = useMemo(() => {
+    // 1. If XML geometry available, use it for all blocks
+    if (blockOutlines && blockOutlines.length > 0) {
+      return blockOutlines.map(geoBlock => {
+        const poly = geoBlock.polygon || [];
+        if (poly.length === 0) return { id: geoBlock.id, x: 0, y: 0, w: 0, h: 0 };
+
+        const mappedPoly = poly.map(p => {
+          const m = np(p.x, p.y);
+          return { x: m.x, y: m.y };
+        });
+
+        const xs = mappedPoly.map(p => p.x);
+        const ys = mappedPoly.map(p => p.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+
+        const { x: cx, y: cy } = np(geoBlock.cx, geoBlock.cy);
+
+        return {
+          id: geoBlock.id,
+          x: minX,
+          y: minY,
+          w: maxX - minX,
+          h: maxY - minY,
+          polygon: mappedPoly,
+          cx,
+          cy,
+        };
+      }).filter(z => z.w > 0 && z.h > 0);
+    }
+
+    // 2. Fallback to API layout bounding boxes
+    if (!data) return [];
+    return getZones(data.layout);
+  }, [data, blockOutlines]);
 
   // ── Colours ──────────────────────────────────────────────────────────────
   const bgColor = isDark ? "#061324" : "#e0f2fe";
@@ -429,9 +427,8 @@ export default function TerminalMap2D({
               wrapperStyle={{
                 width: "100%",
                 height: "100%",
-                willChange: "transform",
               }}
-              contentStyle={{ willChange: "transform" }}
+              contentStyle={{}}
             >
               <svg
                 width={SVG_W}
@@ -461,21 +458,21 @@ export default function TerminalMap2D({
                   {/* Heat gradients */}
                   <radialGradient id="gradHigh2d" cx="50%" cy="50%" r="50%">
                     <stop offset="0%" stopColor="#ff0000" stopOpacity="1" />
-                    <stop offset="30%" stopColor="#ff0000" stopOpacity="0.9" />
-                    <stop offset="60%" stopColor="#ff4444" stopOpacity="0.6" />
+                    <stop offset="40%" stopColor="#ff0000" stopOpacity="0.9" />
+                    <stop offset="75%" stopColor="#ff3333" stopOpacity="0.75" />
                     <stop offset="100%" stopColor="#ff0000" stopOpacity="0" />
                   </radialGradient>
                   <radialGradient id="gradMedium2d" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#ff8800" stopOpacity="1" />
-                    <stop offset="30%" stopColor="#ff8800" stopOpacity="0.85" />
-                    <stop offset="60%" stopColor="#ffaa44" stopOpacity="0.55" />
-                    <stop offset="100%" stopColor="#ff8800" stopOpacity="0" />
+                    <stop offset="0%" stopColor="#ff6600" stopOpacity="1" />
+                    <stop offset="40%" stopColor="#ff6600" stopOpacity="0.9" />
+                    <stop offset="75%" stopColor="#ff8833" stopOpacity="0.75" />
+                    <stop offset="100%" stopColor="#ff6600" stopOpacity="0" />
                   </radialGradient>
                   <radialGradient id="gradLow2d" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#00ff00" stopOpacity="1" />
-                    <stop offset="30%" stopColor="#00ff00" stopOpacity="0.85" />
-                    <stop offset="60%" stopColor="#44ff44" stopOpacity="0.5" />
-                    <stop offset="100%" stopColor="#00ff00" stopOpacity="0" />
+                    <stop offset="0%" stopColor="#00cc00" stopOpacity="1" />
+                    <stop offset="40%" stopColor="#00cc00" stopOpacity="0.9" />
+                    <stop offset="75%" stopColor="#33ff33" stopOpacity="0.75" />
+                    <stop offset="100%" stopColor="#00cc00" stopOpacity="0" />
                   </radialGradient>
                 </defs>
 
@@ -527,23 +524,9 @@ export default function TerminalMap2D({
                   />
                 )}
 
-                {/* ── Block outlines (from XML geometry, faint) ──────── */}
-                {blockOutlines.map(blk =>
-                  blk.polygon.length > 2 ? (
-                    <polygon
-                      key={`outline-${blk.id}`}
-                      points={svgPts(blk.polygon)}
-                      fill={isDark ? "#1e2433" : "#c8d3e0"}
-                      stroke={isDark ? "#334155" : "#94a3b8"}
-                      strokeWidth={0.8}
-                      opacity={0.5}
-                    />
-                  ) : null,
-                )}
-
                 {/* ── Road lanes (light divider lines between zones) ──── */}
                 <g opacity={0.4} style={{ pointerEvents: "none" }}>
-                  {getZones(data?.layout ?? {}).map(z => (
+                  {zones.map(z => (
                     <rect
                       key={`road-${z.id}`}
                       x={z.x - 4}
@@ -559,25 +542,43 @@ export default function TerminalMap2D({
                 </g>
 
                 {/* ── Block zones ─────────────────────────────────────── */}
-                {data &&
-                  getZones(data.layout).map(z => {
-                    const block = data.blocks[z.id];
-                    const isHot = !!block && block.count > 0;
-                    const conc = block?.concentration || "Low";
-                    const isHigh = conc === "High";
-                    const isMed = conc === "Medium";
-                    const isMax = z.id === (computedMaxBlock ?? data.max_block);
-                    const isHover = hovered === z.id;
+                {zones.map(z => {
+                  const block = data?.blocks?.[z.id];
+                  const isHot = !!block && block.count > 0;
+                  const conc = block?.concentration || "Low";
+                  const isHigh = conc === "High";
+                  const isMed = conc === "Medium";
+                  const isHover = hovered === z.id;
 
-                    return (
-                      <g
-                        key={z.id}
-                        className="zone-block"
-                        onMouseEnter={() => setHovered(z.id)}
-                        onMouseLeave={() => setHovered(null)}
-                        style={{ cursor: "pointer" }}
-                      >
-                        {/* Zone background */}
+                  return (
+                    <g
+                      key={z.id}
+                      className="zone-block"
+                      onMouseEnter={() => setHovered(z.id)}
+                      onMouseLeave={() => setHovered(null)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      {/* Zone background */}
+                      {z.polygon && z.polygon.length > 2 ? (
+                        <polygon
+                          points={z.polygon.map(p => `${p.x},${p.y}`).join(" ")}
+                          fill={isDark ? "#161b24" : "#ffffff"}
+                          stroke={
+                            isHover
+                              ? "#fcd34d"
+                              : isHot
+                                ? isHigh
+                                  ? "#ef4444"
+                                  : isMed
+                                    ? "#f97316"
+                                    : "#10b981"
+                                : isDark
+                                  ? "#334155"
+                                  : "#cbd5e1"
+                          }
+                          strokeWidth={isHover || isHigh ? 2.5 : isHot ? 1.5 : 1}
+                        />
+                      ) : (
                         <rect
                           x={z.x}
                           y={z.y}
@@ -600,175 +601,157 @@ export default function TerminalMap2D({
                           strokeWidth={isHover || isHigh ? 2.5 : isHot ? 1.5 : 1}
                           rx={3}
                         />
+                      )}
 
-                        {/* Container grid fill */}
-                        {(() => {
-                          if (!isHot) return null;
-                          const maxCols = 4;
-                          const maxRows = 7;
-                          const count = Math.min(
-                            block!.count,
-                            maxCols * maxRows,
+                      {/* Container grid fill */}
+                      {/* Container grid fill */}
+                      {(() => {
+                        if (!isHot) return null;
+
+                        // If the block is too small, drawing a 10x20 grid of containers
+                        // or even a fill bar will completely obscure the text label and block shape.
+                        // The solid heatmap background color is sufficient.
+                        if (z.w < 30 || z.h < 30) return null;
+
+                        const maxCols = 10;
+                        const maxRows = 20;
+                        const count = Math.min(
+                          block!.count,
+                          maxCols * maxRows,
+                        );
+
+                        if (isMobile) {
+                          const fillPct = Math.min(1, count / (maxCols * maxRows));
+                          const innerW = Math.max(0, z.w - 8);
+                          const innerH = Math.max(0, z.h - 8);
+                          return (
+                            <g>
+                              <rect
+                                x={z.x + 4}
+                                y={z.y + 4}
+                                width={innerW}
+                                height={innerH}
+                                fill={isDark ? "#0b0e14" : "#e8edf5"}
+                                rx={2}
+                              />
+                              <rect
+                                x={z.x + 4}
+                                y={z.y + 4 + innerH * (1 - fillPct)}
+                                width={innerW}
+                                height={innerH * fillPct}
+                                fill={
+                                  isHigh
+                                    ? "#ef4444"
+                                    : isMed
+                                      ? "#f97316"
+                                      : "#10b981"
+                                }
+                                rx={2}
+                                opacity={0.8}
+                              />
+                            </g>
                           );
+                        }
 
-                          if (isMobile) {
-                            const fillPct = Math.min(1, count / (maxCols * maxRows));
-                            return (
-                              <g>
+                        const cellW = (z.w - 8) / maxCols;
+                        const cellH = (z.h - 8) / maxRows;
+                        const cells = [];
+                        for (let row = 0; row < maxRows; row++) {
+                          for (let col = 0; col < maxCols; col++) {
+                            const idx = row * maxCols + col;
+                            const loaded = idx < count;
+                            const cx = z.x + 4 + col * cellW;
+                            const cy = z.y + 4 + row * cellH;
+                            if (loaded) {
+                              const fill =
+                                (row * maxCols + col) % 2 === 0
+                                  ? "#991b1b"
+                                  : "#1d4ed8";
+                              cells.push(
                                 <rect
-                                  x={z.x + 4}
-                                  y={z.y + 4}
-                                  width={z.w - 8}
-                                  height={z.h - 8}
-                                  fill={isDark ? "#0b0e14" : "#e8edf5"}
-                                  rx={2}
-                                />
+                                  key={`${row}-${col}`}
+                                  x={cx}
+                                  y={cy}
+                                  width={cellW - 1}
+                                  height={cellH - 1}
+                                  fill={fill}
+                                  rx={1}
+                                  opacity={0.95}
+                                />,
+                              );
+                            } else {
+                              cells.push(
                                 <rect
-                                  x={z.x + 4}
-                                  y={z.y + 4 + (z.h - 8) * (1 - fillPct)}
-                                  width={z.w - 8}
-                                  height={(z.h - 8) * fillPct}
+                                  key={`${row}-${col}`}
+                                  x={cx}
+                                  y={cy}
+                                  width={cellW - 1}
+                                  height={cellH - 1}
                                   fill={
-                                    isHigh
-                                      ? "#ef4444"
-                                      : isMed
-                                        ? "#f97316"
-                                        : "#10b981"
+                                    isDark ? "#0b0e14" : "#e8edf5"
                                   }
-                                  rx={2}
-                                  opacity={0.8}
-                                />
-                              </g>
-                            );
-                          }
-
-                          const cellW = Math.max(
-                            8,
-                            Math.floor((z.w - 8) / maxCols),
-                          );
-                          const cellH = Math.max(
-                            6,
-                            Math.floor((z.h - 8) / maxRows),
-                          );
-                          const cells = [];
-                          for (let row = 0; row < maxRows; row++) {
-                            for (let col = 0; col < maxCols; col++) {
-                              const idx = row * maxCols + col;
-                              const loaded = idx < count;
-                              const cx = z.x + 4 + col * cellW;
-                              const cy = z.y + 4 + row * cellH;
-                              if (loaded) {
-                                const fill =
-                                  (row * maxCols + col) % 2 === 0
-                                    ? "#991b1b"
-                                    : "#1d4ed8";
-                                cells.push(
-                                  <rect
-                                    key={`${row}-${col}`}
-                                    x={cx}
-                                    y={cy}
-                                    width={cellW - 1}
-                                    height={cellH - 1}
-                                    fill={fill}
-                                    rx={1}
-                                    opacity={0.95}
-                                  />,
-                                );
-                              } else {
-                                cells.push(
-                                  <rect
-                                    key={`${row}-${col}`}
-                                    x={cx}
-                                    y={cy}
-                                    width={cellW - 1}
-                                    height={cellH - 1}
-                                    fill={
-                                      isDark ? "#0b0e14" : "#e8edf5"
-                                    }
-                                    stroke={
-                                      isDark ? "#1e2433" : "#dde3ec"
-                                    }
-                                    strokeWidth={0.5}
-                                    rx={1}
-                                    opacity={0.6}
-                                  />,
-                                );
-                              }
+                                  stroke={
+                                    isDark ? "#1e2433" : "#dde3ec"
+                                  }
+                                  strokeWidth={0.5}
+                                  rx={1}
+                                  opacity={0.6}
+                                />,
+                              );
                             }
                           }
-                          return cells;
-                        })()}
+                        }
+                        return cells;
+                      })()}
 
-                        {/* Block ID badge */}
-                        <rect
-                          x={z.x + 4}
-                          y={z.y + 4}
-                          width={Math.min(36, z.w - 8)}
-                          height={16}
-                          rx={3}
-                          fill={
-                            isHot
-                              ? isHigh
-                                ? "rgba(239,68,68,0.95)"
-                                : isMed
-                                  ? "rgba(249,115,22,0.95)"
-                                  : "rgba(16,185,129,0.95)"
-                              : isDark
-                                ? "rgba(30,36,51,0.95)"
-                                : "rgba(241,245,249,0.95)"
-                          }
-                          stroke={
-                            isHot
-                              ? isHigh
-                                ? "#ef4444"
-                                : isMed
-                                  ? "#f97316"
-                                  : "#10b981"
-                              : isDark
-                                ? "#475569"
-                                : "#cbd5e1"
-                          }
-                          strokeWidth={1}
-                        />
-                        <text
-                          x={z.x + 4 + Math.min(36, z.w - 8) / 2}
-                          y={z.y + 15}
-                          fill={isDark || isMax ? "#f8fafc" : "#0f172a"}
-                          fontSize={Math.min(10, (z.w - 8) / 4)}
-                          fontWeight="800"
-                          fontFamily="sans-serif"
-                          textAnchor="middle"
-                        >
-                          {z.id}
-                        </text>
+                      {/* Clean Block Label (Watermark Style) */}
+                      <text
+                        x={z.x + z.w / 2}
+                        y={z.y + z.h / 2 + 2} // +2 for visual vertical center
+                        transform={z.h > z.w * 1.5 ? `rotate(-90, ${z.x + z.w / 2}, ${z.y + z.h / 2})` : undefined}
+                        fill={isDark ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.7)"}
+                        fontSize={z.id.length > 2 ? 6 : 8}
+                        fontWeight="800"
+                        fontFamily="sans-serif"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        style={{
+                          pointerEvents: "none",
+                          textShadow: isDark
+                            ? "0px 0px 6px rgba(0,0,0,0.9), 0px 0px 12px rgba(0,0,0,0.6)"
+                            : "0px 0px 6px rgba(255,255,255,0.9), 0px 0px 12px rgba(255,255,255,0.6)"
+                        }}
+                      >
+                        {z.id}
+                      </text>
 
-                        {/* Count badge */}
-                        {isHot && (
-                          <g>
-                            <circle
-                              cx={z.x + z.w - 14}
-                              cy={z.y + 14}
-                              r={12}
-                              fill={isDark ? "#0b0e14" : "#ffffff"}
-                              stroke={isDark ? "#475569" : "#cbd5e1"}
-                              strokeWidth={1}
-                            />
-                            <text
-                              x={z.x + z.w - 14}
-                              y={z.y + 18}
-                              fill={theme.palette.text.primary}
-                              fontSize={9}
-                              fontWeight="800"
-                              fontFamily="sans-serif"
-                              textAnchor="middle"
-                            >
-                              {block!.count}
-                            </text>
-                          </g>
-                        )}
-                      </g>
-                    );
-                  })}
+                      {/* Count badge */}
+                      {isHot && (
+                        <g>
+                          <circle
+                            cx={z.x + z.w - 7}
+                            cy={z.y + 7}
+                            r={6}
+                            fill={isDark ? "#0b0e14" : "#ffffff"}
+                            stroke={isDark ? "#475569" : "#cbd5e1"}
+                            strokeWidth={0.5}
+                          />
+                          <text
+                            x={z.x + z.w - 7}
+                            y={z.y + 8.5}
+                            fill={theme.palette.text.primary}
+                            fontSize={5}
+                            fontWeight="800"
+                            fontFamily="sans-serif"
+                            textAnchor="middle"
+                          >
+                            {block!.count}
+                          </text>
+                        </g>
+                      )}
+                    </g>
+                  );
+                })}
 
                 {/* ── Heat overlay ─────────────────────────────────────── */}
                 {data && (
@@ -779,7 +762,7 @@ export default function TerminalMap2D({
                     }}
                     opacity={isDark ? 0.9 : 0.8}
                   >
-                    {getZones(data.layout)
+                    {zones
                       .map(z => {
                         const block = data.blocks[z.id];
                         if (!block || block.count === 0) return null;
@@ -803,6 +786,9 @@ export default function TerminalMap2D({
                       .map(({ z, tier }) => {
                         const scale =
                           tier === "High" ? 1.4 : tier === "Medium" ? 1.25 : 1.1;
+                        const base = Math.sqrt(z.w * z.h);
+                        const rx = (base * 0.5 + z.w * 0.5) * scale * 0.8;
+                        const ry = (base * 0.5 + z.h * 0.5) * scale * 0.8;
                         const gradId =
                           tier === "High"
                             ? "gradHigh2d"
@@ -812,10 +798,10 @@ export default function TerminalMap2D({
                         return (
                           <ellipse
                             key={`heat-${z.id}`}
-                            cx={z.x + z.w / 2}
-                            cy={z.y + z.h / 2}
-                            rx={z.w * scale}
-                            ry={z.h * scale}
+                            cx={z.cx ?? z.x + z.w / 2}
+                            cy={z.cy ?? z.y + z.h / 2}
+                            rx={rx}
+                            ry={ry}
                             fill={`url(#${gradId})`}
                           />
                         );
@@ -826,7 +812,10 @@ export default function TerminalMap2D({
                 {/* ── Berths (from XML geometry) ────────────────────────── */}
                 {activeBerths.map(berth => {
                   const isTarget = targetBerthId === berth.id;
-                  const { x: bx, y: by } = np(berth.cx, berth.cy);
+                  const seaPt = getSeaPoint(berth, 0.10); // Clear the terminal boundary completely
+                  const cranePt = getSeaPoint(berth, 0.06); // Place cranes near the terminal edge
+                  const { x: sx, y: sy } = np(seaPt.x, seaPt.y); // Ship coordinates (sea)
+                  const { x: bx, y: by } = np(cranePt.x, cranePt.y); // Crane coordinates (edge)
                   const rotDeg = berthRotationDeg(berth);
 
                   return (
@@ -846,13 +835,12 @@ export default function TerminalMap2D({
                         />
                       )}
 
-                      {/* Ship at the berth centroid */}
+                      {/* Ship at the sea point */}
                       {isTarget && data && (
                         <Ship
-                          x={bx}
-                          y={by}
-                          w={200}
-                          h={55}
+                          x={sx}
+                          y={sy}
+                          scale={0.7}
                           name={data.vessel}
                           color={isDark ? "#0284c7" : "#0ea5e9"}
                           rot={rotDeg}
@@ -872,44 +860,23 @@ export default function TerminalMap2D({
                       {/* Berth label */}
                       <text
                         x={bx}
-                        y={by - 22}
+                        y={by + 40}
                         transform={
                           rotDeg !== 0
-                            ? `rotate(${rotDeg}, ${bx}, ${by - 22})`
+                            ? `rotate(${rotDeg}, ${bx}, ${by + 2})`
                             : undefined
                         }
                         fill={isTarget ? "#0ea5e9" : isDark ? "#94a3b8" : "#475569"}
-                        fontSize={11}
+                        fontSize={7.5}
                         fontFamily="sans-serif"
                         textAnchor="middle"
                         fontWeight="800"
-                        letterSpacing="1px"
+                        letterSpacing="0.5px"
                       >
                         BERTH {berth.id}
                       </text>
 
-                      {/* Target indicator ring */}
-                      {isTarget && (
-                        <circle
-                          cx={bx}
-                          cy={by}
-                          r={28}
-                          fill="none"
-                          stroke="#0ea5e9"
-                          strokeWidth={2}
-                          strokeDasharray="6 4"
-                          opacity={0.7}
-                        >
-                          <animateTransform
-                            attributeName="transform"
-                            type="rotate"
-                            from={`0 ${bx} ${by}`}
-                            to={`360 ${bx} ${by}`}
-                            dur="8s"
-                            repeatCount="indefinite"
-                          />
-                        </circle>
-                      )}
+
                     </g>
                   );
                 })}

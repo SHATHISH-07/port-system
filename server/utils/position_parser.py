@@ -102,7 +102,7 @@ def parse_position(raw) -> dict | None:
                 "block": block.upper(),
                 "row": row,
                 "bay": bay,
-                "tier": tier,
+                "tier": f"{_sep}{tier}",
             }
 
         # Example: 3A03859C1
@@ -118,7 +118,7 @@ def parse_position(raw) -> dict | None:
                 "block": block.upper(),
                 "row": row,
                 "bay": bay,
-                "tier": tier,
+                "tier": f"{_sep}{tier}",
             }
 
         # Example: RE22369C1
@@ -134,7 +134,7 @@ def parse_position(raw) -> dict | None:
                 "block": block.upper(),
                 "row": row,
                 "bay": bay,
-                "tier": tier,
+                "tier": f"{_sep}{tier}",
             }
 
         # Fallback
@@ -202,9 +202,9 @@ def _get_known_blocks():
     global _KNOWN_BLOCKS
     if not _KNOWN_BLOCKS:
         try:
-            import os
+            from config import settings
             from services.xml_layout_service import xml_layout_service
-            xml_path = os.path.join(os.path.dirname(__file__), "..", "data", "source", "ENNORE_OPT_V1.0.xml")
+            xml_path = settings.TERMINAL_XML_PATH
             layout = xml_layout_service.parse(xml_path)
             _KNOWN_BLOCKS = set(layout.get("blocks", {}).keys())
         except Exception as e:
@@ -226,12 +226,17 @@ def _parse_generic_yard(s: str, su: str) -> dict | None:
             
     if matched_block:
         rest = token[len(matched_block):]
-        m = re.match(r"^(\d{2,4})([A-Z]|\d{2})(?:\.?(\d+))?$", rest, re.IGNORECASE)
+        m = re.match(r"^(\d{2,4})([A-Z]|\d{2})(?:\.)?([a-zA-Z]?\d+)$", rest, re.IGNORECASE)
         if m:
             bay, row, tier = m.groups()
-            tier = tier or "1"
         else:
-            bay, row, tier = "0", "0", "1"
+            m = re.match(r"^(\d{2,4})([A-Z]|\d{2})$", rest, re.IGNORECASE)
+            if m:
+                bay, row = m.groups()
+                tier = "1"
+            else:
+                bay, row, tier = "0", "0", "1"
+        
         return {
             "raw": s,
             "is_vessel": False,
@@ -244,7 +249,7 @@ def _parse_generic_yard(s: str, su: str) -> dict | None:
         }
 
     # Fallback to older generic regex
-    m = re.match(r"^([A-Z0-9]+?)(\d{2,4})([A-Z]|\d{2})\.?(\d+)$", token, re.IGNORECASE)
+    m = re.match(r"^([A-Z0-9]+?)(\d{2,4})([A-Z]|\d{2})(?:\.)?([a-zA-Z]?\d+)$", token, re.IGNORECASE)
     if m:
         block, bay, row, tier = m.groups()
         return {

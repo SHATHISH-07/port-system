@@ -73,7 +73,7 @@ function euclidean(a: NormPoint, b: NormPoint): number {
 }
 
 function toPairs(arr: [number, number][]): NormPoint[] {
-  return (arr || []).map(([x, y]) => ({ x, y }));
+  return (arr || []).map(([x, y]) => ({ x, y: 1 - y }));
 }
 
 // ─── Main factory ─────────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ export function buildTerminalGeometry(raw: RawTerminalLayout | null | undefined)
   const berths: BerthInfo[] = Object.entries(raw.berths ?? {}).map(([id, b]) => {
     const polygon = toPairs(b.polygon ?? []);
     const c = b.center?.length === 2
-      ? { x: b.center[0], y: b.center[1] }
+      ? { x: b.center[0], y: 1 - b.center[1] }
       : centroid(polygon);
     return {
       id,
@@ -107,7 +107,7 @@ export function buildTerminalGeometry(raw: RawTerminalLayout | null | undefined)
   const blocks: BlockInfo[] = Object.entries(raw.blocks ?? {}).map(([id, b]) => {
     const polygon = toPairs(b.polygon ?? []);
     const c = b.center?.length === 2
-      ? { x: b.center[0], y: b.center[1] }
+      ? { x: b.center[0], y: 1 - b.center[1] }
       : centroid(polygon);
     const bbox = b.bbox ?? { width: 0.05, height: 0.025, min_x: c.x, min_y: c.y, max_x: c.x, max_y: c.y };
     return {
@@ -194,8 +194,8 @@ export function polygonToSvgPoints(
  * rotates the element so it is perpendicular to the berth edge.
  */
 export function berthRotationDeg(berth: BerthInfo): number {
-  // Use facing_deg from XML when available; otherwise derive from polygon edge
-  if (berth.facing_deg !== 0) return berth.facing_deg;
+  // Use facing_deg from XML when available (subtract 90 to lay ship parallel to berth)
+  if (berth.facing_deg !== 0) return berth.facing_deg - 90;
   if (berth.polygon.length >= 2) {
     const dx = berth.polygon[1].x - berth.polygon[0].x;
     const dy = berth.polygon[1].y - berth.polygon[0].y;
@@ -234,7 +234,7 @@ export function polygonToWorld(poly: NormPoint[]): { x: number; z: number }[] {
  */
 export function berthHeadingRad(berth: BerthInfo): number {
   if (berth.facing_deg !== 0) {
-    return (berth.facing_deg * Math.PI) / 180;
+    return ((berth.facing_deg - 90) * Math.PI) / 180;
   }
   if (berth.polygon.length >= 2) {
     // find longest edge
@@ -252,4 +252,45 @@ export function berthHeadingRad(berth: BerthInfo): number {
     return angle;
   }
   return 0;
+}
+
+/**
+ * Computes a coordinate pushed out from the berth's centroid into the sea.
+ * It finds the perpendicular to the longest edge and points it away from the terminal center.
+ */
+export function getSeaPoint(berth: BerthInfo, offsetNorm: number = 0.04): NormPoint {
+  if (berth.polygon.length < 2) return { x: berth.cx, y: berth.cy };
+  
+  let maxLen = -1;
+  let ex = 0, ey = 0;
+  for (let i = 0; i < berth.polygon.length; i++) {
+    const a = berth.polygon[i];
+    const b = berth.polygon[(i + 1) % berth.polygon.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len > maxLen) {
+      maxLen = len;
+      ex = dx; ey = dy;
+    }
+  }
+  
+  // Perpendicular vector
+  let px = -ey;
+  let py = ex;
+  const plen = Math.hypot(px, py);
+  if (plen > 0) { px /= plen; py /= plen; }
+  
+  // Point away from terminal center (0.5, 0.5)
+  const vx = berth.cx - 0.5;
+  const vy = berth.cy - 0.5;
+  if (px * vx + py * vy < 0) {
+    px = -px;
+    py = -py;
+  }
+  
+  return {
+    x: berth.cx + px * offsetNorm,
+    y: berth.cy + py * offsetNorm,
+  };
 }

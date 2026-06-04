@@ -331,7 +331,7 @@ class XmlLayoutService:
             if blk and blk.get("center") and blk.get("bbox"):
                 result[name] = {
                     "x":       blk["center"][0],
-                    "y":       blk["center"][1],
+                    "y":       1.0 - blk["center"][1],
                     "w":       blk["bbox"]["width"],
                     "h":       blk["bbox"]["height"],
                     "polygon": blk["polygon"],
