@@ -409,7 +409,7 @@ export default function TerminalMap2D({
       )}
 
       <TransformWrapper
-        initialScale={0.72}
+        initialScale={0.88}
         minScale={0.15}
         maxScale={5}
         centerOnInit
