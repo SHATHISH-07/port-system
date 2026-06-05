@@ -127,6 +127,7 @@ def predict_reshuffle_risk(
     yard_block: Optional[str],
     yard_slot: Optional[str],
     recommended_deck: str,
+    yard_id: str = None
 ) -> str:
     """
     Explainable reshuffle risk heuristic.
@@ -150,7 +151,7 @@ def predict_reshuffle_risk(
         score += 5
 
     if yard_slot:
-        info = parse_position(str(yard_slot))
+        info = parse_position(str(yard_slot), yard_id)
         if info and info.get("is_yard") and info.get("tier"):
             tier_val = str(info.get("tier"))
             if tier_val.isdigit():

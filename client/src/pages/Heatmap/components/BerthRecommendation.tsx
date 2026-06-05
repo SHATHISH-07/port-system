@@ -145,6 +145,26 @@ export default function BerthRecommendation({
             >
               {primary?.berth ?? "—"}
             </Typography>
+
+            <Stack direction="row" spacing={3} sx={{ mt: 0.5, mb: 0.5 }}>
+              <Box>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>LOAD</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.9rem', color: COLORS.info }}>{primary?.cargo_concentration_pct ?? 0}%</Typography>
+              </Box>
+              <Box>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>LADEN DIST.</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>{primary?.laden_travel_distance_m ? `${primary.laden_travel_distance_m}m` : 'N/A'}</Typography>
+              </Box>
+              <Box>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>EMPTY DIST.</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>{primary?.unladen_travel_distance_m ? `${primary.unladen_travel_distance_m}m` : 'N/A'}</Typography>
+              </Box>
+              <Box>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>CRANES</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>{primary?.recommended_cranes ?? 0}</Typography>
+              </Box>
+            </Stack>
+
             <Box
               sx={{
                 p: 1.5,

@@ -506,7 +506,7 @@ def get_yard_heatmap_data(
         if not pos_str:
             continue
 
-        pos_info = parse_position(pos_str)
+        pos_info = parse_position(pos_str, yard_id)
         if not pos_info or not pos_info["is_yard"]:
             continue
 
@@ -555,7 +555,7 @@ def get_yard_heatmap_data(
             if not c_pos or str(c_pos) == "nan":
                 c_pos = str(u.get("current_position") or u.get("ctr_to_position") or u.get("ctr_from_position") or "")
             
-            p_info = parse_position(c_pos)
+            p_info = parse_position(c_pos, yard_id)
             block_list[-1]["containers"].append({
                 "unit_id": u.get("unit_id"),
                 "position": c_pos,
@@ -603,6 +603,14 @@ def get_yard_heatmap_data(
     yard_h = full_layout.get("bbox", {}).get("height", 800) if full_layout else 800
     NEAR_THRESHOLD_M = 600
 
+    xml_distances = {}
+    if full_layout:
+        try:
+            from services.xml_layout_service import xml_layout_service
+            xml_distances = xml_layout_service.compute_distances(cached=full_layout)
+        except Exception as e:
+            logger.error(f"Failed to compute xml distances: {e}")
+
     # 2. Calculate Berth Metrics
     berth_metrics = []
     for berth_id, berth_info in berths_data.items():
@@ -612,20 +620,39 @@ def get_yard_heatmap_data(
         near_count = 0
         near_blocks = set()
         total_laden = 0
+        corridors = set()
+        equipment = set()
         
         for bk_data in block_list:
             bk_id = bk_data["block_id"]
             bk_count = bk_data["total_containers"]
             
-            b_cx, b_cy = 0.5, 0.5
-            if full_layout and bk_id in full_layout.get("blocks", {}):
-                b_cx, b_cy = full_layout["blocks"][bk_id]["center"]
-                
-            dx_norm = abs(b_cx - berth_cx)
-            dy_norm = abs(b_cy - berth_cy)
-            # The raw bbox width/height are in cm, so divide by 100 to get meters
-            dist_m = int((dx_norm * yard_w + dy_norm * yard_h) / 100)
+            dist_m = 500
             
+            if full_layout:
+                if bk_id in xml_distances.get("block_to_berth", {}):
+                    # We map dummy `berth_name` to the first actual XML berth (e.g. AECT1)
+                    xml_berth_names = list(xml_distances["block_to_berth"][bk_id].keys())
+                    xml_b = xml_berth_names[0] if xml_berth_names else None
+                    if xml_b:
+                        d_info = xml_distances["block_to_berth"][bk_id][xml_b]
+                        dist_m = d_info.get("distance_m", 500)
+                        for node in d_info.get("route", []):
+                            corridors.add(node)
+                
+                bk_info = full_layout.get("blocks", {}).get(bk_id, {})
+                if bk_info.get("type"):
+                    equipment.add(bk_info["type"])
+            else:
+                # Fallback to math
+                b_cx, b_cy = 0.5, 0.5
+                dx_norm = abs(b_cx - berth_cx)
+                dy_norm = abs(b_cy - berth_cy)
+                dist_m = int((dx_norm * yard_w + dy_norm * yard_h) / 100)
+            
+            # The routing distance is exactly in metres
+            dist_m = int(dist_m)
+
             if dist_m <= NEAR_THRESHOLD_M:
                 near_count += bk_count
                 near_blocks.add(bk_id)
@@ -633,7 +660,6 @@ def get_yard_heatmap_data(
             total_laden += bk_count * dist_m
             
         concentration_pct = round((near_count / total_all) * 100, 2)
-        # Avg travel distance per container
         avg_dist = int(total_laden / total_all) if total_all > 0 else 0
         
         berth_metrics.append({
@@ -642,8 +668,10 @@ def get_yard_heatmap_data(
             "near_count": near_count,
             "avg_dist": avg_dist,
             "total_laden": total_laden,
-            "total_unladen": int(total_laden * 0.8),
-            "near_blocks": near_blocks
+            "total_unladen": total_laden,
+            "near_blocks": near_blocks,
+            "corridors": corridors,
+            "equipment": equipment
         })
         
     # Sort: Highest concentration first, then shortest avg distance
@@ -678,8 +706,8 @@ def get_yard_heatmap_data(
             "impact_score":            dist_m,
             "travel_distance_score":   dist_m,
             "travel_distance_label":   travel_distance_label,
-            "laden_travel_distance_m": b["total_laden"],
-            "unladen_travel_distance_m": b["total_unladen"],
+            "laden_travel_distance_m": b["avg_dist"],
+            "unladen_travel_distance_m": b["avg_dist"],
             "corridor_congestion": (
                 "High" if b["concentration_pct"] > 80
                 else "Moderate" if b["concentration_pct"] > 40
@@ -727,7 +755,7 @@ def get_yard_heatmap_data(
                         concurrent_vessels[v_id] = {"service": crow.get("outbound_service"), "blocks": set()}
                     c_pos = crow.get("ctr_from_position")
                     if pd.notna(c_pos):
-                        cp_info = parse_position(str(c_pos))
+                        cp_info = parse_position(str(c_pos), yard_id)
                         if cp_info and cp_info.get("is_yard"):
                             cbk = block_label(cp_info)
                             if cbk:
@@ -735,20 +763,49 @@ def get_yard_heatmap_data(
             except Exception as e:
                 print(f"Error querying concurrent vessels: {e}")
 
+        # Enrich concurrent vessels with XML corridors and equipment
+        for v_id, v_data in concurrent_vessels.items():
+            v_data["corridors"] = set()
+            v_data["equipment"] = set()
+            if full_layout:
+                for bk in v_data["blocks"]:
+                    if bk in xml_distances.get("block_to_berth", {}):
+                        xml_berth_names = list(xml_distances["block_to_berth"][bk].keys())
+                        xml_b = xml_berth_names[0] if xml_berth_names else None
+                        if xml_b:
+                            for node in xml_distances["block_to_berth"][bk][xml_b].get("route", []):
+                                v_data["corridors"].add(node)
+                    bk_info = full_layout.get("blocks", {}).get(bk, {})
+                    if bk_info.get("type"):
+                        v_data["equipment"].add(bk_info["type"])
+
         for row in berth_analysis:
             conflicts: list[dict] = []
             row_berth = row["berth"]
             near_blocks = row.pop("near_blocks", set())
+            corridors = row.pop("corridors", set())
+            equipment = row.pop("equipment", set())
             
             for v_id, v_data in concurrent_vessels.items():
-                # Conflict if concurrent vessel operates in ANY block near this berth
                 shared_blocks = list(near_blocks.intersection(v_data["blocks"]))
-                if shared_blocks:
+                shared_corridors = list(corridors.intersection(v_data["corridors"]))
+                shared_equipment = list(equipment.intersection(v_data["equipment"]))
+                
+                conflict_types = []
+                if shared_blocks: 
+                    conflict_types.append("Block Overlap")
+                if len(shared_corridors) >= 2: 
+                    conflict_types.append("Corridor Overlap")
+                if "TRANSTAINER" in shared_equipment: 
+                    conflict_types.append("Equipment Competition")
+                
+                if conflict_types:
                     overlap_hours = round((max_time - min_time).total_seconds() / 3600, 1) if pd.notna(max_time) else 0
                     conflicts.append({
                         "vessel_service": str(v_data["service"]),
                         "visit_id": str(v_id),
                         "shared_blocks": shared_blocks,
+                        "conflict_types": conflict_types,
                         "overlap_hours": overlap_hours
                     })
 
@@ -763,7 +820,8 @@ def get_yard_heatmap_data(
             if conflicts:
                 svc = conflicts[0]["vessel_service"]
                 hrs = conflicts[0]["overlap_hours"]
-                reason = f"Berth {row_berth} is shared with vessel {svc} for {hrs} hrs — HIGH clash risk."
+                ctype = conflicts[0]["conflict_types"][0] if conflicts[0].get("conflict_types") else "Operational Conflict"
+                reason = f"Berth {row_berth} is shared with vessel {svc} for {hrs} hrs — HIGH clash risk ({ctype})."
                 row["congestion_risk"] = "High"
 
             conflict_table.append({

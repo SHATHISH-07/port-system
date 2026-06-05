@@ -1,3 +1,4 @@
+from auth.utils import logger
 from db.queries import get_vessel_schedule
 from db.queries import update_vessel_schedule
 import pandas as pd
@@ -181,7 +182,7 @@ def _compute_crane_metrics(
 
     restow_df = crane_df[crane_df["event_type"] == "UNIT_RESTOW"].copy()
     restow_df["from_block"] = restow_df["from_position"].apply(
-        lambda p: parse_position(p).get("block") if parse_position(p) and parse_position(p).get("is_yard") else None
+        lambda p: parse_position(p, yard_id).get("block") if parse_position(p, yard_id) and parse_position(p, yard_id).get("is_yard") else None
     )
     block_counts = (
         restow_df["from_block"].dropna().value_counts().head(10)
@@ -564,7 +565,7 @@ def process_current_planning_and_yard_strategy(
         pos = _safe_str(row.get("ctr_from_position") if is_loaded else row.get("current_position"), "")
         if not pos:
             pos = _safe_str(row.get("current_position") or row.get("ctr_from_position") or "", "")
-        info = parse_position(pos)
+        info = parse_position(pos, yard_id)
         return info.get("block") if info and info.get("is_yard") else None
 
     df["yard_block"] = df.apply(resolve_yard_block, axis=1)
@@ -671,7 +672,7 @@ def process_current_planning_and_yard_strategy(
         
         current_yard_block = _safe_str(row.get("yard_block"), "")
         if not current_yard_block and current_slot_position != "UNKNOWN":
-            parsed_pos = parse_position(current_slot_position)
+            parsed_pos = parse_position(current_slot_position, yard_id)
             current_yard_block = parsed_pos.get("block") if parsed_pos else "UNKNOWN"
         if not current_yard_block:
             current_yard_block = "UNKNOWN"
@@ -746,7 +747,31 @@ def process_current_planning_and_yard_strategy(
     if "UNKNOWN" in unique_blocks:
         unique_blocks.remove("UNKNOWN")
         
-    proximity_map = calculate_dynamic_proximity(df, block_col="yard_block", weight_col="weight_band")
+    proximity_map = {}
+    try:
+        from services.xml_layout_service import xml_layout_service
+        from config import settings
+        full_layout = xml_layout_service.parse(settings.TERMINAL_XML_PATH)
+        distances = xml_layout_service.compute_distances(cached=full_layout)
+        
+        xml_berths = list(full_layout.get("berths", {}).keys())
+        xml_b = xml_berths[0] if xml_berths else None
+        
+        for blk in unique_blocks:
+            if xml_b and blk in distances.get("block_to_berth", {}):
+                dist_m = distances["block_to_berth"][blk].get(xml_b, {}).get("distance_m", 500)
+                if dist_m < 400:
+                    proximity_map[blk] = "CLOSE"
+                elif dist_m < 1000:
+                    proximity_map[blk] = "MID"
+                else:
+                    proximity_map[blk] = "FAR"
+            else:
+                proximity_map[blk] = "MID"
+    except Exception as e:
+        logger.warning(f"Failed to use XML distances for proximity: {e}")
+        from services.heatmap_service import calculate_dynamic_proximity
+        proximity_map = calculate_dynamic_proximity(df, block_col="yard_block", weight_col="weight_band")
 
     block_strategies = []
     
@@ -1060,7 +1085,7 @@ def generate_pre_consolidation_plan(
 
     def _get_pos_and_meta(row):
         pos_raw = _safe_str(row.get("current_position") or row.get("ctr_from_position") or "")
-        parsed = parse_position(pos_raw) if pos_raw else None
+        parsed = parse_position(pos_raw, yard_id) if pos_raw else None
         if not (parsed and parsed.get("is_yard")):
             return None
         weight_kg = row.get(w_col) if w_col else None

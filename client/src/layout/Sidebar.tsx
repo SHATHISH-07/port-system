@@ -218,7 +218,6 @@ export default function Sidebar() {
               "&:hover .logo-icon": { display: "none" },
               "&:hover .menu-icon": {
                 display: "block",
-                color: textActiveColor,
               },
             }}
           >
@@ -294,7 +293,6 @@ export default function Sidebar() {
           "&:hover .logo-icon": { display: "none" },
           "&:hover .menu-icon": {
             display: "block",
-            color: textActiveColor,
           },
         }}
       >
@@ -358,7 +356,7 @@ export default function Sidebar() {
                     height: 32,
                     flexShrink: 0,
                     color: menuIconColor,
-                    "&:hover": { bgcolor: menuIconHover, color: textActiveColor },
+                    "&:hover": { bgcolor: menuIconHover },
                   }}
                 >
                   <ViewSidebarOutlined sx={{ fontSize: 20 }} />

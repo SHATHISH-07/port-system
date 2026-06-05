@@ -38,12 +38,12 @@ def get_terminal_layout(current_user: dict = Depends(get_current_user)):
     Returns the static physical layout of the terminal (shapes, berths, boundaries, blocks)
     parsed directly from the XML configuration.
     """
-    from services.xml_layout_service import xml_layout_service
-    from config import settings
-    
-    xml_path = settings.TERMINAL_XML_PATH
     try:
-        layout_data = xml_layout_service.parse(xml_path)
+        from services.xml_layout_service import xml_layout_service
+        from config import settings
+        layout_data = xml_layout_service.parse(settings.TERMINAL_XML_PATH)
+        distances = xml_layout_service.compute_distances(cached=layout_data)
+        layout_data["distances"] = distances
         return {"status": "success", "data": layout_data}
     except Exception as e:
         logger.error(f"Error loading terminal layout: {e}")

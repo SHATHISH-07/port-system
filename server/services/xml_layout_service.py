@@ -253,6 +253,7 @@ class XmlLayoutService:
                 "center":     list(ctr),
                 "facing_deg": facing,
                 "bollards":   [],
+                "ingress_vertices": [],
             }
 
         # Bollards
@@ -260,9 +261,13 @@ class XmlLayoutService:
             berth_name = _attr(raw_tag, "owning-berth")
             loc_m = re.search(r"POINT\s*\(\s*([0-9.eE+\-]+)\s+([0-9.eE+\-]+)", 
                               _attr(raw_tag, "location"))
-            if berth_name in berths and loc_m:
-                raw_pt  = (float(loc_m.group(1)), float(loc_m.group(2)))
-                berths[berth_name]["bollards"].append(list(_norm_pt(raw_pt, bb)))
+            ingress_v = _attr(raw_tag, "ingress-vertex")
+            if berth_name in berths:
+                if loc_m:
+                    raw_pt  = (float(loc_m.group(1)), float(loc_m.group(2)))
+                    berths[berth_name]["bollards"].append(list(_norm_pt(raw_pt, bb)))
+                if ingress_v and ingress_v not in berths[berth_name]["ingress_vertices"]:
+                    berths[berth_name]["ingress_vertices"].append(ingress_v)
 
         result["berths"] = berths
 
@@ -289,6 +294,7 @@ class XmlLayoutService:
             to     = _attr(raw_tag, "to-vertex")
             graph  = _attr(raw_tag, "owning-graph")
             line_s = _attr(raw_tag, "path-space")
+            dist_s = _attr(raw_tag, "direct-distance-m")
             raw_pts = _parse_linestring(line_s)
             if raw_pts:
                 roads.append({
@@ -296,9 +302,29 @@ class XmlLayoutService:
                     "to_vertex":   to,
                     "graph":       graph,
                     "points":      _norm_pts(raw_pts, bb),
+                    "distance_m":  float(dist_s) if dist_s else 0.0,
                 })
 
         result["roads"] = roads
+
+        # ── 6. Graph vertices ─────────────────────────────────────────
+        vertices: dict[str, Any] = {}
+
+        for raw_tag in re.findall(r"<graph-vertex\s([^>]+?)/>", xml, re.DOTALL):
+            vid = _attr(raw_tag, "id")
+            if not vid:
+                continue
+            loc_m = re.search(r"POINT\s*\(\s*([0-9.eE+\-]+)\s+([0-9.eE+\-]+)", _attr(raw_tag, "location"))
+            if loc_m:
+                raw_pt = (float(loc_m.group(1)), float(loc_m.group(2)))
+                vertices[vid] = {
+                    "id": vid,
+                    "location": list(_norm_pt(raw_pt, bb)),
+                    "raw_x": raw_pt[0],
+                    "raw_y": raw_pt[1],
+                }
+
+        result["vertices"] = vertices
 
         logger.info(
             "Parsed %s: %d blocks, %d berths, %d rail tracks, %d road segs",
@@ -306,6 +332,112 @@ class XmlLayoutService:
             len(rail_tracks), len(roads),
         )
         return result
+
+    # ── Routing Engine ────────────────────────────────────────────────
+
+    def compute_distances(self, xml_path: str | Path | None = None, cached: dict | None = None) -> dict:
+        """
+        Returns distance matrices (in metres) between all blocks and berths based on XML graph.
+        { "block_to_berth": { "1A": { "AECT1": { "distance_m": 342.5, "route": [...] } } } }
+        """
+        if cached is None and xml_path is not None:
+            cached = self.parse(xml_path)
+        if cached is None:
+            raise ValueError("Provide either cached or xml_path")
+
+        distances = {
+            "block_to_berth": {},
+            "bbox": cached.get("bbox", {})
+        }
+
+        roads = cached.get("roads", [])
+        vertices = cached.get("vertices", {})
+        blocks = cached.get("blocks", {})
+        berths = cached.get("berths", {})
+
+        import heapq
+
+        # 1. Build adjacency list for Dijkstra
+        adj = {}
+        for r in roads:
+            u, v, d = r["from_vertex"], r["to_vertex"], r.get("distance_m", 0.0)
+            if u not in adj: adj[u] = []
+            if v not in adj: adj[v] = []
+            adj[u].append((v, d))
+            adj[v].append((u, d))
+
+        # Helper to find nearest vertex to a normalized point
+        def find_nearest_vertex(nx, ny):
+            best_v = None
+            best_dist = float('inf')
+            for vid, vdata in vertices.items():
+                vx, vy = vdata["location"]
+                dist = (nx - vx)**2 + (ny - vy)**2
+                if dist < best_dist:
+                    best_dist = dist
+                    best_v = vid
+            return best_v
+
+        # 2. Map blocks to vertices
+        block_vertices = {}
+        for bname, bdata in blocks.items():
+            if bdata.get("center"):
+                nx, ny = bdata["center"]
+                best_v = find_nearest_vertex(nx, ny)
+                if best_v:
+                    block_vertices[bname] = best_v
+
+        # 3. Map berths to vertices
+        berth_vertices = {}
+        for bname, bdata in berths.items():
+            ivs = bdata.get("ingress_vertices", [])
+            if ivs and ivs[0] in vertices:
+                berth_vertices[bname] = ivs[0]
+            elif bdata.get("center"):
+                nx, ny = bdata["center"]
+                best_v = find_nearest_vertex(nx, ny)
+                if best_v:
+                    berth_vertices[bname] = best_v
+
+        # 4. Dijkstra from each block
+        for bname, start_v in block_vertices.items():
+            dists = {start_v: 0.0}
+            prev = {start_v: None}
+            pq = [(0.0, start_v)]
+            
+            while pq:
+                d, u = heapq.heappop(pq)
+                if d > dists.get(u, float('inf')):
+                    continue
+                for v, weight in adj.get(u, []):
+                    new_d = d + weight
+                    if new_d < dists.get(v, float('inf')):
+                        dists[v] = new_d
+                        prev[v] = u
+                        heapq.heappush(pq, (new_d, v))
+
+            def get_route(tv):
+                route = []
+                curr = tv
+                while curr is not None:
+                    route.append(curr)
+                    curr = prev.get(curr)
+                return route[::-1]
+
+            distances["block_to_berth"][bname] = {}
+            for berth_name, target_v in berth_vertices.items():
+                if target_v in dists:
+                    distances["block_to_berth"][bname][berth_name] = {
+                        "distance_m": dists[target_v],
+                        "route": get_route(target_v)
+                    }
+                else:
+                    distances["block_to_berth"][bname][berth_name] = {
+                        "distance_m": 500.0, # Fallback
+                        "route": []
+                    }
+            
+        return distances
 
     # ── Convenience helper used by _deterministic_layout ─────────────
 

@@ -60,7 +60,7 @@ def _row_get(row: Any, key: str):
         return None
 
 # Core parser
-def parse_position(raw) -> dict | None:
+def parse_position(raw, yard_id: str = None) -> dict | None:
     """
     Parses a raw position string and returns a normalized dictionary containing terminal, block, bay, row, and tier.
     """
@@ -195,7 +195,7 @@ def parse_position(raw) -> dict | None:
 
     # Generic Y-<TERMINAL>-<...>
     if su.startswith("Y-"):
-        return _parse_generic_yard(s, su)
+        return _parse_generic_yard(s, su, yard_id)
 
 _KNOWN_BLOCKS = set()
 def _get_known_blocks():
@@ -212,10 +212,17 @@ def _get_known_blocks():
             _KNOWN_BLOCKS = {"1A", "1B", "1H", "DMY", "WB"} # fallback
     return _KNOWN_BLOCKS
 
-def _parse_generic_yard(s: str, su: str) -> dict | None:
+def _parse_generic_yard(s: str, su: str, yard_id: str = None) -> dict | None:
     parts = s.split("-")
-    terminal = parts[1].upper() if len(parts) >= 2 else "YARD"
-    token = parts[2] if len(parts) >= 3 else ""
+    if len(parts) >= 3:
+        terminal = parts[1].upper()
+        token = parts[2]
+    elif len(parts) == 2:
+        terminal = yard_id.upper() if yard_id else "YARD"
+        token = parts[1]
+    else:
+        terminal = yard_id.upper() if yard_id else "YARD"
+        token = ""
     
     known = _get_known_blocks()
     matched_block = None
@@ -280,6 +287,7 @@ def _parse_generic_yard(s: str, su: str) -> dict | None:
         parts = s.split(".")
         m = _BLOCK_RE.match(parts[0])
         block = m.group(1).upper() if m else parts[0].upper()
+        terminal = yard_id.upper() if yard_id else "YARD"
         # block.bay.tier
         if len(parts) == 3:
             _, bay, tier = parts
@@ -287,7 +295,7 @@ def _parse_generic_yard(s: str, su: str) -> dict | None:
                 "raw": s,
                 "is_vessel": False,
                 "is_yard": True,
-                "terminal": "YARD",
+                "terminal": terminal,
                 "block": block,
                 "row": "0",
                 "bay": bay,
@@ -300,7 +308,7 @@ def _parse_generic_yard(s: str, su: str) -> dict | None:
                 "raw": s,
                 "is_vessel": False,
                 "is_yard": True,
-                "terminal": "YARD",
+                "terminal": terminal,
                 "block": block,
                 "row": row,
                 "bay": bay,
@@ -311,7 +319,7 @@ def _parse_generic_yard(s: str, su: str) -> dict | None:
             "raw": s,
             "is_vessel": False,
             "is_yard": True,
-            "terminal": "YARD",
+            "terminal": terminal,
             "block": block,
             "row": "0",
             "bay": parts[1] if len(parts) > 1 else "0",
@@ -324,7 +332,7 @@ def _parse_generic_yard(s: str, su: str) -> dict | None:
             "raw": s,
             "is_vessel": False,
             "is_yard": True,
-            "terminal": "YARD",
+            "terminal": yard_id.upper() if yard_id else "YARD",
             "block": s.upper(),
             "row": "0",
             "bay": "0",
@@ -334,28 +342,28 @@ def _parse_generic_yard(s: str, su: str) -> dict | None:
     return None
 
 # Convenience helpers
-def is_vessel_pos(pos) -> bool:
+def is_vessel_pos(pos, yard_id: str = None) -> bool:
     """
     Checks if a position string refers to a vessel location.
     """
-    p = parse_position(pos)
+    p = parse_position(pos, yard_id)
     return bool(p and p["is_vessel"])
 
 # check if the position is yard
-def is_yard_pos(pos) -> bool:
+def is_yard_pos(pos, yard_id: str = None) -> bool:
     """
     Checks if a position string refers to a yard location.
     """
-    p = parse_position(pos)
+    p = parse_position(pos, yard_id)
     return bool(p and p["is_yard"])
 
 # classify a move.
-def classify_move(from_pos, to_pos) -> str:
+def classify_move(from_pos, to_pos, yard_id: str = None) -> str:
     """
     Classifies a move type based on the from and to positions.
     """
-    f_p = parse_position(from_pos)
-    t_p = parse_position(to_pos)
+    f_p = parse_position(from_pos, yard_id)
+    t_p = parse_position(to_pos, yard_id)
     # check if the positions are yard or vessel
     f_y = bool(f_p and f_p["is_yard"])
     f_v = bool(f_p and f_p["is_vessel"])

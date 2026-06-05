@@ -77,8 +77,10 @@ def create_features(df: pd.DataFrame) -> dict | None:
 
     blocks: dict[str, int] = {}
     
+    yard_id = str(df["yard_id"].mode()[0]) if "yard_id" in df.columns and not df["yard_id"].dropna().empty else None
+    
     def _extract_block(pos):
-        p = parse_position(pos)
+        p = parse_position(pos, yard_id)
         return p.get("block", "UNKNOWN") if p and p.get("is_yard") else None
 
     if is_load.any():
