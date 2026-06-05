@@ -796,43 +796,68 @@ def generate_terminal_data(terminal: dict):
     active_rows = derive_active_yard_containers(container_rows, terminal["yard_id"])
     
     if terminal["yard_id"] == "AECY":
-        target_service = "VS-AECY-07"
-        target_blocks = ["1A", "1B", "1C"]
-        vs_active = [r for r in active_rows if r.get("Outbound Service") == target_service]
-        needed = 400 - len(vs_active)
+        vessels = ["VS-AECY-07", "VS-AECY-06", "VS-AECY-09", "VS-AECY-03", "VS-AECY-02", "VS-AECY-04", "VS-AECY-05", "VS-AECY-08", "VS-AECY-01"]
+        pool_blocks = ["1A", "1L", "1B", "1K", "1J", "1H", "1E", "1F", "1G", "1D", "1C", "DMY", "1R", "2R", "3R", "WB", "1M"]
         
-        if needed > 0:
-            other_active = [r for r in active_rows if r.get("Outbound Service") != target_service]
-            converted = other_active[:needed]
-            for r in converted:
-                r["Outbound Service"] = target_service
-                r["Actual Outbound Carrier visit ID"] = target_service
+        svc_to_visit = {}
+        for v in reversed(visits):
+            svc = v["service"]
+            if svc not in svc_to_visit:
+                svc_to_visit[svc] = v["visit_id"]
+        
+        target_count = 250
+        
+        for i, r in enumerate(active_rows):
+            if i < len(vessels) * target_count:
+                vidx = i // target_count
+                svc = vessels[vidx]
+                vid = svc_to_visit.get(svc, svc)
+                r["Outbound Service"] = svc
+                uid = r["Unit ID"]
+                
+                for cr in reversed(container_rows):
+                    if cr["Unit ID"] == uid:
+                        cr["Outbound Service"] = svc
+                        cr["Actual Outbound Carrier visit ID"] = vid
+                        break
+                        
+                for crane_r in reversed(crane_rows):
+                    if crane_r["Unit Nbr"] == uid and crane_r["Move Kind"] == "Load":
+                        crane_r["Carrier Visit"] = vid
+
+        import collections
+        stack_heights = collections.defaultdict(int)
+        
+        for svc in vessels:
+            svc_active = [r for r in active_rows if r.get("Outbound Service") == svc]
+            num_blocks = random.choice([3, 4])
+            vessel_blocks = random.sample(pool_blocks, num_blocks)
+            
+            for i, r in enumerate(svc_active):
+                block = vessel_blocks[i % num_blocks]
+                bay = random.randint(1, 40)
+                row_idx = random.randint(1, 10)
+                
+                slot_key = (block, bay, row_idx)
+                current_tier = stack_heights[slot_key]
+                if current_tier >= 6:
+                    row_idx = (row_idx % 10) + 1
+                    slot_key = (block, bay, row_idx)
+                    current_tier = stack_heights[slot_key]
+                
+                new_tier = current_tier + 1
+                stack_heights[slot_key] = new_tier
+                
+                pos = f"Y-AECY-{block}{bay:03d}{row_idx:02d}C{new_tier}"
+                r["Current Yard Block"] = block
+                r["Current Slot Position"] = pos
+                
                 uid = r["Unit ID"]
                 for cr in reversed(container_rows):
                     if cr["Unit ID"] == uid:
-                        cr["Outbound Service"] = target_service
-                        cr["Actual Outbound Carrier visit ID"] = target_service
+                        cr["Current Position"] = pos
+                        cr["Ctr To Position"] = pos
                         break
-                for crane_r in reversed(crane_rows):
-                    if crane_r["Unit Nbr"] == uid and crane_r["Move Kind"] == "Load":
-                        crane_r["Carrier Visit"] = target_service
-                        
-        vs_active = [r for r in active_rows if r.get("Outbound Service") == target_service][:400]
-        
-        for i, r in enumerate(vs_active):
-            block = target_blocks[i % 3]
-            r["Current Yard Block"] = block
-            bay = random.randint(1, 40)
-            row_idx = random.randint(1, 10)
-            tier = random.randint(1, 6)
-            pos = f"Y-AECY-{block}{bay:03d}{row_idx:02d}C{tier}"
-            r["Current Slot Position"] = pos
-            uid = r["Unit ID"]
-            for cr in reversed(container_rows):
-                if cr["Unit ID"] == uid:
-                    cr["Current Position"] = pos
-                    cr["Ctr To Position"] = pos
-                    break
 
     return container_rows, crane_rows, active_rows
 

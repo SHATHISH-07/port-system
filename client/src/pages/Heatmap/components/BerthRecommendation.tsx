@@ -6,7 +6,7 @@ import {
   useTheme,
 } from "@mui/material";
 import {
-  WarningAmberRounded
+  WarningAmberRounded,
 } from "@mui/icons-material";
 
 
@@ -28,12 +28,14 @@ export interface ConflictVesselDisplay {
   vessel_service: string;
   visit_id: string;
   shared_blocks: string[];
+  shared_block_pct?: number;
   overlap_hours: number;
 }
 
 export interface BerthConflict {
   berth: string;
   reason?: string;
+  mitigation?: string;
   conflict_with?: ConflictVesselDisplay[];
 }
 
@@ -146,22 +148,22 @@ export default function BerthRecommendation({
               {primary?.berth ?? "—"}
             </Typography>
 
-            <Stack direction="row" spacing={3} sx={{ mt: 0.5, mb: 0.5 }}>
+            <Stack direction="row" spacing={3} sx={{ mt: 0.5, mb: 0.5, flexWrap: "wrap", gap: 3 }}>
               <Box>
-                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>LOAD</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: '0.9rem', color: COLORS.info }}>{primary?.cargo_concentration_pct ?? 0}%</Typography>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>CARGO NEARBY</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.95rem', color: COLORS.info }}>{primary?.cargo_concentration_pct ?? 0}%</Typography>
               </Box>
+
               <Box>
-                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>LADEN DIST.</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>{primary?.laden_travel_distance_m ? `${primary.laden_travel_distance_m}m` : 'N/A'}</Typography>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>AVG. YARD DISTANCE</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.95rem' }}>
+                  {primary?.laden_travel_distance_m ? `${primary.laden_travel_distance_m}m` : 'N/A'}
+                </Typography>
               </Box>
+
               <Box>
-                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>EMPTY DIST.</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>{primary?.unladen_travel_distance_m ? `${primary.unladen_travel_distance_m}m` : 'N/A'}</Typography>
-              </Box>
-              <Box>
-                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>CRANES</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>{primary?.recommended_cranes ?? 0}</Typography>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>CRANE ALLOCATION</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.95rem' }}>{primary?.recommended_cranes ?? 0}</Typography>
               </Box>
             </Stack>
 
@@ -224,59 +226,59 @@ export default function BerthRecommendation({
           }}
         >
           {analysis
-              .filter((b) => b.berth !== primary?.berth)
-              .map((b, idx) => (
-                <Box
-                  key={`${b.berth}-${idx}`}
-                  sx={{
-                    p: 1.5,
-                    borderRadius: "16px",
-                    border: borderStyle,
-                    bgcolor: isDark ? "rgba(255,255,255,0.02)" : COLORS.surface.light,
-                    transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                    cursor: "pointer",
-                    "&:hover": {
-                      borderColor: COLORS.info,
-                      bgcolor: isDark ? "rgba(255,255,255,0.04)" : alpha(COLORS.info, 0.03),
-                      transform: "translateY(-3px)",
-                      boxShadow: "0 6px 15px rgba(0,0,0,0.06)",
-                    },
-                  }}
-                >
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
-                    <Box
-                      sx={{
-                        px: 1,
-                        py: 0.25,
-                        borderRadius: "6px",
-                        bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-                        fontSize: "0.65rem",
-                        fontWeight: 900,
-                        color: "text.disabled",
-                      }}
-                    >
-                      #{idx + 2}
-                    </Box>
+            .filter((b) => b.berth !== primary?.berth)
+            .map((b, idx) => (
+              <Box
+                key={`${b.berth}-${idx}`}
+                sx={{
+                  p: 1.5,
+                  borderRadius: "16px",
+                  border: borderStyle,
+                  bgcolor: isDark ? "rgba(255,255,255,0.02)" : COLORS.surface.light,
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                  cursor: "pointer",
+                  "&:hover": {
+                    borderColor: COLORS.info,
+                    bgcolor: isDark ? "rgba(255,255,255,0.04)" : alpha(COLORS.info, 0.03),
+                    transform: "translateY(-3px)",
+                    boxShadow: "0 6px 15px rgba(0,0,0,0.06)",
+                  },
+                }}
+              >
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                  <Box
+                    sx={{
+                      px: 1,
+                      py: 0.25,
+                      borderRadius: "6px",
+                      bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+                      fontSize: "0.65rem",
+                      fontWeight: 900,
+                      color: "text.disabled",
+                    }}
+                  >
+                    #{idx + 2}
                   </Box>
-                  <Typography sx={{ fontWeight: 900, fontSize: "1.1rem", mb: 0.5, fontFamily: "'Outfit', sans-serif" }}>
-                    {b.berth}
-                  </Typography>
-                  <Stack direction="row" spacing={2.5}>
-                    <Box>
-                      <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>LOAD</Typography>
-                      <Typography sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{b.cargo_concentration_pct}%</Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>LADEN DIST.</Typography>
-                      <Typography sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{b.laden_travel_distance_m ? `${b.laden_travel_distance_m}m` : 'N/A'}</Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>EMPTY DIST.</Typography>
-                      <Typography sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{b.unladen_travel_distance_m ? `${b.unladen_travel_distance_m}m` : 'N/A'}</Typography>
-                    </Box>
-                  </Stack>
                 </Box>
-              ))}
+                <Typography sx={{ fontWeight: 900, fontSize: "1.1rem", mb: 0.5, fontFamily: "'Outfit', sans-serif" }}>
+                  {b.berth}
+                </Typography>
+                <Stack direction="row" spacing={2.5} sx={{ mt: 1 }}>
+                  <Box>
+                    <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>NEARBY</Typography>
+                    <Typography sx={{ fontWeight: 800, fontSize: '0.8rem' }}>{b.cargo_concentration_pct}%</Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>DISTANCE</Typography>
+                    <Typography sx={{ fontWeight: 800, fontSize: '0.8rem' }}>{b.laden_travel_distance_m ? `${b.laden_travel_distance_m}m` : 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>CRANES</Typography>
+                    <Typography sx={{ fontWeight: 800, fontSize: '0.8rem' }}>{b.recommended_cranes ?? 'N/A'}</Typography>
+                  </Box>
+                </Stack>
+              </Box>
+            ))}
         </Box>
       </Box>
 
@@ -339,13 +341,20 @@ export default function BerthRecommendation({
                           {cw.vessel_service}
                         </Typography>
                         <Typography sx={{ fontSize: "0.55rem", fontWeight: 700, color: alpha(COLORS.error, 0.7) }}>
-                          {cw.overlap_hours}h overlap
+                          {cw.overlap_hours}h overlap {cw.shared_block_pct ? `(${cw.shared_block_pct}% blocks)` : ''}
                         </Typography>
                       </Box>
                     ))}
                   </Stack>
                 </Box>
                 <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", lineHeight: 1.4 }}>{c.reason}</Typography>
+                {c.mitigation && (
+                  <Box sx={{ mt: 1, p: 0.75, borderRadius: "6px", bgcolor: alpha(COLORS.warning, 0.1), border: `1px solid ${alpha(COLORS.warning, 0.2)}` }}>
+                    <Typography sx={{ fontSize: "0.65rem", fontWeight: 900, color: COLORS.warning, textTransform: "uppercase" }}>
+                      Recommended Mitigation: {c.mitigation}
+                    </Typography>
+                  </Box>
+                )}
               </Box>
             ))}
           </Box>

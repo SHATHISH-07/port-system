@@ -677,6 +677,56 @@ def get_yard_heatmap_data(
     # Sort: Highest concentration first, then shortest avg distance
     berth_metrics.sort(key=lambda x: (-x["concentration_pct"], x["avg_dist"]))
 
+    # Dynamic Crane Capacity Calculation
+    dynamic_crane_capacity = 60.0 # Default fallback
+    try:
+        from db.queries import get_engine
+        from sqlalchemy import text
+        import pandas as pd
+        
+        outbound_svc = str(df["outbound_service"].dropna().iloc[0]).strip().upper() if not df.empty and "outbound_service" in df.columns else None
+        if outbound_svc:
+            query = text("""
+                SELECT 
+                    actual_outbound_carrier_visit_id,
+                    MIN(time_in) as first_move,
+                    MAX(move_complete_time) as last_move,
+                    COUNT(unit_id) as total_moves
+                FROM containers 
+                WHERE UPPER(TRIM(outbound_service)) = :svc
+                  AND actual_outbound_carrier_visit_id IS NOT NULL
+                  AND move_complete_time IS NOT NULL
+                GROUP BY actual_outbound_carrier_visit_id
+            """)
+            engine = get_engine()
+            hist_df = pd.read_sql(query, engine, params={"svc": outbound_svc})
+            
+            if not hist_df.empty:
+                hist_df["first_move"] = pd.to_datetime(hist_df["first_move"])
+                hist_df["last_move"] = pd.to_datetime(hist_df["last_move"])
+                hist_df["stay_hours"] = (hist_df["last_move"] - hist_df["first_move"]).dt.total_seconds() / 3600.0
+                
+                valid_stays = hist_df[hist_df["stay_hours"] > 0].copy()
+                if not valid_stays.empty:
+                    valid_stays["mph"] = valid_stays["total_moves"] / valid_stays["stay_hours"]
+                    avg_stay = valid_stays["stay_hours"].mean()
+                    
+                    visit_ids = valid_stays["actual_outbound_carrier_visit_id"].tolist()
+                    from services.vessel_service import _fetch_crane_counts_batch
+                    crane_counts = _fetch_crane_counts_batch(visit_ids)
+                    
+                    mph_list = []
+                    for _, row in valid_stays.iterrows():
+                        v_id = row["actual_outbound_carrier_visit_id"]
+                        cc = crane_counts.get(v_id, 0)
+                        if cc > 0:
+                            mph_list.append(row["mph"] / cc)
+                            
+                    avg_crane_mph = sum(mph_list) / len(mph_list) if mph_list else 25.0
+                    dynamic_crane_capacity = max(10.0, avg_stay * avg_crane_mph)
+    except Exception as e:
+        print(f"Error calculating dynamic crane capacity: {e}")
+
     for idx, b in enumerate(berth_metrics, start=1):
         dist_m = b["avg_dist"]
         travel_distance_label = "Short" if dist_m < 500 else "Moderate" if dist_m < 1200 else "Long"
@@ -697,7 +747,7 @@ def get_yard_heatmap_data(
             "discharge_moves":         0,
             "cargo_concentration_pct": b["concentration_pct"],
             "intensity":               round(b["concentration_pct"] / 100, 4),
-            "recommended_cranes":      max(1, math.ceil((b["near_count"] / max(120, 1)) * 2.0)),
+            "recommended_cranes":      max(1, math.ceil(b["near_count"] / dynamic_crane_capacity)),
             "congestion_risk":         risk,
             "hazardous":               summary.get("hazardous_containers", 0),
             "reefer":                  summary.get("reefer_containers", 0),
@@ -763,6 +813,29 @@ def get_yard_heatmap_data(
             except Exception as e:
                 print(f"Error querying concurrent vessels: {e}")
 
+        # Fetch Cranes for Target and Concurrent Vessels
+        vessel_crane_map = {}
+        target_cranes = []
+        try:
+            all_vids = [target_visit_id] + list(concurrent_vessels.keys())
+            from db.queries import load_from_db
+            import re
+            
+            crane_df = load_from_db("crane", vessel_id=all_vids)
+            if not crane_df.empty and "crane_id" in crane_df.columns and "carrier_visit" in crane_df.columns:
+                for cv, grp in crane_df.groupby("carrier_visit"):
+                    c_ids = grp["crane_id"].dropna().unique().tolist()
+                    nums = []
+                    for cid in c_ids:
+                        m = re.search(r'\d+', str(cid))
+                        if m:
+                            nums.append(int(m.group()))
+                    vessel_crane_map[str(cv)] = sorted(nums)
+            
+            target_cranes = vessel_crane_map.get(target_visit_id, [])
+        except Exception as e:
+            print(f"Error querying cranes for conflicts: {e}")
+
         # Enrich concurrent vessels with XML corridors and equipment
         for v_id, v_data in concurrent_vessels.items():
             v_data["corridors"] = set()
@@ -799,12 +872,26 @@ def get_yard_heatmap_data(
                 if "TRANSTAINER" in shared_equipment: 
                     conflict_types.append("Equipment Competition")
                 
+                # Check for Crane Rail / Working Zone Overlap
+                c_cranes = vessel_crane_map.get(str(v_id), [])
+                if target_cranes and c_cranes:
+                    shared_c = set(target_cranes).intersection(c_cranes)
+                    if shared_c:
+                        conflict_types.append("Crane Rail Overlap")
+                    else:
+                        t_min, t_max = min(target_cranes), max(target_cranes)
+                        c_min, c_max = min(c_cranes), max(c_cranes)
+                        if t_max > c_min and t_min < c_max:
+                            conflict_types.append("Crane Rail Overlap")
+                
                 if conflict_types:
                     overlap_hours = round((max_time - min_time).total_seconds() / 3600, 1) if pd.notna(max_time) else 0
+                    shared_block_pct = round((len(shared_blocks) / len(near_blocks)) * 100, 1) if near_blocks else 0
                     conflicts.append({
                         "vessel_service": str(v_data["service"]),
                         "visit_id": str(v_id),
                         "shared_blocks": shared_blocks,
+                        "shared_block_pct": shared_block_pct,
                         "conflict_types": conflict_types,
                         "overlap_hours": overlap_hours
                     })
@@ -821,17 +908,28 @@ def get_yard_heatmap_data(
                 svc = conflicts[0]["vessel_service"]
                 hrs = conflicts[0]["overlap_hours"]
                 ctype = conflicts[0]["conflict_types"][0] if conflicts[0].get("conflict_types") else "Operational Conflict"
+                
+                mitigation = "Standard operations"
+                if "Crane Rail Overlap" in conflicts[0]["conflict_types"]:
+                    mitigation = "Adjust crane allocation"
+                elif "Block Overlap" in conflicts[0]["conflict_types"]:
+                    mitigation = "Pre-consolidate yard cargo"
+                
+                if len(conflicts[0]["conflict_types"]) > 1 or len(conflicts) > 1:
+                    mitigation = "Change berth"
+
                 reason = f"Berth {row_berth} is shared with vessel {svc} for {hrs} hrs — HIGH clash risk ({ctype})."
                 row["congestion_risk"] = "High"
 
-            conflict_table.append({
-                "berth":         row["berth"],
-                "block":         row["berth"],
-                "conflict_risk": row["congestion_risk"],
-                "conflict_with": conflicts[:4],
-                "impact_score":  row["impact_score"],
-                "reason":        reason,
-            })
+                conflict_table.append({
+                    "berth":         row["berth"],
+                    "block":         row["berth"],
+                    "conflict_risk": row["congestion_risk"],
+                    "conflict_with": conflicts[:4],
+                    "impact_score":  row["impact_score"],
+                    "reason":        reason,
+                    "mitigation":    mitigation,
+                })
 
         primary_berth = dict(berth_analysis[0])
         primary_berth["recommendation_reason"] = (
