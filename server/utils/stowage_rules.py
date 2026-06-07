@@ -40,20 +40,28 @@ class PositionAllocator:
         """
         Initializes the stateful stowage position allocator.
         """
-        self.port_bay_map = {}
+        self.port_bays = {}  # port -> list of bays allocated
         self.next_available_bay = 1
-        self.counters = {}
+        self.counters = {}   # (bay, deck) -> {"row": 0, "tier": ...}
+        self.MAX_ROWS = 14
+
+    def _allocate_new_bay(self, port: str):
+        bay_str = f"{self.next_available_bay:02d}"
+        self.next_available_bay += 2
+        if port not in self.port_bays:
+            self.port_bays[port] = []
+        self.port_bays[port].append(bay_str)
+        return bay_str
 
     def get_next_position(self, port: str, deck: str):
         """
-        Calculates the next available yard or vessel slot position for a given port and deck.
+        Calculates the next available vessel slot position for a given port and deck.
         """
-        if port not in self.port_bay_map:
-            self.port_bay_map[port] = f"{self.next_available_bay:02d}"
-            self.next_available_bay += 2
+        if port not in self.port_bays or not self.port_bays[port]:
+            self._allocate_new_bay(port)
             
-        bay = self.port_bay_map[port]
-        key = (port, deck)
+        current_bay = self.port_bays[port][-1]
+        key = (current_bay, deck)
         
         if key not in self.counters:
             if deck == "ABOVE_DECK":
@@ -64,21 +72,38 @@ class PositionAllocator:
         state = self.counters[key]
         next_tier = state["tier"] + 2
         
+        bay_overflow = False
         if deck == "ABOVE_DECK":
-            if next_tier > 92:
+            if next_tier > 96:
                 next_tier = 82
                 state["row"] += 1
+                if state["row"] >= self.MAX_ROWS:
+                    bay_overflow = True
         else:
             if next_tier > 16:
                 next_tier = 2
                 state["row"] += 1
-                
+                if state["row"] >= self.MAX_ROWS:
+                    bay_overflow = True
+                    
+        if bay_overflow:
+            # Current bay is full for this deck, allocate a new bay
+            current_bay = self._allocate_new_bay(port)
+            key = (current_bay, deck)
+            if deck == "ABOVE_DECK":
+                self.counters[key] = {"row": 0, "tier": 82}
+            else:
+                self.counters[key] = {"row": 0, "tier": 2}
+            state = self.counters[key]
+            next_tier = state["tier"]
+            
         state["tier"] = next_tier
         
+        # Real ships alternate port/starboard: 00, 01, 02, 03... 
         row_str = f"{state['row']:02d}"
         tier_str = f"{next_tier:02d}"
         
-        return bay, row_str, tier_str
+        return current_bay, row_str, tier_str
 
 def classify_deck_position(weight_band: str) -> str:
     """
