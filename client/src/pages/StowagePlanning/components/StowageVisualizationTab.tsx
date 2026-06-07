@@ -1330,10 +1330,9 @@ export default function StowageVisualizationTab({
                 },
                 {
                   label: "Carrier",
-                  value: hoveredContainer.actualOutboundCarrierVisitId?.slice(
-                    0,
-                    3,
-                  ),
+                  value: hoveredContainer.actualOutboundCarrierVisitId === "UNKNOWN"
+                    ? (hoveredContainer.outboundService !== "UNKNOWN" ? hoveredContainer.outboundService : "Unknown")
+                    : (hoveredContainer.actualOutboundCarrierVisitId || "Unknown"),
                 },
 
                 {
