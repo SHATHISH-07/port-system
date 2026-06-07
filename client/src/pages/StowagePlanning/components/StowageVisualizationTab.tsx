@@ -1065,12 +1065,37 @@ export default function StowageVisualizationTab({
                     alignItems: "flex-end",
                     pb: "24px",
                     zIndex: 1,
+                    position: "relative",
                     "& > *:not(:last-child)": {
                       borderRight: `1px dashed ${alpha(isDark ? "#fff" : "#000", 0.05)}`,
                       pr: "5px",
                     },
                   }}
                 >
+                  {loadingVisualization && (
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: "24px",
+                        zIndex: 10,
+                        bgcolor: alpha(isDark ? "#000" : "#fff", 0.4),
+                        backdropFilter: "blur(3px)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 1,
+                      }}
+                    >
+                      <CircularProgress
+                        size={32}
+                        thickness={4}
+                        sx={{ color: isDark ? "#60a5fa" : "#2563eb" }}
+                      />
+                    </Box>
+                  )}
                   {sortedGroups.map((group: VisualizationGroup) => (
                     <BayColumn
                       key={group.groupId}

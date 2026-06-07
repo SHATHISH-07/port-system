@@ -88,17 +88,10 @@ export default function StowageHeader({
         {/* Inputs row */}
         <Box
           sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "repeat(5, 1fr)",
-              md: "repeat(5, 1fr)",
-              lg:
-                activeTab === 0
-                  ? "2fr 1fr 1fr auto"
-                  : "1fr auto 2fr auto",
-            },
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
             gap: 1.5,
-            alignItems: "center",
+            alignItems: "stretch",
             width: "100%",
           }}
         >
@@ -113,11 +106,11 @@ export default function StowageHeader({
               variant="outlined"
               sx={{
                 width: "100%",
-                gridColumn: { xs: "span 3", lg: "auto" },
+                flex: { xs: "1 1 auto", md: 2 },
                 "& .MuiOutlinedInput-root": {
                   borderRadius: 2,
                   bgcolor: "background.paper",
-                  height: 36,
+                  height: 40,
                   fontSize: "0.8rem",
                   "& fieldset": {
                     borderColor: alpha(theme.palette.divider, 0.8),
@@ -150,10 +143,10 @@ export default function StowageHeader({
             disabled={loading}
             sx={{
               width: "100%",
-              gridColumn: { xs: "span 2", lg: "auto" },
+              flex: 1,
               "& .MuiOutlinedInput-root": {
                 borderRadius: 2,
-                height: 36,
+                height: 40,
                 fontSize: "0.8rem",
               },
             }}
@@ -169,10 +162,10 @@ export default function StowageHeader({
               disabled={loading}
               sx={{
                 width: "100%",
-                gridColumn: { xs: "span 2", lg: "auto" },
+                flex: 1,
                 "& .MuiOutlinedInput-root": {
                   borderRadius: 2,
-                  height: 36,
+                  height: 40,
                   fontSize: "0.8rem",
                 },
               }}
@@ -187,7 +180,7 @@ export default function StowageHeader({
                 alignItems: "center",
                 gap: 1,
                 width: "100%",
-                gridColumn: { xs: "span 2", lg: "auto" },
+                flex: { xs: "1 1 auto", md: 2 },
               }}
             >
               <ButtonGroup
@@ -328,14 +321,14 @@ export default function StowageHeader({
             disabled={loading || !vesselId.trim()}
             sx={{
               borderRadius: 2,
-              px: 2.5,
+              px: 3,
               py: 0.75,
               fontWeight: 700,
               textTransform: "none",
-              fontSize: "0.8rem",
+              fontSize: "0.85rem",
               boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}`,
-              width: "100%",
-              gridColumn: { xs: "span 3", lg: "auto" },
+              width: { xs: "100%", md: "auto" },
+              flexShrink: 0,
               height: 40,
               whiteSpace: "nowrap",
             }}
