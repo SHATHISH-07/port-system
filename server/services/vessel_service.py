@@ -330,6 +330,7 @@ def _calculate_delay_analysis(visit_df) -> list:
                     "factor": "Operational Gaps",
                     "impact": "Medium",
                     "reason": f"Detected {len(long_gaps)} move-completion gaps exceeding 60 mins.",
+                    "recommendation": "Review crane allocation",
                 })
         
         # M-Cycle (Dual Cycle) percentage analysis
@@ -368,6 +369,7 @@ def _calculate_delay_analysis(visit_df) -> list:
                             "factor": "Low M-Cycle Percentage",
                             "impact": "Low",
                             "reason": f"Only {dual_cycle_rate:.1f}% dual-cycles (M-cycles) detected. Poor interleaving of loads and discharges.",
+                            "recommendation": "Improve stacking and consolidation",
                         })
 
     # Fast vectorised restow count
@@ -390,21 +392,131 @@ def _calculate_delay_analysis(visit_df) -> list:
             "factor": "High Restow Rate",
             "impact": "Medium",
             "reason": f"{restow_count} restow/shift moves detected — increases berth time.",
+            "recommendation": "Improve stacking and consolidation",
         })
+
+    # Fetch visit_id to get crane data
+    visit_id = None
+    if "actual_outbound_carrier_visit_id" in visit_df.columns and not visit_df["actual_outbound_carrier_visit_id"].isna().all():
+        visit_id = str(visit_df["actual_outbound_carrier_visit_id"].dropna().iloc[0])
+
+    crane_df = pd.DataFrame()
+    if visit_id:
+        try:
+            from db.queries import load_from_db
+            crane_df = load_from_db("crane", vessel_id=[visit_id])
+        except Exception as e:
+            print(f"Error loading crane df in delay analysis: {e}")
+
+    # 1. Crane idle time
+    if not crane_df.empty and "crane_id" in crane_df.columns and "time_completed" in crane_df.columns:
+        crane_mct = crane_df.dropna(subset=["time_completed"]).sort_values(["crane_id", "time_completed"])
+        if not crane_mct.empty:
+            crane_mct["time_completed"] = pd.to_datetime(crane_mct["time_completed"], errors="coerce")
+            crane_mct = crane_mct.dropna(subset=["time_completed"])
+            crane_mct["gap_mins"] = crane_mct.groupby("crane_id")["time_completed"].diff().dt.total_seconds() / 60
+            idle_gaps = crane_mct[crane_mct["gap_mins"] > 30]
+            if not idle_gaps.empty:
+                causes.append({
+                    "factor": "Crane Idle Time",
+                    "impact": "High",
+                    "reason": f"Detected {len(idle_gaps)} instances of crane idle time >30 mins.",
+                    "recommendation": "Review crane allocation",
+                })
+
+    # 2. Container availability timing
+    if "time_in" in visit_df.columns:
+        loads = visit_df[f_is_y & t_is_v]
+        if not loads.empty and "move_complete_time" in loads.columns:
+            first_load_time = pd.to_datetime(loads["move_complete_time"], errors="coerce").min()
+            if pd.notna(first_load_time):
+                time_in = pd.to_datetime(visit_df["time_in"], errors="coerce")
+                late_arrivals = visit_df[(time_in > first_load_time)]
+                if not late_arrivals.empty:
+                    causes.append({
+                        "factor": "Container not ready",
+                        "impact": "High",
+                        "reason": f"{len(late_arrivals)} containers arrived after vessel loading started.",
+                        "recommendation": "Improve yard readiness before arrival",
+                    })
+
+    # 3. Long unladen travel & ITV congestion
+    try:
+        from services.xml_layout_service import xml_layout_service
+        xml_distances = xml_layout_service.compute_distances()
+        if "block_to_berth" in xml_distances:
+            from utils.position_parser import parse_position
+            load_blocks = f_str[f_is_y & t_is_v].apply(lambda x: parse_position(str(x), "").get("block") if parse_position(str(x), "").get("is_yard") else None).dropna()
+            if not load_blocks.empty:
+                long_travel_count = 0
+                for bk in load_blocks:
+                    if bk in xml_distances["block_to_berth"]:
+                        berths = xml_distances["block_to_berth"][bk]
+                        if berths:
+                            b_name = list(berths.keys())[0]
+                            dist = berths[b_name].get("distance_m", 0)
+                            if dist > 800:
+                                long_travel_count += 1
+                if long_travel_count > len(load_blocks) * 0.3:
+                    causes.append({
+                        "factor": "ITV congestion / Long unladen travel",
+                        "impact": "Medium",
+                        "reason": f"{long_travel_count} load moves originated from blocks >800m from the berth.",
+                        "recommendation": "Review corridor planning",
+                    })
+    except Exception as e:
+        print(f"Error computing unladen travel delay: {e}")
+
+    # 4. Crane crossing conflicts
+    if not crane_df.empty and "crane_id" in crane_df.columns:
+        crane_bays = {}
+        from utils.position_parser import parse_position
+        for row in crane_df.to_dict('records'):
+            cid = row.get("crane_id")
+            pos = row.get("from_position") or row.get("to_position")
+            if pd.isna(cid) or pd.isna(pos):
+                continue
+            p_info = parse_position(str(pos), "")
+            if p_info and p_info.get("is_vessel"):
+                bay = p_info.get("bay")
+                if bay and str(bay).isdigit():
+                    bay = int(bay)
+                    if cid not in crane_bays:
+                        crane_bays[cid] = {"min": bay, "max": bay}
+                    else:
+                        crane_bays[cid]["min"] = min(crane_bays[cid]["min"], bay)
+                        crane_bays[cid]["max"] = max(crane_bays[cid]["max"], bay)
+        
+        c_ids = list(crane_bays.keys())
+        crossing_conflicts = 0
+        for i in range(len(c_ids)):
+            for j in range(i+1, len(c_ids)):
+                b1 = crane_bays[c_ids[i]]
+                b2 = crane_bays[c_ids[j]]
+                if b1["max"] >= b2["min"] and b1["min"] <= b2["max"]:
+                    crossing_conflicts += 1
+        
+        if crossing_conflicts > 0:
+            causes.append({
+                "factor": "Crane crossing conflicts",
+                "impact": "High",
+                "reason": f"Detected {crossing_conflicts} instances of crane working zone (bay) overlap.",
+                "recommendation": "Review crane deployment zones",
+            })
 
     return causes
 
 # Berth table builder
 # Dashboard & Heatmap builders
 def get_yard_heatmap_data(
-    vessel_id: str,
-    unit_ids: list[str] = None,
+    unit_ids: list[str],
     yard_id: str = None,
 ) -> dict:
     """
     Unified endpoint for all map/heatmap/terminal visualization data.
     """
     visit_id = ""
+    vessel_id = ""
 
     if unit_ids:
         from utils.current_container_lookup import lookup_containers_by_ids
@@ -415,39 +527,33 @@ def get_yard_heatmap_data(
                 valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
                 if not valid_visits.empty:
                     visit_id = str(valid_visits.iloc[0])
-    else:
-        df = load_from_db("current", yard_id=yard_id, vessel_id=vessel_id)
-
-        if df.empty:
-            df = load_from_db("history", yard_id=yard_id, vessel_id=vessel_id)
-
-        if not df.empty:
-            v_id_upper = vessel_id.strip().upper()
-            mask = pd.Series([False] * len(df), index=df.index)
             if "outbound_service" in df.columns:
-                mask |= (df["outbound_service"].astype(str).str.strip().str.upper() == v_id_upper)
-            if "actual_outbound_carrier_visit_id" in df.columns:
-                mask |= (df["actual_outbound_carrier_visit_id"].astype(str).str.strip().str.upper() == v_id_upper)
-            df = df[mask].copy()
-
-            if not df.empty and "unit_id" in df.columns:
-                df["unit_id"] = df["unit_id"].astype(str).str.strip().str.upper()
-                sort_cols = [c for c in ["updated_at", "time_in", "created_at"] if c in df.columns]
-                if sort_cols:
-                    df = df.sort_values(sort_cols, ascending=False)
-                df = df.drop_duplicates(subset=["unit_id"], keep="first")
+                valid_services = df["outbound_service"].dropna()
+                if not valid_services.empty:
+                    vessel_id = str(valid_services.iloc[0])
             
-            if not df.empty and "actual_outbound_carrier_visit_id" in df.columns:
-                valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
-                if not valid_visits.empty:
-                    visit_id = str(valid_visits.iloc[0])
+    else:
+        return {"error": "Must provide unit_ids"}
+
+    if not df.empty:
+        if "unit_id" in df.columns:
+            df["unit_id"] = df["unit_id"].astype(str).str.strip().str.upper()
+            sort_cols = [c for c in ["updated_at", "time_in", "created_at"] if c in df.columns]
+            if sort_cols:
+                df = df.sort_values(sort_cols, ascending=False)
+            df = df.drop_duplicates(subset=["unit_id"], keep="first")
+        
+        if not df.empty and "actual_outbound_carrier_visit_id" in df.columns:
+            valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
+            if not valid_visits.empty:
+                visit_id = str(valid_visits.iloc[0])
 
     if df.empty:
         return {
-            "vessel": vessel_id,
+            "vessel": vessel_id or "",
             "visit_id": "",
             "yard_id": yard_id,
-            "error": f"No containers found for vessel '{vessel_id}'",
+            "error": f"No containers found for request",
             "blocks": [],
             "summary": {
                 "total_containers": 0,
@@ -537,14 +643,25 @@ def get_yard_heatmap_data(
 
     for bk, data in blocks.items():
         avg_h = sum(data["stack_heights"]) / len(data["stack_heights"]) if data["stack_heights"] else 1
+        density_pct = round(data["density"] / max(max_density, 1), 4)
+
+        # FIX: concentration label per block (Red/Orange/Green)
+        concentration_label = (
+            "Red" if density_pct >= 0.7
+            else "Orange" if density_pct >= 0.4
+            else "Green"
+        )
+
         block_list.append({
             "block_id": bk,
             "total_containers": data["density"],
             "reefer_count": data["reefer"],
             "hazmat_count": data["hazmat"],
             "oog_count": data["oog"],
-            "density_pct": round(data["density"] / max(max_density, 1), 4),
+            "density_pct": density_pct,
+            "concentration_label": concentration_label,
             "avg_stack_height": round(avg_h, 1),
+            "distance_to_berth_m": None,  # populated after XML distance calc
             "containers": []
         })
 
@@ -554,8 +671,21 @@ def get_yard_heatmap_data(
             c_pos = str(u.get("ctr_from_position", "")) if is_loaded else str(u.get("current_position", ""))
             if not c_pos or str(c_pos) == "nan":
                 c_pos = str(u.get("current_position") or u.get("ctr_to_position") or u.get("ctr_from_position") or "")
-            
+
             p_info = parse_position(c_pos, yard_id)
+
+            # FIX: derive weight_class from unit_weight_in_kg or verified_gross_mass
+            raw_weight = u.get("unit_weight_in_kg") or u.get("verified_gross_mass_kg")
+            try:
+                w_kg = float(raw_weight) if raw_weight and str(raw_weight) not in ("nan", "None", "") else 0
+            except (ValueError, TypeError):
+                w_kg = 0
+            weight_class = (
+                "HEAVY" if w_kg >= 20000
+                else "MEDIUM" if w_kg >= 10000
+                else "LIGHT"
+            )
+
             block_list[-1]["containers"].append({
                 "unit_id": u.get("unit_id"),
                 "position": c_pos,
@@ -568,6 +698,9 @@ def get_yard_heatmap_data(
                 "hazardous": _is_yes(u.get("hazardous_flag")),
                 "reefer": _is_yes(u.get("reefer")),
                 "oog": _is_yes(u.get("oog_unit")),
+                "equipment_class": u.get("equipment_class") or "CONTAINER",
+                "container_length": u.get("container_length"),
+                "weight_class": weight_class,
             })
 
     summary = {
@@ -658,17 +791,25 @@ def get_yard_heatmap_data(
                 near_blocks.add(bk_id)
                 
             total_laden += bk_count * dist_m
-            
+
+            # FIX: populate distance_to_berth_m on each block
+            for bl in block_list:
+                if bl["block_id"] == bk_id and bl["distance_to_berth_m"] is None:
+                    bl["distance_to_berth_m"] = dist_m
+
         concentration_pct = round((near_count / total_all) * 100, 2)
         avg_dist = int(total_laden / total_all) if total_all > 0 else 0
-        
+
+        # FIX: unladen travel = return trips (empty trucks), ~85% of laden distance
+        total_unladen = int(total_laden * 0.85)
+
         berth_metrics.append({
             "berth_name": berth_name,
             "concentration_pct": concentration_pct,
             "near_count": near_count,
             "avg_dist": avg_dist,
             "total_laden": total_laden,
-            "total_unladen": total_laden,
+            "total_unladen": total_unladen,
             "near_blocks": near_blocks,
             "corridors": corridors,
             "equipment": equipment
@@ -737,11 +878,14 @@ def get_yard_heatmap_data(
             else "Low"
         )
         
+        # FIX: unladen distance is separate from laden
+        unladen_dist = int(b["total_unladen"] / total_all) if total_all > 0 else 0
+
         berth_analysis.append({
             "rank":                    idx,
             "berth":                   b["berth_name"],
             "terminal":                yard_id or "YARD",
-            "block":                   b["berth_name"],
+            "near_blocks":             sorted(list(b["near_blocks"])),
             "total_moves":             b["near_count"],
             "load_moves":              b["near_count"],
             "discharge_moves":         0,
@@ -749,15 +893,17 @@ def get_yard_heatmap_data(
             "intensity":               round(b["concentration_pct"] / 100, 4),
             "recommended_cranes":      max(1, math.ceil(b["near_count"] / dynamic_crane_capacity)),
             "congestion_risk":         risk,
-            "hazardous":               summary.get("hazardous_containers", 0),
-            "reefer":                  summary.get("reefer_containers", 0),
-            "oog":                     summary.get("oog_containers", 0),
+            "hazardous":               summary.get("hazmat_total", 0),
+            "reefer":                  summary.get("reefer_total", 0),
+            "oog":                     summary.get("oog_total", 0),
             "unique_containers":       b["near_count"],
             "impact_score":            dist_m,
             "travel_distance_score":   dist_m,
             "travel_distance_label":   travel_distance_label,
-            "laden_travel_distance_m": b["avg_dist"],
-            "unladen_travel_distance_m": b["avg_dist"],
+            "laden_travel_distance_m": dist_m,
+            "unladen_travel_distance_m": unladen_dist,
+            "avg_laden_distance_m":    b["avg_dist"],
+            "avg_unladen_distance_m":  unladen_dist,
             "corridor_congestion": (
                 "High" if b["concentration_pct"] > 80
                 else "Moderate" if b["concentration_pct"] > 40
@@ -767,7 +913,9 @@ def get_yard_heatmap_data(
                 "Deploy additional transport units"
                 if dist_m >= 500 else "Standard operations"
             ),
-            "near_blocks": b["near_blocks"]
+            "_near_blocks_set": b["near_blocks"],
+            "_corridors_set": b.get("corridors", set()),
+            "_equipment_set": b.get("equipment", set()),
         })
 
     if berth_analysis:
@@ -855,9 +1003,10 @@ def get_yard_heatmap_data(
         for row in berth_analysis:
             conflicts: list[dict] = []
             row_berth = row["berth"]
-            near_blocks = row.pop("near_blocks", set())
-            corridors = row.pop("corridors", set())
-            equipment = row.pop("equipment", set())
+            # FIX: use internal keys then remove them, keeping near_blocks in response
+            near_blocks = row.pop("_near_blocks_set", set())
+            corridors = row.pop("_corridors_set", set())
+            equipment = row.pop("_equipment_set", set())
             
             for v_id, v_data in concurrent_vessels.items():
                 shared_blocks = list(near_blocks.intersection(v_data["blocks"]))
@@ -892,6 +1041,8 @@ def get_yard_heatmap_data(
                         "visit_id": str(v_id),
                         "shared_blocks": shared_blocks,
                         "shared_block_pct": shared_block_pct,
+                        "shared_corridors": shared_corridors,
+                        "shared_equipment": shared_equipment,
                         "conflict_types": conflict_types,
                         "overlap_hours": overlap_hours
                     })
@@ -918,13 +1069,37 @@ def get_yard_heatmap_data(
                 if len(conflicts[0]["conflict_types"]) > 1 or len(conflicts) > 1:
                     mitigation = "Change berth"
 
-                reason = f"Berth {row_berth} is shared with vessel {svc} for {hrs} hrs — HIGH clash risk ({ctype})."
-                row["congestion_risk"] = "High"
+                # FIX: Granular risk classification based on conflict severity
+                total_conflict_types = set()
+                max_shared_pct = 0
+                for c in conflicts:
+                    total_conflict_types.update(c["conflict_types"])
+                    max_shared_pct = max(max_shared_pct, c.get("shared_block_pct", 0))
+
+                if (len(total_conflict_types) >= 3
+                    or "Crane Rail Overlap" in total_conflict_types
+                    or max_shared_pct >= 50
+                    or len(conflicts) >= 3):
+                    conflict_risk = "High"
+                elif (len(total_conflict_types) >= 2
+                      or max_shared_pct >= 25
+                      or len(conflicts) >= 2):
+                    conflict_risk = "Medium"
+                else:
+                    conflict_risk = "Low"
+
+                row["congestion_risk"] = conflict_risk
+                reason = f"Berth {row_berth} is shared with vessel {svc} for {hrs} hrs — {conflict_risk} clash risk ({ctype})."
+
+                # FIX: collect all contested blocks across all conflicts
+                all_contested_blocks = set()
+                for c in conflicts:
+                    all_contested_blocks.update(c.get("shared_blocks", []))
 
                 conflict_table.append({
                     "berth":         row["berth"],
-                    "block":         row["berth"],
-                    "conflict_risk": row["congestion_risk"],
+                    "contested_blocks": sorted(list(all_contested_blocks)),
+                    "conflict_risk": conflict_risk,
                     "conflict_with": conflicts[:4],
                     "impact_score":  row["impact_score"],
                     "reason":        reason,

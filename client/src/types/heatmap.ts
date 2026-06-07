@@ -70,12 +70,14 @@ export interface ConflictVessel {
     vessel_service: string;
     visit_id: string;
     shared_blocks: string[];
+    shared_corridors?: string[];
+    shared_equipment?: string[];
     overlap_hours: number;
 }
 
 export interface ConflictEntry {
     berth: string;
-    block: string;
+    contested_blocks?: string[];
     conflict_risk: "High" | "Medium" | "Low";
     conflict_with: ConflictVessel[];
     impact_score: number;
@@ -126,6 +128,6 @@ export interface VesselHeatmapResponse {
 export type VesselHeatmapViewData = VesselHeatmapResponse & {
     targetBerthId?: string;
     computedMaxBlock?: string | null;
-    terminalLayout?: any;
-    terminalGeo?: any;
+    terminalLayout?: TerminalLayout | null;
+    terminalGeo?: Record<string, unknown> | null;
 };

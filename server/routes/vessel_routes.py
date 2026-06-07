@@ -90,7 +90,6 @@ async def get_vessel_heatmap_route(
     """
     try:
         res = get_yard_heatmap_data(
-            vessel_id=request.vessel_id,
             unit_ids=request.unit_ids if request.unit_ids else None,
             yard_id=request.yard_id,
         )
@@ -100,7 +99,7 @@ async def get_vessel_heatmap_route(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("vessel_heatmap error for %s: %s", request.vessel_id, exc, exc_info=True)
+        logger.error("vessel_heatmap error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
 
 @router.get("/yard/summary", response_model=YardSummaryResponse)

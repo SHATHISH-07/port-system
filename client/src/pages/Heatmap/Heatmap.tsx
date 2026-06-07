@@ -40,6 +40,7 @@ import type {
   ConflictEntry,
   BlockData,
   ContainerData,
+  TerminalLayout,
 } from "../../types/heatmap";
 
 // ─── API types ───────────────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ type ApiHeatmapResponse = {
  */
 function adaptDataForMaps(
   newData: ApiHeatmapResponse,
-  terminalLayout?: any,
+  terminalLayout?: TerminalLayout | null,
 ): VesselHeatmapViewData | null {
   if (!newData || !Array.isArray(newData.blocks)) return null;
 
@@ -104,7 +105,9 @@ function adaptDataForMaps(
 
   // ── Container count map (blockId → count) ───────────────────────────────
   const blockCounts: Record<string, number> = {};
-  newData.blocks.forEach(b => { blockCounts[b.block_id] = b.total_containers || 0; });
+  newData.blocks.forEach((b) => {
+    blockCounts[b.block_id] = b.total_containers || 0;
+  });
 
   // ── Recommended berth (pure geometry: closest berth to densest block) ────
   const targetBerthId = geo.recommendedBerth(blockCounts) ?? "B1";
@@ -116,18 +119,21 @@ function adaptDataForMaps(
   //   2. API-supplied layout (already has normalised w/h)
   //   3. Simple grid fallback
   //
-  let layoutObj: Record<string, { x: number; y: number; w?: number; h?: number }> = {};
+  let layoutObj: Record<
+    string,
+    { x: number; y: number; w?: number; h?: number }
+  > = {};
 
   if (geo.blocks.length > 0) {
     // Build from XML: use every block that has a matching entry in the API
     // response OR is present in the XML (so the yard always renders fully).
     const allBlockIds = new Set([
-      ...newData.blocks.map(b => b.block_id),
-      ...geo.blocks.map(b => b.id),
+      ...newData.blocks.map((b) => b.block_id),
+      ...geo.blocks.map((b) => b.id),
     ]);
 
-    allBlockIds.forEach(id => {
-      const xmlBlock = geo.blocks.find(b => b.id === id);
+    allBlockIds.forEach((id) => {
+      const xmlBlock = geo.blocks.find((b) => b.id === id);
       if (xmlBlock) {
         layoutObj[id] = {
           x: xmlBlock.cx,
@@ -159,15 +165,22 @@ function adaptDataForMaps(
   let berthsForMaps: Record<string, { x: number; y: number }[]> = {};
 
   if (geo.berths.length > 0) {
-    geo.berths.forEach(berth => {
-      berthsForMaps[berth.id] = berth.polygon.map(p => ({ x: p.x, y: p.y }));
+    geo.berths.forEach((berth) => {
+      berthsForMaps[berth.id] = berth.polygon.map((p) => ({ x: p.x, y: p.y }));
     });
   } else if (newData.berths && Object.keys(newData.berths).length > 0) {
-    berthsForMaps = newData.berths as Record<string, { x: number; y: number }[]>;
+    berthsForMaps = newData.berths as Record<
+      string,
+      { x: number; y: number }[]
+    >;
   }
 
   // ── Build shapes for map background ──────────────────────────────────────
-  let shapes: { type: string; name: string; points: { x: number; y: number }[] }[] = [];
+  let shapes: {
+    type: string;
+    name: string;
+    points: { x: number; y: number }[];
+  }[] = [];
 
   if (terminalLayout) {
     // Yard boundary
@@ -181,12 +194,15 @@ function adaptDataForMaps(
       });
     }
     // Block outlines
-    Object.values(terminalLayout.blocks ?? {}).forEach((b: any) => {
+    Object.values(terminalLayout.blocks ?? {}).forEach((b) => {
       if (b.polygon?.length) {
         shapes.push({
           type: "block",
           name: b.name,
-          points: (b.polygon as [number, number][]).map(([x, y]) => ({ x, y: 1 - y })),
+          points: (b.polygon as [number, number][]).map(([x, y]) => ({
+            x,
+            y: 1 - y,
+          })),
         });
       }
     });
@@ -196,24 +212,24 @@ function adaptDataForMaps(
 
   // ── Concentration assignment ──────────────────────────────────────────────
   const maxCount = Math.max(
-    ...newData.blocks.map(b => b.total_containers || 0),
+    ...newData.blocks.map((b) => b.total_containers || 0),
     1,
   );
 
   const validBlocks = [...newData.blocks]
-    .filter(b => (b.total_containers || 0) > 0)
+    .filter((b) => (b.total_containers || 0) > 0)
     .sort((a, b) => (b.total_containers || 0) - (a.total_containers || 0));
 
   const blockConcentrationMap: Record<string, "High" | "Medium" | "Low"> = {};
 
   const assign = (idx: number, count: number): "High" | "Medium" | "Low" => {
     if (idx === 0) return "High";
-    
+
     // If the container count is 20% or less of the max block count, it's Low (Green)
     // Otherwise it's Medium (Orange)
     const ratio = count / maxCount;
-    if (ratio <= 0.20) return "Low";
-    
+    if (ratio <= 0.2) return "Low";
+
     return "Medium";
   };
   validBlocks.forEach((b, idx) => {
@@ -224,8 +240,8 @@ function adaptDataForMaps(
   const blocksObj: Record<string, BlockData> = {};
   let computedMaxBlockId: string | null = null;
 
-  Object.keys(layoutObj).forEach(bId => {
-    const b = newData.blocks.find(block => block.block_id === bId);
+  Object.keys(layoutObj).forEach((bId) => {
+    const b = newData.blocks.find((block) => block.block_id === bId);
     if (b) {
       const count = b.total_containers || 0;
       let intensity = b.intensity;
@@ -298,8 +314,7 @@ function adaptDataForMaps(
     shapes,
     berths: berthsForMaps,
     terminalLayout,
-    // Pass full geo so child components can use berth metadata
-    terminalGeo: geo,
+    terminalGeo: geo as unknown as Record<string, unknown>,
   };
 }
 
@@ -310,9 +325,6 @@ export default function Heatmap() {
   const theme = useTheme();
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const [vesselInput, setVesselInput] = React.useState(
-    searchParams.get("vesselId") || "",
-  );
   const [yardInput, setYardInput] = React.useState(
     searchParams.get("yardId") || "",
   );
@@ -322,29 +334,28 @@ export default function Heatmap() {
   const [rawApiData, setRawApiData] = React.useState<ApiHeatmapResponse | null>(
     null,
   );
-  const [mapData, setMapData] = React.useState<VesselHeatmapViewData | null>(
-    null,
-  );
-  const [terminalLayout, setTerminalLayout] = React.useState<any>(null);
+  const [terminalLayout, setTerminalLayout] =
+    React.useState<TerminalLayout | null>(null);
+
+  // Re-derive map data whenever raw API data or XML layout changes
+  const mapData = React.useMemo(() => {
+    if (!rawApiData) return null;
+    return adaptDataForMaps(rawApiData, terminalLayout);
+  }, [rawApiData, terminalLayout]);
 
   // Fetch terminal layout from XML on mount
   React.useEffect(() => {
     api
       .get("/terminal-layout")
-      .then(res => {
+      .then((res) => {
         if (res.data?.status === "success") {
           setTerminalLayout(res.data.data);
         }
       })
-      .catch(err => console.error("Failed to load terminal layout", err));
+      .catch((err) => console.error("Failed to load terminal layout", err));
   }, []);
 
-  // Re-derive map data whenever raw API data or XML layout changes
-  React.useEffect(() => {
-    if (rawApiData) {
-      setMapData(adaptDataForMaps(rawApiData, terminalLayout));
-    }
-  }, [rawApiData, terminalLayout]);
+  // Re-derive map data whenever raw API data or XML layout changes is handled by useMemo above.
 
   const [mapView, setMapView] = React.useState<
     "HEATMAP" | "MAP2D" | "3D" | "CONTAINERS"
@@ -363,10 +374,6 @@ export default function Heatmap() {
   const wrapperRef = React.useRef<HTMLDivElement>(null);
 
   const load = async () => {
-    if (!vesselInput.trim()) {
-      setToast({ open: true, message: "Please enter a Vessel ID", severity: "warning" });
-      return;
-    }
     if (!containerFile) {
       setToast({
         open: true,
@@ -393,9 +400,7 @@ export default function Heatmap() {
         return;
       }
 
-      const payload: Record<string, string | string[]> = {
-        vessel_id: vesselInput.trim(),
-      };
+      const payload: Record<string, string | string[]> = {};
       if (yardInput.trim()) payload.yard_id = yardInput.trim();
       if (unitIds) payload.unit_ids = unitIds;
 
@@ -407,23 +412,21 @@ export default function Heatmap() {
       if (data.error) {
         setToast({ open: true, message: data.error, severity: "error" });
         setRawApiData(null);
-        setMapData(null);
       } else {
         setRawApiData(data);
         setToast({
           open: true,
-          message: `Successfully loaded yard analysis for ${vesselInput.trim()}`,
+          message: `Successfully loaded yard analysis`,
           severity: "success",
         });
         setInputsOpen(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      const msg =
-        err.response?.data?.detail || err.message || "Failed to load heatmap data";
-      setToast({ open: true, message: msg, severity: "error" });
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to load heatmap data";
+      setToast({ open: true, message: errorMsg, severity: "error" });
       setRawApiData(null);
-      setMapData(null);
     } finally {
       setLoading(false);
     }
@@ -465,7 +468,14 @@ export default function Heatmap() {
       {/* BASE LAYER: CANVAS MAPS */}
       <Box sx={{ position: "absolute", inset: 0, zIndex: 1 }}>
         {mapView === "HEATMAP" && (
-          <Box sx={{ width: "100%", height: "100%", overflowY: "auto", overflowX: "hidden" }}>
+          <Box
+            sx={{
+              width: "100%",
+              height: "100%",
+              overflowY: "auto",
+              overflowX: "hidden",
+            }}
+          >
             <BlockIllustrator
               data={mapData}
               targetBerthId={mapData?.targetBerthId || ""}
@@ -534,18 +544,18 @@ export default function Heatmap() {
             }}
             onClick={() => setInputsOpen(true)}
           >
-            <SearchRounded sx={{ fontSize: { xs: 16, md: 20 }, color: "primary.main" }} />
+            <SearchRounded
+              sx={{ fontSize: { xs: 16, md: 20 }, color: "primary.main" }}
+            />
             <Typography
               variant="body2"
-              sx={{ fontSize: { xs: "0.65rem", md: "0.75rem" }, fontWeight: 800, letterSpacing: 0.5 }}
+              sx={{
+                fontSize: { xs: "0.65rem", md: "0.75rem" },
+                fontWeight: 800,
+                letterSpacing: 0.5,
+              }}
             >
-              VESSEL:{" "}
-              <Typography
-                component="span"
-                sx={{ fontSize: { xs: "0.65rem", md: "0.75rem" }, color: "primary.main", fontWeight: 900 }}
-              >
-                {vesselInput || "NONE"}
-              </Typography>
+              HEATMAP SETTINGS
             </Typography>
           </Box>
         ) : (
@@ -581,24 +591,16 @@ export default function Heatmap() {
               <TextField
                 size="small"
                 fullWidth
-                label="Vessel ID"
-                value={vesselInput}
-                onChange={e => setVesselInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && load()}
-                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2, height: { xs: 30, md: 36 } } }}
-                slotProps={{
-                  htmlInput: { style: { fontSize: "0.8rem" } },
-                  inputLabel: { style: { fontSize: "0.8rem" } },
-                }}
-              />
-              <TextField
-                size="small"
-                fullWidth
-                label="Yard ID (Optional)"
+                label="Yard ID"
                 value={yardInput}
-                onChange={e => setYardInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && load()}
-                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2, height: { xs: 30, md: 36 } } }}
+                onChange={(e) => setYardInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && load()}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2,
+                    height: { xs: 30, md: 36 },
+                  },
+                }}
                 slotProps={{
                   htmlInput: { style: { fontSize: "0.8rem" } },
                   inputLabel: { style: { fontSize: "0.8rem" } },
@@ -609,7 +611,9 @@ export default function Heatmap() {
                   fullWidth
                   component="label"
                   variant="outlined"
-                  startIcon={<UploadFileOutlined sx={{ fontSize: { xs: 14, md: 16 } }} />}
+                  startIcon={
+                    <UploadFileOutlined sx={{ fontSize: { xs: 14, md: 16 } }} />
+                  }
                   sx={{
                     borderRadius: 2,
                     fontSize: { xs: "0.65rem", md: "0.75rem" },
@@ -623,16 +627,23 @@ export default function Heatmap() {
                 >
                   <Typography
                     noWrap
-                    sx={{ fontSize: { xs: "0.65rem", md: "0.75rem" }, maxWidth: { xs: 140, md: 180 } }}
+                    sx={{
+                      fontSize: { xs: "0.65rem", md: "0.75rem" },
+                      maxWidth: { xs: 140, md: 180 },
+                    }}
                   >
-                    {containerFile ? containerFile.name : "Upload Container List"}
+                    {containerFile
+                      ? containerFile.name
+                      : "Upload Container List"}
                   </Typography>
                   <input
                     ref={fileInputRef}
                     type="file"
                     hidden
                     accept=".txt,.csv,.json"
-                    onChange={e => setContainerFile(e.target.files?.[0] || null)}
+                    onChange={(e) =>
+                      setContainerFile(e.target.files?.[0] || null)
+                    }
                   />
                 </Button>
                 {containerFile && (
@@ -686,7 +697,8 @@ export default function Heatmap() {
             gap: 2,
             border: "1px solid",
             borderColor: theme.palette.divider,
-            boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[4],
+            boxShadow:
+              theme.palette.mode === "dark" ? "none" : theme.shadows[4],
           }}
         >
           <Box>
@@ -921,14 +933,28 @@ export default function Heatmap() {
             <ToggleButton value="MAP2D">2D Heatmap</ToggleButton>
             <ToggleButton value="3D">3D Heatmap</ToggleButton>
             <ToggleButton value="CONTAINERS">Container Positions</ToggleButton>
-            <Divider flexItem orientation="vertical" sx={{ mx: 0.5, my: 0.6 }} />
+            <Divider
+              flexItem
+              orientation="vertical"
+              sx={{ mx: 0.5, my: 0.6 }}
+            />
             <ToggleButton value="BERTH">Recommended Berth</ToggleButton>
           </ToggleButtonGroup>
         </Box>
         <Box sx={{ display: { xs: "block", lg: "none" } }}>
           <Select
             value={overlayView !== "NONE" ? overlayView : mapView}
-            onChange={e => handleViewToggle(e as any, e.target.value as any)}
+            onChange={(e) =>
+              handleViewToggle(
+                e as unknown as React.MouseEvent<HTMLElement>,
+                e.target.value as
+                  | "HEATMAP"
+                  | "MAP2D"
+                  | "3D"
+                  | "CONTAINERS"
+                  | "BERTH",
+              )
+            }
             size="small"
             sx={{
               minWidth: 140,
@@ -941,27 +967,73 @@ export default function Heatmap() {
               container: () => document.fullscreenElement || document.body,
               slotProps: {
                 paper: {
-                  sx: { borderRadius: 2, mt: -1, boxShadow: "none", border: "1px solid", borderColor: "divider" },
+                  sx: {
+                    borderRadius: 2,
+                    mt: -1,
+                    boxShadow: "none",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  },
                 },
               },
               anchorOrigin: { vertical: "top", horizontal: "center" },
               transformOrigin: { vertical: "bottom", horizontal: "center" },
-            } as any}
+            }}
           >
-            <MenuItem value="HEATMAP" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>
+            <MenuItem
+              value="HEATMAP"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 600,
+                minHeight: "auto",
+                py: 0.8,
+              }}
+            >
               Block Illustrator
             </MenuItem>
-            <MenuItem value="MAP2D" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>
+            <MenuItem
+              value="MAP2D"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 600,
+                minHeight: "auto",
+                py: 0.8,
+              }}
+            >
               2D Heatmap
             </MenuItem>
-            <MenuItem value="3D" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>
+            <MenuItem
+              value="3D"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 600,
+                minHeight: "auto",
+                py: 0.8,
+              }}
+            >
               3D Heatmap
             </MenuItem>
-            <MenuItem value="CONTAINERS" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>
+            <MenuItem
+              value="CONTAINERS"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 600,
+                minHeight: "auto",
+                py: 0.8,
+              }}
+            >
               Container Positions
             </MenuItem>
             <Divider sx={{ my: 0.5 }} />
-            <MenuItem value="BERTH" sx={{ fontSize: "0.65rem", fontWeight: 600, minHeight: "auto", py: 0.8 }}>
+            <MenuItem
+              value="BERTH"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 600,
+                minHeight: "auto",
+                py: 0.8,
+              }}
+            >
               Recommended Berth
             </MenuItem>
           </Select>
@@ -973,7 +1045,9 @@ export default function Heatmap() {
         anchor="bottom"
         open={overlayView !== "NONE"}
         onClose={() => setOverlayView("NONE")}
-        ModalProps={{ container: () => document.fullscreenElement || document.body }}
+        ModalProps={{
+          container: () => document.fullscreenElement || document.body,
+        }}
         slotProps={{
           paper: {
             sx: {
@@ -1016,7 +1090,14 @@ export default function Heatmap() {
           />
         </Box>
 
-        <Box sx={{ p: { xs: 2, md: 4, lg: 6 }, pt: 0, height: "100%", overflowY: "auto" }}>
+        <Box
+          sx={{
+            p: { xs: 2, md: 4, lg: 6 },
+            pt: 0,
+            height: "100%",
+            overflowY: "auto",
+          }}
+        >
           {overlayView === "BERTH" && rawApiData && (
             <Box
               sx={{
@@ -1042,7 +1123,9 @@ export default function Heatmap() {
               >
                 Analysis Summary
               </Typography>
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <Box
+                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+              >
                 <Box>
                   <Typography
                     sx={{
@@ -1226,13 +1309,13 @@ export default function Heatmap() {
       <Snackbar
         open={toast.open}
         autoHideDuration={6000}
-        onClose={() => setToast(t => ({ ...t, open: false }))}
+        onClose={() => setToast((t) => ({ ...t, open: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert
           severity={toast.severity}
           variant="filled"
-          onClose={() => setToast(t => ({ ...t, open: false }))}
+          onClose={() => setToast((t) => ({ ...t, open: false }))}
         >
           {toast.message}
         </Alert>

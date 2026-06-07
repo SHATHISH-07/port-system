@@ -548,11 +548,13 @@ export default function StowageVisualizationTab({
 
   // Maintain local state for the rotation so we can update the pill sequence instantly
   // without triggering a massive synchronous re-render in the parent component.
+  const [prevRotationProp, setPrevRotationProp] = React.useState<string[]>(portRotation || []);
   const [localRotation, setLocalRotation] = React.useState<string[]>(portRotation || []);
 
-  React.useEffect(() => {
+  if (portRotation !== prevRotationProp) {
+    setPrevRotationProp(portRotation || []);
     setLocalRotation(portRotation || []);
-  }, [portRotation]);
+  }
 
   // Defer the port rotation used for sorting the ship so that the fast Drag-and-Drop
   // UI in the sequence bar updates instantly without waiting for the heavy ship DOM to reorder.
@@ -578,7 +580,7 @@ export default function StowageVisualizationTab({
       .map((p: StepData) => p.unitId as string),
   );
 
-  const groups: VisualizationGroup[] = visualizationData?.map?.groups || [];
+  const groups: VisualizationGroup[] = React.useMemo(() => visualizationData?.map?.groups || [], [visualizationData]);
   const sortedGroups = React.useMemo(() => {
     return [...groups].sort((a, b) => {
       const idxA = (deferredPortRotation || []).indexOf(a.groupId);
@@ -635,7 +637,7 @@ export default function StowageVisualizationTab({
     };
 
     const onWheel = (e: WheelEvent) => {
-      // Map vertical mouse wheel / trackpad scrolling to horizontal scroll
+      // Map vertical mouse wheel / touch pad scrolling to horizontal scroll
       if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
         el.scrollLeft += e.deltaY;
         e.preventDefault();
@@ -766,7 +768,7 @@ export default function StowageVisualizationTab({
           <Box
             sx={{
               position: "relative",
-              margin: "auto 24px 24px 24px",
+              margin: "auto auto 24px auto",
               display: "flex",
               alignItems: "flex-end",
               minWidth: "min-content",

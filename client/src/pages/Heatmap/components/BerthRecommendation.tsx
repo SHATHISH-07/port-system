@@ -29,6 +29,8 @@ export interface ConflictVesselDisplay {
   visit_id: string;
   shared_blocks: string[];
   shared_block_pct?: number;
+  shared_corridors?: string[];
+  shared_equipment?: string[];
   overlap_hours: number;
 }
 
@@ -343,6 +345,16 @@ export default function BerthRecommendation({
                         <Typography sx={{ fontSize: "0.55rem", fontWeight: 700, color: alpha(COLORS.error, 0.7) }}>
                           {cw.overlap_hours}h overlap {cw.shared_block_pct ? `(${cw.shared_block_pct}% blocks)` : ''}
                         </Typography>
+                        {cw.shared_corridors && cw.shared_corridors.length > 0 && (
+                          <Typography sx={{ fontSize: "0.55rem", fontWeight: 700, color: alpha(COLORS.warning, 0.8) }}>
+                            Corridors: {cw.shared_corridors.join(", ")}
+                          </Typography>
+                        )}
+                        {cw.shared_equipment && cw.shared_equipment.length > 0 && (
+                          <Typography sx={{ fontSize: "0.55rem", fontWeight: 700, color: alpha(COLORS.warning, 0.8) }}>
+                            Equip: {cw.shared_equipment.join(", ")}
+                          </Typography>
+                        )}
                       </Box>
                     ))}
                   </Stack>

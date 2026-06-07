@@ -2,7 +2,6 @@ from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, ConfigDict
 
 class HeatmapRequest(BaseModel):
-    vessel_id: str
     unit_ids: List[str]
     yard_id: Optional[str] = None
 
