@@ -1,4 +1,5 @@
 from __future__ import annotations
+# cspell:disable
 
 import logging
 
@@ -13,7 +14,7 @@ from services.vessel_service import (
     get_yard_heatmap_data,
 )
 
-from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse
+from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse, DiscoverServicesRequest
 
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/vessel", tags=["Vessel Analytics"])
@@ -92,6 +93,7 @@ async def get_vessel_heatmap_route(
         res = get_yard_heatmap_data(
             unit_ids=request.unit_ids if request.unit_ids else None,
             yard_id=request.yard_id,
+            vessel_id=request.vessel_id,
         )
         if "error" in res:
             raise HTTPException(status_code=404, detail=res["error"])
@@ -101,6 +103,21 @@ async def get_vessel_heatmap_route(
     except Exception as exc:
         logger.error("vessel_heatmap error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
+
+@router.post("/discover-services")
+async def discover_services(
+    request: DiscoverServicesRequest, current_user: dict = Depends(get_current_user)
+):
+    """
+    Discovers unique outbound services (vessels) from a list of unit IDs.
+    """
+    try:
+        from services.vessel_service import discover_services_for_containers
+        services = discover_services_for_containers(request.unit_ids, request.yard_id)
+        return {"services": services}
+    except Exception as e:
+        logger.error(f"Error discovering services: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/yard/summary", response_model=YardSummaryResponse)
 def get_yard_summary(

@@ -531,14 +531,14 @@ def process_current_planning_and_yard_strategy(
         if df.empty:
             df = load_from_db("history", yard_id=yard_id, vessel_id=vessel_id)
         
-        if not df.empty:
-            v_id_upper = str(vessel_id).strip().upper()
-            mask = pd.Series([False] * len(df), index=df.index)
-            if "outbound_service" in df.columns:
-                mask |= (df["outbound_service"].astype(str).str.strip().str.upper() == v_id_upper)
-            if "actual_outbound_carrier_visit_id" in df.columns:
-                mask |= (df["actual_outbound_carrier_visit_id"].astype(str).str.strip().str.upper() == v_id_upper)
-            df = df[mask].copy()
+    if df is not None and not df.empty:
+        v_id_upper = str(vessel_id).strip().upper()
+        mask = pd.Series([False] * len(df), index=df.index)
+        if "outbound_service" in df.columns:
+            mask |= (df["outbound_service"].astype(str).str.strip().str.upper() == v_id_upper)
+        if "actual_outbound_carrier_visit_id" in df.columns:
+            mask |= (df["actual_outbound_carrier_visit_id"].astype(str).str.strip().str.upper() == v_id_upper)
+        df = df[mask].copy()
 
     if df is None or df.empty:
         return _empty_planning_response(vessel_id, len(cleaned_ids))

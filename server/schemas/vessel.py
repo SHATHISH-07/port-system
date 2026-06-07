@@ -1,7 +1,13 @@
+# cspell:disable
 from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, ConfigDict
 
 class HeatmapRequest(BaseModel):
+    unit_ids: List[str]
+    yard_id: Optional[str] = None
+    vessel_id: Optional[str] = None
+
+class DiscoverServicesRequest(BaseModel):
     unit_ids: List[str]
     yard_id: Optional[str] = None
 

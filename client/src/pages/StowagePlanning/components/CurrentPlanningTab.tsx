@@ -20,6 +20,8 @@ import {
   CircularProgress,
   Paper,
   Button,
+  Select,
+  MenuItem,
   type Theme,
 } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -280,8 +282,11 @@ interface CurrentPlanningTabProps {
   onVisualizationLoadingChange: (loading: boolean) => void;
   onVisualizationDataChange: (data: VisualizationData) => void;
   recomputeTrigger?: number;
+  visualizationRefreshTrigger?: number;
   visualizationOpen?: boolean;
   onCloseVisualization?: () => void;
+  discoveredServices?: string[];
+  onServiceChange?: (newService: string) => void;
 }
 
 export default function CurrentPlanningTab({
@@ -296,6 +301,10 @@ export default function CurrentPlanningTab({
   onVisualizationLoadingChange,
   onVisualizationDataChange,
   recomputeTrigger = 0,
+  visualizationRefreshTrigger = 0,
+  visualizationOpen = false,
+  discoveredServices = [],
+  onServiceChange,
 }: CurrentPlanningTabProps) {
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
@@ -309,7 +318,7 @@ export default function CurrentPlanningTab({
   const [loadingVisualization, setLoadingVisualization] = useState(false);
 
   const executeOptimization = async (overrideRotation?: string[]) => {
-    if (!vesselId || (!globalFile && !globalContainerText?.trim())) return;
+    if (!vesselId || (!globalFile && !globalContainerText?.trim())) return null;
     setLoading(true);
     setError(null);
     try {
@@ -332,18 +341,21 @@ export default function CurrentPlanningTab({
           response.data.dischargeSequence.map((s: { port: string }) => s.port),
         );
       }
+      return response.data;
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { detail?: string } } })?.response?.data
           ?.detail || "Failed to optimize plan.",
       );
+      return null;
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchAndOpenVisualization = async (rotationOverride?: string[]) => {
-    if (!vesselId || !optimizedData) return;
+  const fetchAndOpenVisualization = async (rotationOverride?: string[], optDataOverride?: OptimizedData) => {
+    const dataToUse = optDataOverride || optimizedData;
+    if (!vesselId || !dataToUse) return;
     setLoadingVisualization(true);
     onVisualizationLoadingChange(true);
 
@@ -352,7 +364,7 @@ export default function CurrentPlanningTab({
         rotationOverride ||
         (portRotation.length > 0
           ? portRotation
-          : optimizedData.dischargeSequence.map(
+          : dataToUse.dischargeSequence.map(
             (seq: { port: string }) => seq.port,
           ));
 
@@ -397,6 +409,30 @@ export default function CurrentPlanningTab({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recomputeTrigger]);
+
+  React.useEffect(() => {
+    if (visualizationRefreshTrigger > 0) {
+      const run = async () => {
+        if (visualizationOpen) {
+          setLoadingVisualization(true);
+          onVisualizationLoadingChange(true);
+        }
+        const newData = await executeOptimization([]);
+        if (newData && newData.dischargeSequence) {
+          const nextRotation = newData.dischargeSequence.map((s: { port: string }) => s.port);
+          onPortRotationChange(nextRotation);
+          if (visualizationOpen) {
+            await fetchAndOpenVisualization(nextRotation, newData);
+          }
+        } else if (visualizationOpen) {
+          setLoadingVisualization(false);
+          onVisualizationLoadingChange(false);
+        }
+      };
+      run();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visualizationRefreshTrigger]);
 
   if (!optimizedData && !loading && !error) {
     return (
@@ -504,6 +540,7 @@ export default function CurrentPlanningTab({
         flexDirection: "column",
         gap: 3,
         p: 1,
+        position: "relative",
         animation: "fadeIn 0.6s ease-out forwards",
         "@keyframes fadeIn": {
           from: { opacity: 0, transform: "translateY(20px)" },
@@ -511,6 +548,70 @@ export default function CurrentPlanningTab({
         },
       }}
     >
+      {loading && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            bgcolor: alpha(theme.palette.background.default, 0.7),
+            backdropFilter: "blur(4px)",
+            borderRadius: 4,
+          }}
+        >
+          <CircularProgress size={60} thickness={4} />
+        </Box>
+      )}
+
+      {/* Top Center Vessel Toggler for Dashboard */}
+      {discoveredServices.length > 1 && !visualizationOpen && (
+        <Box sx={{ display: "flex", justifyContent: "center", mb: 1 }}>
+          <Paper
+            elevation={0}
+            sx={{
+              bgcolor: "background.paper",
+              borderRadius: 8,
+              p: 0.5,
+              border: "1px solid",
+              borderColor: theme.palette.divider,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[1],
+            }}
+          >
+            <Select
+              value={vesselId}
+              onChange={(e) => onServiceChange?.(e.target.value)}
+              size="small"
+              disabled={loading}
+              sx={{
+                borderRadius: 5,
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                height: 32,
+                color: "text.secondary",
+                "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+                "&:hover": { bgcolor: alpha(theme.palette.action.hover, 0.05) },
+                "& .MuiSelect-select": { py: 0.5, px: 2, minHeight: "auto" },
+              }}
+            >
+              {discoveredServices.map((service) => (
+                <MenuItem key={service} value={service} sx={{ fontSize: "0.8rem", fontWeight: 700 }}>
+                  {service}
+                </MenuItem>
+              ))}
+            </Select>
+          </Paper>
+        </Box>
+      )}
+
       {/* Hero - Single Unified Stats Card */}
       <Grid container spacing={2}>
         <Grid size={{ xs: 12 }}>

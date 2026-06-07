@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Alert } from "@mui/material";
+import { Box, Alert, Paper, Select, MenuItem, useTheme } from "@mui/material";
 import HistoryAnalysisTab from "./components/HistoryAnalysisTab";
 import CurrentPlanningTab from "./components/CurrentPlanningTab";
 import StowageVisualizationTab from "./components/StowageVisualizationTab";
@@ -7,6 +7,7 @@ import StowageHeader from "./components/StowageHeader";
 import type { VisualizationData } from "../../types/stowage";
 
 export default function StowagePlanning() {
+  const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
   const [vesselId, setVesselId] = useState("");
   const [yardId, setYardId] = useState("");
@@ -26,6 +27,46 @@ export default function StowagePlanning() {
   const [loadingVisualization, setLoadingVisualization] = useState(false);
   const [portRotation, setPortRotation] = useState<string[]>([]);
   const [recomputeTrigger, setRecomputeTrigger] = useState(0);
+  const [visualizationRefreshTrigger, setVisualizationRefreshTrigger] = useState(0);
+  const [discoveredServices, setDiscoveredServices] = useState<string[]>([]);
+
+  React.useEffect(() => {
+    const discover = async () => {
+      let unitIds: string[] = [];
+      if (globalContainerText.trim()) {
+        unitIds = globalContainerText.split(/[\s,]+/).filter(Boolean);
+      } else if (globalFile) {
+        try {
+          const text = await globalFile.text();
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) unitIds = parsed;
+        } catch (e) {
+          console.error("Invalid file", e);
+        }
+      }
+      
+      if (unitIds.length > 0) {
+        try {
+          const { api } = await import("../../api/api");
+          const payload: Record<string, string | string[]> = { unit_ids: unitIds };
+          if (yardId.trim()) payload.yard_id = yardId.trim();
+          
+          const res = await api.post("/vessel/discover-services", payload);
+          if (res.data && res.data.services) {
+            setDiscoveredServices(res.data.services);
+            if (res.data.services.length > 0 && !res.data.services.includes(vesselId)) {
+              setVesselId(res.data.services[0]);
+            }
+          }
+        } catch (e) {
+          console.error("Discover failed", e);
+        }
+      } else {
+        setDiscoveredServices([]);
+      }
+    };
+    discover();
+  }, [globalFile, globalContainerText, yardId, vesselId]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     if (newValue !== null) setActiveTab(newValue);
@@ -46,6 +87,14 @@ export default function StowagePlanning() {
       setPlanningTrigger((prev) => prev + 1);
     }
     setTimeout(() => setLoading(false), 600);
+  };
+
+  const handleServiceChange = (newService: string) => {
+    if (newService && newService !== vesselId) {
+      setVesselId(newService);
+      setSearchVesselId(newService);
+      setVisualizationRefreshTrigger(prev => prev + 1);
+    }
   };
 
   return (
@@ -141,8 +190,11 @@ export default function StowagePlanning() {
             portRotation={portRotation}
             onPortRotationChange={setPortRotation}
             recomputeTrigger={recomputeTrigger}
+            visualizationRefreshTrigger={visualizationRefreshTrigger}
             visualizationOpen={visualizationOpen}
             onCloseVisualization={() => setVisualizationOpen(false)}
+            discoveredServices={discoveredServices}
+            onServiceChange={handleServiceChange}
           />
         </Box>
       </Box>
@@ -172,6 +224,51 @@ export default function StowagePlanning() {
               setRecomputeTrigger((prev) => prev + 1);
             }}
           />
+
+          {discoveredServices.length > 0 && (
+            <Paper
+              elevation={4}
+              sx={{
+                position: "absolute",
+                top: 16,
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 1400,
+                bgcolor: "background.paper",
+                borderRadius: 8,
+                p: 0.5,
+                border: "1px solid",
+                borderColor: theme.palette.divider,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[4],
+              }}
+            >
+              <Select
+                value={vesselId}
+                onChange={(e) => handleServiceChange(e.target.value)}
+                size="small"
+                disabled={loadingVisualization}
+                sx={{
+                  borderRadius: 5,
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  height: 30,
+                  color: "text.secondary",
+                  "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+                  "&:hover": { bgcolor: "action.hover" },
+                  "& .MuiSelect-select": { py: 0.5, px: 1.5, minHeight: "auto" },
+                }}
+              >
+                {discoveredServices.map((service) => (
+                  <MenuItem key={service} value={service} sx={{ fontSize: "0.75rem", fontWeight: 700 }}>
+                    {service}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Paper>
+          )}
         </Box>
       )}
     </Box>

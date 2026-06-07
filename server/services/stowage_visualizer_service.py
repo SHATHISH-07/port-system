@@ -1,3 +1,5 @@
+# cspell:disable
+from __future__ import annotations
 import re
 import pandas as pd
 from typing import Any, List, Optional
@@ -402,6 +404,10 @@ def get_stowage_visualization(
                 df = lookup_containers_by_ids(cleaned_ids, yard_id)
                 if df is not None and not df.empty:
                     df = _normalize_dataframe_columns(df)
+                    
+                    if vessel_id and "outbound_service" in df.columns:
+                        df = df[df["outbound_service"].astype(str).str.strip().str.upper() == str(vessel_id).strip().upper()].copy()
+                        
                     df = _dedupe_latest_per_unit(df)
                     resolved_count = len(df)
 

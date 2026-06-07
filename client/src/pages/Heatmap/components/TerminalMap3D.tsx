@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Box, Typography, useTheme, IconButton, Tooltip } from "@mui/material";
 import { RestartAltRounded } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
@@ -370,7 +370,7 @@ class TerminalScene {
 
       // --- Block name billboard (always faces camera, dynamically scaled) ---
       const wp = n2world(blk.cx, blk.cy);
-      const lbl = makeBillboardLabel(blk.id, 42, '#000000');
+      const lbl = makeBillboardLabel(blk.id, 42, '#FFFFFF');
       lbl.position.set(wp.x, 1.2, wp.z); // Increased height to float higher above containers
       this.scene.add(lbl);
       this.blockLabels.push(lbl);
@@ -867,7 +867,7 @@ class TerminalScene {
       cx: number; cz: number; bw: number; bd: number; conc: string;
     }[] = [];
 
-    Object.entries(data.layout).forEach(([id, pos]: any) => {
+    Object.entries(data.layout).forEach(([id, pos]: [string, { x?: number; y?: number; cx?: number; cy?: number; w?: number; h?: number }]) => {
       // Prefer XML block geometry; fall back to normalised layout coords
       const xmlBlk = xmlBlocks.find(b => b.id === id);
       let wpx: number, wpz: number, bw: number, bd: number;
@@ -1222,7 +1222,7 @@ class TerminalScene {
 
 interface TerminalMap3DProps {
   data: VesselHeatmapViewData | null;
-  terminalLayout?: any;
+  terminalLayout?: RawTerminalLayout;
   targetBerthId: string;
   computedMaxBlock: string | null;
   loading?: boolean;
@@ -1244,10 +1244,10 @@ export default function TerminalMap3D({
   const isDark = theme.palette.mode === "dark";
 
   // ── Build geometry from XML ─────────────────────────────────────────────
-  const effectiveLayout = terminalLayoutProp ?? (data as any)?.terminalLayout;
-  const geo = buildTerminalGeometry(
+  const effectiveLayout = terminalLayoutProp ?? (data as { terminalLayout?: RawTerminalLayout })?.terminalLayout;
+  const geo = useMemo(() => buildTerminalGeometry(
     effectiveLayout as RawTerminalLayout | null,
-  );
+  ), [effectiveLayout]);
 
   // ── Init Three.js scene ─────────────────────────────────────────────────
   useEffect(() => {
@@ -1299,7 +1299,7 @@ export default function TerminalMap3D({
         targetBerthId,
       );
     }
-  }, [data, computedMaxBlock, targetBerthId, sceneReady]);
+  }, [data, computedMaxBlock, targetBerthId, sceneReady, geo.blocks, geo.berths]);
 
   const hoveredData = data?.blocks?.[hoveredBlock ?? ""];
 

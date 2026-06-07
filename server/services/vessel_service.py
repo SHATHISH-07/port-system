@@ -1,4 +1,5 @@
 from __future__ import annotations
+# cspell:disable
 from models.stay_model import predict_stay_duration_from_metrics
 
 import logging
@@ -90,6 +91,28 @@ def _fetch_crane_for_visit(visit_id: str) -> pd.DataFrame:
     except Exception as exc:
         logger.warning("crane fetch failed for %s: %s", visit_id, exc)
         return pd.DataFrame()
+
+def discover_services_for_containers(unit_ids: list[str], yard_id: str = None) -> list[str]:
+    """
+    Looks up the list of containers and extracts all unique 'outbound_service' values.
+    Returns a sorted list of unique vessel identifiers.
+    """
+    if not unit_ids:
+        return []
+    
+    from utils.current_container_lookup import lookup_containers_by_ids
+    try:
+        df = lookup_containers_by_ids(unit_ids, yard_id)
+        if df is not None and not df.empty and "outbound_service" in df.columns:
+            services = df["outbound_service"].dropna().astype(str).str.strip().str.upper().unique().tolist()
+            # Filter out empty strings, NaN, NONE, UNKNOWN
+            invalid = {"NAN", "NONE", "UNKNOWN", "NAT", ""}
+            valid_services = sorted([s for s in services if s and s not in invalid])
+            return valid_services
+    except Exception as exc:
+        logger.error(f"Error discovering services: {exc}", exc_info=True)
+        
+    return []
 
 def _fetch_crane_counts_batch(visit_ids: list[str]) -> dict[str, int]:
     """
@@ -511,26 +534,35 @@ def _calculate_delay_analysis(visit_df) -> list:
 def get_yard_heatmap_data(
     unit_ids: list[str],
     yard_id: str = None,
+    vessel_id: str = None,
 ) -> dict:
     """
     Unified endpoint for all map/heatmap/terminal visualization data.
     """
     visit_id = ""
-    vessel_id = ""
 
     if unit_ids:
         from utils.current_container_lookup import lookup_containers_by_ids
-        df = lookup_containers_by_ids(unit_ids, yard_id)
-        if df is not None and not df.empty:
+        full_df = lookup_containers_by_ids(unit_ids, yard_id)
+        df = full_df.copy() if full_df is not None else pd.DataFrame()
+        if not df.empty:
             df["unit_id"] = df["unit_id"].astype(str).str.strip().str.upper()
             if "actual_outbound_carrier_visit_id" in df.columns:
                 valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
                 if not valid_visits.empty:
                     visit_id = str(valid_visits.iloc[0])
             if "outbound_service" in df.columns:
+                if vessel_id:
+                    # Filter specifically for the selected outbound service
+                    df = df[df["outbound_service"].astype(str).str.strip().str.upper() == vessel_id.strip().upper()].copy()
+                
                 valid_services = df["outbound_service"].dropna()
                 if not valid_services.empty:
-                    vessel_id = str(valid_services.iloc[0])
+                    # After filter, this represents the targeted vessel
+                    # or the first available if no specific filter was applied
+                    found_vessel_id = str(valid_services.iloc[0])
+                    if not vessel_id:
+                        vessel_id = found_vessel_id
             
     else:
         return {"error": "Must provide unit_ids"}
@@ -764,11 +796,8 @@ def get_yard_heatmap_data(
             
             if full_layout:
                 if bk_id in xml_distances.get("block_to_berth", {}):
-                    # We map dummy `berth_name` to the first actual XML berth (e.g. AECT1)
-                    xml_berth_names = list(xml_distances["block_to_berth"][bk_id].keys())
-                    xml_b = xml_berth_names[0] if xml_berth_names else None
-                    if xml_b:
-                        d_info = xml_distances["block_to_berth"][bk_id][xml_b]
+                    if berth_id in xml_distances["block_to_berth"][bk_id]:
+                        d_info = xml_distances["block_to_berth"][bk_id][berth_id]
                         dist_m = d_info.get("distance_m", 500)
                         for node in d_info.get("route", []):
                             corridors.add(node)
@@ -829,15 +858,15 @@ def get_yard_heatmap_data(
         if outbound_svc:
             query = text("""
                 SELECT 
-                    actual_outbound_carrier_visit_id,
+                    visit_id as actual_outbound_carrier_visit_id,
                     MIN(time_in) as first_move,
                     MAX(move_complete_time) as last_move,
                     COUNT(unit_id) as total_moves
                 FROM containers 
                 WHERE UPPER(TRIM(outbound_service)) = :svc
-                  AND actual_outbound_carrier_visit_id IS NOT NULL
+                  AND visit_id IS NOT NULL
                   AND move_complete_time IS NOT NULL
-                GROUP BY actual_outbound_carrier_visit_id
+                GROUP BY visit_id
             """)
             engine = get_engine()
             hist_df = pd.read_sql(query, engine, params={"svc": outbound_svc})
@@ -932,27 +961,26 @@ def get_yard_heatmap_data(
         concurrent_vessels = {}  # visit_id -> {"service": str, "blocks": set()}
         if pd.notna(min_time) and pd.notna(max_time):
             try:
-                from db.queries import get_engine
-                from sqlalchemy import text
-                engine = get_engine()
-                query = text("""
-                    SELECT visit_id as actual_outbound_carrier_visit_id, outbound_service, ctr_from_position
-                    FROM containers
-                    WHERE visit_id != :visit_id
-                        AND visit_id IS NOT NULL
-                        AND move_complete_time BETWEEN :min_time AND :max_time
-                """)
-                cdf = pd.read_sql(query, engine, params={
-                    "visit_id": target_visit_id,
-                    "min_time": min_time,
-                    "max_time": max_time
-                })
+                cdf = pd.DataFrame()
+                if "full_df" in locals() and full_df is not None and not full_df.empty:
+                    if "outbound_service" in full_df.columns:
+                        target = str(vessel_id).strip().upper() if vessel_id else ""
+                        mask = (
+                            (full_df["outbound_service"].astype(str).str.strip().str.upper() != target) &
+                            (full_df["outbound_service"].notna())
+                        )
+                        cdf = full_df[mask].copy()
+
                 for crow in cdf.to_dict('records'):
-                    v_id = crow.get("actual_outbound_carrier_visit_id")
+                    v_id = crow.get("actual_outbound_carrier_visit_id") or crow.get("outbound_service")
                     if v_id not in concurrent_vessels:
                         concurrent_vessels[v_id] = {"service": crow.get("outbound_service"), "blocks": set()}
-                    c_pos = crow.get("ctr_from_position")
-                    if pd.notna(c_pos):
+                    
+                    visit_state = str(crow.get("visit_state", "") or "").upper()
+                    is_loaded = "DEPARTED" in visit_state
+                    c_pos = str(crow.get("ctr_from_position", "")) if is_loaded else str(crow.get("current_position", ""))
+                    
+                    if c_pos and c_pos.lower() not in ('nan', 'none'):
                         cp_info = parse_position(str(c_pos), yard_id)
                         if cp_info and cp_info.get("is_yard"):
                             cbk = block_label(cp_info)
@@ -1012,6 +1040,7 @@ def get_yard_heatmap_data(
                 shared_blocks = list(near_blocks.intersection(v_data["blocks"]))
                 shared_corridors = list(corridors.intersection(v_data["corridors"]))
                 shared_equipment = list(equipment.intersection(v_data["equipment"]))
+                print(f"DEBUG: berth={row_berth}, v_id={v_id}, near_blocks={near_blocks}, v_data_blocks={v_data['blocks']}, shared={shared_blocks}")
                 
                 conflict_types = []
                 if shared_blocks: 

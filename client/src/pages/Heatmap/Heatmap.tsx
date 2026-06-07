@@ -1,3 +1,4 @@
+// cspell:disable
 import * as React from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -19,6 +20,7 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material";
 import {
   FullscreenRounded,
   UploadFileOutlined,
@@ -337,6 +339,10 @@ export default function Heatmap() {
   const [terminalLayout, setTerminalLayout] =
     React.useState<TerminalLayout | null>(null);
 
+  const [availableServices, setAvailableServices] = React.useState<string[]>([]);
+  const [selectedService, setSelectedService] = React.useState<string>("");
+  const [loadedUnitIds, setLoadedUnitIds] = React.useState<string[]>([]);
+
   // Re-derive map data whenever raw API data or XML layout changes
   const mapData = React.useMemo(() => {
     if (!rawApiData) return null;
@@ -373,36 +379,12 @@ export default function Heatmap() {
 
   const wrapperRef = React.useRef<HTMLDivElement>(null);
 
-  const load = async () => {
-    if (!containerFile) {
-      setToast({
-        open: true,
-        message: "A container list file is required to execute analysis.",
-        severity: "warning",
-      });
-      return;
-    }
-
-    setLoading(true);
+  const fetchHeatmap = async (unitIds: string[], vesselId?: string) => {
     try {
-      let unitIds: string[] | undefined;
-      const text = await containerFile.text();
-      try {
-        const parsed = JSON.parse(text);
-        unitIds = Array.isArray(parsed) ? parsed : undefined;
-      } catch {
-        setToast({
-          open: true,
-          message: "Invalid JSON file — expected an array of container IDs.",
-          severity: "error",
-        });
-        setLoading(false);
-        return;
-      }
-
       const payload: Record<string, string | string[]> = {};
       if (yardInput.trim()) payload.yard_id = yardInput.trim();
-      if (unitIds) payload.unit_ids = unitIds;
+      payload.unit_ids = unitIds;
+      if (vesselId) payload.vessel_id = vesselId;
 
       const response = await api.post("/vessel/heatmap", payload, {
         headers: { "Content-Type": "application/json" },
@@ -427,8 +409,74 @@ export default function Heatmap() {
         err instanceof Error ? err.message : "Failed to load heatmap data";
       setToast({ open: true, message: errorMsg, severity: "error" });
       setRawApiData(null);
+    }
+  };
+
+  const load = async () => {
+    if (!containerFile) {
+      setToast({
+        open: true,
+        message: "A container list file is required to execute analysis.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let unitIds: string[] = [];
+      const text = await containerFile.text();
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+            unitIds = parsed;
+        } else {
+            throw new Error("Not an array");
+        }
+      } catch {
+        setToast({
+          open: true,
+          message: "Invalid JSON file — expected an array of container IDs.",
+          severity: "error",
+        });
+        setLoading(false);
+        return;
+      }
+      setLoadedUnitIds(unitIds);
+
+      // Discover available outbound services
+      let discoveredServices: string[] = [];
+      try {
+        const discPayload: Record<string, string | string[]> = { unit_ids: unitIds };
+        if (yardInput.trim()) discPayload.yard_id = yardInput.trim();
+        const discResp = await api.post("/vessel/discover-services", discPayload);
+        if (discResp.data && discResp.data.services) {
+            discoveredServices = discResp.data.services;
+            setAvailableServices(discoveredServices);
+        }
+      } catch (err) {
+        console.error("Failed to discover services", err);
+      }
+
+      const targetVessel = discoveredServices.length > 0 ? discoveredServices[0] : undefined;
+      if (targetVessel) setSelectedService(targetVessel);
+
+      await fetchHeatmap(unitIds, targetVessel);
+      
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleServiceChange = async (
+    event: SelectChangeEvent<string>,
+  ) => {
+    const newService = event.target.value;
+    if (newService && newService !== selectedService) {
+        setSelectedService(newService);
+        setLoading(true);
+        await fetchHeatmap(loadedUnitIds, newService);
+        setLoading(false);
     }
   };
 
@@ -555,7 +603,7 @@ export default function Heatmap() {
                 letterSpacing: 0.5,
               }}
             >
-              HEATMAP SETTINGS
+              Heatmap Input
             </Typography>
           </Box>
         ) : (
@@ -878,6 +926,52 @@ export default function Heatmap() {
               </Stack>
             </>
           )}
+        </Paper>
+      )}
+
+      {/* TOP CENTER: OUTBOUND SERVICE TOGGLER */}
+      {availableServices.length > 0 && (
+        <Paper
+          elevation={4}
+          sx={{
+            position: "absolute",
+            top: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 10,
+            bgcolor: "background.paper",
+            borderRadius: 8,
+            p: 0.5,
+            border: "1px solid",
+            borderColor: theme.palette.divider,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[4],
+          }}
+        >
+
+          <Select
+            value={selectedService}
+            onChange={handleServiceChange}
+            size="small"
+            sx={{
+              borderRadius: 5,
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              height: 30,
+              color: "text.secondary",
+              "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+              "&:hover": { bgcolor: "action.hover" },
+              "& .MuiSelect-select": { py: 0.5, px: 1.5, minHeight: "auto" },
+            }}
+          >
+            {availableServices.map((service) => (
+              <MenuItem key={service} value={service} sx={{ fontSize: "0.75rem", fontWeight: 700 }}>
+                {service}
+              </MenuItem>
+            ))}
+          </Select>
         </Paper>
       )}
 
