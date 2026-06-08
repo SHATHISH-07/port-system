@@ -31,7 +31,7 @@ export default function Navbar() {
         sx={{
           fontWeight: "bold",
           color: textColor,
-          fontSize: "20px",
+          fontSize: { xs: "20px", lg: "18px" },
         }}
       >
         Deck Optimizer
@@ -44,7 +44,7 @@ export default function Navbar() {
           sx={{
             color: textColor,
             fontWeight: 600,
-            fontSize: { md: "1.05rem", lg: "1.1rem" },
+            fontSize: { md: "1.05rem", lg: "0.9rem" },
             textTransform: "none",
             px: 2,
             "&:hover": {
@@ -61,7 +61,7 @@ export default function Navbar() {
           sx={{
             color: textColor,
             fontWeight: 600,
-            fontSize: { md: "1.05rem", lg: "1.1rem" },
+            fontSize: { md: "1.05rem", lg: "0.9rem" },
             textTransform: "none",
             px: 2,
             "&:hover": {
