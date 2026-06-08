@@ -1361,13 +1361,21 @@ def analyze_vessel_dashboard(
                 else:
                     avg_hist_cranes = 1.0
 
+            mph_rates = []
+            total_m_weight = 0.0
             for f in historical_features_list:
                 span = f.get("move_span_hours", 0)
                 moves = f.get("total_moves", 0)
                 if span > 0 and moves > 0:
-                    mph_rates.append(moves / span / avg_hist_cranes)  # ← per-crane rate
-            if mph_rates:
+                    rate = (moves / span) / avg_hist_cranes
+                    mph_rates.append(rate * moves)
+                    total_m_weight += moves
+            if mph_rates and total_m_weight > 0:
+                historical_mph_avg = sum(mph_rates) / total_m_weight
+            elif mph_rates:
                 historical_mph_avg = sum(mph_rates) / len(mph_rates)
+            else:
+                historical_mph_avg = 0.0
 
     # ── Synthesise stay for current mode when no actual stay is available ────
     if not actual_raw:

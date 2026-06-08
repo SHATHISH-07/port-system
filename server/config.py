@@ -190,6 +190,7 @@ class Settings:
         "pct_40ft",
         "avg_weight_kg",
         "heavy_ratio",
+        "crane_count",
     ]
 
     # Automated retraining

@@ -8,7 +8,7 @@ from typing import Optional
 
 import joblib
 import pandas as pd
-from sklearn.ensemble import GradientBoostingRegressor, VotingRegressor
+from sklearn.ensemble import GradientBoostingRegressor, VotingRegressor, RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import Pipeline
@@ -194,7 +194,13 @@ def _build_ensemble() -> VotingRegressor:
         min_samples_leaf=5,
         random_state=42,
     )
-    return VotingRegressor(estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr)])
+    rf = RandomForestRegressor(
+        n_estimators=100,
+        max_depth=4,
+        min_samples_leaf=4,
+        random_state=42,
+    )
+    return VotingRegressor(estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr), ("rf", rf)])
 
 
 def _build_feature_row(
@@ -235,6 +241,11 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         min_visit_rows = cfg.get("min_visit_rows", settings.MIN_VISIT_ROWS)
 
         grouped = df.groupby("actual_outbound_carrier_visit_id")
+        
+        # Pre-fetch crane counts for all visits in this training batch
+        visit_ids = [str(vid) for vid, _ in grouped]
+        from services.vessel_service import _fetch_crane_counts_batch
+        crane_counts = _fetch_crane_counts_batch(visit_ids)
 
         X_rows, y_vals = [], []
         skipped_rows = 0
@@ -265,6 +276,11 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
             features = _build_feature_row(train_df)
             if features is None:
                 continue
+                
+            cranes = crane_counts.get(str(visit_id), 0)
+            if cranes == 0:
+                cranes = min(settings.CRANE_MAX_CRANES_DISPLAY, max(1, len(group) // 400))
+            features["crane_count"] = float(cranes)
 
             row = []
             missing_feature = False
@@ -299,7 +315,7 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         print(f"     Skipped (> {max_hours}h)   : {skipped_error}")
         print(f"     Target range       : {y.min():.1f}h - {y.max():.1f}h")
         print(f"     Target mean        : {y.mean():.1f}h")
-        print("     Model type         : VotingRegressor (Ridge + XGBoost + GBR)")
+        print("     Model type         : VotingRegressor (Ridge + XGBoost + GBR + RF)")
         print(f"     Features           : {list(settings.FEATURE_NAMES)}")
         logger.info("ML training: %s samples, target mean=%.1fh", len(X), y.mean())
 
@@ -574,6 +590,10 @@ def predict_visit_stay_duration(
     # ── Physics-based sanity bound ───────────────────────────────────────────
     total_moves = int(features.get("total_moves", len(visit_df)) or len(visit_df))
     effective_cranes = crane_count if crane_count > 0 else max(1, int(features.get("_crane_count", 1) or 1))
+    
+    # CRITICAL: Provide crane_count to the ML model!
+    features["crane_count"] = float(effective_cranes)
+
     heuristic = _heuristic_span_from_metrics(
         total_moves=total_moves,
         crane_count=effective_cranes,
@@ -586,10 +606,16 @@ def predict_visit_stay_duration(
 
     if ml_pred < ABSOLUTE_MIN_HOURS or ml_pred > ABSOLUTE_MAX_HOURS:
         pred = heuristic  # model has failed; fall back entirely
-    elif ml_pred < heuristic:
-        pred = heuristic  # heuristic is a lower bound only
     else:
-        pred = ml_pred    # trust the ML model
+        # Prevent extreme outliers by bounding ML to a realistic multiplier of the physics heuristic
+        max_allowed = heuristic * 1.5
+        min_allowed = heuristic * 0.5
+        if ml_pred > max_allowed:
+            pred = max_allowed
+        elif ml_pred < min_allowed:
+            pred = min_allowed
+        else:
+            pred = ml_pred
 
     return round(float(max(float(settings.TRAIN_MIN_HOURS), pred)), 2)
 
@@ -731,6 +757,7 @@ def predict_stay_duration_from_metrics(
         "reefer_equipment_ratio": settings.DEFAULT_REEFER_RATIO,
         "pct_40ft":               0.5,
         "heavy_ratio":            0.3,
+        "crane_count":            float(crane_count),
     }
 
     if feature_template:
@@ -751,10 +778,15 @@ def predict_stay_duration_from_metrics(
 
     if ml_pred < ABSOLUTE_MIN_HOURS or ml_pred > ABSOLUTE_MAX_HOURS:
         avg_hours = heuristic_span_hours
-    elif ml_pred < heuristic_span_hours:
-        avg_hours = heuristic_span_hours
     else:
-        avg_hours = ml_pred
+        max_allowed = heuristic_span_hours * 1.5
+        min_allowed = heuristic_span_hours * 0.5
+        if ml_pred > max_allowed:
+            avg_hours = max_allowed
+        elif ml_pred < min_allowed:
+            avg_hours = min_allowed
+        else:
+            avg_hours = ml_pred
 
     avg_hours = round(float(max(float(settings.TRAIN_MIN_HOURS), avg_hours)), 2)
 
