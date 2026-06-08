@@ -561,18 +561,10 @@ def get_yard_heatmap_data(
                 valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
                 if not valid_visits.empty:
                     visit_id = str(valid_visits.iloc[0])
-            if "outbound_service" in df.columns:
-                if vessel_id:
-                    # Filter specifically for the selected outbound service
-                    df = df[df["outbound_service"].astype(str).str.strip().str.upper() == vessel_id.strip().upper()].copy()
-                
-                valid_services = df["outbound_service"].dropna()
-                if not valid_services.empty:
-                    # After filter, this represents the targeted vessel
-                    # or the first available if no specific filter was applied
-                    found_vessel_id = str(valid_services.iloc[0])
-                    if not vessel_id:
-                        vessel_id = found_vessel_id
+            
+            # Trust the provided unit_ids completely. 
+            # We no longer filter df by outbound_service, because active containers 
+            # have a NULL outbound service.
             
     else:
         return {"error": "Must provide unit_ids"}
@@ -787,6 +779,13 @@ def get_yard_heatmap_data(
             logger.error(f"Failed to compute xml distances: {e}")
 
     # 2. Calculate Berth Metrics
+    primary_block_id = None
+    max_block_count = -1
+    for bk_data in block_list:
+        if bk_data["total_containers"] > max_block_count:
+            max_block_count = bk_data["total_containers"]
+            primary_block_id = bk_data["block_id"]
+
     berth_metrics = []
     for berth_id, berth_info in berths_data.items():
         berth_name = berth_info.get("name", berth_id)
@@ -830,6 +829,9 @@ def get_yard_heatmap_data(
                 near_blocks.add(bk_id)
                 
             total_laden += bk_count * dist_m
+            
+            if bk_id == primary_block_id:
+                primary_block_dist_m = dist_m
 
             # FIX: populate distance_to_berth_m on each block
             for bl in block_list:
@@ -851,11 +853,12 @@ def get_yard_heatmap_data(
             "total_unladen": total_unladen,
             "near_blocks": near_blocks,
             "corridors": corridors,
-            "equipment": equipment
+            "equipment": equipment,
+            "primary_block_dist_m": primary_block_dist_m if 'primary_block_dist_m' in locals() else 500
         })
         
-    # Sort: Highest concentration first, then shortest avg distance
-    berth_metrics.sort(key=lambda x: (-x["concentration_pct"], x["avg_dist"]))
+    # Sort: Optimal berth is strictly the shortest travel distance from the primary block
+    berth_metrics.sort(key=lambda x: x["primary_block_dist_m"])
 
     # Dynamic Crane Capacity Calculation
     dynamic_crane_capacity = 60.0 # Default fallback
@@ -864,8 +867,8 @@ def get_yard_heatmap_data(
         from sqlalchemy import text
         import pandas as pd
         
-        outbound_svc = str(df["outbound_service"].dropna().iloc[0]).strip().upper() if not df.empty and "outbound_service" in df.columns else None
-        if outbound_svc:
+        # Use the passed vessel_id for fetching history, since active containers no longer have outbound_service
+        if vessel_id:
             query = text("""
                 SELECT 
                     visit_id as actual_outbound_carrier_visit_id,
@@ -879,7 +882,7 @@ def get_yard_heatmap_data(
                 GROUP BY visit_id
             """)
             engine = get_engine()
-            hist_df = pd.read_sql(query, engine, params={"svc": outbound_svc})
+            hist_df = pd.read_sql(query, engine, params={"svc": vessel_id.strip().upper()})
             
             if not hist_df.empty:
                 hist_df["first_move"] = pd.to_datetime(hist_df["first_move"])

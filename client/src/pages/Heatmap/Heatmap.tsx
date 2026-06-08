@@ -20,7 +20,6 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import type { SelectChangeEvent } from "@mui/material";
 import {
   FullscreenRounded,
   UploadFileOutlined,
@@ -330,6 +329,9 @@ export default function Heatmap() {
   const [yardInput, setYardInput] = React.useState(
     searchParams.get("yardId") || "",
   );
+  const [vesselInput, setVesselInput] = React.useState(
+    searchParams.get("vesselId") || "",
+  );
   const [containerFile, setContainerFile] = React.useState<File | null>(null);
 
   const [loading, setLoading] = React.useState(false);
@@ -339,9 +341,6 @@ export default function Heatmap() {
   const [terminalLayout, setTerminalLayout] =
     React.useState<TerminalLayout | null>(null);
 
-  const [availableServices, setAvailableServices] = React.useState<string[]>([]);
-  const [selectedService, setSelectedService] = React.useState<string>("");
-  const [loadedUnitIds, setLoadedUnitIds] = React.useState<string[]>([]);
 
   // Re-derive map data whenever raw API data or XML layout changes
   const mapData = React.useMemo(() => {
@@ -429,9 +428,9 @@ export default function Heatmap() {
       try {
         const parsed = JSON.parse(text);
         if (Array.isArray(parsed)) {
-            unitIds = parsed;
+          unitIds = parsed;
         } else {
-            throw new Error("Not an array");
+          throw new Error("Not an array");
         }
       } catch {
         setToast({
@@ -442,41 +441,13 @@ export default function Heatmap() {
         setLoading(false);
         return;
       }
-      setLoadedUnitIds(unitIds);
 
-      // Discover available outbound services
-      let discoveredServices: string[] = [];
-      try {
-        const discPayload: Record<string, string | string[]> = { unit_ids: unitIds };
-        if (yardInput.trim()) discPayload.yard_id = yardInput.trim();
-        const discResp = await api.post("/vessel/discover-services", discPayload);
-        if (discResp.data && discResp.data.services) {
-            discoveredServices = discResp.data.services;
-            setAvailableServices(discoveredServices);
-        }
-      } catch (err) {
-        console.error("Failed to discover services", err);
-      }
 
-      const targetVessel = discoveredServices.length > 0 ? discoveredServices[0] : undefined;
-      if (targetVessel) setSelectedService(targetVessel);
-
-      await fetchHeatmap(unitIds, targetVessel);
-      
+      // Because active yard containers no longer have an outbound service assigned,
+      // we do not attempt to discover them. We directly use the user-provided vessel input.
+      await fetchHeatmap(unitIds, vesselInput.trim() || undefined);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleServiceChange = async (
-    event: SelectChangeEvent<string>,
-  ) => {
-    const newService = event.target.value;
-    if (newService && newService !== selectedService) {
-        setSelectedService(newService);
-        setLoading(true);
-        await fetchHeatmap(loadedUnitIds, newService);
-        setLoading(false);
     }
   };
 
@@ -642,6 +613,24 @@ export default function Heatmap() {
                 label="Yard ID"
                 value={yardInput}
                 onChange={(e) => setYardInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && load()}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2,
+                    height: { xs: 30, md: 36 },
+                  },
+                }}
+                slotProps={{
+                  htmlInput: { style: { fontSize: "0.8rem" } },
+                  inputLabel: { style: { fontSize: "0.8rem" } },
+                }}
+              />
+              <TextField
+                size="small"
+                fullWidth
+                label="Vessel ID / Visit ID"
+                value={vesselInput}
+                onChange={(e) => setVesselInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && load()}
                 sx={{
                   "& .MuiOutlinedInput-root": {
@@ -926,52 +915,6 @@ export default function Heatmap() {
               </Stack>
             </>
           )}
-        </Paper>
-      )}
-
-      {/* TOP CENTER: OUTBOUND SERVICE TOGGLER */}
-      {availableServices.length > 0 && (
-        <Paper
-          elevation={4}
-          sx={{
-            position: "absolute",
-            top: 16,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 10,
-            bgcolor: "background.paper",
-            borderRadius: 8,
-            p: 0.5,
-            border: "1px solid",
-            borderColor: theme.palette.divider,
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[4],
-          }}
-        >
-
-          <Select
-            value={selectedService}
-            onChange={handleServiceChange}
-            size="small"
-            sx={{
-              borderRadius: 5,
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              height: 30,
-              color: "text.secondary",
-              "& .MuiOutlinedInput-notchedOutline": { border: "none" },
-              "&:hover": { bgcolor: "action.hover" },
-              "& .MuiSelect-select": { py: 0.5, px: 1.5, minHeight: "auto" },
-            }}
-          >
-            {availableServices.map((service) => (
-              <MenuItem key={service} value={service} sx={{ fontSize: "0.75rem", fontWeight: 700 }}>
-                {service}
-              </MenuItem>
-            ))}
-          </Select>
         </Paper>
       )}
 

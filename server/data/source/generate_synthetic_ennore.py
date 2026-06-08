@@ -817,21 +817,34 @@ def generate_terminal_data(terminal: dict):
     active_rows = derive_active_yard_containers(container_rows, terminal["yard_id"])
 
     if terminal["yard_id"] == "AECY":
+        # Keep only 1200 active rows for AECY
+        target_count = 1200
+        omitted_active = active_rows[target_count:]
+        active_rows = active_rows[:target_count]
+        
+        # Build a quick lookup: unit_id -> index in container_rows (last occurrence)
+        uid_to_container_idx: Dict[str, int] = {}
+        for i, cr in enumerate(container_rows):
+            uid_to_container_idx[cr["Unit ID"]] = i
+
+        # For omitted containers, forcefully make them DEPARTED so they aren't considered active
+        for omitted in omitted_active:
+            uid = omitted["Unit ID"]
+            ci = uid_to_container_idx.get(uid)
+            if ci is not None:
+                container_rows[ci]["Current Position"] = ""
+                container_rows[ci]["Ctr To Position"] = ""
+                container_rows[ci]["Visit State"] = "DEPARTED"
+
         vessels    = ["VS-AECY-07", "VS-AECY-06", "VS-AECY-09", "VS-AECY-03",
                       "VS-AECY-02", "VS-AECY-04", "VS-AECY-05", "VS-AECY-08", "VS-AECY-01"]
-        pool_blocks = ["1A", "1L", "1B", "1K", "1J", "1H", "1E", "1F", "1G",
-                       "1D", "1C", "DMY", "1R", "2R", "3R", "WB", "1M"]
+        target_blocks = ["1K", "1J", "1H", "1G", "1E", "1C"]
 
         svc_to_visit: Dict[str, str] = {}
         for v in reversed(visits):
             svc = v["service"]
             if svc not in svc_to_visit:
                 svc_to_visit[svc] = v["visit_id"]
-
-        # Build a quick lookup: unit_id -> index in container_rows (last occurrence)
-        uid_to_container_idx: Dict[str, int] = {}
-        for i, cr in enumerate(container_rows):
-            uid_to_container_idx[cr["Unit ID"]] = i
 
         # Build a quick lookup: unit_id -> index in crane_rows (last Load occurrence)
         uid_to_crane_load_idx: Dict[str, int] = {}
@@ -845,30 +858,29 @@ def generate_terminal_data(terminal: dict):
             vidx = min(i // containers_per_vessel, len(vessels) - 1)
             svc  = vessels[vidx]
             vid  = svc_to_visit.get(svc, svc)
-            r["Outbound Service"] = svc
+            r["Outbound Service"] = ""
 
             uid = r["Unit ID"]
             ci  = uid_to_container_idx.get(uid)
             if ci is not None:
-                container_rows[ci]["Outbound Service"]                 = svc
-                container_rows[ci]["Actual Outbound Carrier visit ID"] = vid
+                container_rows[ci]["Outbound Service"]                 = ""
+                container_rows[ci]["Actual Outbound Carrier visit ID"] = ""
 
+            # Do not change crane rows since they are historical events, but if they had a future load event planned, we leave it or remove it.
+            # The active container shouldn't have a Load crane event if it's still in the yard.
             ki = uid_to_crane_load_idx.get(uid)
             if ki is not None:
-                crane_rows[ki]["Carrier Visit"] = vid
+                crane_rows[ki]["Carrier Visit"] = ""
 
         # Assign yard positions using the enforced tier-safe helper
         stack_heights: Dict[tuple, int] = collections.defaultdict(int)
 
         for i, r in enumerate(active_rows):
             svc     = r.get("Outbound Service", "")
-            # Pick 3-4 blocks per vessel (consistent within a vessel group)
-            vidx    = min(i // containers_per_vessel, len(vessels) - 1)
-            rng     = random.Random(vidx)          # deterministic per vessel
-            num_blk = rng.choice([3, 4])
-            vessel_blocks = rng.sample(pool_blocks, num_blk)
-
-            block = vessel_blocks[i % num_blk]
+            
+            # Exactly 200 containers per block from the target_blocks list
+            block = target_blocks[(i // 200) % len(target_blocks)]
+            
             # FIX: use the guaranteed-safe slot finder; no silent Tier 6+
             bay, row_idx, new_tier = _find_free_aecy_slot(stack_heights, block)
             stack_heights[(block, bay, row_idx)] = new_tier
@@ -912,8 +924,7 @@ def derive_active_yard_containers(container_rows: List[dict], yard_id: str) -> L
     active_rows.sort(
         key=lambda r: parse_time_mmddyyyy(r["Move Complete Time"]), reverse=True
     )
-    target = random.randint(TARGET_ACTIVE_PER_TERMINAL_MIN, TARGET_ACTIVE_PER_TERMINAL_MAX)
-    return active_rows[:target]
+    return active_rows
 
 
 def write_csv(path: Path, headers: List[str], rows: List[dict]):
