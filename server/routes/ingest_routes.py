@@ -550,11 +550,9 @@ def _process_ingestion(
         df = df.dropna(how="all")
         df = df.copy()
 
-        # Coerce time columns for containers
-        time_cols = ["time_in", "time_out", "move_complete_time", "time_completed"]
-        for c in time_cols:
-            if c in df.columns:
-                df[c] = pd.to_datetime(df[c], errors="coerce")
+        # Coerce time columns for containers using robust parse_datetime
+        time_cols = ["time_in", "time_out", "move_complete_time", "time_completed", "dispatch_time", "arrival_time"]
+        df = _coerce_datetime_columns(df, time_cols)
 
         # Lineage: discharge rows → populate actual_inbound_carrier_visit_id
         if "category_id" in df.columns and "actual_outbound_carrier_visit_id" in df.columns:
@@ -714,14 +712,10 @@ def _insert_global_containers(engine, df: pd.DataFrame, ingestion_id: str):
     df["updated_at"] = _utcnow_naive()
     df["created_at"] = _utcnow_naive()
 
-    # Coerce time columns
-    time_cols = ["time_in", "time_out", "move_complete_time"]
-    for c in time_cols:
-        if c in df.columns:
-            df[c] = pd.to_datetime(df[c], errors="coerce")
+    # Time columns are already coerced by _process_ingestion using _coerce_datetime_columns
 
     # Ensure text columns are clean
-    non_time = [c for c in df.columns if c not in time_cols + ["unit_weight_in_kg", "verified_gross_mass_kg", "created_at", "updated_at"]]
+    non_time = [c for c in df.columns if c not in ["time_in", "time_out", "move_complete_time", "unit_weight_in_kg", "verified_gross_mass_kg", "created_at", "updated_at"]]
     df = _ensure_text_columns(df, non_time)
 
     if "visit_id" not in df.columns:
@@ -814,8 +808,7 @@ def _insert_global_cranes(engine, df: pd.DataFrame, ingestion_id: str):
     df["ingestion_id"] = ingestion_id
     df["created_at"] = _utcnow_naive()
 
-    if "time_completed" in df.columns:
-        df["time_completed"] = pd.to_datetime(df["time_completed"], errors="coerce")
+    # Time columns are already coerced by _process_ingestion
 
     non_time = [c for c in df.columns if c not in ["time_completed", "created_at"]]
     df = _ensure_text_columns(df, non_time)
@@ -893,12 +886,9 @@ def _insert_global_itvs(engine, df: pd.DataFrame, ingestion_id: str):
     df["ingestion_id"] = ingestion_id
     df["created_at"] = _utcnow_naive()
 
-    time_cols = ["dispatch_time", "arrival_time"]
-    for c in time_cols:
-        if c in df.columns:
-            df[c] = pd.to_datetime(df[c], errors="coerce")
+    # Time columns are already coerced by _process_ingestion
 
-    non_time = [c for c in df.columns if c not in time_cols + ["created_at"]]
+    non_time = [c for c in df.columns if c not in ["dispatch_time", "arrival_time", "created_at"]]
     df = _ensure_text_columns(df, non_time)
 
     # Load actual table schema and filter to only columns that exist in the DB

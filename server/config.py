@@ -238,7 +238,7 @@ class Settings:
     RISK_EXTENDED_STAY_HOURS = 40.0
 
     # Crane analytics
-    CRANE_MOVES_PER_HOUR_TARGET = 25
+    CRANE_MOVES_PER_HOUR_TARGET = 21
     CRANE_MAX_CRANES_DISPLAY = 6
     CRANE_IDLE_THRESHOLD_MINUTES = 30
     CRANE_EFFICIENCY_ROLLING_WINDOW = 10
@@ -252,7 +252,7 @@ class Settings:
     HISTORY_LOAD_WINDOW_DAYS = 0
 
     # Stay prediction defaults
-    MOVES_PER_HOUR_PER_CRANE = 25.0
+    MOVES_PER_HOUR_PER_CRANE = 21.0
     DEFAULT_AVG_WEIGHT_KG = 15000.0
     DEFAULT_REEFER_RATIO = 0.1
     DEFAULT_HAZARD_RATIO = 0.05
@@ -299,6 +299,7 @@ class Settings:
             visit_id                         TEXT        NOT NULL,
             unit_visit_gkey                  TEXT,
             outbound_service                 TEXT,
+            actual_outbound_carrier_visit_id TEXT,
             actual_inbound_carrier_visit_id  TEXT,
             inbound_service                  TEXT,
             facility_id                      TEXT,

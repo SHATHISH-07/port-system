@@ -78,37 +78,56 @@ def _compute_raw_visit_stay(df: pd.DataFrame) -> Optional[float]:
     Compute stay duration in hours from the raw visit span.
 
     Priority:
-        1. move_complete_time span (first -> last completion)
-        2. vessel_departure (time_out) - earliest event_time
+        1. max(move_complete_time.max(), vessel_departure.max()) - move_complete_time.min()
+        2. vessel_departure.max() - event_time.min()
 
     No history windowing is used here.
     """
     if df is None or df.empty:
         return None
 
+    mct_min = None
+    mct_max = None
     if "move_complete_time" in df.columns:
         mct = pd.to_datetime(df["move_complete_time"], errors="coerce").dropna()
-        if len(mct) >= 2:
-            span_hours = (mct.max() - mct.min()).total_seconds() / 3600
-            if span_hours >= 0.5:
-                return round(span_hours, 2)
+        if not mct.empty:
+            mct_min = mct.quantile(0.01)
+            mct_max = mct.max()
 
-    if "event_time" not in df.columns:
+    vessel_dep = None
+    if "vessel_departure" in df.columns:
+        # Bug 2 fix: Use valid_dep.max() not iloc[0]
+        valid_dep = pd.to_datetime(df["vessel_departure"], errors="coerce").dropna()
+        if not valid_dep.empty:
+            vessel_dep = valid_dep.max()
+
+    # Determine start time (Bug 3 fix)
+    if mct_min is not None:
+        start = mct_min
+    elif "event_time" in df.columns:
+        start = pd.to_datetime(df["event_time"], errors="coerce").min()
+    else:
         return None
 
-    start = df["event_time"].min()
     if pd.isna(start):
         return None
 
-    if "vessel_departure" in df.columns:
-        valid_dep = df["vessel_departure"].dropna()
-        if not valid_dep.empty:
-            end = valid_dep.iloc[0]
-            if pd.notna(end) and end > start:
-                stay_hours = (end - start).total_seconds() / 3600
-                if stay_hours > 0:
-                    return round(stay_hours, 2)
+    # Determine end time (Bug 3 fix)
+    end_candidates = []
+    if mct_max is not None:
+        end_candidates.append(mct_max)
+    if vessel_dep is not None:
+        end_candidates.append(vessel_dep)
+
+    if not end_candidates:
         return None
+
+    end = max(end_candidates)
+
+    if pd.notna(end) and end > start:
+        stay_hours = (end - start).total_seconds() / 3600
+        if stay_hours >= 0.5:
+            return round(stay_hours, 2)
 
     return None
 
@@ -136,8 +155,8 @@ def _heuristic_span_from_metrics(
         if historical_mph_avg and float(historical_mph_avg) > 0
         else float(settings.CRANE_MOVES_PER_HOUR_TARGET)
     )
-    # Clamp to a realistic operational range
-    mph_per_crane = max(5.0, min(60.0, mph_per_crane))
+    # Clamp to a realistic operational range, allowing as low as 0.5 for vessels with extensive idle times
+    mph_per_crane = max(0.5, min(60.0, mph_per_crane))
 
     effective_cranes = max(1, int(crane_count))
     vessel_rate = mph_per_crane * effective_cranes
@@ -561,14 +580,14 @@ def predict_visit_stay_duration(
         historical_mph_avg=mph_override,
     )
 
-    # Trust ML within [0.4×, 3.0×] of the heuristic; average outside that band.
+    # Use heuristic as a sensible lower bound rather than symmetrically overriding
     ABSOLUTE_MIN_HOURS = float(settings.TRAIN_MIN_HOURS)  # 2h
     ABSOLUTE_MAX_HOURS = 240.0
 
-    if ml_pred < ABSOLUTE_MIN_HOURS:
+    if ml_pred < ABSOLUTE_MIN_HOURS or ml_pred > ABSOLUTE_MAX_HOURS:
         pred = heuristic  # model has failed; fall back entirely
-    elif ml_pred > ABSOLUTE_MAX_HOURS:
-        pred = heuristic  # model has failed; fall back entirely
+    elif ml_pred < heuristic:
+        pred = heuristic  # heuristic is a lower bound only
     else:
         pred = ml_pred    # trust the ML model
 
@@ -608,10 +627,21 @@ def predict_vessel_stay_duration(
             continue
 
         cranes = crane_counts.get(str(visit_id), 0)
+        if cranes == 0 and mph_override and mph_override > 0:
+            span = _compute_raw_visit_stay(visit_df)
+            if span and span > 0:
+                moves = len(visit_df)
+                total_mph = moves / span
+                cranes = max(1, int(round(total_mph / mph_override)))
+        
+        if cranes == 0:
+            moves = len(visit_df)
+            # Estimate 1 crane per 400 moves if no data exists
+            cranes = min(settings.CRANE_MAX_CRANES_DISPLAY, max(1, moves // 400))
 
         pred = predict_visit_stay_duration(
             visit_df,
-            mph_override=None,
+            mph_override=mph_override,
             feature_template=feature_template,
             crane_count=cranes,
         )
@@ -620,7 +650,7 @@ def predict_vessel_stay_duration(
         if pred is None:
             continue
 
-        weight = 1
+        weight = len(visit_df)
 
         visit_preds[str(visit_id)] = float(pred)
         weighted_sum += float(pred) * weight
@@ -715,13 +745,13 @@ def predict_stay_duration_from_metrics(
     X = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
     ml_pred = float(model.predict(X)[0])
 
-    # Apply the same outlier-clamping as predict_visit_stay_duration.
+    # Apply the same lower-bound logic as predict_visit_stay_duration.
     ABSOLUTE_MIN_HOURS = float(settings.TRAIN_MIN_HOURS)
     ABSOLUTE_MAX_HOURS = 240.0
 
-    if ml_pred < ABSOLUTE_MIN_HOURS:
+    if ml_pred < ABSOLUTE_MIN_HOURS or ml_pred > ABSOLUTE_MAX_HOURS:
         avg_hours = heuristic_span_hours
-    elif ml_pred > ABSOLUTE_MAX_HOURS:
+    elif ml_pred < heuristic_span_hours:
         avg_hours = heuristic_span_hours
     else:
         avg_hours = ml_pred

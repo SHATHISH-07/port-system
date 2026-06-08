@@ -107,6 +107,7 @@ def init_simplified_schema(engine) -> None:
 
         # Migrate containers table: add columns that may be missing on older DBs
         for col, col_type in [
+            ("actual_outbound_carrier_visit_id", "TEXT"),
             ("actual_inbound_carrier_visit_id", "TEXT"),
             ("unit_visit_gkey", "TEXT"),
         ]:

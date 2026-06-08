@@ -252,29 +252,39 @@ def _visit_details(visit_groups: dict) -> dict:
         move_start = None
         move_end = None
 
-        if "move_complete_time" in vdf.columns:
-            mct = pd.to_datetime(vdf["move_complete_time"], errors="coerce").dropna()
-            if len(mct) >= 2:
-                move_start = mct.min()
-                move_end = mct.max()
-                stay_hours = round((move_end - move_start).total_seconds() / 3600, 2)
-
-        if stay_hours == 0.0:
-            for tc in ("time_in", "updated_at", "created_at"):
-                if tc in vdf.columns and vdf[tc].notna().any():
-                    times = pd.to_datetime(vdf[tc], errors="coerce").dropna()
-                    if len(times) >= 2:
-                        stay_hours = round((times.max() - times.min()).total_seconds() / 3600, 2)
-                    break
-
         # Fast vectorized move counting
         f_str = vdf.get("ctr_from_position", vdf.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
         t_str = vdf.get("ctr_to_position", vdf.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
         
-        f_is_v = f_str.str.startswith("V-")
-        t_is_v = t_str.str.startswith("V-")
-        f_is_y = (f_str != "") & (~f_is_v)
-        t_is_y = (t_str != "") & (~t_is_v)
+        f_is_v = f_str.str.startswith("V-") & f_str.str.contains(visit_id.upper())
+        t_is_v = t_str.str.startswith("V-") & t_str.str.contains(visit_id.upper())
+        involved = f_is_v | t_is_v
+        
+        f_is_y = (f_str != "") & (~f_str.str.startswith("V-"))
+        t_is_y = (t_str != "") & (~t_str.str.startswith("V-"))
+
+        # Calculate operational bounds using valid timestamps
+        valid_times = pd.Series(dtype="datetime64[ns]")
+        
+        if "move_complete_time" in vdf.columns:
+            mct = pd.to_datetime(vdf.loc[involved, "move_complete_time"], errors="coerce").dropna()
+            if not mct.empty:
+                valid_times = pd.concat([valid_times, mct])
+                
+        if "time_in" in vdf.columns:
+            tin = pd.to_datetime(vdf.loc[f_is_v, "time_in"], errors="coerce").dropna()
+            if not tin.empty:
+                valid_times = pd.concat([valid_times, tin])
+                
+        if "time_out" in vdf.columns:
+            tout = pd.to_datetime(vdf.loc[t_is_v, "time_out"], errors="coerce").dropna()
+            if not tout.empty:
+                valid_times = pd.concat([valid_times, tout])
+                
+        if len(valid_times) >= 2:
+            move_start = valid_times.min()
+            move_end = valid_times.max()
+            stay_hours = round((move_end - move_start).total_seconds() / 3600, 2)
         
         loads = int((f_is_y & t_is_v).sum())
         discharges = int((f_is_v & t_is_y).sum())
@@ -1314,9 +1324,13 @@ def analyze_vessel_dashboard(
             f = create_features(vdf)
             if f:
                 # Override move_span_hours with actual computed stay when available
-                raw_stay = _raw_stay(vdf)
-                if raw_stay and raw_stay > 0:
-                    f["move_span_hours"] = raw_stay
+                real_stay = actual_raw.get("visits", {}).get(str(vid))
+                if real_stay and real_stay > 0:
+                    f["move_span_hours"] = float(real_stay)
+                else:
+                    raw_stay = _raw_stay(vdf)
+                    if raw_stay and raw_stay > 0:
+                        f["move_span_hours"] = raw_stay
                 historical_features_list.append(f)
 
         if historical_features_list:
@@ -1326,13 +1340,27 @@ def analyze_vessel_dashboard(
                     feature_template[k] = sum(vals) / len(vals)
 
             # historical_mph_avg: moves per hour across the full operational span
-            # Use actual stay hours (not move_span_hours from features) as the denominator
             mph_rates = []
-            avg_hist_cranes = max(
-                sum(v for v in visit_crane_counts.values() if v > 0)
-                    / max(sum(1 for v in visit_crane_counts.values() if v > 0), 1),
-                    1.0,
-                )
+            
+            # Estimate missing crane counts
+            valid_cranes = [v for v in visit_crane_counts.values() if v > 0]
+            if valid_cranes:
+                avg_hist_cranes = sum(valid_cranes) / len(valid_cranes)
+            else:
+                # Estimate based on total volume and stay
+                total_m = 0
+                total_s = 0
+                for vid in baseline_prepared.keys():
+                    v_stay = actual_raw.get("visits", {}).get(str(vid), 0)
+                    v_moves = len(baseline_prepared[vid])
+                    if v_stay > 0 and v_moves > 0:
+                        total_m += v_moves
+                        total_s += v_stay
+                if total_s > 0:
+                    avg_hist_cranes = max(1.0, round((total_m / total_s) / 25.0))
+                else:
+                    avg_hist_cranes = 1.0
+
             for f in historical_features_list:
                 span = f.get("move_span_hours", 0)
                 moves = f.get("total_moves", 0)
@@ -1370,9 +1398,18 @@ def analyze_vessel_dashboard(
                 return {"error": "No valid visit data found", "vessel": vessel_service}
 
             vals = list(synthetic_visits.values())
+            total_syn_hours = 0.0
+            total_syn_weight = 0
+            for vid, vdf in visit_groups.items():
+                if str(vid) in synthetic_visits:
+                    total_syn_hours += synthetic_visits[str(vid)] * len(vdf)
+                    total_syn_weight += len(vdf)
+            
+            avg_hours = round(total_syn_hours / total_syn_weight, 2) if total_syn_weight > 0 else round(sum(vals) / len(vals), 2)
+            
             actual_raw = {
                 "visits": synthetic_visits,
-                "avg_hours": round(sum(vals) / len(vals), 2),
+                "avg_hours": avg_hours,
                 "max_hours": round(max(vals), 2),
                 "min_hours": round(min(vals), 2),
             }
@@ -1388,9 +1425,15 @@ def analyze_vessel_dashboard(
             # Use average crane count across visits for metric-override path
             avg_crane_count = (
                 round(sum(visit_crane_counts.values()) / len(visit_crane_counts))
-                if visit_crane_counts else 1
+                if visit_crane_counts else 0
             )
-            # ✅ FIX — use actual_raw instead
+            estimated_cranes = avg_crane_count
+            if estimated_cranes == 0 and historical_mph_avg and historical_mph_avg > 0 and actual_raw.get("avg_hours"):
+                total_moves = total_loaded + total_discharged
+                if total_moves > 0 and actual_raw.get("avg_hours") > 0:
+                    total_mph = total_moves / actual_raw.get("avg_hours")
+                    estimated_cranes = max(1, int(round(total_mph / historical_mph_avg)))
+            
             p_res = predict_stay_duration_from_metrics(
                 total_loaded,
                 total_discharged,
@@ -1401,9 +1444,9 @@ def analyze_vessel_dashboard(
             p_stay = p_res.get("predicted", {}).get("avg_hours") if isinstance(p_res, dict) else p_res
             predicted = {"avg_hours": p_stay, "visits": 1, "source": "metric_override"}
         else:
-            # Pass raw unwindowed visit_groups so move_span_hours is correct
+            # Pass properly windowed prepared_visits so move_span_hours accurately reflects vessel operation time
             predicted = predict_vessel_stay_duration(
-                visit_groups,
+                prepared_visits,
                 mph_override=historical_mph_avg or None,
                 feature_template=feature_template,
                 crane_counts=visit_crane_counts,
@@ -1413,6 +1456,20 @@ def analyze_vessel_dashboard(
 
     # ── Build merged visit details ───────────────────────────────────────────
     visit_details = _visit_details(visit_groups)
+    
+    # ── FIX: Merging Historical Baseline into Display Payload ────────────────
+    if baseline_prepared:
+        baseline_visit_details = _visit_details(baseline_prepared)
+        baseline_actual_raw = compute_vessel_stay(baseline_prepared)
+        if "visits" not in actual_raw:
+            actual_raw["visits"] = {}
+        for vid in baseline_prepared.keys():
+            vid_str = str(vid)
+            if vid_str not in actual_raw["visits"]:
+                actual_raw["visits"][vid_str] = baseline_actual_raw.get("visits", {}).get(vid_str, 0.0)
+            if vid_str not in visit_details:
+                visit_details[vid_str] = baseline_visit_details.get(vid_str, {})
+
     merged_visits: dict = {}
 
     for vid, stay in actual_raw.get("visits", {}).items():
@@ -1438,7 +1495,17 @@ def analyze_vessel_dashboard(
         }
 
     merged_stays = [v["stay_hours"] for v in merged_visits.values() if v.get("stay_hours", 0) > 0]
-    merged_avg_hours = round(sum(merged_stays) / len(merged_stays), 2) if merged_stays else 0.0
+    merged_avg_hours = 0.0
+    if merged_stays:
+        total_hours = 0.0
+        total_weight = 0
+        for v in merged_visits.values():
+            stay = v.get("stay_hours", 0)
+            if stay > 0:
+                weight = max(v.get("loaded_containers", 0) + v.get("discharged_containers", 0), 1)
+                total_hours += stay * weight
+                total_weight += weight
+        merged_avg_hours = round(total_hours / total_weight, 2) if total_weight > 0 else 0.0
 
     merged_restows = [v.get("restow_count", 0) for v in merged_visits.values()]
     merged_avg_restows = round(sum(merged_restows) / len(merged_restows), 1) if merged_restows else 0.0
