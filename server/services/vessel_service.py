@@ -833,11 +833,6 @@ def get_yard_heatmap_data(
             if bk_id == primary_block_id:
                 primary_block_dist_m = dist_m
 
-            # FIX: populate distance_to_berth_m on each block
-            for bl in block_list:
-                if bl["block_id"] == bk_id and bl["distance_to_berth_m"] is None:
-                    bl["distance_to_berth_m"] = dist_m
-
         concentration_pct = round((near_count / total_all) * 100, 2)
         avg_dist = int(total_laden / total_all) if total_all > 0 else 0
 
@@ -933,7 +928,7 @@ def get_yard_heatmap_data(
             "discharge_moves":         0,
             "cargo_concentration_pct": b["concentration_pct"],
             "intensity":               round(b["concentration_pct"] / 100, 4),
-            "recommended_cranes":      max(1, math.ceil(b["near_count"] / dynamic_crane_capacity)),
+            "recommended_cranes":      min(5, max(1, math.ceil(b["near_count"] / dynamic_crane_capacity))),
             "congestion_risk":         risk,
             "hazardous":               summary.get("hazmat_total", 0),
             "reefer":                  summary.get("reefer_total", 0),
@@ -980,7 +975,9 @@ def get_yard_heatmap_data(
                         target = str(vessel_id).strip().upper() if vessel_id else ""
                         mask = (
                             (full_df["outbound_service"].astype(str).str.strip().str.upper() != target) &
-                            (full_df["outbound_service"].notna())
+                            (full_df["outbound_service"].notna()) &
+                            (full_df["outbound_service"].astype(str).str.strip() != "") &
+                            (~full_df["outbound_service"].astype(str).str.strip().str.upper().isin(['NAN', 'NONE', 'UNKNOWN']))
                         )
                         cdf = full_df[mask].copy()
 
@@ -1141,18 +1138,34 @@ def get_yard_heatmap_data(
                 conflict_table.append({
                     "berth":         row["berth"],
                     "contested_blocks": sorted(list(all_contested_blocks)),
-                    "conflict_risk": conflict_risk,
+"conflict_risk": conflict_risk,
                     "conflict_with": conflicts[:4],
                     "impact_score":  row["impact_score"],
                     "reason":        reason,
                     "mitigation":    mitigation,
                 })
 
-        primary_berth = dict(berth_analysis[0])
-        primary_berth["recommendation_reason"] = (
-            f"{primary_berth['cargo_concentration_pct']}% of loading cargo located in blocks near {primary_berth['berth']}. "
-            f"Lowest operational impact based on travel distance."
-        )
+        if berth_analysis:
+            primary_berth = berth_analysis[0]
+            # Update each block's distance to this specific optimal berth
+            optimal_berth_name = primary_berth["berth"]
+            optimal_berth_id = next((k for k, v in berths_data.items() if v.get("name", k) == optimal_berth_name), None)
+            
+            if optimal_berth_id:
+                for bl in block_list:
+                    bk_id = bl["block_id"]
+                    dist_m = 500
+                    if full_layout and bk_id in xml_distances.get("block_to_berth", {}) and optimal_berth_id in xml_distances["block_to_berth"][bk_id]:
+                        dist_m = xml_distances["block_to_berth"][bk_id][optimal_berth_id].get("distance_m", 500)
+                    else:
+                        b_cx, b_cy = 0.5, 0.5
+                        berth_cx, berth_cy = berths_data[optimal_berth_id].get("center", (0.185, 0.55))
+                        dist_m = int((abs(b_cx - berth_cx) * yard_w + abs(b_cy - berth_cy) * yard_h) / 100)
+                    bl["distance_to_berth_m"] = int(dist_m)
+            primary_berth["recommendation_reason"] = (
+                f"{primary_berth['cargo_concentration_pct']}% of loading cargo located in blocks near {primary_berth['berth']}. "
+                f"Lowest operational impact based on travel distance."
+            )
 
     from services.heatmap_service import _deterministic_layout
     from services.xml_layout_service import xml_layout_service

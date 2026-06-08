@@ -531,7 +531,9 @@ def process_current_planning_and_yard_strategy(
         if df.empty:
             df = load_from_db("history", yard_id=yard_id, vessel_id=vessel_id)
         
-    if df is not None and not df.empty:
+    if df is not None and not df.empty and not cleaned_ids:
+        # Only filter by vessel_id if we are doing a general lookup for the vessel.
+        # If the user explicitly provided container_ids, we trust they belong to the plan.
         v_id_upper = str(vessel_id).strip().upper()
         mask = pd.Series([False] * len(df), index=df.index)
         if "outbound_service" in df.columns:

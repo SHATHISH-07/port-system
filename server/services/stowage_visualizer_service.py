@@ -175,6 +175,8 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict, yard_id: str =
 
         try:
             wt_float = float(weight_kg) if weight_kg is not None else None
+            if wt_float is not None and pd.isna(wt_float):
+                wt_float = None
         except ValueError:
             wt_float = None
 
@@ -405,8 +407,8 @@ def get_stowage_visualization(
                 if df is not None and not df.empty:
                     df = _normalize_dataframe_columns(df)
                     
-                    if vessel_id and "outbound_service" in df.columns:
-                        df = df[df["outbound_service"].astype(str).str.strip().str.upper() == str(vessel_id).strip().upper()].copy()
+                    # We should NOT filter by outbound_service here if the user explicitly provided container_ids.
+                    # Active yard containers do not have outbound_service assigned yet.
                         
                     df = _dedupe_latest_per_unit(df)
                     resolved_count = len(df)

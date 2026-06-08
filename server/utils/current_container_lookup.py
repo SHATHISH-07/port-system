@@ -12,7 +12,7 @@ from db.connection import get_engine
 logger = logging.getLogger("port_system")
 
 # Directory where active yard JSON/CSV files are stored
-_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "source"
 
 # In-memory cache to avoid re-reading the files on every call
 _active_yard_cache: dict[str, pd.DataFrame] = {}
@@ -28,18 +28,16 @@ def _load_active_yard_df(yard_id: Optional[str] = None) -> pd.DataFrame:
         return _active_yard_cache[cache_key]
 
     dfs: list[pd.DataFrame] = []
-    patterns = [f"{yard_id}_active_yard_containers.json"] if yard_id else ["*_active_yard_containers.json"]
+    patterns = [f"{yard_id}_active_yard_containers.csv"] if yard_id else ["*_active_yard_containers.csv"]
 
     for pattern in patterns:
-        for json_path in _DATA_DIR.glob(pattern):
+        for csv_path in _DATA_DIR.glob(pattern):
             try:
-                with open(json_path, encoding="utf-8") as f:
-                    data = json.load(f)
-                if data:
-                    df = pd.DataFrame(data)
+                df = pd.read_csv(csv_path, dtype=str)
+                if not df.empty:
                     dfs.append(df)
             except Exception as e:
-                logger.debug("Failed to load active yard file %s: %s", json_path, e)
+                logger.debug("Failed to load active yard file %s: %s", csv_path, e)
 
     if not dfs:
         _active_yard_cache[cache_key] = pd.DataFrame()
@@ -51,6 +49,7 @@ def _load_active_yard_df(yard_id: Optional[str] = None) -> pd.DataFrame:
         "Unit ID": "unit_id",
         "Unit Visit Gkey": "unit_visit_gkey",
         "Actual Outbound Carrier visit ID": "actual_outbound_carrier_visit_id",
+        "Outbound Service": "outbound_service",
         "Current Yard Block": "current_yard_block",
         "Current Slot Position": "current_position",
         "Move Complete Time": "move_complete_time",
@@ -110,10 +109,7 @@ def lookup_containers_by_ids(container_ids: List[str], yard_id: Optional[str] = 
         if not active_matches.empty:
             # De-duplicate (keep first — they're already sorted by most recent)
             active_matches = active_matches.drop_duplicates(subset=["unit_id"], keep="first")
-            if "current_position" in active_matches.columns:
-                active_position_map = dict(
-                    zip(active_matches["unit_id"], active_matches["current_position"])
-                )
+            active_dict = active_matches.set_index("unit_id").to_dict("index")
 
     # ── Step 2: Query DB for full metadata ────────────────────────────────
     engine = get_engine()
@@ -179,12 +175,18 @@ def lookup_containers_by_ids(container_ids: List[str], yard_id: Optional[str] = 
         df = df.drop(columns=["_departed_rank"], errors="ignore")
 
     # ── Step 3: Override positions with active yard truth ──────────────────
-    if active_position_map and "current_position" in df.columns:
-        df["current_position"] = df.apply(
-            lambda row: active_position_map.get(row["unit_id"], row["current_position"]),
-            axis=1,
-        )
+    if not active_matches.empty:
+        override_cols = ["current_position", "actual_outbound_carrier_visit_id", "outbound_service", "visit_id"]
+        for col in override_cols:
+            if col in active_matches.columns:
+                if col not in df.columns:
+                    df[col] = None
+                df[col] = df.apply(
+                    lambda row: active_dict.get(row["unit_id"], {}).get(col, row[col]),
+                    axis=1,
+                )
+        
         # Also force visit_state to IN_YARD for containers found in active yard
-        df.loc[df["unit_id"].isin(active_position_map.keys()), "visit_state"] = "IN_YARD"
+        df.loc[df["unit_id"].isin(active_dict.keys()), "visit_state"] = "IN_YARD"
 
     return df.reset_index(drop=True)

@@ -704,8 +704,8 @@ def generate_terminal_data(terminal: dict):
 
             inbound_id       = None
             inbound_service  = None
-            outbound_id      = visit["visit_id"]
-            outbound_service = visit["service"]
+            outbound_id      = None
+            outbound_service = None
 
             if move_kind == "Discharge":
                 yard_block = discharge_block_seq[discharge_idx]
@@ -732,6 +732,8 @@ def generate_terminal_data(terminal: dict):
                                        yard_block, registry=slot_registry)
                 to_pos           = vessel_side_position(visit["visit_id"])
                 current_position = to_pos
+                outbound_id      = visit["visit_id"]
+                outbound_service = visit["service"]
                 # FIX: time_in must always be before time_out.
                 # Container was gated in before the vessel arrived; departs
                 # after the move.  Use absolute offsets from move_time to

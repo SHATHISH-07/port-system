@@ -96,43 +96,41 @@ export default function StowageHeader({
           }}
         >
           {/* Vessel ID search */}
-          {activeTab === 0 ? (
-            <TextField
-              size="small"
-              placeholder="Search Vessel ID"
-              value={vesselId}
-              onChange={(e) => setVesselId(e.target.value.toUpperCase())}
-              disabled={loading}
-              variant="outlined"
-              sx={{
-                width: "100%",
-                flex: { xs: "1 1 auto", md: 2 },
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 2,
-                  bgcolor: "background.paper",
-                  height: 40,
-                  fontSize: "0.8rem",
-                  "& fieldset": {
-                    borderColor: alpha(theme.palette.divider, 0.8),
-                  },
-                  "&:hover fieldset": {
-                    borderColor: theme.palette.primary.main,
-                  },
+          <TextField
+            size="small"
+            placeholder="Search Vessel ID"
+            value={vesselId}
+            onChange={(e) => setVesselId(e.target.value.toUpperCase())}
+            disabled={loading}
+            variant="outlined"
+            sx={{
+              width: "100%",
+              flex: { xs: "1 1 auto", md: 2 },
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 2,
+                bgcolor: "background.paper",
+                height: 40,
+                fontSize: "0.8rem",
+                "& fieldset": {
+                  borderColor: alpha(theme.palette.divider, 0.8),
                 },
-              }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon
-                        sx={{ color: "text.secondary", ml: 0.5, fontSize: 20 }}
-                      />
-                    </InputAdornment>
-                  ),
+                "&:hover fieldset": {
+                  borderColor: theme.palette.primary.main,
                 },
-              }}
-            />
-          ) : null}
+              },
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon
+                      sx={{ color: "text.secondary", ml: 0.5, fontSize: 20 }}
+                    />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
 
           {/* Yard ID input */}
           <TextField

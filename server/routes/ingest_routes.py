@@ -696,9 +696,9 @@ def _insert_global_containers(engine, df: pd.DataFrame, ingestion_id: str):
     # Map the legacy visit column to the table PK column `visit_id`
     if "visit_id" not in df.columns:
         if "actual_outbound_carrier_visit_id" in df.columns:
-            df["visit_id"] = df["actual_outbound_carrier_visit_id"]
+            df["visit_id"] = df["actual_outbound_carrier_visit_id"].fillna("UNKNOWN").replace("", "UNKNOWN")
         elif "carrier_visit" in df.columns:
-            df["visit_id"] = df["carrier_visit"]
+            df["visit_id"] = df["carrier_visit"].fillna("UNKNOWN").replace("", "UNKNOWN")
         else:
             return  # Missing composite PK
 

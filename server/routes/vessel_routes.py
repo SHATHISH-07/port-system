@@ -97,7 +97,22 @@ async def get_vessel_heatmap_route(
         )
         if "error" in res:
             raise HTTPException(status_code=404, detail=res["error"])
-        return res
+            
+        import math
+        import pandas as pd
+        def clean_nan(obj):
+            if isinstance(obj, dict):
+                return {k: clean_nan(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [clean_nan(v) for v in obj]
+            elif isinstance(obj, float):
+                if math.isnan(obj) or math.isinf(obj):
+                    return None
+            elif pd.isna(obj):
+                return None
+            return obj
+            
+        return clean_nan(res)
     except HTTPException:
         raise
     except Exception as exc:
