@@ -545,6 +545,8 @@ def get_yard_heatmap_data(
     unit_ids: list[str],
     yard_id: str = None,
     vessel_id: str = None,
+    load_moves: int = None,
+    discharge_moves: int = None,
 ) -> dict:
     """
     Unified endpoint for all map/heatmap/terminal visualization data.
@@ -882,54 +884,59 @@ def get_yard_heatmap_data(
     # Sort: Optimal berth is strictly the shortest travel distance from the primary block
     berth_metrics.sort(key=lambda x: x["primary_block_dist_m"])
 
-    # Dynamic Crane Capacity Calculation
-    dynamic_crane_capacity = 60.0 # Default fallback
+    final_load = load_moves if load_moves is not None else total_all
+    final_discharge = discharge_moves if discharge_moves is not None else 0
+
+    estimated_stay = 0.0
+    recommended_cranes = 1
+    avg_crane_mph = 25.0
+
     try:
-        from db.queries import get_engine
-        from sqlalchemy import text
+        from db.queries import load_from_db
+        from services.vessel_service import analyze_vessel_dashboard
         
-        # Use the passed vessel_id for fetching history, since active containers no longer have outbound_service
-        if vessel_id:
-            query = text("""
-                SELECT 
-                    visit_id as actual_outbound_carrier_visit_id,
-                    MIN(time_in) as first_move,
-                    MAX(move_complete_time) as last_move,
-                    COUNT(unit_id) as total_moves
-                FROM containers 
-                WHERE UPPER(TRIM(outbound_service)) = :svc
-                  AND visit_id IS NOT NULL
-                  AND move_complete_time IS NOT NULL
-                GROUP BY visit_id
-            """)
-            engine = get_engine()
-            hist_df = pd.read_sql(query, engine, params={"svc": vessel_id.strip().upper()})
+        df_curr = load_from_db("current", vessel_id=vessel_id) if vessel_id else pd.DataFrame()
+        df_hist = load_from_db("history", vessel_id=vessel_id) if vessel_id else pd.DataFrame()
+        
+        analysis_result = analyze_vessel_dashboard(
+            df_curr,
+            vessel_id or "UNKNOWN",
+            loaded_override=final_load,
+            discharged_override=final_discharge,
+            history_df=df_hist,
+        )
+        
+        if "error" in analysis_result and not df_hist.empty:
+            analysis_result = analyze_vessel_dashboard(
+                df_hist,
+                vessel_id or "UNKNOWN",
+                loaded_override=final_load,
+                discharged_override=final_discharge,
+            )
             
-            if not hist_df.empty:
-                hist_df["first_move"] = pd.to_datetime(hist_df["first_move"])
-                hist_df["last_move"] = pd.to_datetime(hist_df["last_move"])
-                hist_df["stay_hours"] = (hist_df["last_move"] - hist_df["first_move"]).dt.total_seconds() / 3600.0
-                
-                valid_stays = hist_df[hist_df["stay_hours"] > 0].copy()
-                if not valid_stays.empty:
-                    valid_stays["mph"] = valid_stays["total_moves"] / valid_stays["stay_hours"]
-                    avg_stay = valid_stays["stay_hours"].mean()
-                    
-                    visit_ids = valid_stays["actual_outbound_carrier_visit_id"].tolist()
-                    from services.vessel_service import _fetch_crane_counts_batch
-                    crane_counts = _fetch_crane_counts_batch(visit_ids)
-                    
-                    mph_list = []
-                    for _, row in valid_stays.iterrows():
-                        v_id = row["actual_outbound_carrier_visit_id"]
-                        cc = crane_counts.get(v_id, 0)
-                        if cc > 0:
-                            mph_list.append(row["mph"] / cc)
-                            
-                    avg_crane_mph = sum(mph_list) / len(mph_list) if mph_list else 25.0
-                    dynamic_crane_capacity = max(10.0, avg_stay * avg_crane_mph)
+        predicted = analysis_result.get("predicted", {})
+        if isinstance(predicted, dict):
+            estimated_stay = predicted.get("avg_hours", 0.0)
+            if "assigned_cranes" in predicted:
+                recommended_cranes = predicted.get("assigned_cranes", 1)
+        elif isinstance(predicted, float):
+            estimated_stay = predicted
+            
+        actual = analysis_result.get("actual", {})
+        if "visits" in actual and actual["visits"]:
+            visit_vals = list(actual["visits"].values())
+            if visit_vals:
+                first_visit = visit_vals[0]
+                if "crane_mph" in first_visit and first_visit.get("crane_mph", 0) > 0:
+                    avg_crane_mph = first_visit.get("crane_mph", 25.0)
+
+        if estimated_stay <= 0.0:
+            estimated_stay = round((final_load + final_discharge) / (recommended_cranes * avg_crane_mph), 1) if (recommended_cranes * avg_crane_mph) > 0 else 0.0
+
     except Exception as e:
-        print(f"Error calculating dynamic crane capacity: {e}")
+        import logging
+        logging.getLogger("port_system").error(f"Error calling analyze_vessel_dashboard from heatmap: {e}")
+        estimated_stay = round((final_load + final_discharge) / (recommended_cranes * avg_crane_mph), 1) if (recommended_cranes * avg_crane_mph) > 0 else 0.0
 
     for idx, b in enumerate(berth_metrics, start=1):
         dist_m = b["avg_dist"]
@@ -943,18 +950,21 @@ def get_yard_heatmap_data(
         
         # FIX: unladen distance is separate from laden
         unladen_dist = int(b["total_unladen"] / total_all) if total_all > 0 else 0
+        
 
         berth_analysis.append({
             "rank":                    idx,
             "berth":                   b["berth_name"],
             "terminal":                yard_id or "YARD",
             "near_blocks":             sorted(list(b["near_blocks"])),
-            "total_moves":             b["near_count"],
+            "total_moves":             total_all,
             "load_moves":              b["near_count"],
             "discharge_moves":         0,
             "cargo_concentration_pct": b["concentration_pct"],
             "intensity":               round(b["concentration_pct"] / 100, 4),
-            "recommended_cranes":      min(5, max(1, math.ceil(b["near_count"] / dynamic_crane_capacity))),
+            "recommended_cranes":      recommended_cranes,
+            "avg_crane_productivity_mph": round(avg_crane_mph, 1),
+            "estimated_port_stay_hours": estimated_stay,
             "congestion_risk":         risk,
             "hazardous":               summary.get("hazmat_total", 0),
             "reefer":                  summary.get("reefer_total", 0),
@@ -1483,27 +1493,29 @@ def analyze_vessel_dashboard(
             total_loaded = loaded_override if loaded_override is not None else 0
             total_discharged = discharged_override if discharged_override is not None else 0
 
-            # Use average crane count across visits for metric-override path
-            avg_crane_count = (
-                round(sum(visit_crane_counts.values()) / len(visit_crane_counts))
-                if visit_crane_counts else 0
-            )
-            estimated_cranes = avg_crane_count
-            if estimated_cranes == 0 and historical_mph_avg and historical_mph_avg > 0 and actual_raw.get("avg_hours"):
-                total_moves = total_loaded + total_discharged
-                if total_moves > 0 and actual_raw.get("avg_hours") > 0:
-                    total_mph = total_moves / actual_raw.get("avg_hours")
-                    estimated_cranes = max(1, int(round(total_mph / historical_mph_avg)))
+            total_moves = total_loaded + total_discharged
+            estimated_cranes = 1
+            if historical_mph_avg and historical_mph_avg > 0 and actual_raw.get("avg_hours") and actual_raw.get("avg_hours") > 0:
+                total_mph = total_moves / actual_raw.get("avg_hours")
+                estimated_cranes = max(1, int(round(total_mph / historical_mph_avg)))
+            else:
+                avg_crane_count = (
+                    round(sum(visit_crane_counts.values()) / len(visit_crane_counts))
+                    if visit_crane_counts else 0
+                )
+                estimated_cranes = max(avg_crane_count, 1)
+                
+            estimated_cranes = min(3, estimated_cranes) # Cap at physical berth limit
             
             p_res = predict_stay_duration_from_metrics(
                 total_loaded,
                 total_discharged,
-                crane_count=max(avg_crane_count, 1),
+                crane_count=estimated_cranes,
                 historical_mph_avg=historical_mph_avg,
                 historical_avg_stay_hours=baseline_avg_hours if baseline_avg_hours else actual_raw.get("avg_hours"),
             )
             p_stay = p_res.get("predicted", {}).get("avg_hours") if isinstance(p_res, dict) else p_res
-            predicted = {"avg_hours": p_stay, "visits": 1, "source": "metric_override"}
+            predicted = {"avg_hours": p_stay, "visits": 1, "source": "metric_override", "assigned_cranes": estimated_cranes}
         else:
             # Pass properly windowed prepared_visits so move_span_hours accurately reflects vessel operation time
             predicted = predict_vessel_stay_duration(
@@ -1644,4 +1656,77 @@ def analyze_vessel_dashboard(
         ),
         "actual":    actual,
         "predicted": predicted,
+    }
+
+
+def predict_port_stay(vessel_id: str, load_moves: int) -> dict:
+    """
+    Predicts port stay hours based on historical average crane assignment and productivity.
+    """
+    avg_crane_mph = 25.0
+    dynamic_crane_capacity = 60.0
+    avg_stay = 12.0
+
+    try:
+        from db.queries import get_engine
+        from sqlalchemy import text
+        import pandas as pd
+        import math
+        
+        query = text("""
+            SELECT 
+                visit_id as actual_outbound_carrier_visit_id,
+                MIN(move_complete_time) as first_move,
+                MAX(move_complete_time) as last_move,
+                COUNT(unit_id) as total_moves
+            FROM containers 
+            WHERE UPPER(TRIM(outbound_service)) = :svc
+              AND visit_id IS NOT NULL
+              AND move_complete_time IS NOT NULL
+            GROUP BY visit_id
+        """)
+        engine = get_engine()
+        hist_df = pd.read_sql(query, engine, params={"svc": vessel_id.strip().upper()})
+        
+        if not hist_df.empty:
+            hist_df["first_move"] = pd.to_datetime(hist_df["first_move"])
+            hist_df["last_move"] = pd.to_datetime(hist_df["last_move"])
+            hist_df["stay_hours"] = (hist_df["last_move"] - hist_df["first_move"]).dt.total_seconds() / 3600.0
+            
+            valid_stays = hist_df[hist_df["stay_hours"] > 0].copy()
+            if not valid_stays.empty:
+                valid_stays["mph"] = valid_stays["total_moves"] / valid_stays["stay_hours"]
+                avg_stay = valid_stays["stay_hours"].mean()
+                
+                visit_ids = valid_stays["actual_outbound_carrier_visit_id"].tolist()
+                crane_counts = _fetch_crane_counts_batch(visit_ids)
+                
+                mph_list = []
+                for _, row in valid_stays.iterrows():
+                    v_id = row["actual_outbound_carrier_visit_id"]
+                    cc = crane_counts.get(v_id, 0)
+                    if cc > 0:
+                        mph_list.append(row["mph"] / cc)
+                        
+                if mph_list:
+                    avg_crane_mph = sum(mph_list) / len(mph_list)
+                
+                dynamic_crane_capacity = max(10.0, avg_stay * avg_crane_mph)
+                
+    except Exception as e:
+        import logging
+        logging.getLogger("port_system").error(f"Error predicting port stay: {e}")
+
+    # Calculate prediction
+    import math
+    recommended_cranes = min(5, max(1, math.ceil(load_moves / dynamic_crane_capacity)))
+    predicted_port_stay_hours = round(load_moves / (recommended_cranes * avg_crane_mph), 1) if (recommended_cranes * avg_crane_mph) > 0 else 0.0
+
+    return {
+        "vessel_id": vessel_id,
+        "total_moves": load_moves,
+        "historical_avg_cranes": recommended_cranes, # Proxy based on total load moves
+        "historical_avg_mph": round(avg_crane_mph, 1),
+        "recommended_cranes": recommended_cranes,
+        "predicted_port_stay_hours": predicted_port_stay_hours
     }

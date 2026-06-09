@@ -22,6 +22,8 @@ export interface BerthAnalysis {
   congestion_risk?: string;
   recommendation_reason?: string;
   recommended_cranes?: number;
+  avg_crane_productivity_mph?: number;
+  estimated_port_stay_hours?: number;
   cargo_concentration_pct?: number;
   impact_score?: number | string;
   travel_distance_label?: string;
@@ -171,16 +173,15 @@ export default function BerthRecommendation({
                     <TableRow key={row.berth} sx={{ "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)" } }}>
                       <TableCell sx={{ borderBottom: bBottom, fontWeight: 900, fontSize: '0.95rem', color: "text.primary" }}>
                         {row.berth.replace('Berth ', 'B')}
+                        {row.berth === primary?.berth && (
+                          <Typography component="span" sx={{ ml: 1, fontSize: '0.65rem', fontWeight: 900, color: COLORS.success, bgcolor: alpha(COLORS.success, 0.1), px: 0.8, py: 0.3, borderRadius: 1 }}>
+                            RECOMMENDED
+                          </Typography>
+                        )}
                       </TableCell>
-                      <TableCell sx={{ borderBottom: bBottom, fontSize: '0.9rem', fontWeight: 800, color: getValColor(cargoStr) }}>
-                        {cargoStr}
-                      </TableCell>
-                      <TableCell sx={{ borderBottom: bBottom, fontSize: '0.9rem', fontWeight: 800, color: getValColor(travelStr) }}>
-                        {travelStr}
-                      </TableCell>
-                      <TableCell sx={{ borderBottom: bBottom, fontSize: '0.9rem', fontWeight: 800, color: getValColor(riskStr) }}>
-                        {riskStr}
-                      </TableCell>
+                      <TableCell sx={{ borderBottom: bBottom, fontWeight: 700, color: getValColor(cargoStr) }}>{cargoStr}</TableCell>
+                      <TableCell sx={{ borderBottom: bBottom, fontWeight: 700, color: getValColor(travelStr) }}>{travelStr}</TableCell>
+                      <TableCell sx={{ borderBottom: bBottom, fontWeight: 700, color: getValColor(riskStr) }}>{riskStr}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -245,7 +246,16 @@ export default function BerthRecommendation({
 
               <Box>
                 <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>CRANE ALLOCATION</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: '0.95rem' }}>{primary?.recommended_cranes ?? 0}</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.95rem' }}>
+                  {primary?.recommended_cranes ? `${primary.recommended_cranes} (${primary.avg_crane_productivity_mph} mph)` : 'N/A'}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>PRED. PORT STAY</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.95rem', color: COLORS.accent }}>
+                  {primary?.estimated_port_stay_hours ? `${primary.estimated_port_stay_hours} hrs` : 'N/A'}
+                </Typography>
               </Box>
             </Stack>
 

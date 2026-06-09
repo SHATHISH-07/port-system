@@ -333,6 +333,8 @@ export default function Heatmap() {
     searchParams.get("vesselId") || "",
   );
   const [containerFile, setContainerFile] = React.useState<File | null>(null);
+  const [loadMovesInput, setLoadMovesInput] = React.useState<number | "">("");
+  const [dischargeMovesInput, setDischargeMovesInput] = React.useState<number | "">("");
 
   const [loading, setLoading] = React.useState(false);
   const [rawApiData, setRawApiData] = React.useState<ApiHeatmapResponse | null>(
@@ -380,10 +382,12 @@ export default function Heatmap() {
 
   const fetchHeatmap = async (unitIds: string[], vesselId?: string) => {
     try {
-      const payload: Record<string, string | string[]> = {};
+      const payload: Record<string, string | string[] | number> = {};
       if (yardInput.trim()) payload.yard_id = yardInput.trim();
       payload.unit_ids = unitIds;
       if (vesselId) payload.vessel_id = vesselId;
+      if (loadMovesInput !== "") payload.load_moves = loadMovesInput;
+      if (dischargeMovesInput !== "") payload.discharge_moves = dischargeMovesInput;
 
       const response = await api.post("/vessel/heatmap", payload, {
         headers: { "Content-Type": "application/json" },
@@ -642,6 +646,47 @@ export default function Heatmap() {
                   inputLabel: { style: { fontSize: "0.75rem" } },
                 }}
               />
+
+              <Stack direction="row" spacing={1}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  type="number"
+                  label="Load"
+                  value={loadMovesInput}
+                  onChange={(e) => setLoadMovesInput(e.target.value === "" ? "" : Number(e.target.value))}
+                  onKeyDown={(e) => e.key === "Enter" && load()}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: 2,
+                      height: { xs: 30, md: 32 },
+                    },
+                  }}
+                  slotProps={{
+                    htmlInput: { style: { fontSize: "0.75rem" } },
+                    inputLabel: { style: { fontSize: "0.75rem" } },
+                  }}
+                />
+                <TextField
+                  size="small"
+                  fullWidth
+                  type="number"
+                  label="Discharge"
+                  value={dischargeMovesInput}
+                  onChange={(e) => setDischargeMovesInput(e.target.value === "" ? "" : Number(e.target.value))}
+                  onKeyDown={(e) => e.key === "Enter" && load()}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: 2,
+                      height: { xs: 30, md: 32 },
+                    },
+                  }}
+                  slotProps={{
+                    htmlInput: { style: { fontSize: "0.75rem" } },
+                    inputLabel: { style: { fontSize: "0.75rem" } },
+                  }}
+                />
+              </Stack>
 
               <Box>
                 <Button

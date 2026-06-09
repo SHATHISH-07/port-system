@@ -134,6 +134,24 @@ async def discover_services(
         logger.error(f"Error discovering services: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+from schemas.vessel import PortStayPredictionRequest, PortStayPredictionResponse
+
+@router.post("/port-stay", response_model=PortStayPredictionResponse)
+async def predict_port_stay_route(
+    request: PortStayPredictionRequest, current_user: dict = Depends(get_current_user)
+):
+    """
+    Predicts the port stay time for a vessel given the total number of load moves.
+    Uses historical performance data (avg cranes, avg mph) for the given vessel_id.
+    """
+    try:
+        from services.vessel_service import predict_port_stay
+        res = predict_port_stay(request.vessel_id, request.load_moves)
+        return res
+    except Exception as e:
+        logger.error(f"Error predicting port stay: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
 @router.get("/yard/summary", response_model=YardSummaryResponse)
 def get_yard_summary(
     yard_id: str = Query(None, alias="yardId"),
