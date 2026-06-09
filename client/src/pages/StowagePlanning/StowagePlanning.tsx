@@ -176,6 +176,7 @@ export default function StowagePlanning() {
           }}
         >
           <StowageVisualizationTab
+            vesselId={searchVesselId}
             visualizationData={visualizationData}
             loadingVisualization={loadingVisualization}
             onClose={() => setVisualizationOpen(false)}

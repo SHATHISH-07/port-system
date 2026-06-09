@@ -530,6 +530,7 @@ export default function StowageVisualizationTab({
   portRotation,
   onPortRotationChange,
   onDragEnd: onDragEndExternal,
+  vesselId,
 }: {
   visualizationData: VisualizationData | null;
   loadingVisualization: boolean;
@@ -537,6 +538,7 @@ export default function StowageVisualizationTab({
   portRotation: string[];
   onPortRotationChange: (rotation: string[]) => void;
   onDragEnd: (newRotation: string[]) => void;
+  vesselId: string;
 }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -1330,9 +1332,7 @@ export default function StowageVisualizationTab({
                 },
                 {
                   label: "Carrier",
-                  value: hoveredContainer.actualOutboundCarrierVisitId === "UNKNOWN"
-                    ? (hoveredContainer.outboundService !== "UNKNOWN" ? hoveredContainer.outboundService : "Unknown")
-                    : (hoveredContainer.actualOutboundCarrierVisitId || "Unknown"),
+                  value: vesselId || "Unknown",
                 },
 
                 {
