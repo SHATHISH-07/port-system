@@ -24,6 +24,18 @@ export interface BlockInfo {
   purpose: string;
 }
 
+export interface RailTrackInfo {
+  name: string;
+  center_line: NormPoint[];
+}
+
+export interface RoadInfo {
+  from_vertex: string;
+  to_vertex: string;
+  graph: string;
+  points: NormPoint[];
+}
+
 export interface TerminalGeometry {
   /** All berths parsed from XML */
   berths: BerthInfo[];
@@ -31,6 +43,10 @@ export interface TerminalGeometry {
   blocks: BlockInfo[];
   /** Yard boundary polygon */
   yardPolygon: NormPoint[];
+  /** Rail tracks */
+  railTracks: RailTrackInfo[];
+  /** Roads */
+  roads: RoadInfo[];
   /**
    * Given a map from blockId → containerCount, returns the berth id
    * closest (by Euclidean distance between centroids) to the highest-density
@@ -60,6 +76,16 @@ export interface RawTerminalLayout {
     facing_deg: number;
     bollards: [number, number][];
   }>;
+  rail_tracks?: {
+    name: string;
+    center_line: [number, number][];
+  }[];
+  roads?: {
+    from_vertex: string;
+    to_vertex: string;
+    graph: string;
+    points: [number, number][];
+  }[];
 }
 
 function centroid(polygon: NormPoint[]): NormPoint {
@@ -84,6 +110,8 @@ export function buildTerminalGeometry(raw: RawTerminalLayout | null | undefined)
       berths: [],
       blocks: [],
       yardPolygon: [],
+      railTracks: [],
+      roads: [],
       recommendedBerth: () => null,
     };
   }
@@ -153,7 +181,21 @@ export function buildTerminalGeometry(raw: RawTerminalLayout | null | undefined)
     return closest;
   }
 
-  return { berths, blocks, yardPolygon, recommendedBerth };
+  // ── Rail tracks ──────────────────────────────────────────────────────────
+  const railTracks: RailTrackInfo[] = (raw.rail_tracks ?? []).map(r => ({
+    name: r.name,
+    center_line: toPairs(r.center_line),
+  }));
+
+  // ── Roads ────────────────────────────────────────────────────────────────
+  const roads: RoadInfo[] = (raw.roads ?? []).map(r => ({
+    from_vertex: r.from_vertex,
+    to_vertex: r.to_vertex,
+    graph: r.graph,
+    points: toPairs(r.points),
+  }));
+
+  return { berths, blocks, yardPolygon, railTracks, roads, recommendedBerth };
 }
 
 // ─── 2-D SVG helpers ─────────────────────────────────────────────────────────

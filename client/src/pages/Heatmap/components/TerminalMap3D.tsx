@@ -12,6 +12,7 @@ import {
   WORLD_SCALE,
   getSeaPoint,
   type RawTerminalLayout,
+  type TerminalGeometry,
   type BlockInfo,
   type BerthInfo,
 } from "../utils/terminalGeometry";
@@ -139,6 +140,56 @@ function makeHeatBlob(
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(rx * 2, rz * 2), mat);
   plane.rotation.x = -Math.PI / 2;
   return plane;
+}
+
+function buildRibbonGeometry(pts: THREE.Vector3[], width: number): THREE.BufferGeometry {
+  const vertices: number[] = [];
+  const indices: number[] = [];
+  const uvs: number[] = [];
+  const up = new THREE.Vector3(0, 1, 0);
+
+  let distance = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const dir = new THREE.Vector3();
+    if (i === 0) {
+      dir.subVectors(pts[1], pts[0]).normalize();
+    } else if (i === pts.length - 1) {
+      dir.subVectors(pts[i], pts[i - 1]).normalize();
+    } else {
+      const d1 = new THREE.Vector3().subVectors(pts[i], pts[i - 1]).normalize();
+      const d2 = new THREE.Vector3().subVectors(pts[i + 1], pts[i]).normalize();
+      dir.addVectors(d1, d2).normalize();
+    }
+    
+    // Fallback if points are coincident
+    if (dir.lengthSq() < 0.0001) dir.set(1, 0, 0);
+
+    const right = new THREE.Vector3().crossVectors(dir, up).normalize().multiplyScalar(width / 2);
+    
+    vertices.push(
+      pts[i].x - right.x, pts[i].y, pts[i].z - right.z,
+      pts[i].x + right.x, pts[i].y, pts[i].z + right.z
+    );
+
+    if (i > 0) distance += pts[i].distanceTo(pts[i - 1]);
+    uvs.push(0, distance, 1, distance);
+  }
+
+  for (let i = 0; i < pts.length - 1; i++) {
+    const v1 = i * 2;
+    const v2 = i * 2 + 1;
+    const v3 = (i + 1) * 2;
+    const v4 = (i + 1) * 2 + 1;
+    indices.push(v1, v2, v4);
+    indices.push(v1, v4, v3);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
 }
 
 // ─── Build yard outline from XML polygon ─────────────────────────────────────
@@ -292,10 +343,9 @@ class TerminalScene {
   }
 
   // ── Static environment (derived from XML geometry) ─────────────────────────
-  buildEnvironment(
-    yardPolygon: { x: number; y: number }[],
-    xmlBlocks: BlockInfo[],
-  ) {
+  buildEnvironment(geo: TerminalGeometry) {
+    const { yardPolygon, blocks: xmlBlocks, railTracks = [], roads = [] } = geo;
+
     // Yard ground
     buildYardOutline(this.scene, yardPolygon);
 
@@ -400,7 +450,115 @@ class TerminalScene {
       }
     });
 
+    // --- Rail Tracks ---
+    railTracks.forEach(rt => {
+      if (!rt.center_line || rt.center_line.length < 2) return;
+      const pts = rt.center_line.map(p => {
+        const w = n2world(p.x, p.y);
+        return new THREE.Vector3(w.x, 0.07, w.z); // Lifted above block pads (0.06)
+      });
+
+      // Track bed (Lighter Gravel to contrast with yard ground)
+      const bedGeo = buildRibbonGeometry(pts, 0.5);
+      const bedMat = new THREE.MeshStandardMaterial({ 
+        color: 0x475569, // slate-600 (lighter than yard 0x334155)
+        roughness: 1.0,
+        side: THREE.DoubleSide 
+      });
+      const bedMesh = new THREE.Mesh(bedGeo, bedMat);
+      bedMesh.receiveShadow = true;
+      this.scene.add(bedMesh);
+
+      // Wooden Cross-ties (Boxes)
+      const tieGeo = new THREE.BoxGeometry(0.6, 0.02, 0.1);
+      const tieMat = new THREE.MeshStandardMaterial({ color: 0x292524, roughness: 1.0 }); // Dark wood
+      const up = new THREE.Vector3(0, 1, 0);
+
+      // We will create a single InstancedMesh for all ties in this track
+      let totalTies = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        totalTies += Math.floor(pts[i].distanceTo(pts[i + 1]) / 0.4);
+      }
+      
+      if (totalTies > 0) {
+        const tieInstanced = new THREE.InstancedMesh(tieGeo, tieMat, totalTies);
+        let tieIdx = 0;
+        const dummy = new THREE.Object3D();
+        
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p1 = pts[i];
+          const p2 = pts[i + 1];
+          const dist = p1.distanceTo(p2);
+          const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+          const numTies = Math.floor(dist / 0.4);
+          
+          for (let j = 0; j < numTies; j++) {
+            const pos = p1.clone().add(dir.clone().multiplyScalar(j * 0.4));
+            dummy.position.copy(pos);
+            dummy.position.y = 0.075; // Just above gravel
+            // align to path
+            dummy.lookAt(pos.clone().add(dir));
+            dummy.updateMatrix();
+            tieInstanced.setMatrixAt(tieIdx++, dummy.matrix);
+          }
+        }
+        tieInstanced.castShadow = true;
+        this.scene.add(tieInstanced);
+      }
+
+      // Left and Right Steel Rails
+      const railMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.3, metalness: 0.9 });
+      const leftPts = [];
+      const rightPts = [];
+      for (let i = 0; i < pts.length; i++) {
+        let dir = new THREE.Vector3();
+        if (i === 0) dir.subVectors(pts[1], pts[0]).normalize();
+        else if (i === pts.length - 1) dir.subVectors(pts[i], pts[i - 1]).normalize();
+        else {
+          const d1 = new THREE.Vector3().subVectors(pts[i], pts[i - 1]).normalize();
+          const d2 = new THREE.Vector3().subVectors(pts[i + 1], pts[i]).normalize();
+          dir.addVectors(d1, d2).normalize();
+        }
+        if (dir.lengthSq() < 0.0001) dir.set(1, 0, 0);
+        
+        const right = new THREE.Vector3().crossVectors(dir, up).normalize().multiplyScalar(0.18);
+        leftPts.push(pts[i].clone().sub(right).setY(0.08)); // On top of ties
+        rightPts.push(pts[i].clone().add(right).setY(0.08));
+      }
+
+      const lGeo = buildRibbonGeometry(leftPts, 0.04);
+      const rGeo = buildRibbonGeometry(rightPts, 0.04);
+      const lMesh = new THREE.Mesh(lGeo, railMat);
+      const rMesh = new THREE.Mesh(rGeo, railMat);
+      lMesh.castShadow = true; rMesh.castShadow = true;
+      this.scene.add(lMesh, rMesh);
+    });
+
+    // --- Roads ---
+    roads.forEach((rd, idx) => {
+      if (!rd.points || rd.points.length < 2) return;
+      const pts = rd.points.map(p => {
+        const w = n2world(p.x, p.y);
+        return new THREE.Vector3(w.x, 0.065 + (idx * 0.0001), w.z); 
+      });
+
+      // Center dashed line (Yellow lane markings / outlines)
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts.map(p => p.clone().setY(0.075 + (idx * 0.0001))));
+      const lineMat = new THREE.LineDashedMaterial({ 
+        color: 0xeab308, // yellow-500
+        opacity: 0.8, 
+        transparent: true,
+        dashSize: 0.5,
+        gapSize: 0.5,
+        depthWrite: false
+      }); 
+      const line = new THREE.Line(lineGeo, lineMat);
+      line.computeLineDistances();
+      this.scene.add(line);
+    });
+
     // Quay apron removed per user request
+
 
   }
 
@@ -1313,7 +1471,7 @@ export default function TerminalMap3D({
       ts.setTheme();
 
       // Build static environment from XML
-      ts.buildEnvironment(geo.yardPolygon, geo.blocks);
+      ts.buildEnvironment(geo);
 
       setSceneReady(true);
 

@@ -542,7 +542,7 @@ export default function Heatmap() {
           borderRadius: 1,
           overflow: "hidden",
           transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-          width: inputsOpen ? { xs: 200, md: 260 } : "auto",
+          width: inputsOpen ? { xs: 200, md: 240, lg: 220 } : "auto",
           border: "1px solid",
           borderColor: theme.palette.divider,
           boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[4],
@@ -553,8 +553,8 @@ export default function Heatmap() {
         {!inputsOpen ? (
           <Box
             sx={{
-              px: { xs: 1, md: 1.5 },
-              py: { xs: 0.6, md: 1 },
+              px: { xs: 1, md: 1.2 },
+              py: { xs: 0.6, md: 0.8 },
               display: "flex",
               alignItems: "center",
               gap: 1,
@@ -564,12 +564,12 @@ export default function Heatmap() {
             onClick={() => setInputsOpen(true)}
           >
             <SearchRounded
-              sx={{ fontSize: { xs: 16, md: 20 }, color: "primary.main" }}
+              sx={{ fontSize: { xs: 16, md: 18 }, color: "primary.main" }}
             />
             <Typography
               variant="body2"
               sx={{
-                fontSize: { xs: "0.65rem", md: "0.75rem" },
+                fontSize: { xs: "0.65rem", md: "0.7rem" },
                 fontWeight: 800,
                 letterSpacing: 0.5,
               }}
@@ -578,21 +578,20 @@ export default function Heatmap() {
             </Typography>
           </Box>
         ) : (
-          <Box sx={{ p: { xs: 1, md: 1.8 } }}>
+          <Box sx={{ p: { xs: 1, md: 1.2 } }}>
             <Box
               sx={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                mb: { xs: 0.8, md: 1.5 },
+                mb: { xs: 0.8, md: 1 },
               }}
             >
               <Typography
                 variant="subtitle2"
                 sx={{
-                  fontSize: { xs: "0.7rem", md: "0.875rem" },
+                  fontSize: { xs: "0.7rem", md: "0.75rem" },
                   fontWeight: 600,
-                  textTransform: "uppercase",
                   letterSpacing: "0.05em",
                 }}
               >
@@ -606,7 +605,7 @@ export default function Heatmap() {
                 <CloseRounded sx={{ fontSize: 16 }} />
               </IconButton>
             </Box>
-            <Stack spacing={{ xs: 0.6, md: 1.2 }}>
+            <Stack spacing={{ xs: 0.6, md: 1 }}>
               <TextField
                 size="small"
                 fullWidth
@@ -617,12 +616,12 @@ export default function Heatmap() {
                 sx={{
                   "& .MuiOutlinedInput-root": {
                     borderRadius: 2,
-                    height: { xs: 30, md: 36 },
+                    height: { xs: 30, md: 32 },
                   },
                 }}
                 slotProps={{
-                  htmlInput: { style: { fontSize: "0.8rem" } },
-                  inputLabel: { style: { fontSize: "0.8rem" } },
+                  htmlInput: { style: { fontSize: "0.75rem" } },
+                  inputLabel: { style: { fontSize: "0.75rem" } },
                 }}
               />
               <TextField
@@ -635,12 +634,12 @@ export default function Heatmap() {
                 sx={{
                   "& .MuiOutlinedInput-root": {
                     borderRadius: 2,
-                    height: { xs: 30, md: 36 },
+                    height: { xs: 30, md: 32 },
                   },
                 }}
                 slotProps={{
-                  htmlInput: { style: { fontSize: "0.8rem" } },
-                  inputLabel: { style: { fontSize: "0.8rem" } },
+                  htmlInput: { style: { fontSize: "0.75rem" } },
+                  inputLabel: { style: { fontSize: "0.75rem" } },
                 }}
               />
 
@@ -654,8 +653,8 @@ export default function Heatmap() {
                   }
                   sx={{
                     borderRadius: 2,
-                    fontSize: { xs: "0.65rem", md: "0.75rem" },
-                    py: { xs: 0.2, md: 0.6 },
+                    fontSize: { xs: "0.65rem", md: "0.7rem" },
+                    py: { xs: 0.2, md: 0.4 },
                     fontWeight: 500,
                     textTransform: "none",
                     justifyContent: "flex-start",
@@ -666,8 +665,8 @@ export default function Heatmap() {
                   <Typography
                     noWrap
                     sx={{
-                      fontSize: { xs: "0.65rem", md: "0.75rem" },
-                      maxWidth: { xs: 140, md: 180 },
+                      fontSize: { xs: "0.65rem", md: "0.7rem" },
+                      maxWidth: { xs: 140, md: 160 },
                     }}
                   >
                     {containerFile
@@ -706,8 +705,8 @@ export default function Heatmap() {
                 sx={{
                   borderRadius: 2,
                   fontWeight: 800,
-                  py: { xs: 0.4, md: 1 },
-                  fontSize: { xs: "0.65rem", md: "0.8rem" },
+                  py: { xs: 0.4, md: 0.6 },
+                  fontSize: { xs: "0.65rem", md: "0.75rem" },
                 }}
               >
                 {loading ? "Analyzing..." : "Analyze"}

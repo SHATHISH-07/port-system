@@ -4,6 +4,13 @@ import {
   Stack,
   alpha,
   useTheme,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from "@mui/material";
 import {
   WarningAmberRounded,
@@ -111,6 +118,77 @@ export default function BerthRecommendation({
         </Typography>
       </Box>
 
+      {/* ── Summary Table ──────────────────────────────────────────────────── */}
+      <Box sx={{ mt: 2, mb: 3 }}>
+        <TableContainer component={Paper} elevation={0} sx={{
+          border: borderStyle,
+          borderRadius: "16px",
+          bgcolor: isDark ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.8)",
+          backdropFilter: "blur(10px)",
+          overflow: "hidden"
+        }}>
+          <Table size="medium" sx={{ width: "100%" }}>
+            <TableHead sx={{ bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)" }}>
+              <TableRow>
+                <TableCell sx={{ borderBottom: borderStyle, fontWeight: 900, color: "text.secondary", fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Berth</TableCell>
+                <TableCell sx={{ borderBottom: borderStyle, fontWeight: 900, color: "text.secondary", fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cargo Concentration</TableCell>
+                <TableCell sx={{ borderBottom: borderStyle, fontWeight: 900, color: "text.secondary", fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Travel Distance</TableCell>
+                <TableCell sx={{ borderBottom: borderStyle, fontWeight: 900, color: "text.secondary", fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Congestion Risk</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {[...(primary ? [primary, ...analysis.filter((b) => b.berth !== primary.berth)] : analysis)]
+                .sort((a, b) => a.berth.localeCompare(b.berth))
+                .map((row, idx) => {
+                  const getCargoDisplay = (pct?: number) => {
+                    if (pct === undefined) return "N/A";
+                    if (pct >= 70) return `High (${pct}%)`;
+                    if (pct >= 40) return `Medium (${pct}%)`;
+                    return `Low (${pct}%)`;
+                  };
+                  const getTravelDist = (label?: string, dist?: number) => {
+                    const distStr = dist ? ` (${dist}m)` : "";
+                    if (label === "Short" || (dist && dist < 500)) return `Low${distStr}`;
+                    if (label === "Moderate" || (dist && dist < 1200)) return `Medium${distStr}`;
+                    return `High${distStr}`;
+                  };
+
+                  const cargoStr = getCargoDisplay(row.cargo_concentration_pct);
+                  const travelStr = getTravelDist(row.travel_distance_label, row.avg_laden_distance_m);
+                  const riskStr = row.congestion_risk || "Low";
+
+                  const getValColor = (val: string) => {
+                    if (val.includes("High")) return COLORS.error;
+                    if (val.includes("Medium")) return COLORS.warning;
+                    if (val.includes("Low")) return COLORS.success;
+                    return COLORS.info;
+                  };
+
+                  const isLast = idx === analysis.length - 1;
+                  const bBottom = isLast ? "none" : borderStyle;
+
+                  return (
+                    <TableRow key={row.berth} sx={{ "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)" } }}>
+                      <TableCell sx={{ borderBottom: bBottom, fontWeight: 900, fontSize: '0.95rem', color: "text.primary" }}>
+                        {row.berth.replace('Berth ', 'B')}
+                      </TableCell>
+                      <TableCell sx={{ borderBottom: bBottom, fontSize: '0.9rem', fontWeight: 800, color: getValColor(cargoStr) }}>
+                        {cargoStr}
+                      </TableCell>
+                      <TableCell sx={{ borderBottom: bBottom, fontSize: '0.9rem', fontWeight: 800, color: getValColor(travelStr) }}>
+                        {travelStr}
+                      </TableCell>
+                      <TableCell sx={{ borderBottom: bBottom, fontSize: '0.9rem', fontWeight: 800, color: getValColor(riskStr) }}>
+                        {riskStr}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
+
       {/* ── Primary Recommendation (Compact layout) ─────────────────────────── */}
       <Box
         sx={{
@@ -137,8 +215,7 @@ export default function BerthRecommendation({
                   textTransform: "uppercase",
                   color: COLORS.info,
                 }}
-              >
-                Priority Selection
+              >Recommended Selection
               </Typography>
             </Box>
             <Typography
