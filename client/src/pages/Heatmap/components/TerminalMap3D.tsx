@@ -72,14 +72,41 @@ function createContainerGeometry(w: number, h: number, d: number): THREE.BoxGeom
   return geom;
 }
 
-function makeBillboardLabel(text: string, fontSize: number, color: string): THREE.Sprite {
+function makeBillboardLabel(text: string, fontSize: number, borderColor: string): THREE.Sprite {
   const W = 512, H = 128;
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = color;
+
+  // Set font first to measure text
   ctx.font = `bold ${fontSize}px 'Inter',sans-serif`;
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText(text, W / 2, H / 2);
+
+  const metrics = ctx.measureText(text);
+  const textW = metrics.width;
+  const textH = fontSize; // Approximate height
+
+  const padX = 24; // Tight padding
+  const padY = 16;
+
+  const boxW = textW + padX * 2;
+  const boxH = textH + padY * 2;
+  const cx = W / 2;
+  const cy = H / 2;
+
+  // Draw tight border around text
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 6;
+  ctx.strokeRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH);
+
+  // Text stroke (outline) for readability
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#000000";
+  ctx.strokeText(text, cx, cy);
+
+  // Text fill (always white as requested)
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(text, cx, cy);
+
   const mat = new THREE.SpriteMaterial({
     map: new THREE.CanvasTexture(c),
     transparent: true,
@@ -160,12 +187,12 @@ function buildRibbonGeometry(pts: THREE.Vector3[], width: number): THREE.BufferG
       const d2 = new THREE.Vector3().subVectors(pts[i + 1], pts[i]).normalize();
       dir.addVectors(d1, d2).normalize();
     }
-    
+
     // Fallback if points are coincident
     if (dir.lengthSq() < 0.0001) dir.set(1, 0, 0);
 
     const right = new THREE.Vector3().crossVectors(dir, up).normalize().multiplyScalar(width / 2);
-    
+
     vertices.push(
       pts[i].x - right.x, pts[i].y, pts[i].z - right.z,
       pts[i].x + right.x, pts[i].y, pts[i].z + right.z
@@ -245,6 +272,7 @@ class TerminalScene {
   shipMeshes: Map<string, THREE.Group> = new Map();
   particleSystems: THREE.Points[] = [];
   blockLabels: THREE.Sprite[] = [];
+  dynamicLabels: THREE.Sprite[] = [];
   trucks: { mesh: THREE.Group; path: THREE.Vector3[]; targetIdx: number; speed: number }[] = [];
   truckWheels: THREE.Mesh[] = [];
   waterMesh!: THREE.Mesh;
@@ -422,6 +450,7 @@ class TerminalScene {
       const wp = n2world(blk.cx, blk.cy);
       const lbl = makeBillboardLabel(blk.id, 42, '#FFFFFF');
       lbl.position.set(wp.x, 1.2, wp.z); // Increased height to float higher above containers
+      lbl.userData = { id: blk.id };
       this.scene.add(lbl);
       this.blockLabels.push(lbl);
 
@@ -460,10 +489,10 @@ class TerminalScene {
 
       // Track bed (Lighter Gravel to contrast with yard ground)
       const bedGeo = buildRibbonGeometry(pts, 0.5);
-      const bedMat = new THREE.MeshStandardMaterial({ 
+      const bedMat = new THREE.MeshStandardMaterial({
         color: 0x475569, // slate-600 (lighter than yard 0x334155)
         roughness: 1.0,
-        side: THREE.DoubleSide 
+        side: THREE.DoubleSide
       });
       const bedMesh = new THREE.Mesh(bedGeo, bedMat);
       bedMesh.receiveShadow = true;
@@ -479,19 +508,19 @@ class TerminalScene {
       for (let i = 0; i < pts.length - 1; i++) {
         totalTies += Math.floor(pts[i].distanceTo(pts[i + 1]) / 0.4);
       }
-      
+
       if (totalTies > 0) {
         const tieInstanced = new THREE.InstancedMesh(tieGeo, tieMat, totalTies);
         let tieIdx = 0;
         const dummy = new THREE.Object3D();
-        
+
         for (let i = 0; i < pts.length - 1; i++) {
           const p1 = pts[i];
           const p2 = pts[i + 1];
           const dist = p1.distanceTo(p2);
           const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
           const numTies = Math.floor(dist / 0.4);
-          
+
           for (let j = 0; j < numTies; j++) {
             const pos = p1.clone().add(dir.clone().multiplyScalar(j * 0.4));
             dummy.position.copy(pos);
@@ -520,7 +549,7 @@ class TerminalScene {
           dir.addVectors(d1, d2).normalize();
         }
         if (dir.lengthSq() < 0.0001) dir.set(1, 0, 0);
-        
+
         const right = new THREE.Vector3().crossVectors(dir, up).normalize().multiplyScalar(0.18);
         leftPts.push(pts[i].clone().sub(right).setY(0.08)); // On top of ties
         rightPts.push(pts[i].clone().add(right).setY(0.08));
@@ -539,19 +568,19 @@ class TerminalScene {
       if (!rd.points || rd.points.length < 2) return;
       const pts = rd.points.map(p => {
         const w = n2world(p.x, p.y);
-        return new THREE.Vector3(w.x, 0.065 + (idx * 0.0001), w.z); 
+        return new THREE.Vector3(w.x, 0.065 + (idx * 0.0001), w.z);
       });
 
       // Center dashed line (Yellow lane markings / outlines)
       const lineGeo = new THREE.BufferGeometry().setFromPoints(pts.map(p => p.clone().setY(0.075 + (idx * 0.0001))));
-      const lineMat = new THREE.LineDashedMaterial({ 
+      const lineMat = new THREE.LineDashedMaterial({
         color: 0xeab308, // yellow-500
-        opacity: 0.8, 
+        opacity: 0.8,
         transparent: true,
         dashSize: 0.5,
         gapSize: 0.5,
         depthWrite: false
-      }); 
+      });
       const line = new THREE.Line(lineGeo, lineMat);
       line.computeLineDistances();
       this.scene.add(line);
@@ -861,7 +890,7 @@ class TerminalScene {
       for (let c = 0; c < COLS; c++) {
         // Vary the number of tiers realistically
         const stackCount = Math.max(1, Math.floor(TIERS * (0.4 + Math.sin((c / COLS) * Math.PI) * 0.6 + Math.random() * 0.4)));
-        
+
         for (let t = 0; t < stackCount; t++) {
           const contColor =
             REALISTIC_CONTAINERS[(r * COLS + c + t) % REALISTIC_CONTAINERS.length];
@@ -1020,6 +1049,11 @@ class TerminalScene {
     this.heatBlobs = [];
     this.particleSystems.forEach(p => this.scene.remove(p));
     this.particleSystems = [];
+    this.dynamicLabels.forEach(lbl => this.scene.remove(lbl));
+    this.dynamicLabels = [];
+
+    // Reset visibility of static labels
+    this.blockLabels.forEach(lbl => { lbl.visible = true; });
 
     const heatGroups: {
       cx: number; cz: number; bw: number; bd: number; conc: string;
@@ -1029,6 +1063,7 @@ class TerminalScene {
       // Prefer XML block geometry; fall back to normalised layout coords
       const xmlBlk = xmlBlocks.find(b => b.id === id);
       let wpx: number, wpz: number, bw: number, bd: number;
+      let maxTier = 0;
 
       if (xmlBlk && xmlBlk.cx > 0) {
         const w = n2world(xmlBlk.cx, xmlBlk.cy);
@@ -1071,7 +1106,7 @@ class TerminalScene {
         heatGroups.push({ cx: wpx, cz: wpz, bw, bd, conc });
         const cW = 0.8, cD = 0.32, cH = 0.35;
         const validContainers = (blk.containers || []).filter(c => c.bay && c.row && c.tier && c.bay !== "-" && c.row !== "-" && c.tier !== "-");
-        
+
         const parsed = validContainers.map((c, idx) => {
           let b = parseInt(c.bay!, 10);
           let r = parseInt(c.row!, 10);
@@ -1087,7 +1122,9 @@ class TerminalScene {
           const maxRow = Math.max(...parsed.map(c => c.r));
           const baySpan = Math.max(1, maxBay - minBay + 1);
           const rowSpan = Math.max(1, maxRow - minRow + 1);
-          
+
+          maxTier = Math.max(0, Math.max(...parsed.map(c => c.t)) - 1);
+
           const colSpacing = bw / baySpan;
           const rowSpacing = bd / rowSpan;
           const actCW = Math.min(cW * 1.1, colSpacing * 0.95);
@@ -1105,7 +1142,7 @@ class TerminalScene {
             const col = p.b - minBay;
             const row = p.r - minRow;
             const tier = Math.max(0, p.t - 1);
-            
+
             dummy.position.set(
               -bw / 2 + colSpacing / 2 + col * colSpacing,
               0.12 + tier * cH + cH / 2,
@@ -1124,6 +1161,8 @@ class TerminalScene {
           const count = Math.min(blk.count, 200);
           const COLS = Math.max(1, Math.floor(bw / (cW * 1.1)));
           const ROWS = Math.max(1, Math.floor(bd / (cD * 1.1)));
+
+          maxTier = Math.floor(count / (COLS * ROWS));
 
           const dummy = new THREE.Object3D();
           const iMesh = new THREE.InstancedMesh(
@@ -1152,17 +1191,23 @@ class TerminalScene {
         }
       }
 
-      // ID badge
-      const badge = makeLabel(id, 26, isMax ? "#b91c1c" : "#000000");
-      badge.rotation.x = -Math.PI / 2;
-      badge.position.set(-bw * 0.32, 0.2, -bd * 0.34);
-      g.add(badge);
+      // Handle Block Labels using Billboards
+      const staticLbl = this.blockLabels.find(l => l.userData.id === id);
 
       if (hasData) {
-        const cntLabel = makeLabel(`${blk.count}`, 24, "#000000");
-        cntLabel.rotation.x = -Math.PI / 2;
-        cntLabel.position.set(bw * 0.3, 0.2, -bd * 0.34);
-        g.add(cntLabel);
+        if (staticLbl) staticLbl.visible = false;
+
+        // Float label directly above the highest container
+        const cH = 0.35;
+        const highestY = 0.12 + maxTier * cH + cH / 2;
+        const floatY = highestY + 1.2;
+
+        const dynLbl = makeBillboardLabel(id, 42, isMax ? "#ef4444" : "#38bdf8");
+        dynLbl.position.set(0, floatY, 0); // Local to the block group
+        g.add(dynLbl);
+        this.dynamicLabels.push(dynLbl);
+      } else {
+        if (staticLbl) staticLbl.visible = true;
       }
 
       g.position.set(wpx, 0, wpz);

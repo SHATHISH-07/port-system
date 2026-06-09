@@ -1004,37 +1004,36 @@ def get_yard_heatmap_data(
         
         # 2. Query Concurrent Vessels
         concurrent_vessels = {}  # visit_id -> {"service": str, "blocks": set()}
-        if pd.notna(min_time) and pd.notna(max_time):
-            try:
-                cdf = pd.DataFrame()
-                if "full_df" in locals() and full_df is not None and not full_df.empty:
-                    if "outbound_service" in full_df.columns:
-                        target = str(vessel_id).strip().upper() if vessel_id else ""
-                        mask = (
-                            (full_df["outbound_service"].astype(str).str.strip().str.upper() != target) &
-                            (full_df["outbound_service"].notna()) &
-                            (full_df["outbound_service"].astype(str).str.strip() != "") &
-                            (~full_df["outbound_service"].astype(str).str.strip().str.upper().isin(['NAN', 'NONE', 'UNKNOWN']))
-                        )
-                        cdf = full_df[mask].copy()
+        try:
+            cdf = pd.DataFrame()
+            if "full_df" in locals() and full_df is not None and not full_df.empty:
+                if "outbound_service" in full_df.columns:
+                    target = str(vessel_id).strip().upper() if vessel_id else ""
+                    mask = (
+                        (full_df["outbound_service"].astype(str).str.strip().str.upper() != target) &
+                        (full_df["outbound_service"].notna()) &
+                        (full_df["outbound_service"].astype(str).str.strip() != "") &
+                        (~full_df["outbound_service"].astype(str).str.strip().str.upper().isin(['NAN', 'NONE', 'UNKNOWN']))
+                    )
+                    cdf = full_df[mask].copy()
 
-                for crow in cdf.to_dict('records'):
-                    v_id = crow.get("actual_outbound_carrier_visit_id") or crow.get("outbound_service")
-                    if v_id not in concurrent_vessels:
-                        concurrent_vessels[v_id] = {"service": crow.get("outbound_service"), "blocks": set()}
-                    
-                    visit_state = str(crow.get("visit_state", "") or "").upper()
-                    is_loaded = "DEPARTED" in visit_state
-                    c_pos = str(crow.get("ctr_from_position", "")) if is_loaded else str(crow.get("current_position", ""))
-                    
-                    if c_pos and c_pos.lower() not in ('nan', 'none'):
-                        cp_info = parse_position(str(c_pos), yard_id)
-                        if cp_info and cp_info.get("is_yard"):
-                            cbk = block_label(cp_info)
-                            if cbk:
-                                concurrent_vessels[v_id]["blocks"].add(cbk)
-            except Exception as e:
-                print(f"Error querying concurrent vessels: {e}")
+            for crow in cdf.to_dict('records'):
+                v_id = crow.get("actual_outbound_carrier_visit_id") or crow.get("outbound_service")
+                if v_id not in concurrent_vessels:
+                    concurrent_vessels[v_id] = {"service": crow.get("outbound_service"), "blocks": set()}
+                
+                visit_state = str(crow.get("visit_state", "") or "").upper()
+                is_loaded = "DEPARTED" in visit_state
+                c_pos = str(crow.get("ctr_from_position", "")) if is_loaded else str(crow.get("current_position", ""))
+                
+                if c_pos and c_pos.lower() not in ('nan', 'none'):
+                    cp_info = parse_position(str(c_pos), yard_id)
+                    if cp_info and cp_info.get("is_yard"):
+                        cbk = block_label(cp_info)
+                        if cbk:
+                            concurrent_vessels[v_id]["blocks"].add(cbk)
+        except Exception as e:
+            print(f"Error querying concurrent vessels: {e}")
 
         # Fetch Cranes for Target and Concurrent Vessels
         vessel_crane_map = {}
@@ -1110,7 +1109,7 @@ def get_yard_heatmap_data(
                             conflict_types.append("Crane Rail Overlap")
                 
                 if conflict_types:
-                    overlap_hours = round((max_time - min_time).total_seconds() / 3600, 1) if pd.notna(max_time) else 0
+                    overlap_hours = round((max_time - min_time).total_seconds() / 3600, 1) if pd.notna(max_time) and pd.notna(min_time) else round(estimated_stay, 1)
                     shared_block_pct = round((len(shared_blocks) / len(near_blocks)) * 100, 1) if near_blocks else 0
                     conflicts.append({
                         "vessel_service": str(v_data["service"]),

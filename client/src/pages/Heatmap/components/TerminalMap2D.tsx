@@ -725,30 +725,7 @@ export default function TerminalMap2D({
                         {z.id}
                       </text>
 
-                      {/* Count badge */}
-                      {isHot && (
-                        <g>
-                          <circle
-                            cx={z.x + z.w - 7}
-                            cy={z.y + 7}
-                            r={6}
-                            fill={isDark ? "#0b0e14" : "#ffffff"}
-                            stroke={isDark ? "#475569" : "#cbd5e1"}
-                            strokeWidth={0.5}
-                          />
-                          <text
-                            x={z.x + z.w - 7}
-                            y={z.y + 8.5}
-                            fill={theme.palette.text.primary}
-                            fontSize={5}
-                            fontWeight="800"
-                            fontFamily="sans-serif"
-                            textAnchor="middle"
-                          >
-                            {block!.count}
-                          </text>
-                        </g>
-                      )}
+
                     </g>
                   );
                 })}
