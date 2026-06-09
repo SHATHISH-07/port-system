@@ -24,6 +24,9 @@ DAYS_RANGE                    = 180
 END_DATE                      = datetime.now()
 START_DATE                    = END_DATE - timedelta(days=DAYS_RANGE)
 
+# Active containers are discharged within this many days before END_DATE
+ACTIVE_DISCHARGE_WINDOW_DAYS  = 14
+
 MIN_HISTORY_CONTAINERS_PER_VISIT = 200
 MAX_HISTORY_CONTAINERS_PER_VISIT = 500
 LOW_VOLUME_MIN   = 30
@@ -45,8 +48,7 @@ HIGH_PRODUCTIVITY_THRESHOLD = MAX_HISTORY_CONTAINERS_PER_VISIT
 OUTPUT_DIR = Path(".")
 BASE_OUTPUT_CONTAINER_FILE = "synthetic_container_dataset.csv"
 BASE_OUTPUT_CRANE_FILE     = "synthetic_crane_dataset.csv"
-BASE_OUTPUT_ACTIVE_FILE    = "active_yard_containers.csv"
-BASE_OUTPUT_ACTIVE_JSON    = "active_yard_containers.json"
+BASE_OUTPUT_ACTIVE_JSON    = "active_unit_ids.json"
 
 CONTAINER_PREFIXES = ["GCXU", "TRLU", "MSCU", "HLCU", "CMAU", "OOLU", "MAEU", "ONEY"]
 VISIT_PREFIXES     = ["CQN", "8YF", "MAE", "HLC", "MSC", "CMA", "OOL", "ONE"]
@@ -79,12 +81,6 @@ _unit_visit_seq: int = 3_000_000
 
 _all_container_ids: set = set()
 
-# ── Gkey tracking: one gkey per unit_id ──────────────────────────────────────
-# Unit Visit Gkey must be unique across ALL rows in the dataset.  A physical
-# container keeps the same gkey regardless of which vessel visit it appears in,
-# so we key the cache on unit_id alone.  This also survives the AECY
-# post-processing step that reassigns outbound visit IDs after the rows are
-# written (which previously caused the same unit+visit to receive two gkeys).
 _gkey_cache: Dict[str, int] = {}
 
 
@@ -124,15 +120,6 @@ def next_visit_id() -> str:
 
 
 def get_or_create_gkey(unit_id: str) -> int:
-    """
-    Return the existing gkey for this unit_id, or allocate a new one.
-    One gkey per physical container for the entire generation run — this
-    matches the N4 data model where Unit Visit Gkey is a unique surrogate
-    key for the container record, not per-vessel-visit.
-    FIX: keying on unit_id alone (not unit_id+visit_id) means the gkey
-    survives the AECY post-processing step that rewrites outbound visit IDs,
-    eliminating all duplicate Unit Visit Gkey rows.
-    """
     global _unit_visit_seq
     if unit_id not in _gkey_cache:
         _unit_visit_seq += 1
@@ -406,22 +393,6 @@ def sort_key_crane(row: dict) -> datetime:
     return datetime.strptime(row["Time Completed"], "%y-%b-%d %H%M")
 
 
-def derive_yard_block(position: str, yard_id: str) -> Optional[str]:
-    if not position.startswith("Y-"):
-        return None
-    if position.startswith("Y-AECY-"):
-        m = re.match(r"^Y-AECY-(.+?)\d{5}C\d", position)
-        return f"{m.group(1)}" if m else "AECY-UNK"
-    if position.startswith("Y-PEB-"):
-        m = re.match(r"^Y-PEB-([A-H])", position)
-        return f"PEB-{m.group(1)}" if m else "PEB-UNK"
-    if position.startswith("Y-CWIT-"):
-        m = re.match(r"^Y-CWIT-(\d)([A-D])", position)
-        return f"CWIT-{m.group(1)}{m.group(2)}" if m else "CWIT-UNK"
-    m = re.match(rf"^Y-{re.escape(yard_id)}-([A-Z0-9])", position)
-    return f"{yard_id}-{m.group(1)}" if m else f"{yard_id}-UNK"
-
-
 CONTAINER_HEADERS = [
     "Unit ID", "Unit Visit Gkey", "Complex Id", "Facility Id", "Yard Id",
     "Category Id", "Equipment Class", "Container Length", "Equipment type",
@@ -438,11 +409,6 @@ CONTAINER_HEADERS = [
 CRANE_HEADERS = [
     "Time Completed", "Event Type", "Move Kind", "Unit Category", "Unit Nbr",
     "Crane CHE", "From Position", "To Position", "Carrier Visit", "Line Op", "Exclude",
-]
-
-ACTIVE_LIST_HEADERS = [
-    "Unit ID", "Unit Visit Gkey", "Outbound Service",
-    "Current Yard Block", "Current Slot Position", "Move Complete Time",
 ]
 
 
@@ -477,7 +443,7 @@ def choose_operation_mix(active_count: int, target_min: int, target_max: int,
                          total_rows: int) -> Tuple[int, int, int]:
     total_rows = max(3, int(total_rows))
 
-    base_restow    = max(1, int(round(total_rows * RESTOW_RATIO)))
+    base_restow      = max(1, int(round(total_rows * RESTOW_RATIO)))
     operational_pool = max(2, total_rows - base_restow)
 
     if active_count < target_min:
@@ -510,47 +476,105 @@ def choose_operation_mix(active_count: int, target_min: int, target_max: int,
     return load_count, discharge_count, restow_count
 
 
-def _find_free_aecy_slot(stack_heights: Dict[tuple, int],
-                         block: str,
-                         max_attempts: int = 50) -> Tuple[int, int, int]:
-    """
-    Find a (bay, row, tier) triple in *block* where tier <= MAX_TIER.
-    Tries random positions; if none found within max_attempts falls back to
-    a linear scan over bays 1-40 / rows 1-10.
-    FIX: guarantees tier never exceeds MAX_TIER, replacing the one-shot
-    fallback that could silently write Tier 6+.
-    """
-    max_tier = YardSlotRegistry.MAX_TIER
-    for _ in range(max_attempts):
-        bay = random.randint(1, 40)
-        row = random.randint(1, 10)
-        current = stack_heights.get((block, bay, row), 0)
-        if current < max_tier:
-            return bay, row, current + 1
-    # Deterministic fallback: scan until a free slot is found
-    for bay in range(1, 41):
-        for row in range(1, 11):
-            current = stack_heights.get((block, bay, row), 0)
-            if current < max_tier:
-                return bay, row, current + 1
-    # All slots truly full — extend into an overflow bay (rare edge case)
-    overflow_bay = 41 + stack_heights.get((block, 0, 0), 0)
-    stack_heights[(block, 0, 0)] = stack_heights.get((block, 0, 0), 0) + 1
-    return overflow_bay, 1, 1
+def _make_physical_attrs() -> dict:
+    """Generate and return a dict of physical container attributes."""
+    container_length = choose_container_length()
+    reefer           = random.random() < 0.10
+    equipment_type   = choose_equipment_type(container_length, reefer)
+    freight_kind     = random.choice(FREIGHT_KINDS)
+    unit_weight      = round(random.uniform(2000, 32000), 6)
+    vgm              = (round(unit_weight + random.uniform(50, 500), 5)
+                        if random.random() > 0.15 else None)
+    hazardous_flag, hazard_un, imdg_code = generate_hazard_fields()
+    oog              = "Yes" if random.random() < 0.08 else "No"
+    port_of_discharge = random.choice(["CNNGB", "SGSIN", "CNSHA", "NLRTM",
+                                       "USLAX", "INMAA", "JPYOK", "KRPUS"])
+    return {
+        "container_length":  container_length,
+        "reefer":            reefer,
+        "equipment_type":    equipment_type,
+        "freight_kind":      freight_kind,
+        "unit_weight":       unit_weight,
+        "vgm":               vgm,
+        "hazardous_flag":    hazardous_flag,
+        "hazard_un":         hazard_un,
+        "imdg_code":         imdg_code,
+        "oog":               oog,
+        "port_of_discharge": port_of_discharge,
+    }
+
+
+def _build_container_row(terminal: dict, unit_id: str, unit_visit_gkey: int,
+                         attrs: dict, category: str, visit_state: str,
+                         transit_state: str, arrival_mode: str,
+                         inbound_id, inbound_service,
+                         outbound_id, outbound_service,
+                         current_position: str, from_pos: str, to_pos: str,
+                         move_time: datetime, time_in: datetime,
+                         time_out: datetime) -> dict:
+    return {
+        "Unit ID":                          unit_id,
+        "Unit Visit Gkey":                  unit_visit_gkey,
+        "Complex Id":                       terminal["complex_id"],
+        "Facility Id":                      terminal["facility_id"],
+        "Yard Id":                          terminal["yard_id"],
+        "Category Id":                      category,
+        "Equipment Class":                  "CONTAINER",
+        "Container Length":                 attrs["container_length"],
+        "Equipment type":                   attrs["equipment_type"],
+        "Freight Kind":                     attrs["freight_kind"],
+        "Destination":                      None,
+        "Unit Weight in kg":                attrs["unit_weight"],
+        "Verified Gross Mass (Kg)":         attrs["vgm"],
+        "Reefer":                           "Yes" if attrs["reefer"] else "No",
+        "OOG Unit":                         attrs["oog"],
+        "Hazardous Flag":                   attrs["hazardous_flag"],
+        "Hazard UN Numbers":                attrs["hazard_un"],
+        "IMDG Code":                        attrs["imdg_code"],
+        "Stow Code 1":                      None,
+        "Stow Code 2":                      None,
+        "Stow Code 3":                      None,
+        "Port of Discharge":                attrs["port_of_discharge"],
+        "Actual Inbound Carrier visit ID":  inbound_id,
+        "Inbound Service":                  inbound_service,
+        "Actual Outbound Carrier visit ID": outbound_id,
+        "Outbound Service":                 outbound_service,
+        "Arrival Mode":                     arrival_mode,
+        "Current Position":                 current_position,
+        "Visit State":                      visit_state,
+        "Transit State":                    transit_state,
+        "Time Out":                         fmt_time_mmddyyyy(time_out),
+        "Time In":                          fmt_time_mmddyyyy(time_in),
+        "Move Complete Time":               fmt_time_mmddyyyy(move_time),
+        "Ctr From Position":                from_pos,
+        "Ctr To Position":                  to_pos,
+    }
 
 
 def generate_terminal_data(terminal: dict):
+    """
+    Two-phase generation:
+
+    PHASE 1 — Historical vessel operations (180 days)
+        Runs the original visit-loop over all vessel calls.  Produces a rich
+        mix of Load / Discharge / Restow records across HISTORY_VESSELS_PER_TERMINAL
+        × VISITS_PER_VESSEL vessel visits.  Containers that end their last
+        historical record as a Load (departed) are NOT in the active JSON.
+
+    PHASE 2 — Active containers (present state)
+        Generates TARGET_ACTIVE_PER_TERMINAL_MIN … MAX fresh containers, each
+        with exactly two records:
+          Record 1  Yard → Vessel  3DEPARTED / S70_DEPARTED  (historical load,
+                    move time in the 15–180 day window before now)
+          Record 2  Vessel → Yard  IN_YARD   / S40_YARD      (recent discharge,
+                    move time in the last ACTIVE_DISCHARGE_WINDOW_DAYS days)
+        Every active container is guaranteed to end in yard.  All Unit IDs from
+        this phase populate the active_unit_ids JSON.
+    """
     container_rows: List[dict] = []
     crane_rows:     List[dict] = []
-    visits          = build_visit_schedule(terminal)
-    active_set:  set = set()
-    inactive_set: set = set()
-    line_op         = random.choice(LINE_OPS)
 
-    occupied_blocks: Dict[str, int] = {}
-
-    # FIX: slot_registry is created once and reset once per visit (consistent
-    # behaviour).  The startup banner is updated to match.
+    visits      = build_visit_schedule(terminal)
     slot_registry = YardSlotRegistry()
 
     _all_pool  = (AECY_BLOCKS if terminal["format"] == "AECY" else
@@ -561,13 +585,15 @@ def generate_terminal_data(terminal: dict):
                   7 if terminal["format"] == "CWIT" else 5)
     _zone_pool = random.sample(_all_pool, min(_zone_size, len(_all_pool)))
 
+    container_attrs: Dict[str, dict] = {}
+    occupied_blocks: Dict[str, int]  = {}
+
     def _select_discharge_blocks(n: int) -> List[str]:
         existing   = [b for b in _zone_pool if b in occupied_blocks]
         unopened   = [b for b in _zone_pool if b not in occupied_blocks]
         work_order = existing + unopened
         if not work_order:
             work_order = list(_zone_pool)
-
         assignments: List[str] = []
         remaining = n
         wi = 0
@@ -601,10 +627,6 @@ def generate_terminal_data(terminal: dict):
                 del occupied_blocks[block_chosen]
 
     def _update_occupied_restow(from_block: str, to_block: str):
-        """
-        FIX: restow moves now update the occupancy model — decrement the
-        source block and increment the destination block.
-        """
         if from_block in occupied_blocks:
             occupied_blocks[from_block] -= 1
             if occupied_blocks[from_block] <= 0:
@@ -617,8 +639,13 @@ def generate_terminal_data(terminal: dict):
                                   else AECY_BLOCKS[:2] if terminal["format"] == "AECY"
                                   else CWIT_BLOCKS[:2])
 
+    line_op = random.choice(LINE_OPS)
+
+    # ── PHASE 1: Historical vessel operations ─────────────────────────────────
+    active_set:  set = set()
+    inactive_set: set = set()
+
     for visit in visits:
-        # Reset per-visit so tier counts don't bleed across vessel calls.
         slot_registry.reset()
 
         total_rows   = generate_container_count()
@@ -633,12 +660,8 @@ def generate_terminal_data(terminal: dict):
         stay_hours = estimate_stay_hours(load_count, discharge_count, len(cranes_assigned))
 
         event_times = build_event_times(
-            visit["visit_start"],
-            stay_hours,
-            total_ops,
-            len(cranes_assigned),
+            visit["visit_start"], stay_hours, total_ops, len(cranes_assigned),
         )
-
         while len(event_times) < total_ops:
             last = event_times[-1] if event_times else visit["visit_start"] + timedelta(hours=1)
             event_times.append(last + timedelta(seconds=random.randint(60, 300)))
@@ -658,11 +681,6 @@ def generate_terminal_data(terminal: dict):
                     active_set.discard(unit_id)
                     inactive_set.add(unit_id)
                 else:
-                    # FIX: do NOT invent a container for a Load when no active
-                    # containers exist — that would produce a container whose
-                    # first record is a departure (operationally impossible).
-                    # Skip this op slot by converting it to a Discharge instead
-                    # so we always have something to load.
                     move_kind = "Discharge"
                     unit_id   = next_container_id()
                     active_set.add(unit_id)
@@ -683,29 +701,17 @@ def generate_terminal_data(terminal: dict):
                     unit_id = next_container_id()
                     active_set.add(unit_id)
 
-            # FIX: gkey is keyed on unit_id only — one gkey per physical
-            # container for the entire run, surviving any post-processing
-            # that rewrites outbound visit IDs.
             unit_visit_gkey = get_or_create_gkey(unit_id)
 
-            container_length = choose_container_length()
-            reefer           = random.random() < 0.10
-            equipment_type   = choose_equipment_type(container_length, reefer)
-            freight_kind     = random.choice(FREIGHT_KINDS)
-            category         = CATEGORY_BY_MOVE[move_kind]
-            unit_weight      = round(random.uniform(2000, 32000), 6)
-            vgm              = (round(unit_weight + random.uniform(50, 500), 5)
-                                if random.random() > 0.15 else None)
-            hazardous_flag, hazard_un, imdg_code = generate_hazard_fields()
-            oog              = "Yes" if random.random() < 0.08 else "No"
-            port_of_discharge = random.choice(["CNNGB", "SGSIN", "CNSHA", "NLRTM",
-                                               "USLAX", "INMAA", "JPYOK", "KRPUS"])
-            move_time        = event_times[idx]
+            if unit_id not in container_attrs:
+                container_attrs[unit_id] = _make_physical_attrs()
+            attrs = container_attrs[unit_id]
 
+            move_time        = event_times[idx]
             inbound_id       = None
             inbound_service  = None
-            outbound_id      = None
-            outbound_service = None
+            outbound_id      = visit["visit_id"] if move_kind == "Load" else None
+            outbound_service = visit["service"]  if move_kind == "Load" else None
 
             if move_kind == "Discharge":
                 yard_block = discharge_block_seq[discharge_idx]
@@ -718,13 +724,11 @@ def generate_terminal_data(terminal: dict):
                 current_position = to_pos
                 inbound_id       = visit["visit_id"]
                 inbound_service  = visit["service"]
-                # FIX: time_in == move_time (arrival), time_out is later;
-                # no risk of time_out < time_in for Discharge.
                 time_in  = move_time
                 time_out = move_time + timedelta(hours=random.uniform(2, 9))
 
             elif move_kind == "Load":
-                live     = _current_blocks()
+                live       = _current_blocks()
                 yard_block = random.choice(live)
                 _update_occupied_load(yard_block)
                 from_pos         = generate_position_in_block(
@@ -732,12 +736,6 @@ def generate_terminal_data(terminal: dict):
                                        yard_block, registry=slot_registry)
                 to_pos           = vessel_side_position(visit["visit_id"])
                 current_position = to_pos
-                outbound_id      = visit["visit_id"]
-                outbound_service = visit["service"]
-                # FIX: time_in must always be before time_out.
-                # Container was gated in before the vessel arrived; departs
-                # after the move.  Use absolute offsets from move_time to
-                # guarantee time_in < move_time < time_out.
                 time_in  = move_time - timedelta(hours=random.uniform(1, 5))
                 time_out = move_time + timedelta(hours=random.uniform(1, 4))
 
@@ -752,48 +750,21 @@ def generate_terminal_data(terminal: dict):
                                        terminal["yard_id"], terminal["format"],
                                        b2, registry=slot_registry)
                 current_position = to_pos
-                # FIX: update occupancy model for restow
                 _update_occupied_restow(b1, b2)
                 time_in  = move_time - timedelta(hours=random.uniform(1, 3))
                 time_out = move_time + timedelta(hours=random.uniform(1, 6))
 
-            container_rows.append({
-                "Unit ID":                          unit_id,
-                "Unit Visit Gkey":                  unit_visit_gkey,
-                "Complex Id":                       terminal["complex_id"],
-                "Facility Id":                      terminal["facility_id"],
-                "Yard Id":                          terminal["yard_id"],
-                "Category Id":                      category,
-                "Equipment Class":                  "CONTAINER",
-                "Container Length":                 container_length,
-                "Equipment type":                   equipment_type,
-                "Freight Kind":                     freight_kind,
-                "Destination":                      None,
-                "Unit Weight in kg":                unit_weight,
-                "Verified Gross Mass (Kg)":         vgm,
-                "Reefer":                           "Yes" if reefer else "No",
-                "OOG Unit":                         oog,
-                "Hazardous Flag":                   hazardous_flag,
-                "Hazard UN Numbers":                hazard_un,
-                "IMDG Code":                        imdg_code,
-                "Stow Code 1":                      None,
-                "Stow Code 2":                      None,
-                "Stow Code 3":                      None,
-                "Port of Discharge":                port_of_discharge,
-                "Actual Inbound Carrier visit ID":  inbound_id,
-                "Inbound Service":                  inbound_service,
-                "Actual Outbound Carrier visit ID": outbound_id,
-                "Outbound Service":                 outbound_service,
-                "Arrival Mode":                     ARRIVAL_MODE_BY_MOVE[move_kind],
-                "Current Position":                 current_position,
-                "Visit State":                      VISIT_STATE_BY_MOVE[move_kind],
-                "Transit State":                    TRANSIT_STATE_BY_MOVE[move_kind],
-                "Time Out":                         fmt_time_mmddyyyy(time_out),
-                "Time In":                          fmt_time_mmddyyyy(time_in),
-                "Move Complete Time":               fmt_time_mmddyyyy(move_time),
-                "Ctr From Position":                from_pos,
-                "Ctr To Position":                  to_pos,
-            })
+            container_rows.append(_build_container_row(
+                terminal, unit_id, unit_visit_gkey, attrs,
+                CATEGORY_BY_MOVE[move_kind],
+                VISIT_STATE_BY_MOVE[move_kind],
+                TRANSIT_STATE_BY_MOVE[move_kind],
+                ARRIVAL_MODE_BY_MOVE[move_kind],
+                inbound_id, inbound_service,
+                outbound_id, outbound_service,
+                current_position, from_pos, to_pos,
+                move_time, time_in, time_out,
+            ))
 
             crane_rows.append({
                 "Time Completed": fmt_crane(move_time),
@@ -809,124 +780,157 @@ def generate_terminal_data(terminal: dict):
                 "Exclude":        random.choice(["No", "No", "No", "Yes"]),
             })
 
+    # ── PHASE 2: Active containers (exactly 2 records each) ──────────────────
+    # These are brand-new Unit IDs not seen in Phase 1, ensuring no container
+    # appears both as a historical record and an active record.
+    #
+    # Yard slots for Record 2 (current position) are pinned to specific blocks
+    # with exact counts:
+    #   1M → 200,  1L → 200,  1K → 200
+    #   1J → 300,  1H → 100,  1G →  50      Total = 1,050
+    #
+    # Record 1 (Load):      move_time in history window (before discharge window)
+    # Record 2 (Discharge): move_time in last ACTIVE_DISCHARGE_WINDOW_DAYS days
+    # Both must be strictly ordered: move_time_1 < move_time_2.
+
+    ACTIVE_BLOCK_DISTRIBUTION: List[Tuple[str, int]] = [
+        ("1M", 200),
+        ("1L", 200),
+        ("1K", 200),
+        ("1J", 300),
+        ("1H", 100),
+        ("1G",  50),
+    ]
+    # Build a flat list of blocks, one entry per container, in block order.
+    active_block_assignments: List[str] = []
+    for blk, cnt in ACTIVE_BLOCK_DISTRIBUTION:
+        active_block_assignments.extend([blk] * cnt)
+
+    n_active      = len(active_block_assignments)   # 1,050
+    active_unit_ids: List[str] = []
+
+    # Pick a recent vessel visit pool for the discharge leg (last 14 days of
+    # the schedule).  Fall back to any visit if none are recent enough.
+    active_discharge_start = END_DATE - timedelta(days=ACTIVE_DISCHARGE_WINDOW_DAYS)
+    recent_visits = [v for v in visits if v["visit_start"] >= active_discharge_start]
+    if not recent_visits:
+        recent_visits = visits[-max(1, len(visits) // 4):]   # last 25 % of visits
+
+    # Visits available for the historical load leg (older than the discharge window)
+    old_visits = [v for v in visits if v["visit_start"] < active_discharge_start]
+    if not old_visits:
+        old_visits = visits[:max(1, len(visits) // 2)]
+
+    cranes_active = assign_cranes(n_active)
+
+    # Per-block slot registries so tier counts are tracked independently
+    # within each block and never bleed across blocks.
+    block_registries: Dict[str, YardSlotRegistry] = {
+        blk: YardSlotRegistry() for blk, _ in ACTIVE_BLOCK_DISTRIBUTION
+    }
+
+    for yard_block_r2 in active_block_assignments:
+        unit_id         = next_container_id()
+        unit_visit_gkey = get_or_create_gkey(unit_id)
+        attrs           = _make_physical_attrs()
+        active_unit_ids.append(unit_id)
+
+        # ── vessel visits for each leg ──────────────────────────────────────
+        v_load      = random.choice(old_visits)
+        v_discharge = random.choice(recent_visits)
+
+        vessel_visit_load        = v_load["visit_id"]
+        vessel_service_load      = v_load["service"]
+        vessel_visit_discharge   = v_discharge["visit_id"]
+        vessel_service_discharge = v_discharge["service"]
+
+        # ── move times ──────────────────────────────────────────────────────
+        # Load time: anywhere in the old-visit's operational window
+        move_time_1 = v_load["visit_start"] + timedelta(hours=random.uniform(1, 60))
+        # Clamp so it never spills into the active discharge window
+        load_ceiling = active_discharge_start - timedelta(hours=1)
+        if move_time_1 > load_ceiling:
+            move_time_1 = load_ceiling - timedelta(hours=random.uniform(1, 24))
+
+        # Discharge time: within the last ACTIVE_DISCHARGE_WINDOW_DAYS days
+        move_time_2 = active_discharge_start + timedelta(
+            seconds=random.uniform(0, (END_DATE - active_discharge_start).total_seconds())
+        )
+        # Guarantee strict ordering
+        if move_time_2 <= move_time_1:
+            move_time_2 = move_time_1 + timedelta(hours=random.uniform(24, 72))
+
+        # ── positions ───────────────────────────────────────────────────────
+        # Record 1: container was in any yard block before loading
+        yard_block_r1 = random.choice(_all_pool)
+        slot_registry.reset()
+        yard_pos_r1   = generate_position_in_block(
+                            terminal["yard_id"], terminal["format"],
+                            yard_block_r1, registry=slot_registry)
+        vessel_pos_r1 = vessel_side_position(vessel_visit_load)
+
+        # Record 2: container is discharged into the assigned active block
+        vessel_pos_r2 = vessel_side_position(vessel_visit_discharge)
+        yard_pos_r2   = generate_position_in_block(
+                            terminal["yard_id"], terminal["format"],
+                            yard_block_r2, registry=block_registries[yard_block_r2])
+
+        # ── Record 1: Yard → Vessel (historical load, 3DEPARTED) ────────────
+        r1_time_in  = move_time_1 - timedelta(hours=random.uniform(1, 5))
+        r1_time_out = move_time_1 + timedelta(hours=random.uniform(1, 4))
+
+        container_rows.append(_build_container_row(
+            terminal, unit_id, unit_visit_gkey, attrs,
+            "EXPRT", "3DEPARTED", "S70_DEPARTED", "TRUCK",
+            None, None,
+            vessel_visit_load, vessel_service_load,
+            vessel_pos_r1, yard_pos_r1, vessel_pos_r1,
+            move_time_1, r1_time_in, r1_time_out,
+        ))
+        crane_rows.append({
+            "Time Completed": fmt_crane(move_time_1),
+            "Event Type":     "UNIT_LOAD",
+            "Move Kind":      "Load",
+            "Unit Category":  random.choice(UNIT_CATEGORIES),
+            "Unit Nbr":       unit_id,
+            "Crane CHE":      random.choice(cranes_active),
+            "From Position":  yard_pos_r1,
+            "To Position":    vessel_pos_r1,
+            "Carrier Visit":  vessel_visit_load,
+            "Line Op":        line_op,
+            "Exclude":        random.choice(["No", "No", "No", "Yes"]),
+        })
+
+        # ── Record 2: Vessel → Yard (active discharge, IN_YARD) ─────────────
+        r2_time_in  = move_time_2
+        r2_time_out = move_time_2 + timedelta(hours=random.uniform(2, 9))
+
+        container_rows.append(_build_container_row(
+            terminal, unit_id, unit_visit_gkey, attrs,
+            "IMPRT", "IN_YARD", "S40_YARD", "VESSEL",
+            vessel_visit_discharge, vessel_service_discharge,
+            None, None,
+            yard_pos_r2, vessel_pos_r2, yard_pos_r2,
+            move_time_2, r2_time_in, r2_time_out,
+        ))
+        crane_rows.append({
+            "Time Completed": fmt_crane(move_time_2),
+            "Event Type":     "UNIT_DISCHARGE",
+            "Move Kind":      "Discharge",
+            "Unit Category":  random.choice(UNIT_CATEGORIES),
+            "Unit Nbr":       unit_id,
+            "Crane CHE":      random.choice(cranes_active),
+            "From Position":  vessel_pos_r2,
+            "To Position":    yard_pos_r2,
+            "Carrier Visit":  vessel_visit_discharge,
+            "Line Op":        line_op,
+            "Exclude":        random.choice(["No", "No", "No", "Yes"]),
+        })
+
     container_rows.sort(key=sort_key_move)
     crane_rows.sort(key=sort_key_crane)
 
-    # ── Derive active containers BEFORE any post-processing mutates the rows ──
-    # FIX: active list is now built first, then the AECY position patch is
-    # applied to BOTH container_rows and active_rows in one pass, so the two
-    # datasets stay consistent.
-    active_rows = derive_active_yard_containers(container_rows, terminal["yard_id"])
-
-    if terminal["yard_id"] == "AECY":
-        # Keep only 1200 active rows for AECY
-        target_count = 1200
-        omitted_active = active_rows[target_count:]
-        active_rows = active_rows[:target_count]
-        
-        # Build a quick lookup: unit_id -> index in container_rows (last occurrence)
-        uid_to_container_idx: Dict[str, int] = {}
-        for i, cr in enumerate(container_rows):
-            uid_to_container_idx[cr["Unit ID"]] = i
-
-        # For omitted containers, forcefully make them DEPARTED so they aren't considered active
-        for omitted in omitted_active:
-            uid = omitted["Unit ID"]
-            ci = uid_to_container_idx.get(uid)
-            if ci is not None:
-                container_rows[ci]["Current Position"] = ""
-                container_rows[ci]["Ctr To Position"] = ""
-                container_rows[ci]["Visit State"] = "DEPARTED"
-
-        vessels    = ["VS-AECY-07", "VS-AECY-06", "VS-AECY-09", "VS-AECY-03",
-                      "VS-AECY-02", "VS-AECY-04", "VS-AECY-05", "VS-AECY-08", "VS-AECY-01"]
-        target_blocks = ["1K", "1J", "1H", "1G", "1E", "1C"]
-
-        svc_to_visit: Dict[str, str] = {}
-        for v in reversed(visits):
-            svc = v["service"]
-            if svc not in svc_to_visit:
-                svc_to_visit[svc] = v["visit_id"]
-
-        # Build a quick lookup: unit_id -> index in crane_rows (last Load occurrence)
-        uid_to_crane_load_idx: Dict[str, int] = {}
-        for i, cr in enumerate(crane_rows):
-            if cr["Move Kind"] == "Load":
-                uid_to_crane_load_idx[cr["Unit Nbr"]] = i
-
-        # Assign vessels to active rows in round-robin chunks
-        containers_per_vessel = max(1, len(active_rows) // max(1, len(vessels)))
-        for i, r in enumerate(active_rows):
-            vidx = min(i // containers_per_vessel, len(vessels) - 1)
-            svc  = vessels[vidx]
-            vid  = svc_to_visit.get(svc, svc)
-            r["Outbound Service"] = ""
-
-            uid = r["Unit ID"]
-            ci  = uid_to_container_idx.get(uid)
-            if ci is not None:
-                container_rows[ci]["Outbound Service"]                 = ""
-                container_rows[ci]["Actual Outbound Carrier visit ID"] = ""
-
-            # Do not change crane rows since they are historical events, but if they had a future load event planned, we leave it or remove it.
-            # The active container shouldn't have a Load crane event if it's still in the yard.
-            ki = uid_to_crane_load_idx.get(uid)
-            if ki is not None:
-                crane_rows[ki]["Carrier Visit"] = ""
-
-        # Assign yard positions using the enforced tier-safe helper
-        stack_heights: Dict[tuple, int] = collections.defaultdict(int)
-
-        for i, r in enumerate(active_rows):
-            svc     = r.get("Outbound Service", "")
-            
-            # Exactly 200 containers per block from the target_blocks list
-            block = target_blocks[(i // 200) % len(target_blocks)]
-            
-            # FIX: use the guaranteed-safe slot finder; no silent Tier 6+
-            bay, row_idx, new_tier = _find_free_aecy_slot(stack_heights, block)
-            stack_heights[(block, bay, row_idx)] = new_tier
-
-            pos = f"Y-AECY-{block}{bay:03d}{row_idx:02d}C{new_tier}"
-            r["Current Yard Block"]    = block
-            r["Current Slot Position"] = pos
-
-            uid = r["Unit ID"]
-            ci  = uid_to_container_idx.get(uid)
-            if ci is not None:
-                container_rows[ci]["Current Position"] = pos
-                container_rows[ci]["Ctr To Position"]  = pos
-
-    return container_rows, crane_rows, active_rows
-
-
-def derive_active_yard_containers(container_rows: List[dict], yard_id: str) -> List[dict]:
-    latest_by_unit: Dict[str, dict] = {}
-    for row in container_rows:
-        uid = row["Unit ID"]
-        cur = latest_by_unit.get(uid)
-        if cur is None or (parse_time_mmddyyyy(row["Move Complete Time"])
-                           > parse_time_mmddyyyy(cur["Move Complete Time"])):
-            latest_by_unit[uid] = row
-
-    active_rows: List[dict] = []
-    for row in latest_by_unit.values():
-        pos = row.get("Current Position", "")
-        if not pos.startswith("Y-"):
-            continue
-        active_rows.append({
-            "Unit ID":               row["Unit ID"],
-            "Unit Visit Gkey":       row["Unit Visit Gkey"],
-            "Outbound Service":      row["Outbound Service"],
-            "Current Yard Block":    derive_yard_block(pos, yard_id),
-            "Current Slot Position": pos,
-            "Move Complete Time":    row["Move Complete Time"],
-        })
-
-    active_rows.sort(
-        key=lambda r: parse_time_mmddyyyy(r["Move Complete Time"]), reverse=True
-    )
-    return active_rows
+    return container_rows, crane_rows, active_unit_ids
 
 
 def write_csv(path: Path, headers: List[str], rows: List[dict]):
@@ -936,25 +940,12 @@ def write_csv(path: Path, headers: List[str], rows: List[dict]):
         writer.writerows(rows)
 
 
-def write_json(path: Path, rows: List[dict]):
+def write_json(path: Path, data) -> None:
     with path.open("w", encoding="utf-8") as f:
-        json.dump(rows, f, indent=2)
-
-
-def build_block_grouped_json(active_rows: List[dict]) -> List[dict]:
-    block_map: Dict[str, List[str]] = collections.defaultdict(list)
-    for row in active_rows:
-        block = row["Current Yard Block"]
-        if block:
-            block_map[block].append(row["Unit ID"])
-    return [
-        {"block": block, "unit_ids": unit_ids}
-        for block, unit_ids in sorted(block_map.items())
-    ]
+        json.dump(data, f, indent=2)
 
 
 def main():
-    # FIX: seed here, after all module-level code, for deterministic output.
     random.seed(42)
 
     print("\n================================================")
@@ -962,11 +953,9 @@ def main():
     print(f"Block capacity          : {BLOCK_CAPACITY} slots  ({SLOTS_PER_BLOCK} usable @ {BLOCK_OCCUPANCY:.0%})")
     print(f"Active crane MPH        : {CRANE_ACTIVE_MPH_MIN}-{CRANE_ACTIVE_MPH_MAX} (within batches)")
     print(f"Vessel stay hours       : {STAY_MIN_HOURS:.0f} h (low volume) – {STAY_MAX_HOURS:.0f} h (high volume)")
-    print( "Block assignment        : capacity-driven (fills existing before opening new)")
     print(f"Max tier                : {YardSlotRegistry.MAX_TIER}  (from XML z-index-max)")
-    print( "Tier registry           : reset once per vessel visit")
-    print( "Restow occupancy        : source block decremented, destination incremented")
-    print( "Gkey allocation         : one gkey per (unit_id, vessel_visit) pair")
+    print(f"History window          : {DAYS_RANGE} days")
+    print(f"Active discharge window : last {ACTIVE_DISCHARGE_WINDOW_DAYS} days")
     print("================================================")
 
     total_c = total_cr = total_a = 0
@@ -974,65 +963,88 @@ def main():
     for terminal in TERMINALS:
         yard_id = terminal["yard_id"]
         print(f"\nProcessing Yard: {yard_id}")
-        container_rows, crane_rows, active_rows = generate_terminal_data(terminal)
+        container_rows, crane_rows, active_unit_ids = generate_terminal_data(terminal)
+
         total_c  += len(container_rows)
         total_cr += len(crane_rows)
-        total_a  += len(active_rows)
+        total_a  += len(active_unit_ids)
 
         out_c  = OUTPUT_DIR / f"{yard_id}_{BASE_OUTPUT_CONTAINER_FILE}"
         out_cr = OUTPUT_DIR / f"{yard_id}_{BASE_OUTPUT_CRANE_FILE}"
-        out_a  = OUTPUT_DIR / f"{yard_id}_{BASE_OUTPUT_ACTIVE_FILE}"
         out_aj = OUTPUT_DIR / f"{yard_id}_{BASE_OUTPUT_ACTIVE_JSON}"
 
-        write_csv(out_c,  CONTAINER_HEADERS,  container_rows)
-        write_csv(out_cr, CRANE_HEADERS,       crane_rows)
-        write_csv(out_a,  ACTIVE_LIST_HEADERS, active_rows)
-        write_json(out_aj, build_block_grouped_json(active_rows))
+        write_csv(out_c,  CONTAINER_HEADERS, container_rows)
+        write_csv(out_cr, CRANE_HEADERS,     crane_rows)
+        write_json(out_aj, active_unit_ids)
 
         print(f"  -> {out_c.name}  ({len(container_rows):,} rows)")
         print(f"  -> {out_cr.name}  ({len(crane_rows):,} rows)")
-        print(f"  -> {out_a.name}  ({len(active_rows):,} active)")
+        print(f"  -> {out_aj.name}  ({len(active_unit_ids):,} active unit IDs)")
 
-        # A gkey may appear on multiple rows (same unit, multiple moves) — that
-        # is expected.  What must never happen is a gkey pointing at two
-        # *different* unit IDs.
+        # ── Sanity checks ────────────────────────────────────────────────────
+        active_set_check = set(active_unit_ids)
+
+        # Active containers must each have exactly 2 rows
+        rows_per_active: Dict[str, int] = collections.defaultdict(int)
+        for r in container_rows:
+            if r["Unit ID"] in active_set_check:
+                rows_per_active[r["Unit ID"]] += 1
+        bad_active = sum(1 for v in rows_per_active.values() if v != 2)
+        print(f"  Active containers without exactly 2 rows   : {bad_active}  (should be 0)")
+
+        # Active containers' last record must be IN_YARD
+        latest_by_unit: Dict[str, dict] = {}
+        for r in container_rows:
+            if r["Unit ID"] in active_set_check:
+                uid = r["Unit ID"]
+                cur = latest_by_unit.get(uid)
+                if cur is None or (parse_time_mmddyyyy(r["Move Complete Time"])
+                                   > parse_time_mmddyyyy(cur["Move Complete Time"])):
+                    latest_by_unit[uid] = r
+        not_in_yard = sum(1 for r in latest_by_unit.values()
+                          if not r.get("Current Position", "").startswith("Y-"))
+        print(f"  Active containers not ending in yard        : {not_in_yard}  (should be 0)")
+
+        # No gkey shared across different Unit IDs
         gkey_to_units: Dict[str, set] = collections.defaultdict(set)
         for r in container_rows:
             gkey_to_units[r["Unit Visit Gkey"]].add(r["Unit ID"])
         cross_gkeys = sum(1 for v in gkey_to_units.values() if len(v) > 1)
-        print(f"  Gkeys shared across different Unit IDs : {cross_gkeys}  (should be 0)")
+        print(f"  Gkeys shared across different Unit IDs      : {cross_gkeys}  (should be 0)")
 
-        tier_counts: collections.Counter = collections.Counter()
-        for r in active_rows:
-            pos = r.get("Current Slot Position", "")
-            m   = re.search(r"[C\.](\d)$", pos)
-            if m:
-                tier_counts[int(m.group(1))] += 1
-        print(f"  Tier distribution (active containers):")
-        for t in sorted(tier_counts):
-            bar   = "#" * (tier_counts[t] // 15)
-            share = tier_counts[t] / len(active_rows) * 100
-            print(f"    Tier {t}  {tier_counts[t]:4d}  ({share:4.1f}%)  {bar}")
-
-        block_counts: collections.Counter = collections.Counter(
-            r["Current Yard Block"] for r in active_rows
+        # IN_YARD rows must have null Outbound Service
+        in_yard_with_outbound = sum(
+            1 for r in container_rows
+            if r.get("Visit State") == "IN_YARD" and r.get("Outbound Service") is not None
         )
-        print(f"  Block distribution ({len(block_counts)} blocks used, "
-              f"~{len(active_rows) // max(1, len(block_counts))} avg per block):")
-        for blk, cnt in sorted(block_counts.items(), key=lambda x: -x[1])[:12]:
-            bar   = "#" * (cnt // 20)
-            share = cnt / len(active_rows) * 100
-            print(f"    {blk:12s} {cnt:4d}  ({share:4.1f}%)  {bar}")
+        print(f"  IN_YARD rows with non-null Outbound Service : {in_yard_with_outbound}  (should be 0)")
 
-        max_realistic = math.ceil(len(active_rows) / SLOTS_PER_BLOCK)
-        print(f"  Sanity: {len(active_rows)} containers -> needs >= {max_realistic} block(s) "
-              f"@ {SLOTS_PER_BLOCK} slots each  [got {len(block_counts)}]")
+        # Per-block active container count verification
+        block_counts: Dict[str, int] = collections.defaultdict(int)
+        for r in container_rows:
+            if r["Unit ID"] in active_set_check and r["Visit State"] == "IN_YARD":
+                pos = r["Current Position"]   # e.g. Y-AECY-1M02305C3
+                m = re.match(r"Y-AECY-([A-Z0-9]+?)\d{3}", pos)
+                if m:
+                    block_counts[m.group(1)] += 1
+        expected_blocks = [("1M", 200), ("1L", 200), ("1K", 200),
+                           ("1J", 300), ("1H", 100), ("1G",  50)]
+        print(f"  Per-block active container counts:")
+        for blk, exp in expected_blocks:
+            got = block_counts.get(blk, 0)
+            ok  = "OK" if got == exp else f"MISMATCH (expected {exp})"
+            print(f"    Block {blk}: {got:3d}  {ok}")
+
+        # Historical row count (Phase 1 only)
+        hist_rows = len(container_rows) - len(active_unit_ids) * 2
+        print(f"  Historical rows (Phase 1)                   : {hist_rows:,}")
+        print(f"  Active rows     (Phase 2, 2× each)          : {len(active_unit_ids) * 2:,}")
 
     print("\n================================================")
     print("GENERATION COMPLETED")
     print(f"Total Container rows    : {total_c:,}")
     print(f"Total Crane rows        : {total_cr:,}")
-    print(f"Total Active containers : {total_a:,}")
+    print(f"Total Active unit IDs   : {total_a:,}")
     print("================================================")
 
 
