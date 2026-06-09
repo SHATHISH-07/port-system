@@ -877,7 +877,7 @@ class TerminalScene {
         wpx = w.x; wpz = w.z;
         bw = xmlBlk.w * WORLD_SCALE;
         bd = xmlBlk.h * WORLD_SCALE;
-      } else if (pos.w !== undefined) {
+      } else if (pos.w !== undefined && pos.x !== undefined && pos.y !== undefined && pos.h !== undefined) {
         const w = n2world(pos.x, pos.y);
         wpx = w.x; wpz = w.z;
         bw = pos.w * WORLD_SCALE;
@@ -911,37 +911,87 @@ class TerminalScene {
 
       if (hasData) {
         heatGroups.push({ cx: wpx, cz: wpz, bw, bd, conc });
-        const count = Math.min(blk.count, 200);
-        // Determine realistic container size
         const cW = 0.8, cD = 0.32, cH = 0.35;
-        // Calculate how many fit
-        const COLS = Math.max(1, Math.floor(bw / (cW * 1.1)));
-        const ROWS = Math.max(1, Math.floor(bd / (cD * 1.1)));
+        const validContainers = (blk.containers || []).filter(c => c.bay && c.row && c.tier && c.bay !== "-" && c.row !== "-" && c.tier !== "-");
+        
+        const parsed = validContainers.map((c, idx) => {
+          let b = parseInt(c.bay!, 10);
+          let r = parseInt(c.row!, 10);
+          if (isNaN(r) && c.row!.length > 0) r = c.row!.toUpperCase().charCodeAt(0) - 64; // Handle letters like 'A', 'B'
+          let t = parseInt(c.tier!, 10);
+          return { b, r, t, origIdx: idx };
+        }).filter(c => !isNaN(c.b) && !isNaN(c.r) && !isNaN(c.t));
 
-        const dummy = new THREE.Object3D();
-        const iMesh = new THREE.InstancedMesh(
-          createContainerGeometry(cW, cH, cD),
-          new THREE.MeshStandardMaterial({ map: CONTAINER_TEX, roughness: 0.7, metalness: 0.2 }),
-          count,
-        );
-        iMesh.castShadow = true; iMesh.receiveShadow = true;
-        for (let i = 0; i < count; i++) {
-          const tier = Math.floor(i / (COLS * ROWS));
-          const idx = i % (COLS * ROWS);
-          const col = idx % COLS;
-          const row = Math.floor(idx / COLS);
+        if (parsed.length > 0) {
+          const minBay = Math.min(...parsed.map(c => c.b));
+          const maxBay = Math.max(...parsed.map(c => c.b));
+          const minRow = Math.min(...parsed.map(c => c.r));
+          const maxRow = Math.max(...parsed.map(c => c.r));
+          const baySpan = Math.max(1, maxBay - minBay + 1);
+          const rowSpan = Math.max(1, maxRow - minRow + 1);
+          
+          const colSpacing = bw / baySpan;
+          const rowSpacing = bd / rowSpan;
+          const actCW = Math.min(cW * 1.1, colSpacing * 0.95);
+          const actCD = Math.min(cD * 1.1, rowSpacing * 0.95);
 
-          dummy.position.set(
-            -bw / 2 + (cW * 1.1) / 2 + col * (cW * 1.1),
-            0.12 + tier * cH + cH / 2,
-            -bd / 2 + (cD * 1.1) / 2 + row * (cD * 1.1),
+          const dummy = new THREE.Object3D();
+          const iMesh = new THREE.InstancedMesh(
+            createContainerGeometry(actCW, cH, actCD),
+            new THREE.MeshStandardMaterial({ map: CONTAINER_TEX, roughness: 0.7, metalness: 0.2 }),
+            parsed.length,
           );
-          dummy.updateMatrix();
-          iMesh.setMatrixAt(i, dummy.matrix);
-          iMesh.setColorAt(i, new THREE.Color(CONTAINER_COLORS[Math.floor(Math.random() * 3)]));
+          iMesh.castShadow = true; iMesh.receiveShadow = true;
+          for (let i = 0; i < parsed.length; i++) {
+            const p = parsed[i];
+            const col = p.b - minBay;
+            const row = p.r - minRow;
+            const tier = Math.max(0, p.t - 1);
+            
+            dummy.position.set(
+              -bw / 2 + colSpacing / 2 + col * colSpacing,
+              0.12 + tier * cH + cH / 2,
+              -bd / 2 + rowSpacing / 2 + row * rowSpacing,
+            );
+            dummy.updateMatrix();
+            iMesh.setMatrixAt(i, dummy.matrix);
+            const origContainer = validContainers[p.origIdx];
+            const colorIdx = origContainer.hazardous ? 0 : origContainer.reefer ? 1 : 2;
+            iMesh.setColorAt(i, new THREE.Color(CONTAINER_COLORS[colorIdx]));
+          }
+          iMesh.instanceMatrix.needsUpdate = true;
+          g.add(iMesh);
+        } else {
+          // Fallback random distribution if no position details
+          const count = Math.min(blk.count, 200);
+          const COLS = Math.max(1, Math.floor(bw / (cW * 1.1)));
+          const ROWS = Math.max(1, Math.floor(bd / (cD * 1.1)));
+
+          const dummy = new THREE.Object3D();
+          const iMesh = new THREE.InstancedMesh(
+            createContainerGeometry(cW, cH, cD),
+            new THREE.MeshStandardMaterial({ map: CONTAINER_TEX, roughness: 0.7, metalness: 0.2 }),
+            count,
+          );
+          iMesh.castShadow = true; iMesh.receiveShadow = true;
+          for (let i = 0; i < count; i++) {
+            const tier = Math.floor(i / (COLS * ROWS));
+            const idx = i % (COLS * ROWS);
+            const col = idx % COLS;
+            const row = Math.floor(idx / COLS);
+
+            dummy.position.set(
+              -bw / 2 + (cW * 1.1) / 2 + col * (cW * 1.1),
+              0.12 + tier * cH + cH / 2,
+              -bd / 2 + (cD * 1.1) / 2 + row * (cD * 1.1),
+            );
+            dummy.updateMatrix();
+            iMesh.setMatrixAt(i, dummy.matrix);
+            iMesh.setColorAt(i, new THREE.Color(CONTAINER_COLORS[Math.floor(Math.random() * 3)]));
+          }
+          iMesh.instanceMatrix.needsUpdate = true;
+          g.add(iMesh);
         }
-        iMesh.instanceMatrix.needsUpdate = true;
-        g.add(iMesh);
       }
 
       // ID badge

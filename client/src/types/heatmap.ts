@@ -61,6 +61,11 @@ export interface BerthAnalysis {
     impact_score: number;
     travel_distance_score: number;
     travel_distance_label: "Short" | "Moderate" | "Long";
+    laden_travel_distance_m?: number;
+    unladen_travel_distance_m?: number;
+    avg_laden_distance_m?: number;
+    avg_unladen_distance_m?: number;
+    block_distances?: Record<string, number>;
     corridor_congestion: "High" | "Moderate" | "Low";
     mitigation: string;
     recommendation_reason?: string;

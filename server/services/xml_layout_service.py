@@ -432,8 +432,17 @@ class XmlLayoutService:
                         "route": get_route(target_v)
                     }
                 else:
+                    b_center = blocks[bname].get("center")
+                    berth_center = berths[berth_name].get("center")
+                    if b_center and berth_center:
+                        dx = abs(b_center[0] - berth_center[0]) * cached.get("bbox", {}).get("width", 2000)
+                        dy = abs(b_center[1] - berth_center[1]) * cached.get("bbox", {}).get("height", 800)
+                        fallback_dist = dx + dy
+                    else:
+                        fallback_dist = 0.0
+
                     distances["block_to_berth"][bname][berth_name] = {
-                        "distance_m": 500.0, # Fallback
+                        "distance_m": fallback_dist,
                         "route": []
                     }
             

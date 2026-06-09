@@ -20,6 +20,9 @@ export interface BerthAnalysis {
   travel_distance_label?: string;
   laden_travel_distance_m?: number;
   unladen_travel_distance_m?: number;
+  avg_laden_distance_m?: number;
+  avg_unladen_distance_m?: number;
+  block_distances?: Record<string, number>;
   hazardous?: number;
   reefer?: number;
 }
@@ -157,9 +160,9 @@ export default function BerthRecommendation({
               </Box>
 
               <Box>
-                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>AVG. YARD DISTANCE</Typography>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem' }}>OVERALL AVG DISTANCE</Typography>
                 <Typography sx={{ fontWeight: 800, fontSize: '0.95rem' }}>
-                  {primary?.laden_travel_distance_m ? `${primary.laden_travel_distance_m}m` : 'N/A'}
+                  {primary?.avg_laden_distance_m ? `${primary.avg_laden_distance_m}m` : 'N/A'}
                 </Typography>
               </Box>
 
@@ -189,6 +192,25 @@ export default function BerthRecommendation({
                 "{primary?.recommendation_reason ?? "Optimized selection based on current workload."}"
               </Typography>
             </Box>
+
+            {primary?.block_distances && Object.keys(primary.block_distances).length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.65rem', mb: 0.5 }}>
+                  BLOCK DISTANCES TO BERTH
+                </Typography>
+                <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1 }}>
+                  {Object.entries(primary.block_distances).map(([blockId, dist]) => (
+                    <Box key={blockId} sx={{
+                      px: 1, py: 0.5, borderRadius: 1, bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+                      display: "flex", gap: 1, alignItems: "center"
+                    }}>
+                      <Typography sx={{ fontSize: '0.7rem', fontWeight: 900 }}>{blockId}</Typography>
+                      <Typography sx={{ fontSize: '0.7rem', color: "text.secondary", fontWeight: 700 }}>{dist}m</Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )}
           </Box>
         </Box>
       </Box>
@@ -271,14 +293,33 @@ export default function BerthRecommendation({
                     <Typography sx={{ fontWeight: 800, fontSize: '0.8rem' }}>{b.cargo_concentration_pct}%</Typography>
                   </Box>
                   <Box>
-                    <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>DISTANCE</Typography>
-                    <Typography sx={{ fontWeight: 800, fontSize: '0.8rem' }}>{b.laden_travel_distance_m ? `${b.laden_travel_distance_m}m` : 'N/A'}</Typography>
+                    <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>AVG DISTANCE</Typography>
+                    <Typography sx={{ fontWeight: 800, fontSize: '0.8rem' }}>{b.avg_laden_distance_m ? `${b.avg_laden_distance_m}m` : 'N/A'}</Typography>
                   </Box>
                   <Box>
                     <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.6rem' }}>CRANES</Typography>
                     <Typography sx={{ fontWeight: 800, fontSize: '0.8rem' }}>{b.recommended_cranes ?? 'N/A'}</Typography>
                   </Box>
                 </Stack>
+
+                {b.block_distances && Object.keys(b.block_distances).length > 0 && (
+                  <Box sx={{ mt: 1.5, pt: 1, borderTop: borderStyle }}>
+                    <Typography sx={{ color: "text.disabled", display: "block", fontWeight: 700, fontSize: '0.55rem', mb: 0.5 }}>
+                      BLOCK DISTANCES
+                    </Typography>
+                    <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                      {Object.entries(b.block_distances).map(([blockId, dist]) => (
+                        <Box key={blockId} sx={{
+                          px: 0.75, py: 0.25, borderRadius: "4px", bgcolor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
+                          display: "flex", gap: 0.5, alignItems: "center"
+                        }}>
+                          <Typography sx={{ fontSize: '0.6rem', fontWeight: 900 }}>{blockId}</Typography>
+                          <Typography sx={{ fontSize: '0.6rem', color: "text.secondary", fontWeight: 600 }}>{dist}m</Typography>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
               </Box>
             ))}
         </Box>

@@ -170,6 +170,9 @@ class Settings:
     MIN_VISIT_ROWS = 5
     VESSEL_WINDOW_HOURS = 96
 
+    # FIX: Added move_span_hours — the strongest predictor of vessel stay duration.
+    # It was computed by create_features() but absent here, so the model trained
+    # and predicted with it always zeroed out. Also added restow_count for completeness.
     FEATURE_NAMES: list[str] = [
         "loaded",
         "discharged",
@@ -184,6 +187,7 @@ class Settings:
         "hazard_count",
         "oog_count",
         "service_hash",
+        "move_span_hours",        # FIX: was missing — strongest single feature
         "restow_intensity",
         "block_concentration",
         "reefer_equipment_ratio",
@@ -239,7 +243,10 @@ class Settings:
     RISK_EXTENDED_STAY_HOURS = 40.0
 
     # Crane analytics
-    CRANE_MOVES_PER_HOUR_TARGET = 21
+    # FIX: CRANE_MOVES_PER_HOUR_TARGET = 1.06 is correct (measured from actual data).
+    # The old value of ~25 was peak mechanical rate, not operational throughput.
+    # Operational rate accounts for idle time, documentation holds, shift changes, etc.
+    CRANE_MOVES_PER_HOUR_TARGET = 1.06
     CRANE_MAX_CRANES_DISPLAY = 6
     CRANE_IDLE_THRESHOLD_MINUTES = 30
     CRANE_EFFICIENCY_ROLLING_WINDOW = 10
@@ -253,7 +260,7 @@ class Settings:
     HISTORY_LOAD_WINDOW_DAYS = 0
 
     # Stay prediction defaults
-    MOVES_PER_HOUR_PER_CRANE = 21.0
+    MOVES_PER_HOUR_PER_CRANE = 1.06   # FIX: was 21.0 — updated to match CRANE_MOVES_PER_HOUR_TARGET
     DEFAULT_AVG_WEIGHT_KG = 15000.0
     DEFAULT_REEFER_RATIO = 0.1
     DEFAULT_HAZARD_RATIO = 0.05
@@ -495,6 +502,8 @@ class Settings:
             promoted_at       TIMESTAMP,
             trained_at        TIMESTAMP,
             notes             TEXT,
+            tags              JSONB DEFAULT '[]'::jsonb,
+            model_binary      BYTEA,
             created_at        TIMESTAMP DEFAULT NOW(),
             updated_at        TIMESTAMP DEFAULT NOW()
         );

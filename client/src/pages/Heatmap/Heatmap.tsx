@@ -516,7 +516,7 @@ export default function Heatmap() {
           <Box sx={{ width: "100%", height: "100%", overflow: "hidden" }}>
             <TerminalMap3D
               data={mapData}
-              terminalLayout={terminalLayout}
+              terminalLayout={(terminalLayout as unknown) as any}
               targetBerthId={mapData?.targetBerthId || ""}
               computedMaxBlock={mapData?.computedMaxBlock || null}
               loading={loading}
@@ -610,24 +610,6 @@ export default function Heatmap() {
               <TextField
                 size="small"
                 fullWidth
-                label="Yard ID"
-                value={yardInput}
-                onChange={(e) => setYardInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && load()}
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 2,
-                    height: { xs: 30, md: 36 },
-                  },
-                }}
-                slotProps={{
-                  htmlInput: { style: { fontSize: "0.8rem" } },
-                  inputLabel: { style: { fontSize: "0.8rem" } },
-                }}
-              />
-              <TextField
-                size="small"
-                fullWidth
                 label="Vessel ID / Visit ID"
                 value={vesselInput}
                 onChange={(e) => setVesselInput(e.target.value)}
@@ -643,6 +625,25 @@ export default function Heatmap() {
                   inputLabel: { style: { fontSize: "0.8rem" } },
                 }}
               />
+              <TextField
+                size="small"
+                fullWidth
+                label="Yard ID"
+                value={yardInput}
+                onChange={(e) => setYardInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && load()}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2,
+                    height: { xs: 30, md: 36 },
+                  },
+                }}
+                slotProps={{
+                  htmlInput: { style: { fontSize: "0.8rem" } },
+                  inputLabel: { style: { fontSize: "0.8rem" } },
+                }}
+              />
+
               <Box>
                 <Button
                   fullWidth
@@ -985,11 +986,11 @@ export default function Heatmap() {
               handleViewToggle(
                 e as unknown as React.MouseEvent<HTMLElement>,
                 e.target.value as
-                  | "HEATMAP"
-                  | "MAP2D"
-                  | "3D"
-                  | "CONTAINERS"
-                  | "BERTH",
+                | "HEATMAP"
+                | "MAP2D"
+                | "3D"
+                | "CONTAINERS"
+                | "BERTH",
               )
             }
             size="small"

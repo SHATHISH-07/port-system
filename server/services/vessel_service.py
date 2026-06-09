@@ -256,12 +256,12 @@ def _visit_details(visit_groups: dict) -> dict:
         f_str = vdf.get("ctr_from_position", vdf.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
         t_str = vdf.get("ctr_to_position", vdf.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
         
-        f_is_v = f_str.str.startswith("V-") & f_str.str.contains(visit_id.upper())
-        t_is_v = t_str.str.startswith("V-") & t_str.str.contains(visit_id.upper())
+        f_is_v = f_str.str.startswith(("V-", "VS-")) & f_str.str.contains(visit_id.upper())
+        t_is_v = t_str.str.startswith(("V-", "VS-")) & t_str.str.contains(visit_id.upper())
         involved = f_is_v | t_is_v
         
-        f_is_y = (f_str != "") & (~f_str.str.startswith("V-"))
-        t_is_y = (t_str != "") & (~t_str.str.startswith("V-"))
+        f_is_y = (f_str != "") & (~f_str.str.startswith(("V-", "VS-")))
+        t_is_y = (t_str != "") & (~t_str.str.startswith(("V-", "VS-")))
 
         # Calculate operational bounds using valid timestamps
         valid_times = pd.Series(dtype="datetime64[ns]")
@@ -375,8 +375,8 @@ def _calculate_delay_analysis(visit_df) -> list:
                 f_str_mct = mct_df.get("ctr_from_position", mct_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
                 t_str_mct = mct_df.get("ctr_to_position", mct_df.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
                 
-                is_load = (~f_str_mct.str.startswith("V-")) & t_str_mct.str.startswith("V-")
-                is_disc = f_str_mct.str.startswith("V-") & (~t_str_mct.str.startswith("V-"))
+                is_load = (~f_str_mct.str.startswith(("V-", "VS-"))) & t_str_mct.str.startswith(("V-", "VS-"))
+                is_disc = f_str_mct.str.startswith(("V-", "VS-")) & (~t_str_mct.str.startswith(("V-", "VS-")))
                 
                 mct_df["op_type"] = "OTHER"
                 mct_df.loc[is_load, "op_type"] = "LOAD"
@@ -409,8 +409,8 @@ def _calculate_delay_analysis(visit_df) -> list:
     f_str = visit_df.get("ctr_from_position", visit_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
     t_str = visit_df.get("ctr_to_position", visit_df.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
     
-    f_is_v = f_str.str.startswith("V-")
-    t_is_v = t_str.str.startswith("V-")
+    f_is_v = f_str.str.startswith(("V-", "VS-"))
+    t_is_v = t_str.str.startswith(("V-", "VS-"))
     f_is_y = (f_str != "") & (~f_is_v)
     t_is_y = (t_str != "") & (~t_is_v)
     
@@ -557,14 +557,32 @@ def get_yard_heatmap_data(
         df = full_df.copy() if full_df is not None else pd.DataFrame()
         if not df.empty:
             df["unit_id"] = df["unit_id"].astype(str).str.strip().str.upper()
+            
+            # Extract active containers specifically matching the criteria:
+            # - Outbound service is null
+            # - Inbound service is not null
+            # - Ctr From Position starts with V-
+            # - Ctr To Position starts with Y-
+            outbound_col = "outbound_service" if "outbound_service" in df.columns else "actual_outbound_carrier_visit_id"
+            if outbound_col in df.columns and "inbound_service" in df.columns:
+                df["_outbound_clean"] = df[outbound_col].astype(str).str.strip().replace(["nan", "None", "NaN", ""], pd.NA)
+                df["_inbound_clean"] = df["inbound_service"].astype(str).str.strip().replace(["nan", "None", "NaN", ""], pd.NA)
+                
+                f_str = df.get("ctr_from_position", pd.Series(dtype=str)).fillna("").astype(str).str.upper()
+                t_str = df.get("ctr_to_position", pd.Series(dtype=str)).fillna("").astype(str).str.upper()
+                
+                valid_mask = (
+                    df["_outbound_clean"].isna() &
+                    df["_inbound_clean"].notna() &
+                    f_str.str.startswith(("V-", "VS-")) &
+                    t_str.str.startswith("Y-")
+                )
+                df = df[valid_mask].copy()
+
             if "actual_outbound_carrier_visit_id" in df.columns:
                 valid_visits = df["actual_outbound_carrier_visit_id"].dropna()
                 if not valid_visits.empty:
                     visit_id = str(valid_visits.iloc[0])
-            
-            # Trust the provided unit_ids completely. 
-            # We no longer filter df by outbound_service, because active containers 
-            # have a NULL outbound service.
             
     else:
         return {"error": "Must provide unit_ids"}
@@ -637,11 +655,10 @@ def get_yard_heatmap_data(
     })
 
     for row in df.to_dict('records'):
-        visit_state = str(row.get("visit_state", "") or "").upper()
-        is_loaded = "DEPARTED" in visit_state
-        pos_str = str(row.get("ctr_from_position", "")) if is_loaded else str(row.get("current_position", ""))
+        # Get position strictly from ctr_to_position as requested for active in-yard containers
+        pos_str = str(row.get("ctr_to_position", ""))
         if not pos_str or str(pos_str) == "nan":
-            pos_str = str(row.get("current_position") or row.get("ctr_to_position") or row.get("ctr_from_position") or "")
+            pos_str = str(row.get("current_position") or "")
         
         if not pos_str:
             continue
@@ -700,11 +717,9 @@ def get_yard_heatmap_data(
         })
 
         for u in data["unit_rows"]:
-            visit_state = str(u.get("visit_state", "") or "").upper()
-            is_loaded = "DEPARTED" in visit_state
-            c_pos = str(u.get("ctr_from_position", "")) if is_loaded else str(u.get("current_position", ""))
+            c_pos = str(u.get("ctr_to_position", ""))
             if not c_pos or str(c_pos) == "nan":
-                c_pos = str(u.get("current_position") or u.get("ctr_to_position") or u.get("ctr_from_position") or "")
+                c_pos = str(u.get("current_position") or "")
 
             p_info = parse_position(c_pos, yard_id)
 
@@ -797,19 +812,29 @@ def get_yard_heatmap_data(
         corridors = set()
         equipment = set()
         
+        block_distances = {}
+        
         for bk_data in block_list:
             bk_id = bk_data["block_id"]
             bk_count = bk_data["total_containers"]
             
-            dist_m = 500
+            dist_m = 0
             
             if full_layout:
                 if bk_id in xml_distances.get("block_to_berth", {}):
                     if berth_id in xml_distances["block_to_berth"][bk_id]:
                         d_info = xml_distances["block_to_berth"][bk_id][berth_id]
-                        dist_m = d_info.get("distance_m", 500)
+                        dist_m = d_info.get("distance_m", 0)
                         for node in d_info.get("route", []):
                             corridors.add(node)
+                
+                # If still 0, calculate based on XML center coordinates
+                if dist_m == 0:
+                    bk_info = full_layout.get("blocks", {}).get(bk_id, {})
+                    b_cx, b_cy = bk_info.get("center", (0.5, 0.5))
+                    dx_norm = abs(b_cx - berth_cx)
+                    dy_norm = abs(b_cy - berth_cy)
+                    dist_m = (dx_norm * yard_w + dy_norm * yard_h)
                 
                 bk_info = full_layout.get("blocks", {}).get(bk_id, {})
                 if bk_info.get("type"):
@@ -823,6 +848,7 @@ def get_yard_heatmap_data(
             
             # The routing distance is exactly in metres
             dist_m = int(dist_m)
+            block_distances[bk_id] = dist_m
 
             if dist_m <= NEAR_THRESHOLD_M:
                 near_count += bk_count
@@ -849,7 +875,8 @@ def get_yard_heatmap_data(
             "near_blocks": near_blocks,
             "corridors": corridors,
             "equipment": equipment,
-            "primary_block_dist_m": primary_block_dist_m if 'primary_block_dist_m' in locals() else 500
+            "block_distances": block_distances,
+            "primary_block_dist_m": primary_block_dist_m if 'primary_block_dist_m' in locals() else 0
         })
         
     # Sort: Optimal berth is strictly the shortest travel distance from the primary block
@@ -860,7 +887,6 @@ def get_yard_heatmap_data(
     try:
         from db.queries import get_engine
         from sqlalchemy import text
-        import pandas as pd
         
         # Use the passed vessel_id for fetching history, since active containers no longer have outbound_service
         if vessel_id:
@@ -941,6 +967,7 @@ def get_yard_heatmap_data(
             "unladen_travel_distance_m": unladen_dist,
             "avg_laden_distance_m":    b["avg_dist"],
             "avg_unladen_distance_m":  unladen_dist,
+            "block_distances":         b["block_distances"],
             "corridor_congestion": (
                 "High" if b["concentration_pct"] > 80
                 else "Moderate" if b["concentration_pct"] > 40
@@ -1324,15 +1351,18 @@ def analyze_vessel_dashboard(
         baseline_vessel = df.copy()
 
     if not baseline_vessel.empty and "outbound_service" in baseline_vessel.columns:
+        # Relax filter: keep if outbound_service matches OR if it is null/empty 
+        # (since load_from_db already filters by vessel_id)
+        os_col = baseline_vessel["outbound_service"].astype(str).str.strip().str.upper()
         baseline_vessel = baseline_vessel[
-            baseline_vessel["outbound_service"].astype(str).str.strip().str.upper() == search_key
+            (os_col == search_key) | (os_col == "NAN") | (os_col == "NONE") | (os_col == "")
         ].copy()
 
     baseline_prepared: dict = {}
     if not baseline_vessel.empty:
         for vid, grp in baseline_vessel.groupby("actual_outbound_carrier_visit_id"):
-            # Use raw (unwindowed) prep so move_span_hours is the full span
-            baseline_prepared[vid] = _raw_prep(grp.copy())
+            # Use windowed prep so move_span_hours accurately reflects vessel operation time, not yard dwell time
+            baseline_prepared[vid] = prepare_visit_data(grp.copy())
 
     if baseline_prepared:
         historical_features_list = []
@@ -1393,6 +1423,12 @@ def analyze_vessel_dashboard(
             else:
                 historical_mph_avg = 0.0
 
+    baseline_avg_hours = None
+    baseline_actual_raw = {}
+    if baseline_prepared:
+        baseline_actual_raw = compute_vessel_stay(baseline_prepared)
+        baseline_avg_hours = baseline_actual_raw.get("avg_hours")
+
     # ── Synthesise stay for current mode when no actual stay is available ────
     if not actual_raw:
         if is_current_mode:
@@ -1402,6 +1438,7 @@ def analyze_vessel_dashboard(
                     mph_override=historical_mph_avg or None,
                     feature_template=feature_template,
                     crane_counts=visit_crane_counts,
+                    historical_avg_stay_hours=baseline_avg_hours,
                 )
                 pred_avg = (
                     predicted_init.get("avg_hours")
@@ -1463,7 +1500,7 @@ def analyze_vessel_dashboard(
                 total_discharged,
                 crane_count=max(avg_crane_count, 1),
                 historical_mph_avg=historical_mph_avg,
-                historical_avg_stay_hours=actual_raw.get("avg_hours"),  # ← was actual
+                historical_avg_stay_hours=baseline_avg_hours if baseline_avg_hours else actual_raw.get("avg_hours"),
             )
             p_stay = p_res.get("predicted", {}).get("avg_hours") if isinstance(p_res, dict) else p_res
             predicted = {"avg_hours": p_stay, "visits": 1, "source": "metric_override"}
@@ -1474,6 +1511,7 @@ def analyze_vessel_dashboard(
                 mph_override=historical_mph_avg or None,
                 feature_template=feature_template,
                 crane_counts=visit_crane_counts,
+                historical_avg_stay_hours=baseline_avg_hours,
             )
     except Exception:
         predicted = None
@@ -1484,7 +1522,6 @@ def analyze_vessel_dashboard(
     # ── FIX: Merging Historical Baseline into Display Payload ────────────────
     if baseline_prepared:
         baseline_visit_details = _visit_details(baseline_prepared)
-        baseline_actual_raw = compute_vessel_stay(baseline_prepared)
         if "visits" not in actual_raw:
             actual_raw["visits"] = {}
         for vid in baseline_prepared.keys():
@@ -1563,8 +1600,8 @@ def analyze_vessel_dashboard(
     f_str = visit_df.get("ctr_from_position", visit_df.get("from_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
     t_str = visit_df.get("ctr_to_position", visit_df.get("to_position", pd.Series(dtype=str))).fillna("").astype(str).str.upper()
     
-    f_is_v = f_str.str.startswith("V-")
-    t_is_v = t_str.str.startswith("V-")
+    f_is_v = f_str.str.startswith(("V-", "VS-"))
+    t_is_v = t_str.str.startswith(("V-", "VS-"))
     f_is_y = (f_str != "") & (~f_is_v)
     t_is_y = (t_str != "") & (~t_is_v)
     

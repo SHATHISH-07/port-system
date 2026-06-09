@@ -525,6 +525,22 @@ def process_current_planning_and_yard_strategy(
     
     if cleaned_ids:
         df = lookup_containers_by_ids(cleaned_ids, yard_id)
+        if df is not None and not df.empty:
+            outbound_col = "outbound_service" if "outbound_service" in df.columns else "actual_outbound_carrier_visit_id"
+            if outbound_col in df.columns and "inbound_service" in df.columns:
+                df["_outbound_clean"] = df[outbound_col].astype(str).str.strip().replace(["nan", "None", "NaN", ""], pd.NA)
+                df["_inbound_clean"] = df["inbound_service"].astype(str).str.strip().replace(["nan", "None", "NaN", ""], pd.NA)
+                
+                f_str = df.get("ctr_from_position", pd.Series(dtype=str)).fillna("").astype(str).str.upper()
+                t_str = df.get("ctr_to_position", pd.Series(dtype=str)).fillna("").astype(str).str.upper()
+                
+                valid_mask = (
+                    df["_outbound_clean"].isna() &
+                    df["_inbound_clean"].notna() &
+                    f_str.str.startswith("V-") &
+                    t_str.str.startswith("Y-")
+                )
+                df = df[valid_mask].copy()
     else:
         # Fallback to fetching all containers for this vessel
         df = load_from_db("current", yard_id=yard_id, vessel_id=vessel_id)
@@ -562,11 +578,9 @@ def process_current_planning_and_yard_strategy(
         """
         Parses a yard position string to safely extract the block identifier.
         """
-        visit_state = _safe_str(row.get("visit_state"), "")
-        is_loaded = "DEPARTED" in visit_state.upper()
-        pos = _safe_str(row.get("ctr_from_position") if is_loaded else row.get("current_position"), "")
+        pos = _safe_str(row.get("ctr_to_position"), "")
         if not pos:
-            pos = _safe_str(row.get("current_position") or row.get("ctr_from_position") or "", "")
+            pos = _safe_str(row.get("current_position") or "", "")
         info = parse_position(pos, yard_id)
         return info.get("block") if info and info.get("is_yard") else None
 
@@ -667,8 +681,8 @@ def process_current_planning_and_yard_strategy(
         port = _safe_str(_first_existing_value(row, ["port_of_discharge"]), "")
         eq_class = _safe_str(_first_existing_value(row, ["equipment_class"]), "unknownEquipmentClass")
         
-        is_loaded = row.get("is_loaded", False)
-        pos_candidates = ["ctr_from_position", "current_position"] if is_loaded else ["current_position", "current_slot_position", "slot_position", "yard_position"]
+        # Strict fallback prioritizing ctr_to_position
+        pos_candidates = ["ctr_to_position", "current_position", "current_slot_position", "slot_position", "yard_position"]
         position_text = _safe_str(_first_existing_value(row, pos_candidates), "")
         current_slot_position = _safe_str(row.get("current_slot_position"), position_text or "UNKNOWN")
         
