@@ -1,3 +1,4 @@
+# cspell:disable
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -180,9 +181,9 @@ class MapPosition(BaseModel):
 
     # Yard coordinates (where it is/was in the yard)
     yardBlock: Optional[str] = None
-    yardRow: Optional[int] = None
+    yardRow: Optional[str] = None
     yardCol: Optional[str] = None
-    yardTier: Optional[int] = None
+    yardTier: Optional[str] = None
     yardSlotRaw: Optional[str] = None
 
     # Vessel coordinates (populated only when status == "LOADED")

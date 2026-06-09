@@ -70,6 +70,7 @@ Interactive visualization engine supporting:
 * Congestion heatmaps
 * Grid-level concentration analysis
 * Terminal layout intelligence
+* XML-based dynamic yard layout integration (e.g., `ENNORE_OPT_V1.0.xml`)
 
 ---
 
@@ -96,6 +97,8 @@ The ingestion engine:
 
 * Validates schemas
 * Cleans operational data
+* Processes massive datasets asynchronously via background tasks
+* Provides status polling endpoints (`/ingest/status/{ingestion_id}`) for UI progress tracking
 * Performs UPSERT operations
 * Stores historical records
 * Triggers retraining pipelines
@@ -227,6 +230,7 @@ Features:
 * Dynamic congestion visualization
 * Yard occupancy analytics
 * Berth recommendation support
+* XML-based terminal map generation and layout parsing
 
 ---
 
@@ -423,6 +427,37 @@ flowchart LR
     G --> H
     H --> K
     J --> K
+```
+
+---
+
+# Async Ingestion Polling Flow
+
+```mermaid
+sequenceDiagram
+    participant UI as Frontend (React)
+    participant API as FastAPI
+    participant Worker as Background Task
+    participant DB as Database
+
+    UI->>API: POST /ingest/upload (CSV/JSON)
+    API->>DB: Create ingestion_log (Status: PROCESSING)
+    API->>Worker: Dispatch Async Task
+    API-->>UI: 202 Accepted (Return ingestion_id)
+    
+    loop Every 2 seconds
+        UI->>API: GET /ingest/status/{ingestion_id}
+        API->>DB: Query status
+        API-->>UI: Status (PROCESSING)
+    end
+    
+    Worker->>DB: Complete processing & UPSERT data
+    Worker->>DB: Update ingestion_log (Status: COMPLETED)
+    
+    UI->>API: GET /ingest/status/{ingestion_id}
+    API->>DB: Query status
+    API-->>UI: Status (COMPLETED) + Results
+    UI->>UI: Show completion dashboard
 ```
 
 ---

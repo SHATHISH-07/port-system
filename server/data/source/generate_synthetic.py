@@ -783,11 +783,16 @@ def generate_terminal_data(terminal: dict):
             converted = other_active[:needed]
             for r in converted:
                 r["Outbound Service"] = target_service
+                r["Actual Outbound Carrier visit ID"] = target_service
                 uid = r["Unit ID"]
                 for cr in reversed(container_rows):
                     if cr["Unit ID"] == uid:
                         cr["Outbound Service"] = target_service
+                        cr["Actual Outbound Carrier visit ID"] = target_service
                         break
+                for crane_r in reversed(crane_rows):
+                    if crane_r["Unit Nbr"] == uid and crane_r["Move Kind"] == "Load":
+                        crane_r["Carrier Visit"] = target_service
                         
         vs_active = [r for r in active_rows if r.get("Outbound Service") == target_service][:400]
         

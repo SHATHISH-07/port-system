@@ -197,6 +197,7 @@ export interface VesselAnalysisData {
     factor: string;
     impact: string;
     reason: string;
+    recommendation?: string;
   }>;
 
   crane_performance?: CranePerformanceResponse;
@@ -225,11 +226,11 @@ export interface VesselAnalysisData {
 
   berth_conflicts?: Array<{
     berth: string;
-    block: string;
+    contested_blocks?: string[];
 
     conflict_risk: "Low" | "Medium" | "High";
 
-    conflict_with: string[];
+    conflict_with: any[];
 
     impact_score: number;
     reason: string;

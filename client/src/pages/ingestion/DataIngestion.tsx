@@ -131,7 +131,7 @@ export default function DataIngestion() {
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 2, width: '100%' }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.5px', mb: 0.5 }}>
-              Unified Data Ingestion
+              Data Ingestion
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
               Upload raw dataset files (History, Crane, or ITV). The system will automatically detect the dataset type.
@@ -248,7 +248,7 @@ export default function DataIngestion() {
                         </Typography>
                       </Box>
 
-                      <Box sx={{ p: 2, borderRadius: 3, bgcolor: statusData.rejected_count > 0 ? alpha(theme.palette.error.main, 0.1) : alpha(theme.palette.divider, 0.05), border: `1px solid ${statusData.rejected_count > 0 ? alpha(theme.palette.error.main, 0.2) : alpha(theme.palette.divider, 0.1)}` }}>
+                      <Box sx={{ p: 2, borderRadius: 3, bgcolor: (statusData.rejected_count || 0) > 0 ? alpha(theme.palette.error.main, 0.1) : alpha(theme.palette.divider, 0.05), border: `1px solid ${(statusData.rejected_count || 0) > 0 ? alpha(theme.palette.error.main, 0.2) : alpha(theme.palette.divider, 0.1)}` }}>
                         <Typography variant="caption" sx={{ color: (statusData.rejected_count || 0) > 0 ? "error.main" : "text.secondary", fontWeight: 800, display: "block", mb: 0.5, letterSpacing: "0.1em" }}>
                           REJECTED
                         </Typography>

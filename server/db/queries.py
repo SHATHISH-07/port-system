@@ -107,6 +107,7 @@ def init_simplified_schema(engine) -> None:
 
         # Migrate containers table: add columns that may be missing on older DBs
         for col, col_type in [
+            ("actual_outbound_carrier_visit_id", "TEXT"),
             ("actual_inbound_carrier_visit_id", "TEXT"),
             ("unit_visit_gkey", "TEXT"),
         ]:
@@ -386,7 +387,7 @@ def _load_crane_ops_global(
                 df[col] = None
                 
         # Backward compatibility aliases
-        if "carrier_visit" not in df.columns:
+        if "visit_id" in df.columns:
             df["carrier_visit"] = df["visit_id"]
                 
         return _parse_datetime_columns(df).copy()

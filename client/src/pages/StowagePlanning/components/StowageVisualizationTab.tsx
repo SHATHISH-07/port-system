@@ -530,6 +530,7 @@ export default function StowageVisualizationTab({
   portRotation,
   onPortRotationChange,
   onDragEnd: onDragEndExternal,
+  vesselId,
 }: {
   visualizationData: VisualizationData | null;
   loadingVisualization: boolean;
@@ -537,6 +538,7 @@ export default function StowageVisualizationTab({
   portRotation: string[];
   onPortRotationChange: (rotation: string[]) => void;
   onDragEnd: (newRotation: string[]) => void;
+  vesselId: string;
 }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -548,11 +550,13 @@ export default function StowageVisualizationTab({
 
   // Maintain local state for the rotation so we can update the pill sequence instantly
   // without triggering a massive synchronous re-render in the parent component.
+  const [prevRotationProp, setPrevRotationProp] = React.useState<string[]>(portRotation || []);
   const [localRotation, setLocalRotation] = React.useState<string[]>(portRotation || []);
 
-  React.useEffect(() => {
+  if (portRotation !== prevRotationProp) {
+    setPrevRotationProp(portRotation || []);
     setLocalRotation(portRotation || []);
-  }, [portRotation]);
+  }
 
   // Defer the port rotation used for sorting the ship so that the fast Drag-and-Drop
   // UI in the sequence bar updates instantly without waiting for the heavy ship DOM to reorder.
@@ -578,7 +582,7 @@ export default function StowageVisualizationTab({
       .map((p: StepData) => p.unitId as string),
   );
 
-  const groups: VisualizationGroup[] = visualizationData?.map?.groups || [];
+  const groups: VisualizationGroup[] = React.useMemo(() => visualizationData?.map?.groups || [], [visualizationData]);
   const sortedGroups = React.useMemo(() => {
     return [...groups].sort((a, b) => {
       const idxA = (deferredPortRotation || []).indexOf(a.groupId);
@@ -635,7 +639,7 @@ export default function StowageVisualizationTab({
     };
 
     const onWheel = (e: WheelEvent) => {
-      // Map vertical mouse wheel / trackpad scrolling to horizontal scroll
+      // Map vertical mouse wheel / touch pad scrolling to horizontal scroll
       if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
         el.scrollLeft += e.deltaY;
         e.preventDefault();
@@ -766,7 +770,7 @@ export default function StowageVisualizationTab({
           <Box
             sx={{
               position: "relative",
-              margin: "auto 24px 24px 24px",
+              margin: "auto auto 24px auto",
               display: "flex",
               alignItems: "flex-end",
               minWidth: "min-content",
@@ -1063,12 +1067,37 @@ export default function StowageVisualizationTab({
                     alignItems: "flex-end",
                     pb: "24px",
                     zIndex: 1,
+                    position: "relative",
                     "& > *:not(:last-child)": {
                       borderRight: `1px dashed ${alpha(isDark ? "#fff" : "#000", 0.05)}`,
                       pr: "5px",
                     },
                   }}
                 >
+                  {loadingVisualization && (
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: "24px",
+                        zIndex: 10,
+                        bgcolor: alpha(isDark ? "#000" : "#fff", 0.4),
+                        backdropFilter: "blur(3px)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 1,
+                      }}
+                    >
+                      <CircularProgress
+                        size={32}
+                        thickness={4}
+                        sx={{ color: isDark ? "#60a5fa" : "#2563eb" }}
+                      />
+                    </Box>
+                  )}
                   {sortedGroups.map((group: VisualizationGroup) => (
                     <BayColumn
                       key={group.groupId}
@@ -1303,10 +1332,7 @@ export default function StowageVisualizationTab({
                 },
                 {
                   label: "Carrier",
-                  value: hoveredContainer.actualOutboundCarrierVisitId?.slice(
-                    0,
-                    3,
-                  ),
+                  value: vesselId || "Unknown",
                 },
 
                 {

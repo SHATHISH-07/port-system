@@ -1,4 +1,5 @@
 from __future__ import annotations
+# cspell:disable
 
 import logging
 
@@ -13,7 +14,7 @@ from services.vessel_service import (
     get_yard_heatmap_data,
 )
 
-from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse
+from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse, DiscoverServicesRequest
 
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/vessel", tags=["Vessel Analytics"])
@@ -90,18 +91,66 @@ async def get_vessel_heatmap_route(
     """
     try:
         res = get_yard_heatmap_data(
-            vessel_id=request.vessel_id,
             unit_ids=request.unit_ids if request.unit_ids else None,
             yard_id=request.yard_id,
+            vessel_id=request.vessel_id,
         )
         if "error" in res:
             raise HTTPException(status_code=404, detail=res["error"])
-        return res
+            
+        import math
+        import pandas as pd
+        def clean_nan(obj):
+            if isinstance(obj, dict):
+                return {k: clean_nan(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [clean_nan(v) for v in obj]
+            elif isinstance(obj, float):
+                if math.isnan(obj) or math.isinf(obj):
+                    return None
+            elif pd.isna(obj):
+                return None
+            return obj
+            
+        return clean_nan(res)
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("vessel_heatmap error for %s: %s", request.vessel_id, exc, exc_info=True)
+        logger.error("vessel_heatmap error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
+
+@router.post("/discover-services")
+async def discover_services(
+    request: DiscoverServicesRequest, current_user: dict = Depends(get_current_user)
+):
+    """
+    Discovers unique outbound services (vessels) from a list of unit IDs.
+    """
+    try:
+        from services.vessel_service import discover_services_for_containers
+        services = discover_services_for_containers(request.unit_ids, request.yard_id)
+        return {"services": services}
+    except Exception as e:
+        logger.error(f"Error discovering services: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+from schemas.vessel import PortStayPredictionRequest, PortStayPredictionResponse
+
+@router.post("/port-stay", response_model=PortStayPredictionResponse)
+async def predict_port_stay_route(
+    request: PortStayPredictionRequest, current_user: dict = Depends(get_current_user)
+):
+    """
+    Predicts the port stay time for a vessel given the total number of load moves.
+    Uses historical performance data (avg cranes, avg mph) for the given vessel_id.
+    """
+    try:
+        from services.vessel_service import predict_port_stay
+        res = predict_port_stay(request.vessel_id, request.load_moves)
+        return res
+    except Exception as e:
+        logger.error(f"Error predicting port stay: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/yard/summary", response_model=YardSummaryResponse)
 def get_yard_summary(

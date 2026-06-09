@@ -288,12 +288,12 @@ export default function StayTimeTrendChart({
                                         <linearGradient id="stayFill" x1="0" y1="0" x2="0" y2="1">
                                             <stop
                                                 offset="5%"
-                                                stopColor={theme.palette.primary.main}
+                                                stopColor={theme.palette.error.main}
                                                 stopOpacity={0.18}
                                             />
                                             <stop
                                                 offset="95%"
-                                                stopColor={theme.palette.primary.main}
+                                                stopColor={theme.palette.error.main}
                                                 stopOpacity={0.01}
                                             />
                                         </linearGradient>
@@ -416,10 +416,10 @@ export default function StayTimeTrendChart({
                                         type="monotone"
                                         dataKey="stayHours"
                                         name="Stay (hrs)"
-                                        stroke={theme.palette.primary.main}
+                                        stroke={theme.palette.error.main}
                                         fill="url(#stayFill)"
                                         strokeWidth={2.5}
-                                        dot={false}
+                                        dot={{ r: 3.5, fill: theme.palette.error.main, strokeWidth: 2, stroke: '#fff' }}
                                         activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }}
                                         animationDuration={1200}
                                     />

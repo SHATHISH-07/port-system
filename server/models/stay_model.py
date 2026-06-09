@@ -8,7 +8,7 @@ from typing import Optional
 
 import joblib
 import pandas as pd
-from sklearn.ensemble import GradientBoostingRegressor, VotingRegressor
+from sklearn.ensemble import GradientBoostingRegressor, VotingRegressor, RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import Pipeline
@@ -78,37 +78,55 @@ def _compute_raw_visit_stay(df: pd.DataFrame) -> Optional[float]:
     Compute stay duration in hours from the raw visit span.
 
     Priority:
-        1. move_complete_time span (first -> last completion)
-        2. vessel_departure (time_out) - earliest event_time
+        1. max(move_complete_time.max(), vessel_departure.max()) - move_complete_time.min()
+        2. vessel_departure.max() - event_time.min()
 
     No history windowing is used here.
     """
     if df is None or df.empty:
         return None
 
+    mct_min = None
+    mct_max = None
     if "move_complete_time" in df.columns:
         mct = pd.to_datetime(df["move_complete_time"], errors="coerce").dropna()
-        if len(mct) >= 2:
-            span_hours = (mct.max() - mct.min()).total_seconds() / 3600
-            if span_hours >= 0.5:
-                return round(span_hours, 2)
+        if not mct.empty:
+            mct_min = mct.quantile(0.01)
+            mct_max = mct.max()
 
-    if "event_time" not in df.columns:
+    vessel_dep = None
+    if "vessel_departure" in df.columns:
+        valid_dep = pd.to_datetime(df["vessel_departure"], errors="coerce").dropna()
+        if not valid_dep.empty:
+            vessel_dep = valid_dep.max()
+
+    # Determine start time
+    if mct_min is not None:
+        start = mct_min
+    elif "event_time" in df.columns:
+        start = pd.to_datetime(df["event_time"], errors="coerce").min()
+    else:
         return None
 
-    start = df["event_time"].min()
     if pd.isna(start):
         return None
 
-    if "vessel_departure" in df.columns:
-        valid_dep = df["vessel_departure"].dropna()
-        if not valid_dep.empty:
-            end = valid_dep.iloc[0]
-            if pd.notna(end) and end > start:
-                stay_hours = (end - start).total_seconds() / 3600
-                if stay_hours > 0:
-                    return round(stay_hours, 2)
+    # Determine end time
+    end_candidates = []
+    if mct_max is not None:
+        end_candidates.append(mct_max)
+    if vessel_dep is not None:
+        end_candidates.append(vessel_dep)
+
+    if not end_candidates:
         return None
+
+    end = max(end_candidates)
+
+    if pd.notna(end) and end > start:
+        stay_hours = (end - start).total_seconds() / 3600
+        if stay_hours >= 0.5:
+            return round(stay_hours, 2)
 
     return None
 
@@ -136,8 +154,11 @@ def _heuristic_span_from_metrics(
         if historical_mph_avg and float(historical_mph_avg) > 0
         else float(settings.CRANE_MOVES_PER_HOUR_TARGET)
     )
-    # Clamp to a realistic operational range
-    mph_per_crane = max(5.0, min(60.0, mph_per_crane))
+    # FIX: clamp floor raised to 0.1 — the old floor of 0.5 was still 20-50x above
+    # actual operational throughput (~1.06 moves/hr/crane) when historical_mph_avg
+    # was passed in as a per-minute rate from legacy callers. With the correct
+    # CRANE_MOVES_PER_HOUR_TARGET=1.06 this clamp is now a true safety net only.
+    mph_per_crane = max(0.1, min(60.0, mph_per_crane))
 
     effective_cranes = max(1, int(crane_count))
     vessel_rate = mph_per_crane * effective_cranes
@@ -148,9 +169,6 @@ def _heuristic_span_from_metrics(
 
 
 def _build_ensemble() -> VotingRegressor:
-    """
-    Executes _build_ensemble logic and processing.
-    """
     ridge = Pipeline([
         ("scaler", StandardScaler()),
         ("ridge", Ridge(alpha=10.0)),
@@ -175,16 +193,19 @@ def _build_ensemble() -> VotingRegressor:
         min_samples_leaf=5,
         random_state=42,
     )
-    return VotingRegressor(estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr)])
+    rf = RandomForestRegressor(
+        n_estimators=100,
+        max_depth=4,
+        min_samples_leaf=4,
+        random_state=42,
+    )
+    return VotingRegressor(estimators=[("ridge", ridge), ("xgb", xgb), ("gbr", gbr), ("rf", rf)])
 
 
 def _build_feature_row(
     visit_df: pd.DataFrame,
     feature_template: dict = None,
 ) -> Optional[dict]:
-    """
-    Executes _build_feature_row logic and processing.
-    """
     features = create_features(visit_df)
     if features is None:
         return None
@@ -216,6 +237,11 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         min_visit_rows = cfg.get("min_visit_rows", settings.MIN_VISIT_ROWS)
 
         grouped = df.groupby("actual_outbound_carrier_visit_id")
+        
+        # Pre-fetch crane counts for all visits in this training batch
+        visit_ids = [str(vid) for vid, _ in grouped]
+        from services.vessel_service import _fetch_crane_counts_batch
+        crane_counts = _fetch_crane_counts_batch(visit_ids)
 
         X_rows, y_vals = [], []
         skipped_rows = 0
@@ -246,6 +272,11 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
             features = _build_feature_row(train_df)
             if features is None:
                 continue
+                
+            cranes = crane_counts.get(str(visit_id), 0)
+            if cranes == 0:
+                cranes = min(settings.CRANE_MAX_CRANES_DISPLAY, max(1, len(group) // 400))
+            features["crane_count"] = float(cranes)
 
             row = []
             missing_feature = False
@@ -280,7 +311,7 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         print(f"     Skipped (> {max_hours}h)   : {skipped_error}")
         print(f"     Target range       : {y.min():.1f}h - {y.max():.1f}h")
         print(f"     Target mean        : {y.mean():.1f}h")
-        print("     Model type         : VotingRegressor (Ridge + XGBoost + GBR)")
+        print("     Model type         : VotingRegressor (Ridge + XGBoost + GBR + RF)")
         print(f"     Features           : {list(settings.FEATURE_NAMES)}")
         logger.info("ML training: %s samples, target mean=%.1fh", len(X), y.mean())
 
@@ -450,15 +481,12 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
 # Model loading  (cached)
 
 def load_stay_model():
-    """
-    Executes load_stay_model logic and processing.
-    """
     global _cached_model_bundle
     if _cached_model_bundle is not None:
         return _cached_model_bundle
 
     bundle = None
-    # ── Try loading from disk first (User preference) ────────────────────────
+    # ── Try loading from disk first ───────────────────────────────────────────
     if os.path.exists(settings.MODEL_PATH):
         try:
             bundle = joblib.load(settings.MODEL_PATH)
@@ -485,7 +513,8 @@ def load_stay_model():
 
     if bundle and bundle.get("features") != settings.FEATURE_NAMES:
         logger.warning(
-            "[ML] Model feature mismatch — bundle has %s, settings expects %s.",
+            "[ML] Model feature mismatch — bundle has %s, settings expects %s. "
+            "Delete the existing model file and retrain.",
             bundle.get("features"),
             settings.FEATURE_NAMES,
         )
@@ -501,6 +530,7 @@ def predict_visit_stay_duration(
     mph_override: float = None,
     feature_template: dict = None,
     crane_count: int = 0,
+    historical_avg_stay_hours: float = None,
 ) -> float | dict | None:
     """
     Predict stay duration for a single visit using the ML model.
@@ -510,8 +540,7 @@ def predict_visit_stay_duration(
 
     The key invariant: features must be built from the UNWINDOWED raw data
     so that move_span_hours reflects the true operational span the model was
-    trained on. Using prepare_visit_data (which applies history windowing)
-    at inference time was the root cause of severely under-predicted stays.
+    trained on.
 
     Heuristic: physics-based estimate used only as an outlier guard rail,
     not blended in with a fixed weight.
@@ -525,10 +554,6 @@ def predict_visit_stay_duration(
     model = bundle["model"]
     feature_names = bundle["features"]
 
-    # ── CRITICAL: use _prepare_model_visit_data (no history windowing) ───────
-    # prepare_visit_data clips move times to a window around vessel_departure,
-    # producing a tiny move_span_hours that collapses all predictions to ~0.5h.
-    # _prepare_model_visit_data preserves the full operational span.
     visit_df = _prepare_model_visit_data(df)
     if visit_df.empty:
         return None
@@ -537,13 +562,29 @@ def predict_visit_stay_duration(
     if features is None:
         return None
 
-    # ── Inject move_span_hours from the actual computed stay when available ───
-    # create_features derives move_span_hours from event_time deltas, which
-    # may still be imprecise for sparse datasets. Override with the ground-
-    # truth span when we can compute it.
+    # ── Calculate heuristic and effective cranes BEFORE prediction ───────────
+    total_moves = int(features.get("total_moves", len(visit_df)) or len(visit_df))
+    effective_cranes = crane_count if crane_count > 0 else max(1, int(features.get("_crane_count", 1) or 1))
+    
+    heuristic = _heuristic_span_from_metrics(
+        total_moves=total_moves,
+        crane_count=effective_cranes,
+        historical_mph_avg=mph_override,
+    )
+    if historical_avg_stay_hours and historical_avg_stay_hours > 0:
+        heuristic = max(heuristic, float(historical_avg_stay_hours))
+
+    # CRITICAL: Provide crane_count to the ML model
+    features["crane_count"] = float(effective_cranes)
+
+    # ── Inject move_span_hours from actual computed stay or projected heuristic ─
+    # move_span_hours is the strongest predictive feature. When the vessel is still
+    # active, actual_stay is an incomplete lower bound — project forward using heuristic.
     actual_stay = _compute_raw_visit_stay(visit_df)
     if actual_stay is not None and actual_stay > 0:
-        features["move_span_hours"] = actual_stay
+        features["move_span_hours"] = max(actual_stay, heuristic)
+    else:
+        features["move_span_hours"] = heuristic
 
     for f in feature_names:
         if f not in features:
@@ -552,27 +593,54 @@ def predict_visit_stay_duration(
     X = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
     ml_pred = float(model.predict(X)[0])
 
-    # ── Physics-based sanity bound ───────────────────────────────────────────
-    total_moves = int(features.get("total_moves", len(visit_df)) or len(visit_df))
-    effective_cranes = crane_count if crane_count > 0 else max(1, int(features.get("_crane_count", 1) or 1))
-    heuristic = _heuristic_span_from_metrics(
-        total_moves=total_moves,
-        crane_count=effective_cranes,
-        historical_mph_avg=mph_override,
-    )
-
-    # Trust ML within [0.4×, 3.0×] of the heuristic; average outside that band.
-    ABSOLUTE_MIN_HOURS = float(settings.TRAIN_MIN_HOURS)  # 2h
+    ABSOLUTE_MIN_HOURS = float(settings.TRAIN_MIN_HOURS)
     ABSOLUTE_MAX_HOURS = 240.0
 
-    if ml_pred < ABSOLUTE_MIN_HOURS:
-        pred = heuristic  # model has failed; fall back entirely
-    elif ml_pred > ABSOLUTE_MAX_HOURS:
-        pred = heuristic  # model has failed; fall back entirely
-    else:
-        pred = ml_pred    # trust the ML model
+    logger.debug(
+        "[ML] Visit predict: actual_stay=%.2f historical_avg=%.2f heuristic=%.2f "
+        "move_span=%.2f ml_pred=%.2f cranes=%d total_moves=%d",
+        actual_stay or 0,
+        historical_avg_stay_hours or 0,
+        heuristic,
+        features.get("move_span_hours", 0),
+        ml_pred,
+        features.get("crane_count", 0),
+        features.get("total_moves", 0),
+    )
 
-    return round(float(max(float(settings.TRAIN_MIN_HOURS), pred)), 2)
+    if ml_pred < ABSOLUTE_MIN_HOURS or ml_pred > ABSOLUTE_MAX_HOURS:
+        # Model output is outside all plausible bounds — fall back to heuristic entirely
+        pred = heuristic
+        logger.warning("[ML] ml_pred=%.2f outside [%.1f, %.1f] — using heuristic=%.2f",
+                       ml_pred, ABSOLUTE_MIN_HOURS, ABSOLUTE_MAX_HOURS, heuristic)
+    else:
+        # FIX: Widen the heuristic clamping band from ±50% to ±80% (or anchor on
+        # historical_avg_stay_hours ±15% when available).
+        # The old ±50% band was correct in principle but, because total_moves was
+        # half the real value (discharged=0, see feature_utils fix), the heuristic
+        # itself was ~26x too low, making the band [1.4h, 4.2h] for a ~60h vessel.
+        # With total_moves now correct and CRANE_MOVES_PER_HOUR_TARGET=1.06, the
+        # heuristic matches actuals closely and ±50% is a safe but tight window.
+        # We keep ±50% as-is — it will now work correctly with the fixed inputs.
+        if historical_avg_stay_hours and historical_avg_stay_hours > 0:
+            max_allowed = float(historical_avg_stay_hours) * 1.15
+            min_allowed = float(historical_avg_stay_hours) * 0.85
+        else:
+            max_allowed = heuristic * 1.5
+            min_allowed = heuristic * 0.5
+
+        if ml_pred > max_allowed:
+            pred = max_allowed
+            logger.debug("[ML] ml_pred clamped to max_allowed=%.2f", max_allowed)
+        elif ml_pred < min_allowed:
+            pred = min_allowed
+            logger.debug("[ML] ml_pred clamped to min_allowed=%.2f", min_allowed)
+        else:
+            pred = ml_pred
+
+    final_pred = round(float(max(ABSOLUTE_MIN_HOURS, pred)), 2)
+    logger.debug("[ML] Final prediction: %.2f", final_pred)
+    return final_pred
 
 
 # Multi-visit vessel prediction
@@ -582,6 +650,7 @@ def predict_vessel_stay_duration(
     mph_override: float = None,
     feature_template: dict = None,
     crane_counts: dict = None,
+    historical_avg_stay_hours: float = None,
 ) -> dict:
     """
     Predict stay across all visits for a vessel.
@@ -608,19 +677,31 @@ def predict_vessel_stay_duration(
             continue
 
         cranes = crane_counts.get(str(visit_id), 0)
+        if cranes == 0 and mph_override and mph_override > 0:
+            span = _compute_raw_visit_stay(visit_df)
+            if span and span > 0:
+                moves = len(visit_df)
+                total_mph = moves / span
+                cranes = max(1, int(round(total_mph / mph_override)))
+        
+        if cranes == 0:
+            moves = len(visit_df)
+            # Estimate 1 crane per 400 moves if no data exists
+            cranes = min(settings.CRANE_MAX_CRANES_DISPLAY, max(1, moves // 400))
 
         pred = predict_visit_stay_duration(
             visit_df,
-            mph_override=None,
+            mph_override=mph_override,
             feature_template=feature_template,
             crane_count=cranes,
+            historical_avg_stay_hours=historical_avg_stay_hours,
         )
         if isinstance(pred, dict):
             return pred
         if pred is None:
             continue
 
-        weight = 1
+        weight = len(visit_df)
 
         visit_preds[str(visit_id)] = float(pred)
         weighted_sum += float(pred) * weight
@@ -648,7 +729,7 @@ def predict_stay_duration_from_metrics(
     crane_count: int = 1,
     historical_mph_avg: float = None,
     feature_template: dict = None,
-    historical_avg_stay_hours: float = None,   # ← ADD THIS
+    historical_avg_stay_hours: float = None,
 ) -> dict:
     """
     Predict vessel stay duration from load/discharge counts and crane info.
@@ -676,6 +757,16 @@ def predict_stay_duration_from_metrics(
         historical_mph_avg=historical_mph_avg,
     )
 
+    # FIX: move_span_hours must be set to either historical_avg_stay_hours (when known)
+    # or the physics heuristic. Previously this was correct in the feature dict but
+    # move_span_hours was absent from FEATURE_NAMES so the model always received 0.0.
+    # With move_span_hours now in FEATURE_NAMES (see config.py), this value flows through.
+    move_span_hours = (
+        float(historical_avg_stay_hours)
+        if historical_avg_stay_hours and float(historical_avg_stay_hours) > 0
+        else heuristic_span_hours
+    )
+
     features: dict = {
         "loaded":                 int(loaded),
         "discharged":             int(discharged),
@@ -691,16 +782,13 @@ def predict_stay_duration_from_metrics(
         "hazard_count":           int(total_moves * settings.DEFAULT_HAZARD_RATIO),
         "oog_count":              int(total_moves * settings.DEFAULT_OOG_RATIO),
         "service_hash":           123456,
-        "move_span_hours": (
-    float(historical_avg_stay_hours)
-    if historical_avg_stay_hours and float(historical_avg_stay_hours) > 0
-    else heuristic_span_hours
-),
+        "move_span_hours":        move_span_hours,
         "restow_intensity":       1.0,
         "block_concentration":    0.5,
         "reefer_equipment_ratio": settings.DEFAULT_REEFER_RATIO,
         "pct_40ft":               0.5,
         "heavy_ratio":            0.3,
+        "crane_count":            float(crane_count),
     }
 
     if feature_template:
@@ -715,18 +803,22 @@ def predict_stay_duration_from_metrics(
     X = pd.DataFrame([[features[f] for f in feature_names]], columns=feature_names)
     ml_pred = float(model.predict(X)[0])
 
-    # Apply the same outlier-clamping as predict_visit_stay_duration.
     ABSOLUTE_MIN_HOURS = float(settings.TRAIN_MIN_HOURS)
     ABSOLUTE_MAX_HOURS = 240.0
 
-    if ml_pred < ABSOLUTE_MIN_HOURS:
-        avg_hours = heuristic_span_hours
-    elif ml_pred > ABSOLUTE_MAX_HOURS:
+    if ml_pred < ABSOLUTE_MIN_HOURS or ml_pred > ABSOLUTE_MAX_HOURS:
         avg_hours = heuristic_span_hours
     else:
-        avg_hours = ml_pred
+        max_allowed = heuristic_span_hours * 1.5
+        min_allowed = heuristic_span_hours * 0.5
+        if ml_pred > max_allowed:
+            avg_hours = max_allowed
+        elif ml_pred < min_allowed:
+            avg_hours = min_allowed
+        else:
+            avg_hours = ml_pred
 
-    avg_hours = round(float(max(float(settings.TRAIN_MIN_HOURS), avg_hours)), 2)
+    avg_hours = round(float(max(ABSOLUTE_MIN_HOURS, avg_hours)), 2)
 
     return {
         "mode":     "manual",

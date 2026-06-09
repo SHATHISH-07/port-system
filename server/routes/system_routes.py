@@ -25,12 +25,29 @@ def get_audit_logs(admin: dict = Depends(require_admin)):
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(text("""
-            SELECT a.id, a.action, a.details, a.timestamp, u.username 
-            FROM audit_logs a 
-            LEFT JOIN users u ON a.user_id = u.id 
+            SELECT a.id, a.action, a.details, a.timestamp, u.username
+            FROM audit_logs a
+            LEFT JOIN users u ON a.user_id = u.id
             ORDER BY a.timestamp DESC LIMIT 100
         """)).fetchall()
     return [dict(r._mapping) for r in result]
+
+@router.get("/terminal-layout")
+def get_terminal_layout(current_user: dict = Depends(get_current_user)):
+    """
+    Returns the static physical layout of the terminal (shapes, berths, boundaries, blocks)
+    parsed directly from the XML configuration.
+    """
+    try:
+        from services.xml_layout_service import xml_layout_service
+        from config import settings
+        layout_data = xml_layout_service.parse(settings.TERMINAL_XML_PATH)
+        distances = xml_layout_service.compute_distances(cached=layout_data)
+        layout_data["distances"] = distances
+        return {"status": "success", "data": layout_data}
+    except Exception as e:
+        logger.error(f"Error loading terminal layout: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 @router.get("/requests")
