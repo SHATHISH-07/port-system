@@ -94,8 +94,8 @@ export default function HistoryAnalysisTable({
   assignments: VisitData[];
 }) {
   const theme = useTheme();
-  const [orderBy, setOrderBy] = useState<SortKey>("stayHours");
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
+  const [orderBy, setOrderBy] = useState<SortKey>("startTime");
+  const [order, setOrder] = useState<"asc" | "desc">("asc");
 
   const rows = useMemo(() => {
     const assignmentMap = new Map<string, VisitData>();
