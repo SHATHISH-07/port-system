@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Box,
   Paper,
@@ -11,10 +11,10 @@ import {
   useTheme,
   Popover,
   ButtonGroup,
-} from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+} from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 interface StowageHeaderProps {
   vesselId: string;
@@ -59,7 +59,7 @@ export default function StowageHeader({
         px: { xs: 2.5, md: 4 },
         py: 2.5,
         bgcolor: alpha(theme.palette.background.default, 0.9),
-        backdropFilter: 'blur(25px)',
+        backdropFilter: "blur(25px)",
         borderRadius: 0,
       }}
     >
@@ -67,18 +67,18 @@ export default function StowageHeader({
         component="form"
         onSubmit={handleSearchSubmit}
         sx={{
-          display: 'flex',
-          flexDirection: 'column',
+          display: "flex",
+          flexDirection: "column",
           gap: 1.5,
-          width: '100%',
+          width: "100%",
         }}
       >
         {/* Title row */}
         <Box sx={{ mb: 0.5 }}>
           <Box
             sx={{
-              fontSize: '18px',
-              fontWeight: 'bold',
+              fontSize: "18px",
+              fontWeight: "bold",
             }}
           >
             Stowage and Yard Planning
@@ -88,15 +88,11 @@ export default function StowageHeader({
         {/* Inputs row */}
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: 'repeat(5, 1fr)',
-              md: 'repeat(5, 1fr)',
-              lg: activeTab === 0 ? '2fr 1fr 1fr auto' : '2fr 1fr auto 2fr auto'
-            },
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
             gap: 1.5,
-            alignItems: 'center',
-            width: '100%',
+            alignItems: "stretch",
+            width: "100%",
           }}
         >
           {/* Vessel ID search */}
@@ -108,22 +104,28 @@ export default function StowageHeader({
             disabled={loading}
             variant="outlined"
             sx={{
-              width: '100%',
-              gridColumn: { xs: 'span 3', lg: 'auto' },
-              '& .MuiOutlinedInput-root': {
+              width: "100%",
+              flex: { xs: "1 1 auto", md: 2 },
+              "& .MuiOutlinedInput-root": {
                 borderRadius: 2,
-                bgcolor: 'background.paper',
-                height: 36,
-                fontSize: '0.8rem',
-                '& fieldset': { borderColor: alpha(theme.palette.divider, 0.8) },
-                '&:hover fieldset': { borderColor: theme.palette.primary.main },
+                bgcolor: "background.paper",
+                height: 40,
+                fontSize: "0.8rem",
+                "& fieldset": {
+                  borderColor: alpha(theme.palette.divider, 0.8),
+                },
+                "&:hover fieldset": {
+                  borderColor: theme.palette.primary.main,
+                },
               },
             }}
             slotProps={{
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: 'text.secondary', ml: 0.5, fontSize: 20 }} />
+                    <SearchIcon
+                      sx={{ color: "text.secondary", ml: 0.5, fontSize: 20 }}
+                    />
                   </InputAdornment>
                 ),
               },
@@ -132,15 +134,19 @@ export default function StowageHeader({
 
           {/* Yard ID input */}
           <TextField
-            placeholder="Yard ID (Opt)"
+            placeholder="Yard ID"
             size="small"
             value={yardId}
             onChange={(e) => setYardId(e.target.value.toUpperCase())}
             disabled={loading}
             sx={{
-              width: '100%',
-              gridColumn: { xs: 'span 2', lg: 'auto' },
-              '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
+              width: "100%",
+              flex: 1,
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 2,
+                height: 40,
+                fontSize: "0.8rem",
+              },
             }}
           />
 
@@ -153,9 +159,13 @@ export default function StowageHeader({
               onChange={(e) => setVisitId(e.target.value.toUpperCase())}
               disabled={loading}
               sx={{
-                width: '100%',
-                gridColumn: { xs: 'span 2', lg: 'auto' },
-                '& .MuiOutlinedInput-root': { borderRadius: 2, height: 36, fontSize: '0.8rem' },
+                width: "100%",
+                flex: 1,
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 2,
+                  height: 40,
+                  fontSize: "0.8rem",
+                },
               }}
             />
           )}
@@ -164,23 +174,29 @@ export default function StowageHeader({
           {activeTab >= 1 && (
             <Box
               sx={{
-                display: 'flex',
-                alignItems: 'center',
+                display: "flex",
+                alignItems: "center",
                 gap: 1,
-                width: '100%',
-                gridColumn: { xs: 'span 2', lg: 'auto' },
+                width: "100%",
+                flex: { xs: "1 1 auto", md: 2 },
               }}
             >
               <ButtonGroup
                 variant="outlined"
                 sx={{
-                  width: '100%',
+                  width: "100%",
                   height: 40,
                   borderRadius: 2,
-                  '& .MuiButtonGroup-firstButton': { borderTopLeftRadius: 'inherit', borderBottomLeftRadius: 'inherit' },
-                  '& .MuiButtonGroup-lastButton': { borderTopRightRadius: 'inherit', borderBottomRightRadius: 'inherit' },
-                  '& .MuiButton-root': {
-                    borderColor: globalFile ? 'success.main' : 'divider',
+                  "& .MuiButtonGroup-firstButton": {
+                    borderTopLeftRadius: "inherit",
+                    borderBottomLeftRadius: "inherit",
+                  },
+                  "& .MuiButtonGroup-lastButton": {
+                    borderTopRightRadius: "inherit",
+                    borderBottomRightRadius: "inherit",
+                  },
+                  "& .MuiButton-root": {
+                    borderColor: globalFile ? "success.main" : "divider",
                   },
                 }}
               >
@@ -190,17 +206,25 @@ export default function StowageHeader({
                   sx={{
                     flex: 1,
                     minWidth: 0,
-                    textTransform: 'none',
+                    textTransform: "none",
                     fontWeight: 700,
-                    color: globalFile ? 'success.main' : 'text.primary',
-                    '&:hover': {
-                      borderColor: globalFile ? 'success.dark' : 'primary.main',
+                    color: globalFile ? "success.main" : "text.primary",
+                    "&:hover": {
+                      borderColor: globalFile ? "success.dark" : "primary.main",
                       bgcolor: alpha(theme.palette.primary.main, 0.04),
                     },
                   }}
                 >
-                  <Box component="span" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {globalFile ? globalFile.name : 'Upload List'}
+                  <Box
+                    component="span"
+                    sx={{
+                      display: "block",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {globalFile ? globalFile.name : "Upload List"}
                   </Box>
                   <input
                     type="file"
@@ -220,7 +244,7 @@ export default function StowageHeader({
                     sx={{
                       minWidth: 32,
                       px: 0,
-                      color: 'error.main',
+                      color: "error.main",
                     }}
                   >
                     ×
@@ -234,7 +258,7 @@ export default function StowageHeader({
                     px: 0,
                   }}
                 >
-                  <KeyboardArrowDownIcon sx={{ color: 'text.secondary' }} />
+                  <KeyboardArrowDownIcon sx={{ color: "text.secondary" }} />
                 </Button>
               </ButtonGroup>
 
@@ -243,17 +267,23 @@ export default function StowageHeader({
                 anchorEl={anchorEl}
                 onClose={() => setAnchorEl(null)}
                 anchorOrigin={{
-                  vertical: 'bottom',
-                  horizontal: 'right',
+                  vertical: "bottom",
+                  horizontal: "right",
                 }}
                 transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
+                  vertical: "top",
+                  horizontal: "right",
                 }}
                 slotProps={{
                   paper: {
-                    sx: { p: 1.5, mt: 0.5, borderRadius: 2, minWidth: 240, bgcolor: 'background.paper' }
-                  }
+                    sx: {
+                      p: 1.5,
+                      mt: 0.5,
+                      borderRadius: 2,
+                      minWidth: 240,
+                      bgcolor: "background.paper",
+                    },
+                  },
                 }}
               >
                 <TextField
@@ -264,20 +294,23 @@ export default function StowageHeader({
                   value={globalContainerText}
                   onChange={(e) => setGlobalContainerText(e.target.value)}
                   sx={{
-                    width: '100%',
-                    '& .MuiOutlinedInput-root': {
+                    width: "100%",
+                    "& .MuiOutlinedInput-root": {
                       borderRadius: 2,
-                      fontSize: '0.85rem',
-                      bgcolor: 'background.paper',
-                      '& fieldset': { borderColor: alpha(theme.palette.divider, 0.8) },
-                      '&:hover fieldset': { borderColor: theme.palette.primary.main },
+                      fontSize: "0.85rem",
+                      bgcolor: "background.paper",
+                      "& fieldset": {
+                        borderColor: alpha(theme.palette.divider, 0.8),
+                      },
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
                     },
                   }}
                 />
               </Popover>
             </Box>
           )}
-
 
           {/* Action Submit Button */}
           <Button
@@ -286,16 +319,16 @@ export default function StowageHeader({
             disabled={loading || !vesselId.trim()}
             sx={{
               borderRadius: 2,
-              px: 2.5,
+              px: 3,
               py: 0.75,
               fontWeight: 700,
-              textTransform: 'none',
-              fontSize: '0.8rem',
+              textTransform: "none",
+              fontSize: "0.85rem",
               boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}`,
-              width: '100%',
-              gridColumn: { xs: 'span 3', lg: 'auto' },
+              width: { xs: "100%", md: "auto" },
+              flexShrink: 0,
               height: 40,
-              whiteSpace: 'nowrap',
+              whiteSpace: "nowrap",
             }}
           >
             Analyze
@@ -305,9 +338,9 @@ export default function StowageHeader({
         {/* View Switcher Toggles Row */}
         <Box
           sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            width: '100%',
+            display: "flex",
+            justifyContent: "center",
+            width: "100%",
             mt: 0.5,
             mb: 0.5,
           }}
@@ -321,48 +354,44 @@ export default function StowageHeader({
               bgcolor: alpha(theme.palette.divider, 0.05),
               borderRadius: 2.5,
               p: 0.3,
-              border: '1px solid',
+              border: "1px solid",
               borderColor: theme.palette.divider,
               height: 40,
-              display: 'flex',
-              width: { xs: '100%', sm: 'auto' },
-              boxSizing: 'border-box',
-              '& .MuiToggleButton-root': {
+              display: "flex",
+              width: { xs: "100%", sm: "auto" },
+              boxSizing: "border-box",
+              "& .MuiToggleButton-root": {
                 flex: 1,
                 borderRadius: 2,
                 px: { xs: 1, md: 4 },
                 py: 0,
-                height: '100%',
-                border: 'none',
+                height: "100%",
+                border: "none",
                 fontWeight: 700,
-                textTransform: 'none',
-                color: 'text.secondary',
-                fontSize: { xs: '0.65rem', sm: '0.75rem' },
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                textTransform: "none",
+                color: "text.secondary",
+                fontSize: { xs: "0.65rem", sm: "0.75rem" },
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 gap: { xs: 0.5, md: 1 },
-                whiteSpace: 'nowrap',
-                '&.Mui-selected': {
-                  bgcolor: 'primary.main',
-                  color: 'primary.contrastText',
-                  '&:hover': {
-                    bgcolor: 'primary.dark',
+                whiteSpace: "nowrap",
+                "&.Mui-selected": {
+                  bgcolor: "primary.main",
+                  color: "primary.contrastText",
+                  "&:hover": {
+                    bgcolor: "primary.dark",
                   },
                 },
-                '&:hover': {
+                "&:hover": {
                   bgcolor: alpha(theme.palette.primary.main, 0.08),
-                  color: 'primary.main',
+                  color: "primary.main",
                 },
               },
             }}
           >
-            <ToggleButton value={0}>
-              Historical Analysis
-            </ToggleButton>
-            <ToggleButton value={1}>
-              Current Planning
-            </ToggleButton>
+            <ToggleButton value={0}>Historical Analysis</ToggleButton>
+            <ToggleButton value={1}>Current Planning</ToggleButton>
           </ToggleButtonGroup>
         </Box>
       </Box>

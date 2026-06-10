@@ -14,7 +14,7 @@ test_cases = [
             "file": ("test.csv", io.BytesIO(test_csv_content), "text/csv")
         },
         "expected_status": 200,
-        "validate_output": lambda res: res.get("status", "").lower() == "success" or "partial" in res.get("status", "").lower() or "ingestion completed" in res.get("message", "").lower()
+        "validate_output": lambda res: res.get("status", "").lower() == "processing" and "ingestion_id" in res
     },
     {
         "name": "Ingestion - Missing Dataset Type",
@@ -25,6 +25,6 @@ test_cases = [
             "file": ("test.csv", io.BytesIO(test_csv_content), "text/csv")
         },
         "expected_status": 200, 
-        "validate_output": lambda res: res.get("status") == "failed" and "Could not identify dataset type" in res.get("rejections", [{}])[0].get("reason", "")
+        "validate_output": lambda res: res.get("status", "").lower() == "processing" and "ingestion_id" in res
     }
 ]

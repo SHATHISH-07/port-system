@@ -8,12 +8,12 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from typing import Optional
-
+import numpy as np
 import pandas as pd
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile
-from sqlalchemy import MetaData, Table, text
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile, HTTPException
+from sqlalchemy import MetaData, Table, text, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from db.queries import ensure_yard_tables
+
 from auth.dependencies import require_admin
 from auth.utils import log_audit
 from db.connection import get_engine
@@ -62,6 +62,7 @@ _MAPPING: dict[str, str] = {
     "ctr_from_position": "ctr_from_position",
     "ctr_to_position": "ctr_to_position",
     "current_position": "current_position",
+    "current_slot_position": "current_position",
     "from_position": "from_position",
     "to_position": "to_position",
     "crane_from_position": "from_position",
@@ -107,6 +108,7 @@ _MAPPING: dict[str, str] = {
     "complex_id": "complex_id",
     "facility_id": "facility_id",
     "yard_id": "yard_id",
+    "current_yard_block": "yard_id",
 }
 
 def _normalize(df: pd.DataFrame) -> pd.DataFrame:
@@ -202,7 +204,7 @@ def _ensure_text_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
             df[col] = (
                 df[col]
                 .astype(str)
-                .replace(["nan", "None", "NAT", "NaT", "none", "null"], None)
+                .replace(["nan", "None", "NAT", "NaT", "none", "null"], np.nan)
             )
     return df
 
@@ -300,37 +302,62 @@ def _derive_yard_id_from_row(row: pd.Series, dataset_type: str) -> Optional[str]
 
     return None
 
+class SchemaMatcher:
+    CONTAINER_FIELDS = {
+        "unit_id", "complex_id", "facility_id", "yard_id",
+        "category_id", "equipment_class", "container_length", "equipment_type",
+        "freight_kind", "destination", "unit_weight_in_kg", "verified_gross_mass_kg",
+        "reefer", "oog_unit", "hazardous_flag", "hazard_un_numbers", "imdg_code",
+        "stow_code_1", "stow_code_2", "stow_code_3", "port_of_discharge",
+        "actual_inbound_carrier_visit_id", "inbound_service",
+        "actual_outbound_carrier_visit_id", "outbound_service", "arrival_mode",
+        "current_position", "visit_state", "transit_state", "time_out", "time_in",
+        "move_complete_time", "ctr_from_position", "ctr_to_position"
+    }
+    
+    CRANE_FIELDS = {
+        "time_completed", "event_type", "move_kind", "unit_category", "unit_id",
+        "crane_id", "from_position", "to_position", "carrier_visit", "line_op", "exclude"
+    }
+    
+    ITV_FIELDS = {
+        "itv_id", "unit_id", "move_task_id", "driver_id", 
+        "dispatch_time", "arrival_time", "from_position", "to_position", 
+        "status", "carrier_visit"
+    }
+
+    @classmethod
+    def match(cls, df: pd.DataFrame) -> Optional[str]:
+        cols = set(df.columns)
+        
+        container_score = len(cols.intersection(cls.CONTAINER_FIELDS))
+        crane_score = len(cols.intersection(cls.CRANE_FIELDS))
+        itv_score = len(cols.intersection(cls.ITV_FIELDS))
+        
+        scores = {
+            "history": container_score,
+            "crane": crane_score,
+            "itv": itv_score
+        }
+        
+        best_match = max(scores, key=scores.get)
+        if scores[best_match] < 3:
+            return None
+            
+        return best_match
+
 # Dataset type detection
 def _detect_type(df: pd.DataFrame, explicit: Optional[str]) -> Optional[str]:
     """
-    Infers the dataset type (history, current, crane) based on the presence of specific columns.
+    Infers the dataset type (history, crane, itv) based on the SchemaMatcher score.
     """
-    if explicit and explicit.lower() in ("history", "crane", "current"):
+    if explicit and explicit.lower() in ("history", "crane", "itv"):
         return explicit.lower()
 
-    cols = set(df.columns)
+    if explicit and explicit.lower() == "current":
+        return "history" # Map legacy 'current' endpoint to history processing
 
-    if {"crane_id", "carrier_visit"}.issubset(cols):
-        return "crane"
-
-    if "visit_state" in cols or "transit_state" in cols:
-        sample_text = ""
-        if "visit_state" in cols:
-            sample_text += " ".join(df["visit_state"].dropna().astype(str).unique()[:25])
-        if "transit_state" in cols:
-            sample_text += " ".join(df["transit_state"].dropna().astype(str).unique()[:25])
-        if "DEPART" in sample_text.upper():
-            return "history"
-        return "current"
-
-    if "time_out" in cols:
-        non_null_ratio = df["time_out"].notna().mean()
-        return "history" if non_null_ratio >= 0.30 else "history"  # all container data is history now
-
-    if {"unit_id", "outbound_service"}.issubset(cols):
-        return "history"
-
-    return None
+    return SchemaMatcher.match(df)
 
 # Ingestion log helpers
 def _insert_ingestion_log(
@@ -403,7 +430,6 @@ def _update_ingestion_log(
 async def upload_data(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    datasetType: Optional[str] = Query(None),
     admin: dict = Depends(require_admin),
 ):
     """
@@ -430,6 +456,8 @@ async def upload_data(
                     hrow = i
                     break
             df = pd.read_excel(BytesIO(content), header=hrow)
+        elif file_name.endswith(".json"):
+            df = pd.read_json(BytesIO(content))
         else:
             df = pd.read_csv(BytesIO(content), low_memory=False)
     except Exception as e:
@@ -441,45 +469,8 @@ async def upload_data(
     df = _normalize(df)
     df = df.dropna(how="all")
 
-    dataset_type = _detect_type(df, datasetType)
-    if not dataset_type:
-        return _fail(
-            f"Could not identify dataset type from headers: {list(df.columns)[:15]}"
-        )
-
-    if dataset_type in ("history", "current"):
-        for col in ("move_complete_time", "time_in", "time_out"):
-            if col in df.columns:
-                df = _coerce_datetime_columns(df, [col])
-        if "time_completed" in df.columns and "move_complete_time" not in df.columns:
-            df = _coerce_datetime_columns(df, ["time_completed"])
-            df["move_complete_time"] = df["time_completed"]
-        if "carrier_visit" in df.columns and "actual_outbound_carrier_visit_id" not in df.columns:
-            df["actual_outbound_carrier_visit_id"] = df["carrier_visit"]
-        if "from_position" in df.columns and "ctr_from_position" not in df.columns:
-            df["ctr_from_position"] = df["from_position"]
-        if "to_position" in df.columns and "ctr_to_position" not in df.columns:
-            df["ctr_to_position"] = df["to_position"]
-        if "category_id" in df.columns and "actual_outbound_carrier_visit_id" in df.columns:
-            discharge_mask = (
-                df["category_id"].astype(str).str.upper()
-                .str.contains("IMPORT|DISCH", na=False)
-            )
-            if "actual_inbound_carrier_visit_id" not in df.columns:
-                df["actual_inbound_carrier_visit_id"] = None
-            no_inbound = df["actual_inbound_carrier_visit_id"].isna()
-            df.loc[discharge_mask & no_inbound, "actual_inbound_carrier_visit_id"] = \
-                df.loc[discharge_mask & no_inbound, "actual_outbound_carrier_visit_id"]
-                
-    if dataset_type == "crane":
-        if "time_completed" in df.columns:
-            df = _coerce_datetime_columns(df, ["time_completed"])
-        if "move_kind" in df.columns:
-            df["move_kind"] = (
-                df["move_kind"]
-                .astype(str).str.strip().str.upper()
-                .replace({"NAN": None, "NONE": None, "NULL": None, "": None})
-            )
+    # Unified ingestion
+    dataset_type = "unified"
 
     ingestion_id = str(uuid.uuid4())
     _insert_ingestion_log(
@@ -491,24 +482,50 @@ async def upload_data(
         uploaded_by=admin["id"],
     )
 
-    result = _process_ingestion(
-        ingestion_id=ingestion_id,
-        df=df,
-        dataset_type=dataset_type,
-        filename=file_name,
-        admin_id=admin["id"],
-        background_tasks=background_tasks,
+    # Start background process
+    background_tasks.add_task(
+        _process_ingestion,
+        content,
+        file_name,
+        ingestion_id,
+        admin["id"],
+        background_tasks,
     )
-    return result
+
+    return {"status": "processing", "ingestion_id": ingestion_id}
+
+@router.get("/status/{ingestion_id}")
+def get_ingestion_status(ingestion_id: str, current_user: dict = Depends(require_admin)):
+    engine = get_engine()
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT status, dataset_type, records_accepted, records_rejected, error_summary 
+                FROM ingestion_logs 
+                WHERE id = :id
+            """),
+            {"id": ingestion_id}
+        ).fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Ingestion not found")
+            
+        return {
+            "status": row[0],
+            "dataset_type": row[1] or "unified",
+            "accepted_count": row[2] or 0,
+            "rejected_count": row[3] or 0,
+            "errors": [row[4]] if row[4] else [],
+            "ingestion_id": ingestion_id
+        }
 
 # Synchronous ingestion processor
 def _process_ingestion(
-    ingestion_id: str,
-    df: pd.DataFrame,
-    dataset_type: str,
+    file_content: bytes,
     filename: str,
+    ingestion_id: str,
     admin_id: int,
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks
 ):
     """
     Handles data validation, splitting by yard, and routing to the specific database tables.
@@ -517,38 +534,47 @@ def _process_ingestion(
     accepted_count = 0
     rejected_count = 0
     insert_errors: list[str] = []
-
+    logged_type = "unified"
+    status = "processing"
+    
+    # 1. Parse dataframe
     try:
+        if filename.endswith(".json"):
+            df = pd.read_json(BytesIO(file_content))
+        elif filename.endswith((".xlsx", ".xls")):
+            df = pd.read_excel(BytesIO(file_content))
+        else:
+            df = pd.read_csv(BytesIO(file_content), low_memory=False)
+        df = _normalize(df)
+        df = df.dropna(how="all")
         df = df.copy()
 
-        if dataset_type == "history":
-            df = df[[c for c in df.columns if not re.search(r'_m\d+$', c)]].copy()
-            df = _coerce_datetime_columns(df, ["time_in", "time_out", "move_complete_time"])
-            # ── lineage: discharge rows → populate actual_inbound_carrier_visit_id
-            if "category_id" in df.columns and "actual_outbound_carrier_visit_id" in df.columns:
-                discharge_mask = (
-                    df["category_id"].astype(str).str.upper()
-                    .str.contains("IMPORT|DISCH", na=False)
-                )
-                if "actual_inbound_carrier_visit_id" not in df.columns:
-                    df["actual_inbound_carrier_visit_id"] = None
-                no_inbound = df["actual_inbound_carrier_visit_id"].isna()
-                df.loc[discharge_mask & no_inbound, "actual_inbound_carrier_visit_id"] = \
-                    df.loc[discharge_mask & no_inbound, "actual_outbound_carrier_visit_id"]
+        # Coerce time columns for containers using robust parse_datetime
+        time_cols = ["time_in", "time_out", "move_complete_time", "time_completed", "dispatch_time", "arrival_time"]
+        df = _coerce_datetime_columns(df, time_cols)
 
-        if dataset_type == "crane":
-            df = _coerce_datetime_columns(df, ["time_completed"])
-
-        # ── Derive yard_id ───────────────────────────────────────────────────
-        if dataset_type == "crane":
-            df["yard_id"] = df.apply(
-                lambda row: _derive_yard_id_from_row(row, "crane"), axis=1
+        # Lineage: discharge rows → populate actual_inbound_carrier_visit_id
+        if "category_id" in df.columns and "actual_outbound_carrier_visit_id" in df.columns:
+            discharge_mask = (
+                df["category_id"].astype(str).str.upper()
+                .str.contains("IMPORT|DISCH", na=False)
             )
-        else:
-            if "yard_id" not in df.columns or df["yard_id"].isna().all():
-                df["yard_id"] = df.apply(
-                    lambda row: _derive_yard_id_from_row(row, dataset_type), axis=1
-                )
+            if "actual_inbound_carrier_visit_id" not in df.columns:
+                df["actual_inbound_carrier_visit_id"] = None
+            no_inbound = df["actual_inbound_carrier_visit_id"].isna()
+            df.loc[discharge_mask & no_inbound, "actual_inbound_carrier_visit_id"] = \
+                df.loc[discharge_mask & no_inbound, "actual_outbound_carrier_visit_id"]
+
+        # Fallback for visit_id if actual_outbound_carrier_visit_id is missing but outbound_service is present
+        if "actual_outbound_carrier_visit_id" not in df.columns and "outbound_service" in df.columns:
+            df["actual_outbound_carrier_visit_id"] = df["outbound_service"]
+
+
+        # Derive yard_id from explicit fields or movement positions
+        if "yard_id" not in df.columns or df["yard_id"].isna().all():
+            df["yard_id"] = df.apply(
+                lambda row: _derive_yard_id_from_row(row, "unified"), axis=1
+            )
 
         no_yard_mask = (
             df["yard_id"].isna()
@@ -557,144 +583,48 @@ def _process_ingestion(
         rejected_df = df[no_yard_mask].copy()
         df = df[~no_yard_mask].copy()
 
-        # ── Required column validation ────────────────────────────────────────
-        required_map = {
-            "history": ["unit_id", "actual_outbound_carrier_visit_id"],
-            "current": ["unit_id", "actual_outbound_carrier_visit_id"],
-            "crane":   ["crane_id", "carrier_visit", "move_kind"],
-        }
-        for col in required_map.get(dataset_type, []):
-            if col in df.columns:
-                bad = df[col].isna() | (df[col].astype(str).str.strip() == "")
-                if bad.any():
-                    rejected_df = pd.concat([rejected_df, df[bad]], ignore_index=True)
-                    df = df[~bad].copy()
-
-        # ── time_in fallback for history ─────────────────────────────────────
-        if dataset_type == "history":
-            if "time_in" in df.columns:
-                fallback = pd.to_datetime(
-                    df.get("move_complete_time", pd.Series([pd.NaT] * len(df), index=df.index)),
-                    errors="coerce",
-                )
-                df["time_in"] = (
-                    pd.to_datetime(df["time_in"], errors="coerce")
-                    .fillna(fallback)
-                    .fillna(pd.Timestamp("2020-01-01"))
-                )
-            else:
-                df["time_in"] = pd.Timestamp("2020-01-01")
+        # We will determine what type of file it might be predominantly for logging purposes
+        cols = set(df.columns)
+        has_container = bool(cols.intersection({"actual_outbound_carrier_visit_id", "freight_kind", "category_id"}))
+        has_crane = bool(cols.intersection({"crane_id", "move_kind"}))
+        has_itv = bool(cols.intersection({"itv_id"}))
+        
+        logged_type = "unified"
+        if has_container and not has_crane and not has_itv: logged_type = "history"
+        elif has_crane and not has_itv: logged_type = "crane"
+        elif has_itv and not has_crane: logged_type = "itv"
 
         if df.empty:
-            rejected_count = len(rejected_df)
-            status = "failed" if accepted_count == 0 else "partial"
-            _update_ingestion_log(
-                ingestion_id=ingestion_id,
-                status=status,
-                accepted_count=accepted_count,
-                rejected_count=rejected_count,
-                error_summary="No valid rows remained after validation.",
-            )
-            return {
-                "status":         status,
-                "dataset_type":   dataset_type,
-                "accepted_count": accepted_count,
-                "rejected_count": rejected_count,
-                "ingestion_id":   ingestion_id,
-                "message":        "No valid rows remained after validation.",
-            }
+            _update_ingestion_log(ingestion_id, "failed", 0, len(rejected_df), "All rows rejected.")
+            return
 
-        # ── Ensure tables exist ───────────────────────────────────────────────
-        for yard in df["yard_id"].dropna().unique():
-            ensure_yard_tables(engine, str(yard).lower().strip())
+        accepted_count = len(df)
+        rejected_count = len(rejected_df)
 
-        # ── Insert per yard ───────────────────────────────────────────────────
-        for yard, yard_df in df.groupby("yard_id"):
-            yard_lower = str(yard).lower().strip()
-            yard_acc, yard_rej, yard_err = _insert_yard_data(
-                engine=engine,
-                yard=yard_lower,
-                dataset_type=dataset_type,
-                df=yard_df,
-                ingestion_id=ingestion_id,
-                background_tasks=background_tasks,
-            )
-            accepted_count += yard_acc
-            rejected_count += yard_rej
-            if yard_err:
-                insert_errors.append(yard_err)
+        # ── Insert logic ────────────────────────────────────────────────────────
+        _insert_global_containers(engine, df, ingestion_id)
+        _insert_global_cranes(engine, df, ingestion_id)
+        _insert_global_itvs(engine, df, ingestion_id)
 
-        rejected_count += len(rejected_df)
+        status = "success" if rejected_count == 0 else "partial"
+        _update_ingestion_log(ingestion_id, status, accepted_count, rejected_count, None)
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE ingestion_logs SET dataset_type = :dt WHERE id = :id"), {"dt": logged_type, "id": ingestion_id})
 
-        # ── Log rejected samples ──────────────────────────────────────────────
-        if not rejected_df.empty:
-            sample = rejected_df.head(10)
-            try:
-                with engine.begin() as conn:
-                    for _, rej_row in sample.iterrows():
-                        conn.execute(
-                            text("""
-                                INSERT INTO rejection_logs
-                                    (ingestion_id, row_data, reason)
-                                VALUES (:id, :data, :reason)
-                            """),
-                            {
-                                "id":     ingestion_id,
-                                "data":   json.dumps(
-                                    _clean_row(rej_row.to_dict()), default=str
-                                ),
-                                "reason": "No yard detected or missing required field",
-                            },
-                        )
-            except Exception as rej_exc:
-                logger.warning(
-                    "[Ingestion] Could not write rejection samples for %s: %s",
-                    ingestion_id, rej_exc,
-                )
-
-        status = (
-            "success"  if not insert_errors and rejected_count == 0
-            else "partial" if accepted_count > 0
-            else "failed"
-        )
+        if logged_type == "history" and accepted_count > 0:
+            check_and_trigger_retraining(background_tasks)
 
     except Exception as exc:
-        logger.exception("[Ingestion] Worker failed for %s", ingestion_id)
+        logger.exception("[Ingestion] Worker failed for %s", filename)
         accepted_count = 0
-        rejected_count = len(df) if isinstance(df, pd.DataFrame) else 0
         status = "failed"
         insert_errors = [str(exc)]
-
-    try:
-        _update_ingestion_log(
-            ingestion_id=ingestion_id,
-            status=status,
-            accepted_count=accepted_count,
-            rejected_count=rejected_count,
-            error_summary="\n".join(insert_errors) if insert_errors else None,
-        )
-    except Exception as update_exc:
-        logger.error(
-            "[Ingestion] Failed to update ingestion log %s: %s",
-            ingestion_id, update_exc, exc_info=True,
-        )
-
-    # ── Trigger retraining after successful history ingestion ─────────────────
-    if dataset_type == "history" and accepted_count > 0:
-        try:
-            # Pass background_tasks when available so it runs asynchronously;
-            # retraining_service falls back to a thread when it is None.
-            check_and_trigger_retraining(background_tasks)
-        except Exception as retrain_exc:
-            logger.warning(
-                "[Ingestion] Retraining trigger failed for %s: %s",
-                ingestion_id, retrain_exc,
-            )
+        _update_ingestion_log(ingestion_id, "failed", 0, 0, str(exc))
 
     try:
         log_audit(
             "Ingestion",
-            f"Ingested {dataset_type} {filename}: "
+            f"Ingested {logged_type} {filename}: "
             f"{accepted_count} accepted, {rejected_count} rejected",
             admin_id,
         )
@@ -703,7 +633,7 @@ def _process_ingestion(
 
     logger.info(
         "[Ingestion] %s (%s) done: %d accepted / %d rejected / errors=%s",
-        filename, dataset_type, accepted_count, rejected_count, insert_errors,
+        filename, logged_type, accepted_count, rejected_count, insert_errors,
     )
 
     message = "Ingestion completed."
@@ -714,7 +644,7 @@ def _process_ingestion(
 
     return {
         "status":         status,
-        "dataset_type":   dataset_type,
+        "dataset_type":   logged_type,
         "accepted_count": accepted_count,
         "rejected_count": rejected_count,
         "ingestion_id":   ingestion_id,
@@ -734,30 +664,20 @@ def _insert_yard_data(
     """
     Routes parsed data to the appropriate underlying table structure based on dataset type.
     """
-    accepted = 0
+    accepted = len(df)
     rejected = 0
     error_str = ""
 
     try:
-        if dataset_type == "crane":
-            accepted, rejected, error_str = _insert_crane_operations(
-                engine, yard, df, ingestion_id
-            )
-        elif dataset_type in ("history", "current"):
-            accepted, rejected, error_str = _insert_container_operations(
-                engine, yard, df, ingestion_id, record_type=dataset_type
-            )
+        # Global Tables Insertion
+        if dataset_type in ("history", "current"):
+            _insert_global_containers(engine, df, ingestion_id)
+        elif dataset_type == "crane":
+            _insert_global_cranes(engine, df, ingestion_id)
+        elif dataset_type == "itv":
+            _insert_global_itvs(engine, df, ingestion_id)
 
-        # FIX: run vessel summary update as a background task so it never
-        # blocks the HTTP response.  Falls back to inline if no task runner.
-        if accepted > 0:
-            if background_tasks is not None:
-                background_tasks.add_task(_update_vessel_visits, engine, yard, df, dataset_type)
-            else:
-                try:
-                    _update_vessel_visits(engine, yard, df, dataset_type)
-                except Exception as e:
-                    logger.warning("[Ingestion] Summary update failed for %s: %s", yard, e)
+
 
     except Exception as e:
         error_str = f"{yard}/{dataset_type}: {e}"
@@ -765,278 +685,226 @@ def _insert_yard_data(
 
     return accepted, rejected, error_str
 
-# Unified container insert
-def _insert_container_operations(
-    engine,
-    yard: str,
-    df: pd.DataFrame,
-    ingestion_id: str,
-    record_type: str = "history",
-):
-    """
-    Inserts validated container records into the per-yard container_operations table.
-    """
-    tbl = f"{yard}_container_operations"
-
-    cols = [
-        "unit_id", "unit_visit_gkey", "outbound_service",
-        "actual_outbound_carrier_visit_id", "inbound_service",
-        "actual_inbound_carrier_visit_id", "facility_id", "yard_id",
-        "complex_id", "category_id", "freight_kind", "arrival_mode",
-        "visit_state", "transit_state", "time_in", "time_out",
-        "move_complete_time", "equipment_class", "container_length",
-        "equipment_type", "unit_weight_in_kg", "verified_gross_mass_kg",
-        "reefer", "oog_unit", "hazardous_flag", "hazard_un_numbers",
-        "imdg_code", "port_of_discharge", "destination",
-        "ctr_from_position", "ctr_to_position", "current_position",
-        "stow_code_1", "stow_code_2", "stow_code_3",
-    ]
-
-    # Strip any pandas merge-suffixed columns before building insert dataframe
-    clean_cols = [c for c in df.columns if not re.search(r'_m\d+$', c)]
-    df = df[clean_cols].copy()
-    valid_cols = [c for c in cols if c in df.columns]
-    insert_df = df[valid_cols].copy()
-
-    insert_df["record_type"]  = record_type
-    insert_df["ingestion_id"] = ingestion_id
-    insert_df["updated_at"]   = _utcnow_naive()
-    insert_df["created_at"]   = _utcnow_naive()
-
-    time_cols = ["time_in", "time_out", "move_complete_time"]
-    for c in time_cols:
-        if c in insert_df.columns:
-            insert_df[c] = pd.to_datetime(insert_df[c], errors="coerce")
-            if c == "time_in" and record_type == "history":
-                insert_df[c] = insert_df[c].fillna(pd.Timestamp("2020-01-01"))
-
-    non_time = [
-        c for c in insert_df.columns
-        if c not in time_cols + ["unit_weight_in_kg", "verified_gross_mass_kg", "created_at", "updated_at"]
-    ]
-    insert_df = _ensure_text_columns(insert_df, non_time)
-
-    accepted = 0
-    errors: list[str] = []
-    metadata_obj = MetaData()
-    table = Table(tbl, metadata_obj, autoload_with=engine)
-
-    for start in range(0, len(insert_df), _CHUNK_SIZE):
-        chunk = insert_df.iloc[start: start + _CHUNK_SIZE]
-        try:
-            records = _prepare_records(chunk)
-            if not records:
-                continue
-
-            if record_type == "current":
-                stmt = pg_insert(table).values(records)
-                update_set = {
-                    c.name: stmt.excluded[c.name]
-                    for c in table.columns
-                    if c.name not in {"id", "unit_id", "created_at"}
-                    and c.name in chunk.columns
-                }
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=["unit_id", "yard_id"],
-                    index_where=text("record_type = 'current'"),
-                    set_=update_set,
-                    where=text(f"{table.name}.record_type = 'current'"),
-                )
-                with engine.begin() as conn:
-                    conn.execute(stmt)
-            else:
-                # History: plain insert, no conflict handling
-                with engine.begin() as conn:
-                    conn.execute(table.insert(), records)
-
-            accepted += len(chunk)
-        except Exception as e:
-            errors.append(str(e))
-            logger.error("[Ingestion] Container insert error for %s: %s", yard, e)
 
 
-    return accepted, len(df) - accepted, "; ".join(errors)
 
-# Unified crane insert
-def _insert_crane_operations(
-    engine,
-    yard: str,
-    df: pd.DataFrame,
-    ingestion_id: str,
-):
-    """
-    Inserts parsed crane movement logs into the per-yard crane_operations table.
-    """
-    tbl = f"{yard}_crane_operations"
+# Global Table Inserts
+def _insert_global_containers(engine, df: pd.DataFrame, ingestion_id: str):
+    df = df.copy()
 
-    cols = [
-        "crane_id", "unit_id", "carrier_visit", "event_type", "move_kind",
-        "line_op", "unit_category", "exclude", "time_completed",
-        "from_position", "to_position", "yard_id",
-    ]
+    # Map the legacy visit column to the table PK column `visit_id`
+    if "visit_id" not in df.columns:
+        if "actual_outbound_carrier_visit_id" in df.columns:
+            df["visit_id"] = df["actual_outbound_carrier_visit_id"].fillna("UNKNOWN").replace("", "UNKNOWN")
+        elif "carrier_visit" in df.columns:
+            df["visit_id"] = df["carrier_visit"].fillna("UNKNOWN").replace("", "UNKNOWN")
+        else:
+            return  # Missing composite PK
 
-    valid_cols = [c for c in cols if c in df.columns]
-    insert_df = df[valid_cols].copy()
-    insert_df["ingestion_id"] = ingestion_id
-    insert_df["created_at"]   = _utcnow_naive()
-
-    if "time_completed" in insert_df.columns:
-        insert_df["time_completed"] = pd.to_datetime(
-            insert_df["time_completed"], errors="coerce"
-        )
-
-    non_time = [c for c in insert_df.columns if c not in ["time_completed", "created_at"]]
-    insert_df = _ensure_text_columns(insert_df, non_time)
-
-    accepted = 0
-    errors: list[str] = []
-    metadata_obj = MetaData()
-    table = Table(tbl, metadata_obj, autoload_with=engine)
-
-    for start in range(0, len(insert_df), _CHUNK_SIZE):
-        chunk = insert_df.iloc[start: start + _CHUNK_SIZE]
-        try:
-            records = _prepare_records(chunk)
-            if not records:
-                continue
-            with engine.begin() as conn:
-                conn.execute(table.insert(), records)
-            accepted += len(chunk)
-        except Exception as e:
-            errors.append(str(e))
-            logger.error("[Ingestion] Crane insert error for %s: %s", yard, e)
-
-    return accepted, len(df) - accepted, "; ".join(errors)
-
-# Vessel visit summary update  (includes avg_mphc calculation)
-def _update_vessel_visits(engine, yard: str, df: pd.DataFrame, dataset_type: str):
-    """
-    Background summary update: refresh vessel_visits with aggregated metrics
-    from the newly ingested data, including avg_mphc from crane productivity.
-    """
-    vv_tbl = f"{yard}_vessel_visits"
-
-    visit_col = (
-        "actual_outbound_carrier_visit_id"
-        if dataset_type != "crane"
-        else "carrier_visit"
-    )
-    if visit_col not in df.columns:
+    # Drop rows missing PK
+    df = df.dropna(subset=["unit_id", "visit_id"]).copy()
+    if df.empty:
         return
 
-    unique_visits = df[visit_col].dropna().unique()
+    # Add metadata columns
+    df["ingestion_id"] = ingestion_id
+    df["updated_at"] = _utcnow_naive()
+    df["created_at"] = _utcnow_naive()
 
-    for visit_id in unique_visits:
-        visit_id = str(visit_id).strip()
-        if not visit_id:
+    # Time columns are already coerced by _process_ingestion using _coerce_datetime_columns
+
+    # Ensure text columns are clean
+    non_time = [c for c in df.columns if c not in ["time_in", "time_out", "move_complete_time", "unit_weight_in_kg", "verified_gross_mass_kg", "created_at", "updated_at"]]
+    df = _ensure_text_columns(df, non_time)
+
+    if "visit_id" not in df.columns:
+        if "actual_outbound_carrier_visit_id" in df.columns:
+            df["visit_id"] = df["actual_outbound_carrier_visit_id"]
+        else:
+            df["visit_id"] = "UNKNOWN"
+            
+    df["visit_id"] = df["visit_id"].fillna("UNKNOWN")
+    df["unit_id"] = df["unit_id"].fillna("UNKNOWN")
+
+    # Load actual table schema and filter to only columns that exist in the DB
+    metadata_obj = MetaData()
+    table = Table("containers", metadata_obj, autoload_with=engine)
+    table_col_names = {c.name for c in table.columns}
+
+    # Only keep DataFrame columns that match actual table columns
+    insert_cols = [c for c in df.columns if c in table_col_names]
+    insert_df = df[insert_cols].copy()
+    
+    # Drop duplicates to prevent 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+    if "unit_id" in insert_df.columns and "visit_id" in insert_df.columns:
+        insert_df = insert_df.drop_duplicates(subset=["unit_id", "visit_id"], keep="last")
+
+    for start in range(0, len(insert_df), _CHUNK_SIZE):
+        chunk = insert_df.iloc[start: start + _CHUNK_SIZE]
+        records = _prepare_records(chunk)
+        if not records:
             continue
 
-        hist_df  = load_from_db("history", vessel_id=visit_id, yard_id=yard)
-        crane_df = load_from_db("crane",   vessel_id=visit_id, yard_id=yard)
-
-        if hist_df.empty and crane_df.empty:
-            continue
-
-        # ── Container counts ─────────────────────────────────────────────────
-        total_cnt  = len(hist_df)
-        total_load = 0
-        total_disc = 0
-        if "category_id" in hist_df.columns:
-            total_load = int(
-                hist_df["category_id"]
-                .astype(str).str.upper()
-                .str.contains("EXPORT|LOAD", na=False)
-                .sum()
-            )
-            total_disc = int(
-                hist_df["category_id"]
-                .astype(str).str.upper()
-                .str.contains("IMPORT|DISCH", na=False)
-                .sum()
-            )
-
-        # ── Move time window ─────────────────────────────────────────────────
-        first_move = None
-        last_move  = None
-        if not crane_df.empty and "time_completed" in crane_df.columns:
-            moves = pd.to_datetime(crane_df["time_completed"]).dropna().sort_values()
-            if not moves.empty:
-                first_move = moves.iloc[0]
-                last_move  = moves.iloc[-1]
-
-        # ── Crane count ───────────────────────────────────────────────────────
-        avg_cranes = 0.0
-        if not crane_df.empty and "crane_id" in crane_df.columns:
-            avg_cranes = float(crane_df["crane_id"].nunique())
-
-        # ── MPHC (moves per hour per crane) ───────────────────────────────────
-        avg_mphc = 0.0
-        if not crane_df.empty and "crane_id" in crane_df.columns and "time_completed" in crane_df.columns:
-            crane_df = crane_df.copy()
-            crane_df["time_completed"] = pd.to_datetime(
-                crane_df["time_completed"], errors="coerce"
-            )
-            valid_crane = (
-                crane_df[crane_df["exclude"] != "Yes"]
-                if "exclude" in crane_df.columns
-                else crane_df
-            )
-            total_crane_hours = 0.0
-            for _, cgrp in valid_crane.groupby("crane_id"):
-                cmin = cgrp["time_completed"].min()
-                cmax = cgrp["time_completed"].max()
-                if pd.notna(cmin) and pd.notna(cmax):
-                    total_crane_hours += max(
-                        (cmax - cmin).total_seconds() / 3600, 0.1
-                    )
-            eff_moves = len(valid_crane)
-            if total_crane_hours > 0 and eff_moves > 0:
-                n_cranes = max(int(valid_crane["crane_id"].nunique()), 1)
-                avg_mphc = round(
-                    min((eff_moves / total_crane_hours) / n_cranes, 999.0), 2
-                )
-
-        # ── Stay hours ────────────────────────────────────────────────────────
-        stay_hrs = None
-        if not hist_df.empty:
-            if "time_in" in hist_df.columns and "time_out" in hist_df.columns:
-                t_in  = pd.to_datetime(hist_df["time_in"]).min()
-                t_out = pd.to_datetime(hist_df["time_out"]).max()
-                if pd.notna(t_in) and pd.notna(t_out):
-                    stay_hrs = round(
-                        (t_out - t_in).total_seconds() / 3600.0, 2
-                    )
-
-        # ── Outbound service ──────────────────────────────────────────────────
-        outbound_service = None
-        if not hist_df.empty and "outbound_service" in hist_df.columns:
-            outbound_service = hist_df["outbound_service"].dropna().iloc[0] if hist_df["outbound_service"].notna().any() else None
-
-        # ── Upsert ────────────────────────────────────────────────────────────
-        metadata_obj = MetaData()
-        table = Table(vv_tbl, metadata_obj, autoload_with=engine)
-
-        record = {
-            "vessel_visit_id":   visit_id,
-            "outbound_service":  outbound_service,
-            "total_containers":  total_cnt,
-            "total_loaded":      total_load,
-            "total_discharged":  total_disc,
-            "avg_crane_count":   avg_cranes,
-            "avg_mphc":          avg_mphc,
-            "first_move_time":   first_move,
-            "last_move_time":    last_move,
-            "stay_hours":        stay_hrs,
-            "yard_id":           yard,
-            "updated_at":        _utcnow_naive(),
+        stmt = pg_insert(table).values(records)
+        update_set = {
+            c.name: func.coalesce(stmt.excluded[c.name], getattr(table.c, c.name))
+            for c in table.columns
+            if c.name not in {"unit_id", "visit_id", "created_at"} and c.name in chunk.columns
         }
+        if update_set:
+            stmt = stmt.on_conflict_do_update(index_elements=["unit_id", "visit_id"], set_=update_set)
+        else:
+            stmt = stmt.on_conflict_do_nothing(index_elements=["unit_id", "visit_id"])
 
-        stmt = pg_insert(table).values(record)
-        update_set = {k: v for k, v in record.items() if k != "vessel_visit_id"}
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["vessel_visit_id"],
-            set_=update_set,
-        )
+        try:
+            with engine.begin() as conn:
+                conn.execute(stmt)
+        except Exception as e:
+            logger.error("[Ingestion] Global containers insert error: %s", e)
 
-        with engine.begin() as conn:
-            conn.execute(stmt)
+
+def _insert_global_cranes(engine, df: pd.DataFrame, ingestion_id: str):
+    # Only proceed if we have crane-specific columns
+    if not {"crane_id", "move_kind"}.intersection(set(df.columns)):
+        return
+
+    df = df.copy()
+    if "visit_id" not in df.columns:
+        if "carrier_visit" in df.columns:
+            df["visit_id"] = df["carrier_visit"]
+        elif "actual_outbound_carrier_visit_id" in df.columns:
+            df["visit_id"] = df["actual_outbound_carrier_visit_id"]
+        else:
+            return
+
+    df = df.dropna(subset=["unit_id", "visit_id"]).copy()
+    if df.empty:
+        return
+
+    # Pre-insert placeholder containers to satisfy Foreign Key constraints
+    unique_containers = df[["unit_id", "visit_id"]].drop_duplicates()
+    container_records = []
+    for _, row in unique_containers.iterrows():
+        container_records.append({
+            "unit_id": str(row["unit_id"]),
+            "visit_id": str(row["visit_id"]),
+            "ingestion_id": ingestion_id,
+            "created_at": _utcnow_naive(),
+            "updated_at": _utcnow_naive()
+        })
+    if container_records:
+        metadata_obj = MetaData()
+        c_table = Table("containers", metadata_obj, autoload_with=engine)
+        c_stmt = pg_insert(c_table).values(container_records)
+        c_stmt = c_stmt.on_conflict_do_nothing(index_elements=["unit_id", "visit_id"])
+        try:
+            with engine.begin() as conn:
+                conn.execute(c_stmt)
+        except Exception as e:
+            logger.error("[Ingestion] FK stub insert failed for cranes: %s", e)
+
+    # Add metadata
+    df["ingestion_id"] = ingestion_id
+    df["created_at"] = _utcnow_naive()
+
+    # Time columns are already coerced by _process_ingestion
+
+    non_time = [c for c in df.columns if c not in ["time_completed", "created_at"]]
+    df = _ensure_text_columns(df, non_time)
+
+    if "visit_id" not in df.columns:
+        if "actual_outbound_carrier_visit_id" in df.columns:
+            df["visit_id"] = df["actual_outbound_carrier_visit_id"]
+        else:
+            df["visit_id"] = "UNKNOWN"
+            
+    df["visit_id"] = df["visit_id"].fillna("UNKNOWN")
+    df["unit_id"] = df["unit_id"].fillna("UNKNOWN")
+
+    # Load actual table schema and filter to only columns that exist in the DB
+    metadata_obj = MetaData()
+    table = Table("cranes", metadata_obj, autoload_with=engine)
+    table_col_names = {c.name for c in table.columns}
+
+    insert_cols = [c for c in df.columns if c in table_col_names]
+    insert_df = df[insert_cols].copy()
+
+    for start in range(0, len(insert_df), _CHUNK_SIZE):
+        chunk = insert_df.iloc[start: start + _CHUNK_SIZE]
+        records = _prepare_records(chunk)
+        if not records:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(table.insert(), records)
+        except Exception as e:
+            logger.error("[Ingestion] Global cranes insert error: %s", e)
+
+
+def _insert_global_itvs(engine, df: pd.DataFrame, ingestion_id: str):
+    # Only proceed if we have ITV-specific columns
+    if "itv_id" not in df.columns:
+        return
+
+    df = df.copy()
+    if "visit_id" not in df.columns:
+        if "carrier_visit" in df.columns:
+            df["visit_id"] = df["carrier_visit"]
+        elif "actual_outbound_carrier_visit_id" in df.columns:
+            df["visit_id"] = df["actual_outbound_carrier_visit_id"]
+        else:
+            return
+
+    df = df.dropna(subset=["unit_id", "visit_id"]).copy()
+    if df.empty:
+        return
+
+    # Pre-insert placeholder containers to satisfy Foreign Key constraints
+    unique_containers = df[["unit_id", "visit_id"]].drop_duplicates()
+    container_records = []
+    for _, row in unique_containers.iterrows():
+        container_records.append({
+            "unit_id": str(row["unit_id"]),
+            "visit_id": str(row["visit_id"]),
+            "ingestion_id": ingestion_id,
+            "created_at": _utcnow_naive(),
+            "updated_at": _utcnow_naive()
+        })
+    if container_records:
+        metadata_obj = MetaData()
+        c_table = Table("containers", metadata_obj, autoload_with=engine)
+        c_stmt = pg_insert(c_table).values(container_records)
+        c_stmt = c_stmt.on_conflict_do_nothing(index_elements=["unit_id", "visit_id"])
+        try:
+            with engine.begin() as conn:
+                conn.execute(c_stmt)
+        except Exception as e:
+            logger.error("[Ingestion] FK stub insert failed for itvs: %s", e)
+
+    # Add metadata
+    df["ingestion_id"] = ingestion_id
+    df["created_at"] = _utcnow_naive()
+
+    # Time columns are already coerced by _process_ingestion
+
+    non_time = [c for c in df.columns if c not in ["dispatch_time", "arrival_time", "created_at"]]
+    df = _ensure_text_columns(df, non_time)
+
+    # Load actual table schema and filter to only columns that exist in the DB
+    metadata_obj = MetaData()
+    table = Table("itvs", metadata_obj, autoload_with=engine)
+    table_col_names = {c.name for c in table.columns}
+
+    insert_cols = [c for c in df.columns if c in table_col_names]
+    insert_df = df[insert_cols].copy()
+
+    for start in range(0, len(insert_df), _CHUNK_SIZE):
+        chunk = insert_df.iloc[start: start + _CHUNK_SIZE]
+        records = _prepare_records(chunk)
+        if not records:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(table.insert(), records)
+        except Exception as e:
+            logger.error("[Ingestion] Global itvs insert error: %s", e)

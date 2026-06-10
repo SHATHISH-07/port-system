@@ -24,7 +24,7 @@ test_cases = [
         "method": "POST",
         "role": "admin",
         "json_payload": True,
-        "payload": {"username": "testuser1", "password": "password123", "role": "user"},
+        "payload": {"username": "admin", "password": "password123", "role": "user"},
         "expected_status": 400,
         "validate_output": lambda res: "detail" in res and "already exists" in res["detail"].lower()
     },

@@ -7,6 +7,7 @@ import StowageHeader from "./components/StowageHeader";
 import type { VisualizationData } from "../../types/stowage";
 
 export default function StowagePlanning() {
+
   const [activeTab, setActiveTab] = useState(0);
   const [vesselId, setVesselId] = useState("");
   const [yardId, setYardId] = useState("");
@@ -26,6 +27,10 @@ export default function StowagePlanning() {
   const [loadingVisualization, setLoadingVisualization] = useState(false);
   const [portRotation, setPortRotation] = useState<string[]>([]);
   const [recomputeTrigger, setRecomputeTrigger] = useState(0);
+  const [visualizationRefreshTrigger, setVisualizationRefreshTrigger] = useState(0);
+
+
+
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     if (newValue !== null) setActiveTab(newValue);
@@ -48,11 +53,19 @@ export default function StowagePlanning() {
     setTimeout(() => setLoading(false), 600);
   };
 
+  const handleServiceChange = (newService: string) => {
+    if (newService && newService !== vesselId) {
+      setVesselId(newService);
+      setSearchVesselId(newService);
+      setVisualizationRefreshTrigger(prev => prev + 1);
+    }
+  };
+
   return (
     <Box
       sx={{
         width: "100%",
-        height: visualizationOpen ? "calc(100dvh - 64px)" : "auto",
+        height: visualizationOpen ? "calc(100dvh - 110px)" : "auto",
         overflow: visualizationOpen ? "hidden" : "visible",
         bgcolor: "transparent",
         display: "flex",
@@ -141,8 +154,10 @@ export default function StowagePlanning() {
             portRotation={portRotation}
             onPortRotationChange={setPortRotation}
             recomputeTrigger={recomputeTrigger}
+            visualizationRefreshTrigger={visualizationRefreshTrigger}
             visualizationOpen={visualizationOpen}
             onCloseVisualization={() => setVisualizationOpen(false)}
+            onServiceChange={handleServiceChange}
           />
         </Box>
       </Box>
@@ -150,18 +165,18 @@ export default function StowagePlanning() {
       {visualizationOpen && (
         <Box
           sx={{
-            position: { xs: "fixed", lg: "absolute" },
-            top: { xs: 0, lg: 32 },
-            bottom: { xs: 0, lg: 32 },
-            left: { xs: 0, lg: 40 },
-            right: { xs: 0, lg: 40 },
+            position: { xs: "fixed", md: "absolute" },
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
             zIndex: 1300,
             bgcolor: "background.default",
-            borderRadius: { xs: 0, lg: "16px" },
             overflow: "hidden",
           }}
         >
           <StowageVisualizationTab
+            vesselId={searchVesselId}
             visualizationData={visualizationData}
             loadingVisualization={loadingVisualization}
             onClose={() => setVisualizationOpen(false)}
@@ -172,6 +187,8 @@ export default function StowagePlanning() {
               setRecomputeTrigger((prev) => prev + 1);
             }}
           />
+
+
         </Box>
       )}
     </Box>

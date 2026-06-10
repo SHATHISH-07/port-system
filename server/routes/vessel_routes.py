@@ -1,19 +1,20 @@
 from __future__ import annotations
+# cspell:disable
 
 import logging
-
+import math
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
-
+from services.port_stay_prediction_service import predict_port_stay
 from auth.dependencies import get_current_user
 from db.connection import get_engine
 from db.queries import load_from_db
-from services.vessel_service import (
-    analyze_vessel_dashboard,
-    get_yard_heatmap_data,
-)
-
-from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse
+from services.vessel_service import analyze_vessel_dashboard
+from services.berth_optimization_service import get_yard_heatmap_data
+from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse, DiscoverServicesRequest
+from services.vessel_operations import discover_services_for_containers
+from schemas.vessel import PortStayPredictionRequest, PortStayPredictionResponse
 
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/vessel", tags=["Vessel Analytics"])
@@ -62,17 +63,12 @@ async def get_vessel_analysis(
             )
             if "error" not in hist_result:
                 return hist_result
-            # Surface suggestions cleanly rather than exposing internal keys
-            suggestions = result.get("suggestions", [])
-            err_result = {
-                "error":       result.get("error", "Vessel not found"),
-                "vessel":      vessel_id,
-                "suggestions": suggestions,
-            }
-            return err_result
+            raise HTTPException(status_code=404, detail=hist_result.get("error", "No data found for vessel"))
 
         return result
 
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("vessel_analysis error for %s: %s", vessel_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -94,14 +90,61 @@ async def get_vessel_heatmap_route(
       - yard_id    (optional): filter to a specific yard
     """
     try:
-        return get_yard_heatmap_data(
-            vessel_id=request.vessel_id,
+        res = get_yard_heatmap_data(
             unit_ids=request.unit_ids if request.unit_ids else None,
             yard_id=request.yard_id,
+            vessel_id=request.vessel_id,
         )
+        if "error" in res:
+            raise HTTPException(status_code=404, detail=res["error"])
+            
+        def clean_nan(obj):
+            if isinstance(obj, dict):
+                return {k: clean_nan(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [clean_nan(v) for v in obj]
+            elif isinstance(obj, float):
+                if math.isnan(obj) or math.isinf(obj):
+                    return None
+            elif pd.isna(obj):
+                return None
+            return obj
+            
+        return clean_nan(res)
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.error("vessel_heatmap error for %s: %s", request.vessel_id, exc, exc_info=True)
+        logger.error("vessel_heatmap error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
+
+@router.post("/discover-services")
+async def discover_services(
+    request: DiscoverServicesRequest, current_user: dict = Depends(get_current_user)
+):
+    """
+    Discovers unique outbound services (vessels) from a list of unit IDs.
+    """
+    try:
+        services = discover_services_for_containers(request.unit_ids, request.yard_id)
+        return {"services": services}
+    except Exception as e:
+        logger.error(f"Error discovering services: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@router.post("/port-stay", response_model=PortStayPredictionResponse)
+async def predict_port_stay_route(
+    request: PortStayPredictionRequest, current_user: dict = Depends(get_current_user)
+):
+    """
+    Predicts the port stay time for a vessel given the total number of load moves.
+    Uses historical performance data (avg cranes, avg mph) for the given vessel_id.
+    """
+    try:
+        res = predict_port_stay(request.vessel_id, request.load_moves)
+        return res
+    except Exception as e:
+        logger.error(f"Error predicting port stay: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/yard/summary", response_model=YardSummaryResponse)
 def get_yard_summary(
@@ -118,80 +161,32 @@ def get_yard_summary(
     with engine.connect() as conn:
 
         # ── Discover tables, optionally filtered to a specific yard ───────────
-        yard_filter = f"AND relname LIKE '{yard_id.lower().strip()}_%'" if yard_id else ""
+        yard_filter = "WHERE yard_id = :y" if yard_id else ""
+        y_param = {"y": yard_id} if yard_id else {}
 
         # ── History/Operational containers ────────────────────────────────────
         try:
-            ops_tbls = conn.execute(text(f"""
-                SELECT relname FROM pg_class
-                WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_container_operations'
-                  {yard_filter}
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-            """)).fetchall()
-            total_history = 0
-            for (tbl,) in ops_tbls:
-                try:
-                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE record_type = 'history'")).scalar()
-                    total_history += (n or 0)
-                except Exception:
-                    pass
-            counts["history_containers"] = total_history
+            n = conn.execute(text(f"SELECT COUNT(*) FROM containers {yard_filter}"), y_param).scalar()
+            counts["history_containers"] = n or 0
         except Exception:
             counts["history_containers"] = 0
 
         # ── Current containers (Dynamic Extraction count) ─────────────────────
         try:
-            total_current = 0
-            for (tbl,) in ops_tbls:
-                try:
-                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE time_out IS NULL")).scalar()
-                    total_current += (n or 0)
-                except Exception:
-                    pass
-            counts["current_containers"] = total_current
+            time_filter = "time_out IS NULL"
+            curr_where = f"WHERE {time_filter} AND yard_id = :y" if yard_id else f"WHERE {time_filter}"
+            n = conn.execute(text(f"SELECT COUNT(*) FROM containers {curr_where}"), y_param).scalar()
+            counts["current_containers"] = n or 0
         except Exception:
             counts["current_containers"] = 0
 
         # ── Crane movements ───────────────────────────────────────────────────
         try:
-            crane_tbls = conn.execute(text(f"""
-                SELECT relname FROM pg_class
-                WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_crane_operations'
-                  {yard_filter}
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-            """)).fetchall()
-            total_crane = 0
-            for (tbl,) in crane_tbls:
-                try:
-                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
-                    total_crane += (n or 0)
-                except Exception:
-                    pass
-            counts["crane_movements"] = total_crane
+            n = conn.execute(text(f"SELECT COUNT(*) FROM cranes {yard_filter}"), y_param).scalar()
+            counts["crane_movements"] = n or 0
         except Exception:
             counts["crane_movements"] = 0
 
-        # ── Vessel visits ─────────────────────────────────────────────────────
-        try:
-            vv_tbls = conn.execute(text(f"""
-                SELECT relname FROM pg_class
-                WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_vessel_visits'
-                  {yard_filter}
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
-            """)).fetchall()
-            total_vv = 0
-            for (tbl,) in vv_tbls:
-                try:
-                    n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
-                    total_vv += (n or 0)
-                except Exception:
-                    pass
-            counts["vessel_visits"] = total_vv
-        except Exception:
-            counts["vessel_visits"] = 0
 
         # ── Support tables ────────────────────────────────────────────────────
         for table in ["ingestion_logs", "rejection_logs", "users", "training_metadata"]:
@@ -205,33 +200,22 @@ def get_yard_summary(
         # ── Per-yard details ──────────────────────────────────────────────────
         yards: list[dict] = []
         try:
+            yard_cond = "yard_id = :y AND yard_id IS NOT NULL" if yard_id else "yard_id IS NOT NULL"
             yard_rows = conn.execute(text(f"""
-                SELECT DISTINCT
-                    replace(relname, '_container_operations', '') AS yard_id
-                FROM pg_class
-                WHERE relkind IN ('r','p')
-                  AND relname LIKE '%_container_operations'
-                  {yard_filter}
-                  AND oid NOT IN (SELECT inhrelid FROM pg_inherits)
+                SELECT DISTINCT yard_id
+                FROM containers
+                WHERE {yard_cond}
                 ORDER BY 1
-            """)).fetchall()
+            """), y_param).fetchall()
 
             for (yid,) in yard_rows:
-                info: dict = {"yard_id": yid}
-                for suffix, label in [
-                    ("container_operations", "history_rows"),
-                    ("vessel_visits",        "visit_summaries"),
-                    ("crane_operations",     "crane_rows"),
-                ]:
-                    tbl = f"{yid}_{suffix}"
-                    try:
-                        if suffix == "container_operations":
-                            n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE record_type = 'history'")).scalar()
-                        else:
-                            n = conn.execute(text(f"SELECT COUNT(*) FROM {tbl}")).scalar()
-                        info[label] = n or 0
-                    except Exception:
-                        info[label] = 0
+                yid_str = str(yid).strip()
+                info: dict = {"yard_id": yid_str}
+                
+                info["history_rows"] = conn.execute(text("SELECT COUNT(*) FROM containers WHERE yard_id = :y"), {"y": yid_str}).scalar() or 0
+                info["crane_rows"] = conn.execute(text("SELECT COUNT(*) FROM cranes WHERE yard_id = :y"), {"y": yid_str}).scalar() or 0
+                
+
                 yards.append(info)
         except Exception:
             pass
@@ -248,10 +232,14 @@ def get_yard_summary(
         except Exception:
             recent_logs = []
 
-    return {
-        "yard_filter":       yard_id,
+    if not yards and counts.get("history_containers", 0) == 0 and counts.get("current_containers", 0) == 0:
+        raise HTTPException(status_code=404, detail="No yard summary data found")
+
+    res = {
+        "yard_filter":       yard_id or "ALL",
         "counts":            counts,
         "yards":             yards,
         "recent_ingestions": [dict(r._mapping) for r in recent_logs],
     }
+    return res
 

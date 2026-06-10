@@ -4,9 +4,6 @@ import {
     ComposedChart,
     Line,
     Area,
-    BarChart,
-    Bar,
-    Cell,
     CartesianGrid,
     XAxis,
     YAxis,
@@ -68,54 +65,7 @@ function TrendChartTooltip({ active, payload, label }: any) {
     );
 }
 
-function PortChartTooltip({ active, payload, label }: any) {
-    if (!active || !payload?.length) return null;
 
-    return (
-        <Box
-            sx={(theme) => ({
-                bgcolor: theme.palette.mode === 'dark' ? '#121212' : '#ffffff',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2,
-                p: { xs: 1, sm: 1.5 },
-                boxShadow: '0 12px 30px rgba(0,0,0,0.12)',
-                minWidth: { xs: 130, sm: 160 },
-            })}
-        >
-            <Typography
-                variant="caption"
-                sx={{
-                    color: 'text.secondary',
-                    display: 'block',
-                    mb: 0.5,
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                }}
-            >
-                {label}
-            </Typography>
-            {payload.map((item: any) => (
-                <Typography key={item.dataKey} sx={{ fontSize: { xs: '0.7rem', sm: '0.875rem' }, fontWeight: 700, color: 'primary.main' }}>
-                    {item.value.toLocaleString()} units discharged
-                </Typography>
-            ))}
-        </Box>
-    );
-}
-
-// Port bar colors – a stepped blue-to-indigo palette for visual hierarchy
-const PORT_COLORS = [
-    '#2563EB',
-    '#3B82F6',
-    '#60A5FA',
-    '#93C5FD',
-    '#BFDBFE',
-    '#1D4ED8',
-    '#1E40AF',
-    '#172554',
-];
 
 export default function StayTimeTrendChart({
     visits,
@@ -123,6 +73,7 @@ export default function StayTimeTrendChart({
 }: {
     visits: Record<string, any>;
     avgHours: number;
+    containerBreakdown?: any;
 }) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -141,19 +92,7 @@ export default function StayTimeTrendChart({
         })
         .sort((a, b) => a.startTs - b.startTs);
 
-    // ─── Port breakdown data ─────────────────────────────────────────────────
-    const totals: Record<string, number> = {};
-    Object.values(visits || {}).forEach((v: any) => {
-        const ports = v.port_of_discharge_top5 || {};
-        Object.entries(ports).forEach(([key, count]) => {
-            totals[key] = (totals[key] || 0) + Number(count || 0);
-        });
-    });
 
-    const portData = Object.entries(totals)
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 8);
 
     // ─── Shared empty-state component ────────────────────────────────────────
     const EmptyState = ({ message }: { message: string }) => (
@@ -205,7 +144,7 @@ export default function StayTimeTrendChart({
             <Grid container>
                 {/* ── Left: Historical Performance Trend ──────────────────── */}
                 <Grid
-                    size={{ xs: 12, md: 8 }}
+                    size={{ xs: 12 }}
                     sx={{
                         borderRight: {
                             md: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
@@ -288,12 +227,12 @@ export default function StayTimeTrendChart({
                                         <linearGradient id="stayFill" x1="0" y1="0" x2="0" y2="1">
                                             <stop
                                                 offset="5%"
-                                                stopColor={theme.palette.primary.main}
+                                                stopColor={theme.palette.error.main}
                                                 stopOpacity={0.18}
                                             />
                                             <stop
                                                 offset="95%"
-                                                stopColor={theme.palette.primary.main}
+                                                stopColor={theme.palette.error.main}
                                                 stopOpacity={0.01}
                                             />
                                         </linearGradient>
@@ -416,10 +355,10 @@ export default function StayTimeTrendChart({
                                         type="monotone"
                                         dataKey="stayHours"
                                         name="Stay (hrs)"
-                                        stroke={theme.palette.primary.main}
+                                        stroke={theme.palette.error.main}
                                         fill="url(#stayFill)"
                                         strokeWidth={2.5}
-                                        dot={false}
+                                        dot={{ r: 3.5, fill: theme.palette.error.main, strokeWidth: 2, stroke: '#fff' }}
                                         activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }}
                                         animationDuration={1200}
                                     />
@@ -441,9 +380,9 @@ export default function StayTimeTrendChart({
                                         type="monotone"
                                         dataKey="discharged"
                                         name="Discharged Containers"
-                                        stroke="#3B82F6"
+                                        stroke="#f6b53bff"
                                         strokeWidth={2}
-                                        dot={{ r: 3.5, fill: '#3B82F6', strokeWidth: 2, stroke: '#fff' }}
+                                        dot={{ r: 3.5, fill: '#f6e33bff', strokeWidth: 2, stroke: '#fff' }}
                                         activeDot={{ r: 5, strokeWidth: 0 }}
                                         animationDuration={2000}
                                     />
@@ -453,102 +392,6 @@ export default function StayTimeTrendChart({
                     </Box>
                 </Grid>
 
-                {/* ── Right: Port Destination Breakdown ───────────────────── */}
-                <Grid
-                    size={{ xs: 12, md: 4 }}
-                >
-                    {/* Header */}
-                    <Box
-                        sx={{
-                            px: { xs: 1.5, sm: 2, md: 3 },
-                            py: 2.5,
-                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-                        }}
-                    >
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.3 }}>
-                            Port Destination Breakdown
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mt: 0.25 }}>
-                            Discharged cargo volume by destination port
-                        </Typography>
-                    </Box>
-
-                    {/* Chart area */}
-                    <Box sx={{ pt: 3, pb: 2, pr: { xs: 1, sm: 2 }, pl: { xs: 0, sm: 1 } }}>
-                        {portData.length === 0 ? (
-                            <Box sx={{ height: 380, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <EmptyState message="No port breakdown available." />
-                            </Box>
-                        ) : (
-                            <ResponsiveContainer width="100%" height={400}>
-                                <BarChart
-                                    data={portData}
-                                    layout="vertical"
-                                    margin={{ top: 4, right: isMobile ? 12 : 16, left: isMobile ? 4 : 4, bottom: 4 }}
-                                    barCategoryGap="28%"
-                                >
-                                    <CartesianGrid
-                                        strokeDasharray="4 4"
-                                        horizontal={false}
-                                        stroke={alpha(theme.palette.divider, 0.5)}
-                                    />
-
-                                    <XAxis
-                                        type="number"
-                                        tickLine={false}
-                                        axisLine={{ stroke: alpha(theme.palette.divider, 0.4) }}
-                                        tick={{
-                                            fill: theme.palette.text.secondary,
-                                            fontSize: 11,
-                                            fontWeight: 600,
-                                        }}
-                                        tickFormatter={(v) =>
-                                            v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)
-                                        }
-                                    />
-
-                                    <YAxis
-                                        type="category"
-                                        dataKey="name"
-                                        tickLine={false}
-                                        axisLine={false}
-                                        // Let recharts calculate the width needed; set a sensible min
-                                        width={isMobile ? 64 : 72}
-                                        tick={{
-                                            fill: theme.palette.text.primary,
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                        }}
-                                    />
-
-                                    <Tooltip
-                                        content={<PortChartTooltip />}
-                                        cursor={{
-                                            fill: alpha(theme.palette.text.primary, 0.04),
-                                        }}
-                                        wrapperStyle={{ zIndex: 1000 }}
-                                    />
-
-                                    <Bar
-                                        dataKey="value"
-                                        name="Discharged Units"
-                                        radius={[0, 5, 5, 0]}
-                                        barSize={18}
-                                        isAnimationActive
-                                        animationDuration={1200}
-                                    >
-                                        {portData.map((_entry, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={PORT_COLORS[index % PORT_COLORS.length]}
-                                            />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        )}
-                    </Box>
-                </Grid>
             </Grid>
         </Card>
     );

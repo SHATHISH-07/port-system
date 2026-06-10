@@ -1,7 +1,9 @@
+# cspell:disable
+from __future__ import annotations
 import re
 import pandas as pd
 from typing import Any, List, Optional
-
+from services.heatmap_service import _deterministic_layout
 from db.queries import load_from_db
 from utils.current_container_lookup import lookup_containers_by_ids
 from utils.position_decoder import parse_vessel_slot
@@ -78,7 +80,7 @@ def _derive_recommended_tier(weight_band: str, loading_priority: int) -> str:
     return "04" if loading_priority <= 5 else "06"
 
 # Map group builder
-def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
+def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict, yard_id: str = None) -> List[dict]:
     """
     Groups container positions by discharge port for map visualization.
     """
@@ -124,7 +126,7 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
         # Decode yard slot
         yard_block = "UNKNOWN"
         yard_row = yard_col = yard_tier = yard_slot_raw = None
-        yard_info = parse_position(yard_pos_str)
+        yard_info = parse_position(yard_pos_str, yard_id)
         if yard_info and yard_info.get("is_yard"):
             yard_block = yard_info.get("block", "UNKNOWN")
             yard_slot_raw = yard_info.get("raw")
@@ -173,6 +175,8 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
 
         try:
             wt_float = float(weight_kg) if weight_kg is not None else None
+            if wt_float is not None and pd.isna(wt_float):
+                wt_float = None
         except ValueError:
             wt_float = None
 
@@ -181,33 +185,33 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
                 "unitId": unit_id,
                 "status": status,
                 "weightCategory": weight_band,
-                "weightKg": wt_float,
-                "freightKind": _safe_str(row.get("freight_kind"), None) or None,
-                "equipmentClass": eq_class if eq_class != "unknownEquipmentClass" else None,
-                "containerLength": _safe_str(length, None) or None,
+                "weightKg": wt_float if wt_float is not None else 0.0,
+                "freightKind": _safe_str(row.get("freight_kind"), "UNKNOWN"),
+                "equipmentClass": eq_class if eq_class != "unknownEquipmentClass" else "UNKNOWN",
+                "containerLength": _safe_str(length, "20") if length else "20",
                 "loadingPriority": int(rec["loadingPriority"]),
                 "reshuffleRisk": rec["reshuffleRisk"],
-                "outboundService": outbound_svc,
-                "actualOutboundCarrierVisitId": actual_visit,
-                "portOfDischarge": port if port else None,
+                "outboundService": outbound_svc or "UNKNOWN",
+                "actualOutboundCarrierVisitId": actual_visit or "UNKNOWN",
+                "portOfDischarge": port if port else "UNKNOWN",
 
                 # Yard coordinates
-                "yardBlock": yard_block if yard_block != "UNKNOWN" else None,
-                "yardRow": yard_row,
-                "yardCol": yard_col,
-                "yardTier": yard_tier,
-                "yardSlotRaw": yard_slot_raw,
+                "yardBlock": yard_block if yard_block != "UNKNOWN" else "UNASSIGNED",
+                "yardRow": yard_row or "00",
+                "yardCol": yard_col or "00",
+                "yardTier": yard_tier or "01",
+                "yardSlotRaw": yard_slot_raw or "UNASSIGNED",
 
                 # Vessel coordinates
-                "vesselBay": vessel_bay,
-                "vesselRow": vessel_row_n,
-                "vesselTier": vessel_tier,
-                "vesselDeck": vessel_deck,
-                "vesselVisitId": vessel_visit_id,
+                "vesselBay": vessel_bay or 0,
+                "vesselRow": vessel_row_n or 0,
+                "vesselTier": vessel_tier or 0,
+                "vesselDeck": vessel_deck or rec["recommendedDeck"],
+                "vesselVisitId": vessel_visit_id or "UNASSIGNED",
 
                 # Legacy fields mapping
-                "currentYardBlock": yard_block if yard_block != "UNKNOWN" else None,
-                "currentSlotPosition": yard_slot_raw,
+                "currentYardBlock": yard_block if yard_block != "UNKNOWN" else "UNASSIGNED",
+                "currentSlotPosition": yard_slot_raw or "UNASSIGNED",
                 "recommendedDeck": rec["recommendedDeck"],
                 "recommendedTier": rec_tier,
                 "recommendedBay": rec_bay,
@@ -215,7 +219,7 @@ def _build_map_groups(df: pd.DataFrame, port_rotation_dict: dict) -> List[dict]:
                 "parsedBay": str(vessel_bay) if vessel_bay is not None else rec_bay,
                 "parsedRow": str(vessel_row_n) if vessel_row_n is not None else rec_row,
                 "parsedTier": str(vessel_tier) if vessel_tier is not None else rec_tier,
-                "parsedBlock": yard_block if yard_block != "UNKNOWN" else None,
+                "parsedBlock": yard_block if yard_block != "UNKNOWN" else "UNASSIGNED",
                 "parsedDeck": vessel_deck if vessel_deck else rec["recommendedDeck"],
             }
         )
@@ -244,9 +248,7 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
     """
     Constructs a grid summary of the yard block capacities, proximities, and weight distributions.
     """
-    from services.heatmap_service import _deterministic_layout
-    
-    
+
     blocks = {}
     for _, row in df.iterrows():
         visit_state = _safe_str(row.get("visit_state"), "")
@@ -256,7 +258,7 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
         yard_pos = _safe_str(
             row.get("ctr_from_position") if is_loaded else row.get("current_position"), ""
         )
-        yard_info = parse_position(yard_pos)
+        yard_info = parse_position(yard_pos, terminal)
         if not yard_info or not yard_info.get("is_yard"):
             continue
         
@@ -304,7 +306,7 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
         b["pod_counts"][pod] = b["pod_counts"].get(pod, 0) + 1
         b["weight_counts"][wb] = b["weight_counts"].get(wb, 0) + 1
         b["reshuffle_risks"].append(
-            predict_reshuffle_risk(blk, yard_pos, "BELOW_DECK")
+            predict_reshuffle_risk(blk, yard_pos, "BELOW_DECK", terminal)
         )
     
     unique_blocks = [blk for blk in blocks if blk != "UNKNOWN"]
@@ -387,8 +389,6 @@ def get_stowage_visualization(
         if df is not None and not df.empty:
             df = _normalize_dataframe_columns(df)
 
-            if "record_type" in df.columns:
-                df = df[df["record_type"].astype(str).str.lower() == "history"].copy()
             if visit_id and "actual_outbound_carrier_visit_id" in df.columns:
                 df = df[
                     df["actual_outbound_carrier_visit_id"].astype(str) == str(visit_id)
@@ -404,6 +404,10 @@ def get_stowage_visualization(
                 df = lookup_containers_by_ids(cleaned_ids, yard_id)
                 if df is not None and not df.empty:
                     df = _normalize_dataframe_columns(df)
+                    
+                    # We should NOT filter by outbound_service here if the user explicitly provided container_ids.
+                    # Active yard containers do not have outbound_service assigned yet.
+                        
                     df = _dedupe_latest_per_unit(df)
                     resolved_count = len(df)
 
@@ -411,14 +415,15 @@ def get_stowage_visualization(
         return {
             "mode": mode,
             "vesselId": vessel_id,
-            "yardId": yard_id,
-            "visitId": visit_id,
+            "yardId": yard_id or "UNKNOWN",
+            "visitId": visit_id or "UNKNOWN",
             "map": {"groups": []},
-            "yardGrid": None,
+            "yardGrid": {"blocks": [], "loadedTotal": 0, "inYardTotal": 0},
             "summary": {
                 "totalContainers": len(container_ids) if container_ids else 0,
                 "resolvedCount": 0,
             },
+            "dischargeSequence": [],
         }
 
     rotation = []

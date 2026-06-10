@@ -2,6 +2,7 @@ import React from "react";
 import { Box } from "@mui/material";
 import Sidebar from "./Sidebar";
 import { useLocation } from "react-router-dom";
+import Navbar from "./Navbar";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -44,6 +45,7 @@ export default function Layout({ children }: LayoutProps) {
             height: isSelfContainedPage ? "100%" : "auto",
           }}
         >
+          {!isSelfContainedPage && <Navbar />}
           {children}
         </Box>
       </Box>

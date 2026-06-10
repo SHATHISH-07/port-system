@@ -109,7 +109,7 @@ export default function ContainerPositionTable({ data }: ContainerPositionTableP
               <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper" }}>Row</TableCell>
               <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper" }}>Tier</TableCell>
               <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper" }}>Category</TableCell>
-              <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper" }}>Outbound Service</TableCell>
+
               <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "background.paper" }}>Flags</TableCell>
             </TableRow>
           </TableHead>
@@ -125,7 +125,7 @@ export default function ContainerPositionTable({ data }: ContainerPositionTableP
                 <TableCell sx={{ color: "text.secondary", fontFamily: "'Inter', monospace" }}>{row.row || "-"}</TableCell>
                 <TableCell sx={{ color: "text.secondary", fontFamily: "'Inter', monospace" }}>{row.tier || "-"}</TableCell>
                 <TableCell>{row.category || "-"}</TableCell>
-                <TableCell>{row.outbound_service || "-"}</TableCell>
+
                 <TableCell align="right">
                   <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
                     {row.hazardous && <Chip size="small" label="HAZ" sx={{ height: 20, fontSize: "0.65rem", fontWeight: 700, bgcolor: alpha("#ef4444", 0.1), color: "#ef4444" }} />}
@@ -138,7 +138,7 @@ export default function ContainerPositionTable({ data }: ContainerPositionTableP
             })}
             {paginatedContainers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 6, color: "text.secondary" }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 6, color: "text.secondary" }}>
                   No containers match the current criteria.
                 </TableCell>
               </TableRow>

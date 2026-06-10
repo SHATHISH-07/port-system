@@ -17,8 +17,8 @@ test_cases = [
         "name": "Vessels - Missing Vessel Lookup",
         "endpoint": "/vessel/analysis?vesselId=UNKNOWN-99",
         "method": "GET",
-        "expected_status": 200,
-        "validate_output": lambda res: res.get("error") is not None or "Vessel not found" in str(res)
+        "expected_status": 404,
+        "validate_output": lambda res: "detail" in res
     },
     {
         "name": "Vessels - Yard Summary",

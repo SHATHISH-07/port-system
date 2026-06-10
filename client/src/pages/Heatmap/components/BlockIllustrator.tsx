@@ -204,8 +204,8 @@ function BlockTile({ blockId, block, isMax }: { blockId: string; block?: BlockDa
   );
 }
 
-function BerthCard({ id, label, isTarget, vesselName, isDark }: { id: string; label: string; isTarget: boolean; vesselName?: string; isDark: boolean }) {
-  const isHorizontal = id.startsWith("T") || id.startsWith("B");
+function BerthCard({ id, label, isTarget, vesselName, isDark, orientation }: { id: string; label: string; isTarget: boolean; vesselName?: string; isDark: boolean; orientation?: "horizontal" | "vertical" }) {
+  const isHorizontal = orientation === "horizontal" || (!orientation && !id.startsWith("R") && !id.startsWith("L"));
   const w = isHorizontal ? 200 : 160;
   const h = isHorizontal ? 100 : 200;
 
@@ -429,17 +429,31 @@ export default function BlockIllustrator({ data, loading, targetBerthId }: { dat
 
   if (loading || !data) return <HeatmapPlaceholder />;
 
-  const blockIds = Object.keys(data.blocks || {});
-  const sortedBlockIds = [...blockIds].sort((a, b) => {
+  // Only include blocks that have actual container data (remove unwanted empty blocks)
+  const validBlockIds = Object.keys(data.blocks || {}).filter(
+    id => data.blocks[id] && data.blocks[id].count > 0 && id !== "UNKNOWN"
+  );
+
+  // Sort blocks based on their physical layout coordinates to logically match "other maps"
+  const sortedBlockIds = [...validBlockIds].sort((a, b) => {
     const posA = data.layout[a] || { x: 0, y: 0 };
     const posB = data.layout[b] || { x: 0, y: 0 };
-    return (posA.y * 3 + posA.x) - (posB.y * 3 + posB.x);
+    // Sort Top-to-Bottom (Y descending) and Left-to-Right (X ascending)
+    return (posB.y - posA.y) * 100 + (posA.x - posB.x);
   });
 
   const chunkedRows: string[][] = [];
-  for (let i = 0; i < sortedBlockIds.length; i += 3) {
-    chunkedRows.push(sortedBlockIds.slice(i, i + 3));
+  for (let i = 0; i < sortedBlockIds.length; i += 4) { // Use 4 per row for a nice dashboard spread
+    chunkedRows.push(sortedBlockIds.slice(i, i + 4));
   }
+
+  const allBerths = Object.keys(data.berths || {});
+  if (allBerths.length === 0 && targetBerthId) {
+    allBerths.push(targetBerthId);
+  }
+  const topBerths = allBerths.slice(0, 2);
+  const rightBerths = allBerths.slice(2, 4);
+  const bottomBerths = allBerths.slice(4);
 
   return (
     <Box
@@ -528,42 +542,48 @@ export default function BlockIllustrator({ data, loading, targetBerthId }: { dat
             <TransformComponent wrapperStyle={{ width: "100%", height: "100%", willChange: "transform" }} contentStyle={{ willChange: "transform" }}>
               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 1200, p: 6, gap: 6 }}>
 
-                {/* TOP BERTHS ROW */}
-                <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
-                  <BerthCard id="T1" label="BERTH T1" isTarget={targetBerthId === "T1"} vesselName={data.vessel} isDark={isDark} />
-                  <BerthCard id="T2" label="BERTH T2" isTarget={targetBerthId === "T2"} vesselName={data.vessel} isDark={isDark} />
-                </Box>
+                <>
+                  {topBerths.length > 0 && (
+                    <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
+                      {topBerths.map(bId => (
+                        <BerthCard key={bId} id={bId} label={`BERTH ${bId}`} isTarget={targetBerthId === bId} vesselName={data.vessel} isDark={isDark} orientation="horizontal" />
+                      ))}
+                    </Box>
+                  )}
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 6, alignItems: "center", width: "100%", maxWidth: 1100 }}>
-
-                  {/* Yards 3x3 Grid */}
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", alignItems: "center" }}>
-                    {chunkedRows.map((rowBlockIds, rowIdx) => (
-                      <Box key={rowIdx} sx={{ position: "relative", width: "100%", maxWidth: 900 }}>
-                        <Typography sx={{ position: "absolute", left: -40, top: "50%", transform: "translateY(-50%) rotate(-90deg)", fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#94a3b8" : "#64748b", letterSpacing: "0.2em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                          {ROW_LABELS[rowIdx]}
-                        </Typography>
-                        <Box sx={{ display: "flex", justifyContent: "center", gap: 4 }}>
-                          {rowBlockIds.map((blockId) => (
-                            <BlockTile key={blockId} blockId={blockId} block={data.blocks[blockId]} isMax={blockId === data.max_block} />
-                          ))}
+                  <Box sx={{ display: "grid", gridTemplateColumns: rightBerths.length > 0 ? "1fr 200px" : "1fr", gap: 6, alignItems: "center", width: "100%", maxWidth: rightBerths.length > 0 ? 1100 : 900 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", alignItems: "center" }}>
+                      {chunkedRows.map((rowBlockIds, rowIdx) => (
+                        <Box key={rowIdx} sx={{ position: "relative", width: "100%", maxWidth: 900 }}>
+                          <Typography sx={{ position: "absolute", left: -40, top: "50%", transform: "translateY(-50%) rotate(-90deg)", fontSize: "0.6rem", fontWeight: 800, color: isDark ? "#94a3b8" : "#64748b", letterSpacing: "0.2em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                            {ROW_LABELS[rowIdx] || `ZONE ${String.fromCharCode(65 + rowIdx)}`}
+                          </Typography>
+                          <Box sx={{ display: "flex", justifyContent: "center", gap: 4, flexWrap: "wrap" }}>
+                            {rowBlockIds.map((blockId) => (
+                              <BlockTile key={blockId} blockId={blockId} block={data.blocks[blockId]} isMax={blockId === data.max_block} />
+                            ))}
+                          </Box>
                         </Box>
+                      ))}
+                    </Box>
+
+                    {rightBerths.length > 0 && (
+                      <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
+                        {rightBerths.map(bId => (
+                          <BerthCard key={bId} id={bId} label={`BERTH ${bId}`} isTarget={targetBerthId === bId} vesselName={data.vessel} isDark={isDark} orientation="vertical" />
+                        ))}
                       </Box>
-                    ))}
+                    )}
                   </Box>
 
-                  {/* Right Side Berths */}
-                  <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
-                    <BerthCard id="R1" label="BERTH R1" isTarget={targetBerthId === "R1"} vesselName={data.vessel} isDark={isDark} />
-                    <BerthCard id="R2" label="BERTH R2" isTarget={targetBerthId === "R2"} vesselName={data.vessel} isDark={isDark} />
-                  </Box>
-                </Box>
-
-                {/* BOTTOM BERTHS ROW */}
-                <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
-                  <BerthCard id="B1" label="BERTH B1" isTarget={targetBerthId === "B1"} vesselName={data.vessel} isDark={isDark} />
-                  <BerthCard id="B2" label="BERTH B2" isTarget={targetBerthId === "B2"} vesselName={data.vessel} isDark={isDark} />
-                </Box>
+                  {bottomBerths.length > 0 && (
+                    <Box sx={{ display: "flex", justifyContent: "center", gap: 8 }}>
+                      {bottomBerths.map(bId => (
+                        <BerthCard key={bId} id={bId} label={`BERTH ${bId}`} isTarget={targetBerthId === bId} vesselName={data.vessel} isDark={isDark} orientation="horizontal" />
+                      ))}
+                    </Box>
+                  )}
+                </>
 
               </Box>
             </TransformComponent>

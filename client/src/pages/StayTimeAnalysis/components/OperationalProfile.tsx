@@ -79,6 +79,7 @@ interface DelayData {
   impact?: string;
   factor?: string;
   reason?: string;
+  recommendation?: string;
 }
 
 interface ProfileData {
@@ -162,6 +163,11 @@ function TopVisitPanel({ topVisit, actualAvg, predictedAvg, predictedVisits, del
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="body2" sx={{ fontWeight: 800, lineHeight: 1.25, fontSize: '0.8rem' }}>{delay.factor}</Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.4, fontSize: '0.7rem' }}>{delay.reason}</Typography>
+              {delay.recommendation && (
+                <Typography variant="caption" color="primary.main" sx={{ display: 'block', lineHeight: 1.4, fontSize: '0.7rem', fontWeight: 600, mt: 0.5 }}>
+                  Recommendation: {delay.recommendation}
+                </Typography>
+              )}
             </Box>
           </Box>
         )) : (

@@ -61,6 +61,11 @@ export interface BerthAnalysis {
     impact_score: number;
     travel_distance_score: number;
     travel_distance_label: "Short" | "Moderate" | "Long";
+    laden_travel_distance_m?: number;
+    unladen_travel_distance_m?: number;
+    avg_laden_distance_m?: number;
+    avg_unladen_distance_m?: number;
+    block_distances?: Record<string, number>;
     corridor_congestion: "High" | "Moderate" | "Low";
     mitigation: string;
     recommendation_reason?: string;
@@ -70,16 +75,41 @@ export interface ConflictVessel {
     vessel_service: string;
     visit_id: string;
     shared_blocks: string[];
+    shared_corridors?: string[];
+    shared_equipment?: string[];
     overlap_hours: number;
 }
 
 export interface ConflictEntry {
     berth: string;
-    block: string;
+    contested_blocks?: string[];
     conflict_risk: "High" | "Medium" | "Low";
     conflict_with: ConflictVessel[];
     impact_score: number;
     reason: string;
+}
+
+export interface TerminalLayout {
+    yard_code: string;
+    model_name: string;
+    bbox: { min_x: number; max_x: number; min_y: number; max_y: number };
+    yard_polygon: [number, number][];
+    blocks: Record<string, {
+        name: string;
+        type: string;
+        purpose: string;
+        polygon: [number, number][];
+        center: [number, number];
+        bbox: { width: number; height: number; min_x: number; max_x: number; min_y: number; max_y: number };
+        rotation_rad: number;
+    }>;
+    berths: Record<string, {
+        name: string;
+        polygon: [number, number][];
+        center: [number, number];
+        facing_deg: number;
+        bollards: [number, number][];
+    }>;
 }
 
 export interface VesselHeatmapResponse {
@@ -89,7 +119,10 @@ export interface VesselHeatmapResponse {
     recommended_berth?: string;
     max_block?: string;
     summary: Summary;
-    layout: Record<string, { x: number; y: number }>;
+    layout: Record<string, { x: number; y: number; w?: number; h?: number }>;
+    terminal_layout?: TerminalLayout;
+    shapes?: { type: string; name: string; points: { x: number; y: number }[] }[];
+    berths?: Record<string, { x: number; y: number }[]>;
     blocks: Record<string, BlockData>;
     primary_berth?: BerthAnalysis;
     berth_analysis?: BerthAnalysis[];
@@ -100,4 +133,6 @@ export interface VesselHeatmapResponse {
 export type VesselHeatmapViewData = VesselHeatmapResponse & {
     targetBerthId?: string;
     computedMaxBlock?: string | null;
+    terminalLayout?: TerminalLayout | null;
+    terminalGeo?: Record<string, unknown> | null;
 };

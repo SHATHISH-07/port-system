@@ -11,8 +11,6 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  Collapse,
-  IconButton,
   alpha,
   useTheme,
   TextField,
@@ -20,10 +18,9 @@ import {
   CircularProgress,
   Paper,
   Button,
-  type Theme,
+  Select,
+  MenuItem,
 } from "@mui/material";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import SearchIcon from "@mui/icons-material/Search";
 import {
   PieChart,
@@ -45,6 +42,7 @@ import type {
   VisualizationData,
 } from "../../../types/stowage";
 import HousekeepingTable from "./HousekeepingTable";
+import { CompactRow } from "./CurrentPlanningComponents";
 
 const cardStyles = {
   elevation: 0,
@@ -57,212 +55,7 @@ const cardStyles = {
   },
 };
 
-const StatusChip = ({ label, theme }: { label: string; theme: Theme }) => {
-  let color = theme.palette.success.main;
-  if (label === "HIGH" || label === "HEAVY") color = theme.palette.error.main;
-  if (label === "MEDIUM") color = theme.palette.warning.main;
-  return (
-    <Box
-      sx={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        bgcolor: alpha(color, 0.15),
-        color,
-        px: 1,
-        py: 0.25,
-        borderRadius: 1,
-        fontSize: "0.65rem",
-        fontWeight: 800,
-        letterSpacing: 0.5,
-        border: `1px solid ${alpha(color, 0.2)}`,
-      }}
-    >
-      {label}
-    </Box>
-  );
-};
 
-function CompactRow({ step, theme }: { step: StepData; theme: Theme }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <TableRow
-        sx={{
-          "& > *": {
-            borderBottom: "1px solid",
-            borderColor: alpha(theme.palette.divider, 0.5),
-            py: 0.75,
-          },
-          transition: "background-color 0.2s ease",
-          "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.05) },
-        }}
-      >
-        <TableCell padding="checkbox">
-          <IconButton
-            size="small"
-            onClick={() => setOpen(!open)}
-            sx={{ color: open ? "primary.main" : "text.secondary" }}
-          >
-            {open ? (
-              <KeyboardArrowUpIcon fontSize="small" />
-            ) : (
-              <KeyboardArrowDownIcon fontSize="small" />
-            )}
-          </IconButton>
-        </TableCell>
-        <TableCell
-          sx={{ fontSize: "0.75rem", fontWeight: 700, color: "text.secondary" }}
-        >
-          {String(step.stepIndex).padStart(2, "0")}
-        </TableCell>
-        <TableCell
-          sx={{
-            fontFamily: "monospace",
-            fontSize: "0.8rem",
-            fontWeight: 700,
-            color: "primary.main",
-          }}
-        >
-          {step.unitId}
-        </TableCell>
-        <TableCell
-          sx={{ fontSize: "0.75rem", fontWeight: 600, color: "text.primary" }}
-        >
-          {step.portOfDischarge}
-        </TableCell>
-        <TableCell>
-          <StatusChip label={step.weightCategory || ""} theme={theme} />
-        </TableCell>
-        <TableCell
-          sx={{ fontSize: "0.75rem", fontWeight: 500, color: "text.primary" }}
-        >
-          {step.recommendedDeck}{" "}
-          <Typography
-            component="span"
-            variant="caption"
-            sx={{ fontWeight: 800, color: "text.secondary", ml: 0.5 }}
-          >
-            {step.recommendedBay && step.recommendedRow ? (
-              `B${step.recommendedBay} R${step.recommendedRow} T${step.recommendedTier}`
-            ) : (
-              `T${step.recommendedTier}`
-            )}
-          </Typography>
-        </TableCell>
-        <TableCell>
-          <StatusChip label={step.reshuffleRisk || ""} theme={theme} />
-        </TableCell>
-        <TableCell
-          align="right"
-          sx={{ fontSize: "0.75rem", fontWeight: 800, color: "text.primary" }}
-        >
-          {step.loadingPriority}
-        </TableCell>
-      </TableRow>
-      <TableRow>
-        <TableCell
-          style={{ paddingBottom: 0, paddingTop: 0, border: "none" }}
-          colSpan={8}
-        >
-          <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box
-              sx={{
-                m: 1,
-                mb: 2,
-                p: 2,
-                bgcolor: "background.paper",
-                boxShadow: theme.shadows[2],
-                borderLeft: `3px solid ${theme.palette.primary.main}`,
-                borderRadius: 2,
-              }}
-            >
-              <Grid container spacing={3}>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <Typography
-                    variant="overline"
-                    color="primary"
-                    sx={{
-                      display: "block",
-                      mb: 0.5,
-                      fontWeight: 700,
-                      lineHeight: 1,
-                    }}
-                  >
-                    Reasoning
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ fontSize: "0.8rem", color: "text.secondary" }}
-                  >
-                    {step.recommendedReason}
-                  </Typography>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 3 }}>
-                  <Typography
-                    variant="overline"
-                    color="primary"
-                    sx={{
-                      display: "block",
-                      mb: 0.5,
-                      fontWeight: 700,
-                      lineHeight: 1,
-                    }}
-                  >
-                    Yard Origin
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "text.primary",
-                    }}
-                  >
-                    Block {step.currentYardBlock}{" "}
-                    <span
-                      style={{
-                        color: theme.palette.text.disabled,
-                        margin: "0 4px",
-                      }}
-                    >
-                      |
-                    </span>{" "}
-                    {step.currentSlotPosition}
-                  </Typography>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 3 }}>
-                  <Typography
-                    variant="overline"
-                    color="primary"
-                    sx={{
-                      display: "block",
-                      mb: 0.5,
-                      fontWeight: 700,
-                      lineHeight: 1,
-                    }}
-                  >
-                    Outbound
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "text.primary",
-                    }}
-                  >
-                    {step.actualOutboundCarrierVisitId || "TBD"}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </Box>
-          </Collapse>
-        </TableCell>
-      </TableRow>
-    </>
-  );
-}
 
 interface CurrentPlanningTabProps {
   vesselId: string;
@@ -280,8 +73,11 @@ interface CurrentPlanningTabProps {
   onVisualizationLoadingChange: (loading: boolean) => void;
   onVisualizationDataChange: (data: VisualizationData) => void;
   recomputeTrigger?: number;
+  visualizationRefreshTrigger?: number;
   visualizationOpen?: boolean;
   onCloseVisualization?: () => void;
+  discoveredServices?: string[];
+  onServiceChange?: (newService: string) => void;
 }
 
 export default function CurrentPlanningTab({
@@ -296,6 +92,10 @@ export default function CurrentPlanningTab({
   onVisualizationLoadingChange,
   onVisualizationDataChange,
   recomputeTrigger = 0,
+  visualizationRefreshTrigger = 0,
+  visualizationOpen = false,
+  discoveredServices = [],
+  onServiceChange,
 }: CurrentPlanningTabProps) {
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
@@ -309,7 +109,7 @@ export default function CurrentPlanningTab({
   const [loadingVisualization, setLoadingVisualization] = useState(false);
 
   const executeOptimization = async (overrideRotation?: string[]) => {
-    if (!vesselId || (!globalFile && !globalContainerText?.trim())) return;
+    if (!vesselId || (!globalFile && !globalContainerText?.trim())) return null;
     setLoading(true);
     setError(null);
     try {
@@ -332,18 +132,21 @@ export default function CurrentPlanningTab({
           response.data.dischargeSequence.map((s: { port: string }) => s.port),
         );
       }
+      return response.data;
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { detail?: string } } })?.response?.data
           ?.detail || "Failed to optimize plan.",
       );
+      return null;
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchAndOpenVisualization = async (rotationOverride?: string[]) => {
-    if (!vesselId || !optimizedData) return;
+  const fetchAndOpenVisualization = async (rotationOverride?: string[], optDataOverride?: OptimizedData) => {
+    const dataToUse = optDataOverride || optimizedData;
+    if (!vesselId || !dataToUse) return;
     setLoadingVisualization(true);
     onVisualizationLoadingChange(true);
 
@@ -352,7 +155,7 @@ export default function CurrentPlanningTab({
         rotationOverride ||
         (portRotation.length > 0
           ? portRotation
-          : optimizedData.dischargeSequence.map(
+          : dataToUse.dischargeSequence.map(
             (seq: { port: string }) => seq.port,
           ));
 
@@ -397,6 +200,30 @@ export default function CurrentPlanningTab({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recomputeTrigger]);
+
+  React.useEffect(() => {
+    if (visualizationRefreshTrigger > 0) {
+      const run = async () => {
+        if (visualizationOpen) {
+          setLoadingVisualization(true);
+          onVisualizationLoadingChange(true);
+        }
+        const newData = await executeOptimization([]);
+        if (newData && newData.dischargeSequence) {
+          const nextRotation = newData.dischargeSequence.map((s: { port: string }) => s.port);
+          onPortRotationChange(nextRotation);
+          if (visualizationOpen) {
+            await fetchAndOpenVisualization(nextRotation, newData);
+          }
+        } else if (visualizationOpen) {
+          setLoadingVisualization(false);
+          onVisualizationLoadingChange(false);
+        }
+      };
+      run();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visualizationRefreshTrigger]);
 
   if (!optimizedData && !loading && !error) {
     return (
@@ -504,6 +331,7 @@ export default function CurrentPlanningTab({
         flexDirection: "column",
         gap: 3,
         p: 1,
+        position: "relative",
         animation: "fadeIn 0.6s ease-out forwards",
         "@keyframes fadeIn": {
           from: { opacity: 0, transform: "translateY(20px)" },
@@ -511,6 +339,70 @@ export default function CurrentPlanningTab({
         },
       }}
     >
+      {loading && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            bgcolor: alpha(theme.palette.background.default, 0.7),
+            backdropFilter: "blur(4px)",
+            borderRadius: 4,
+          }}
+        >
+          <CircularProgress size={60} thickness={4} />
+        </Box>
+      )}
+
+      {/* Top Center Vessel Toggler for Dashboard */}
+      {discoveredServices.length > 1 && !visualizationOpen && (
+        <Box sx={{ display: "flex", justifyContent: "center", mb: 1 }}>
+          <Paper
+            elevation={0}
+            sx={{
+              bgcolor: "background.paper",
+              borderRadius: 8,
+              p: 0.5,
+              border: "1px solid",
+              borderColor: theme.palette.divider,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              boxShadow: theme.palette.mode === "dark" ? "none" : theme.shadows[1],
+            }}
+          >
+            <Select
+              value={vesselId}
+              onChange={(e) => onServiceChange?.(e.target.value)}
+              size="small"
+              disabled={loading}
+              sx={{
+                borderRadius: 5,
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                height: 32,
+                color: "text.secondary",
+                "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+                "&:hover": { bgcolor: alpha(theme.palette.action.hover, 0.05) },
+                "& .MuiSelect-select": { py: 0.5, px: 2, minHeight: "auto" },
+              }}
+            >
+              {discoveredServices.map((service) => (
+                <MenuItem key={service} value={service} sx={{ fontSize: "0.8rem", fontWeight: 700 }}>
+                  {service}
+                </MenuItem>
+              ))}
+            </Select>
+          </Paper>
+        </Box>
+      )}
+
       {/* Hero - Single Unified Stats Card */}
       <Grid container spacing={2}>
         <Grid size={{ xs: 12 }}>
@@ -756,16 +648,16 @@ export default function CurrentPlanningTab({
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={alpha(theme.palette.divider, 0.5)} />
                 <XAxis type="number" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis dataKey="name" type="category" fontSize={10} width={90} tickLine={false} axisLine={false} tick={{ fontWeight: 600 }} stroke={theme.palette.text.secondary} />
-                <Tooltip 
-                  cursor={{ fill: alpha(theme.palette.primary.main, 0.05) }} 
-                  contentStyle={{ 
-                    fontSize: '0.75rem', 
-                    borderRadius: '8px', 
-                    border: `1px solid ${theme.palette.divider}`, 
+                <Tooltip
+                  cursor={{ fill: alpha(theme.palette.primary.main, 0.05) }}
+                  contentStyle={{
+                    fontSize: '0.75rem',
+                    borderRadius: '8px',
+                    border: `1px solid ${theme.palette.divider}`,
                     backgroundColor: theme.palette.background.paper,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
-                    color: theme.palette.text.primary 
-                  }} 
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    color: theme.palette.text.primary
+                  }}
                 />
                 <Bar dataKey="Count" fill={theme.palette.info.main} radius={[0, 4, 4, 0]} />
               </BarChart>

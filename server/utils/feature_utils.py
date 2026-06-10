@@ -55,8 +55,8 @@ def create_features(df: pd.DataFrame) -> dict | None:
     f_str = df.get("crane_from", df.get("ctr_from_position", df.get("from_position", pd.Series(dtype=str, index=df.index)))).fillna("").astype(str).str.upper()
     t_str = df.get("crane_to", df.get("ctr_to_position", df.get("to_position", pd.Series(dtype=str, index=df.index)))).fillna("").astype(str).str.upper()
 
-    f_is_v = f_str.str.startswith("V-")
-    t_is_v = t_str.str.startswith("V-")
+    f_is_v = f_str.str.startswith("V-") | f_str.str.startswith("VS-")
+    t_is_v = t_str.str.startswith("V-") | t_str.str.startswith("VS-")
     f_is_y = (f_str != "") & (~f_is_v)
     t_is_y = (t_str != "") & (~t_is_v)
 
@@ -75,10 +75,28 @@ def create_features(df: pd.DataFrame) -> dict | None:
     discharged = int(is_disc.sum())
     restows = int(is_shift.sum())
 
+    # FIX: When a move_kind column is present (crane data joined in or passed directly),
+    # use it as the authoritative source for loaded/discharged counts.
+    # Container-only data grouped by actual_outbound_carrier_visit_id only contains
+    # the EXPORTED containers (category_id=EXPRT), so discharged always comes out 0
+    # and total_moves is half the real value. Crane data has both Load and Discharge
+    # events for the same carrier_visit and is the correct source.
+    if "move_kind" in df.columns and move_kind.isin(["LOAD", "DISCHARGE", "RESTOW"]).any():
+        crane_loaded     = int((move_kind == "LOAD").sum())
+        crane_discharged = int((move_kind == "DISCHARGE").sum())
+        crane_restows    = int((move_kind == "RESTOW").sum())
+        # Only override when crane move_kind gives a richer signal than position inference
+        if crane_loaded + crane_discharged > loaded + discharged:
+            loaded     = crane_loaded
+            discharged = crane_discharged
+            restows    = crane_restows
+
     blocks: dict[str, int] = {}
     
+    yard_id = str(df["yard_id"].mode()[0]) if "yard_id" in df.columns and not df["yard_id"].dropna().empty else None
+    
     def _extract_block(pos):
-        p = parse_position(pos)
+        p = parse_position(pos, yard_id)
         return p.get("block", "UNKNOWN") if p and p.get("is_yard") else None
 
     if is_load.any():

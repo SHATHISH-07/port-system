@@ -180,6 +180,8 @@ def compute_vessel_stay(prepared_visits: dict) -> dict:
     or an empty dict if no valid stays are found.
     """
     result: dict[str, float] = {}
+    total_hours = 0.0
+    total_weight = 0
 
     for visit_id, visit_df in prepared_visits.items():
         if visit_df is None or visit_df.empty:
@@ -187,14 +189,17 @@ def compute_vessel_stay(prepared_visits: dict) -> dict:
         stay = compute_visit_stay(visit_df)
         if stay is not None and stay > 0:
             result[str(visit_id).strip()] = stay
+            total_hours += stay * len(visit_df)
+            total_weight += len(visit_df)
 
     if not result:
         return {}
 
     vals = list(result.values())
+    avg_hours = round(total_hours / total_weight, 2) if total_weight > 0 else round(sum(vals) / len(vals), 2)
     return {
         "visits":    result,
-        "avg_hours": round(sum(vals) / len(vals), 2),
+        "avg_hours": avg_hours,
         "max_hours": round(max(vals), 2),
         "min_hours": round(min(vals), 2),
     }

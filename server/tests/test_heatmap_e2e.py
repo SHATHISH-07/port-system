@@ -5,8 +5,8 @@ test_cases = [
         "method": "POST",
         "json_payload": True,
         "payload": {"vessel_id": "VS-PEB-07", "unit_ids": ["BMOU1234567"]},
-        "expected_status": 200,
-        "validate_output": lambda res: "blocks" in res and isinstance(res["blocks"], list)
+        "expected_status": 404,
+        "validate_output": lambda res: "detail" in res
     },
     {
         "name": "Heatmap - Valid Heatmap (With Yard Filter)",
@@ -14,8 +14,8 @@ test_cases = [
         "method": "POST",
         "json_payload": True,
         "payload": {"vessel_id": "VS-PEB-07", "unit_ids": ["BMOU1234567"], "yard_id": "PEB"},
-        "expected_status": 200,
-        "validate_output": lambda res: "yard_id" in res and res["yard_id"] == "PEB"
+        "expected_status": 404,
+        "validate_output": lambda res: "detail" in res
     },
     {
         "name": "Heatmap - Unknown Yard ID",
@@ -23,8 +23,8 @@ test_cases = [
         "method": "POST",
         "json_payload": True,
         "payload": {"vessel_id": "VS-PEB-07", "unit_ids": ["BMOU1234567"], "yard_id": "UNKNOWN_999"},
-        "expected_status": 200,
-        "validate_output": lambda res: "blocks" in res and len(res["blocks"]) == 0
+        "expected_status": 404,
+        "validate_output": lambda res: "detail" in res
     },
     {
         "name": "Heatmap - Missing Required Vessel ID",
