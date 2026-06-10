@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import pandas as pd
 from typing import Any, List, Optional
-
+from services.heatmap_service import _deterministic_layout
 from db.queries import load_from_db
 from utils.current_container_lookup import lookup_containers_by_ids
 from utils.position_decoder import parse_vessel_slot
@@ -248,9 +248,7 @@ def _build_yard_grid(df: pd.DataFrame, terminal: str) -> dict:
     """
     Constructs a grid summary of the yard block capacities, proximities, and weight distributions.
     """
-    from services.heatmap_service import _deterministic_layout
-    
-    
+
     blocks = {}
     for _, row in df.iterrows():
         visit_state = _safe_str(row.get("visit_state"), "")

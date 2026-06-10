@@ -14,6 +14,7 @@ import {
 import StayTimeForm from './components/StayTimeForm';
 import HistoryAnalysisTable from './components/HistoryAnalysisTable';
 import StayTimeTrendChart from './components/StayTimeTrendChart';
+import { EquipmentBreakdownChart } from './components/EquipmentBreakdownChart';
 import { api } from '../../api/api';
 
 type AnalysisData = any;
@@ -102,10 +103,10 @@ function DelayAnalysisPanel({ delays }: { delays: any[] }) {
               }}
             />
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.35 }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: delay.impact === 'High' ? 'error.main' : 'warning.main', mb: 0.5, display: 'block' }}>
                 {delay.factor}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.55 }}>
+              <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 500, lineHeight: 1.4 }}>
                 {delay.reason}
               </Typography>
             </Box>
@@ -126,9 +127,7 @@ export default function StayTimeAnalysis() {
   const [vesselId, setVesselId] = useState('');
   const [loaded, setLoaded] = useState('');
   const [discharged, setDischarged] = useState('');
-  // Committed values — only updated when API call succeeds on Run
-  const [committedLoaded, setCommittedLoaded] = useState('');
-  const [committedDischarged, setCommittedDischarged] = useState('');
+
 
   const handleAnalyze = async (e?: React.SubmitEvent<HTMLFormElement>) => {
     if (e) e.preventDefault();
@@ -176,9 +175,6 @@ export default function StayTimeAnalysis() {
         setAnalysisData(data);
       } else {
         setAnalysisData(data);
-        // Commit the load/discharge values used for this successful run
-        setCommittedLoaded(loaded);
-        setCommittedDischarged(discharged);
       }
     } catch (err: any) {
       setError(extractApiError(err));
@@ -193,6 +189,48 @@ export default function StayTimeAnalysis() {
   const visitsCount = Object.keys(analysisData?.actual?.visits || {}).length;
   const delayAnalysis = Array.isArray(analysisData?.delay_analysis) ? analysisData.delay_analysis : [];
   const isStayLoaded = !!analysisData && !analysisData.error && !loading;
+
+  // ML Prediction Factors
+  const modelFactors = analysisData?.predicted?.model_factors || {};
+  const fTotalMoves = modelFactors.total_moves || 0;
+  const fCranes = modelFactors.crane_count || 1;
+  const fMph = modelFactors.historical_mph_avg || 0;
+
+  const cBreakdown = analysisData?.actual?.container_breakdown || {};
+  const cTotal = cBreakdown.total || 0;
+  const c40 = cBreakdown.ft40 || 0;
+  const c20 = cBreakdown.ft20 || 0;
+  const cHeavy = cBreakdown.heavy || 0;
+  const cReefer = cBreakdown.reefer || 0;
+  const cHaz = cBreakdown.hazard || 0;
+  const cOog = cBreakdown.oog || 0;
+
+  const MetricBox = ({ title, value, unit, subtitle, color = 'text.primary' }: any) => (
+    <Box sx={{ flex: '1 1 calc(25% - 24px)', minWidth: '95px' }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+        {title}
+      </Typography>
+      <Typography sx={{ fontSize: '1.6rem', fontWeight: 900, color, mt: 0.25, lineHeight: 1 }}>
+        {value}{unit && <span style={{ fontSize: '0.9rem', opacity: 0.6, fontWeight: 700, marginLeft: '2px' }}>{unit}</span>}
+      </Typography>
+      {subtitle && (
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5, fontWeight: 500, whiteSpace: 'nowrap' }}>
+          {subtitle}
+        </Typography>
+      )}
+    </Box>
+  );
+
+  const MetricGroup = ({ title, children }: any) => (
+    <Box sx={{ width: '100%', mb: 1 }}>
+      <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.1em', mb: 1, display: 'block' }}>
+        {title}
+      </Typography>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 2, md: 3 }, p: 2.5, borderRadius: 3, bgcolor: alpha(theme.palette.background.default, 0.5), border: '1px solid', borderColor: alpha(theme.palette.divider, 0.6) }}>
+        {children}
+      </Box>
+    </Box>
+  );
 
   return (
     <Box
@@ -274,13 +312,13 @@ export default function StayTimeAnalysis() {
                         display: 'flex',
                         flexDirection: { xs: 'column', md: 'row' },
                         alignItems: { xs: 'flex-start', md: 'center' },
-                        justifyContent: 'space-between',
-                        gap: 4,
+                        justifyContent: 'flex-start',
+                        gap: { xs: 4, md: 6 },
                         boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.05)}`
                       }}
                     >
                       {/* Left Side: Main Predicted Stay */}
-                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: { md: '40%' } }}>
+                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: '0 0 auto' }}>
                         <Box sx={{ mb: 2 }}>
                           <Typography sx={{ fontWeight: 800, fontSize: '1.2rem', color: 'text.secondary', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                             {analysisData?.vessel_service || vesselId}
@@ -291,7 +329,7 @@ export default function StayTimeAnalysis() {
                             Predicted Port Stay
                           </Typography>
                           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                            <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '3.5rem', md: '4.5rem' }, lineHeight: 1, color: 'text.primary' }}>
+                            <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '4.5rem', md: '6.5rem' }, lineHeight: 1, color: 'text.primary' }}>
                               {formatNumber(predictedAvg)}
                             </Typography>
                             <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.7 }}>
@@ -308,27 +346,7 @@ export default function StayTimeAnalysis() {
                               lineHeight: 1.5,
                             }}
                           >
-                            {committedLoaded || committedDischarged ? (
-                              <>
-                                Predicted using{' '}
-                                <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                                  {committedLoaded || 0}
-                                </Box>{' '}
-                                load moves and{' '}
-                                <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                                  {committedDischarged || 0}
-                                </Box>{' '}
-                                discharge moves.
-                              </>
-                            ) : (
-                              <>
-                                Based on{' '}
-                                <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                                  {visitsCount}
-                                </Box>{' '}
-                                historical visits.
-                              </>
-                            )}
+                            Prediction is based on <strong>{visitsCount}</strong> historical visits.
                           </Typography>
                         </Box>
                       </Box>
@@ -338,41 +356,27 @@ export default function StayTimeAnalysis() {
                       {/* Divider for Mobile */}
                       <Box sx={{ display: { xs: 'block', md: 'none' }, height: '1px', width: '100%', bgcolor: 'divider', zIndex: 1 }} />
 
-                      {/* Right Side: Sub Metrics Grid */}
-                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexWrap: 'wrap', gap: { xs: 3, md: 5 }, flex: '1 1 auto', pt: { xs: 1, md: 0 } }}>
-                        <Box sx={{ flex: '1 1 calc(33% - 20px)', minWidth: '120px' }}>
-                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            Historical Baseline
-                          </Typography>
-                          <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'text.primary', mt: 0.5, lineHeight: 1 }}>
-                            {formatNumber(actualAvg)}<span style={{ fontSize: '1rem', opacity: 0.6, fontWeight: 700, marginLeft: '2px' }}>h</span>
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
-                            Typical stay duration
-                          </Typography>
-                        </Box>
-                        <Box sx={{ flex: '1 1 calc(33% - 20px)', minWidth: '120px' }}>
-                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            History Coverage
-                          </Typography>
-                          <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'primary.main', mt: 0.5, lineHeight: 1 }}>
-                            {formatNumber(visitsCount, 0)}
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
-                            Analyzed visits
-                          </Typography>
-                        </Box>
-                        <Box sx={{ flex: '1 1 calc(33% - 20px)', minWidth: '120px' }}>
-                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            Average Restows
-                          </Typography>
-                          <Typography sx={{ fontSize: '2rem', fontWeight: 900, color: 'warning.main', mt: 0.5, lineHeight: 1 }}>
-                            {formatNumber(analysisData?.actual?.avg_restows ?? 0, 0)}
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, fontWeight: 500 }}>
-                            Per historic visit
-                          </Typography>
-                        </Box>
+                      {/* Right Side: Prediction Drivers Grid */}
+                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 1, flex: '1 1 auto', pt: { xs: 1, md: 0 } }}>
+                        
+                        <MetricGroup title="Operational Performance">
+                          <MetricBox title="Historical Baseline" value={formatNumber(actualAvg)} unit="h" subtitle="Typical stay duration" />
+                          <MetricBox title="Avg Workload" value={formatNumber(fTotalMoves, 0)} subtitle="Total Moves" />
+                          <MetricBox title="Avg Resources" value={fCranes} subtitle="Assigned Cranes" color="primary.main" />
+                          <MetricBox title="Avg Productivity" value={formatNumber(fMph, 1)} unit="MPH" subtitle="Moves per Hour" />
+                          <MetricBox title="History Coverage" value={formatNumber(visitsCount, 0)} subtitle="Analyzed visits" color="primary.main" />
+                        </MetricGroup>
+
+                        <MetricGroup title="Container Classification">
+                          <MetricBox title="Total Historical Vol." value={formatNumber(cTotal, 0)} color="info.main" />
+                          <MetricBox title="40FT Containers" value={formatNumber(c40, 0)} />
+                          <MetricBox title="20FT Containers" value={formatNumber(c20, 0)} />
+                          <MetricBox title="Heavy" value={formatNumber(cHeavy, 0)} color="error.main" />
+                          <MetricBox title="Reefer Units" value={formatNumber(cReefer, 0)} color="info.main" />
+                          <MetricBox title="Hazardous" value={formatNumber(cHaz, 0)} color="warning.main" />
+                          <MetricBox title="Out of Gauge" value={formatNumber(cOog, 0)} />
+                        </MetricGroup>
+                        
                       </Box>
 
                       {/* Background Decoration */}
@@ -395,9 +399,21 @@ export default function StayTimeAnalysis() {
                 </Grid>
 
                 <Grid container spacing={2.5}>
-                  <Grid size={{ xs: 12 }}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <StayTimeTrendChart visits={analysisData?.actual?.visits || {}} avgHours={actualAvg} />
                   </Grid>
+
+                  {analysisData?.actual?.container_breakdown?.equipment_breakdown && Object.keys(analysisData.actual.container_breakdown.equipment_breakdown).length > 0 ? (
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <EquipmentBreakdownChart equipmentData={analysisData.actual.container_breakdown.equipment_breakdown} />
+                    </Grid>
+                  ) : (
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.paper', borderRadius: 4, border: '1px dashed', borderColor: 'divider' }}>
+                        <Typography variant="body2" color="text.secondary">No Equipment Data</Typography>
+                      </Box>
+                    </Grid>
+                  )}
 
                   <Grid size={{ xs: 12 }}>
                     <DelayAnalysisPanel delays={delayAnalysis} />

@@ -25,25 +25,11 @@ const MAT_CHASSIS = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness:
 const MAT_GLASS = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1, metalness: 0.9, transparent: true, opacity: 0.6 });
 const MAT_TREE_TRUNK = new THREE.MeshStandardMaterial({ color: 0x362c26, roughness: 1.0 });
 const MAT_TREE_LEAVES = new THREE.MeshStandardMaterial({ color: 0x1e3621, roughness: 0.9 });
-const CONTAINER_COLORS = [0x991b1b, 0x1d4ed8, 0xea580c];
-const GEO_WHEEL_X = new THREE.CylinderGeometry(0.04, 0.04, 0.04, 12).rotateZ(Math.PI / 2);
+import { createStsCraneMesh } from "./meshes/CraneMesh";
+import { getContainerTexture, createContainerGeometry, CONTAINER_COLORS } from "./meshes/ContainerMesh";
+import { buildYardOutline, buildRibbonGeometry } from "./meshes/YardBlockMesh";
 
-// ─── Texture factories ────────────────────────────────────────────────────────
-
-function createContainerTexture(): THREE.Texture {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512; canvas.height = 512;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 512, 512);
-  ctx.lineWidth = 32; ctx.strokeStyle = "#333333"; ctx.strokeRect(16, 16, 480, 480);
-  ctx.fillStyle = "#1a1a1a";
-  for (let i = 48; i < 464; i += 32) ctx.fillRect(i, 24, 16, 464);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.anisotropy = 16;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  return tex;
-}
-const CONTAINER_TEX = createContainerTexture();
+const CONTAINER_TEX = getContainerTexture();
 
 function createParticleTexture(): THREE.Texture {
   const c = document.createElement("canvas"); c.width = c.height = 64;
@@ -59,18 +45,7 @@ const PARTICLE_TEX = createParticleTexture();
 
 // ─── Geometry helpers ─────────────────────────────────────────────────────────
 
-function createContainerGeometry(w: number, h: number, d: number): THREE.BoxGeometry {
-  const geom = new THREE.BoxGeometry(w, h, d);
-  const uvs = geom.attributes.uv, normals = geom.attributes.normal;
-  const isXLong = w > d;
-  for (let i = 0; i < uvs.count; i++) {
-    const nx = Math.abs(normals.getX(i)), nz = Math.abs(normals.getZ(i)), ny = Math.abs(normals.getY(i));
-    if (isXLong) { if (ny > 0.5 || nz > 0.5) uvs.setX(i, uvs.getX(i) * 3); }
-    else { if (ny > 0.5 || nx > 0.5) uvs.setX(i, uvs.getX(i) * 3); }
-  }
-  geom.attributes.uv.needsUpdate = true;
-  return geom;
-}
+const GEO_WHEEL_X = new THREE.CylinderGeometry(0.04, 0.04, 0.04, 12).rotateZ(Math.PI / 2);
 
 function makeBillboardLabel(text: string, fontSize: number, borderColor: string): THREE.Sprite {
   const W = 512, H = 128;
@@ -169,93 +144,7 @@ function makeHeatBlob(
   return plane;
 }
 
-function buildRibbonGeometry(pts: THREE.Vector3[], width: number): THREE.BufferGeometry {
-  const vertices: number[] = [];
-  const indices: number[] = [];
-  const uvs: number[] = [];
-  const up = new THREE.Vector3(0, 1, 0);
 
-  let distance = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const dir = new THREE.Vector3();
-    if (i === 0) {
-      dir.subVectors(pts[1], pts[0]).normalize();
-    } else if (i === pts.length - 1) {
-      dir.subVectors(pts[i], pts[i - 1]).normalize();
-    } else {
-      const d1 = new THREE.Vector3().subVectors(pts[i], pts[i - 1]).normalize();
-      const d2 = new THREE.Vector3().subVectors(pts[i + 1], pts[i]).normalize();
-      dir.addVectors(d1, d2).normalize();
-    }
-
-    // Fallback if points are coincident
-    if (dir.lengthSq() < 0.0001) dir.set(1, 0, 0);
-
-    const right = new THREE.Vector3().crossVectors(dir, up).normalize().multiplyScalar(width / 2);
-
-    vertices.push(
-      pts[i].x - right.x, pts[i].y, pts[i].z - right.z,
-      pts[i].x + right.x, pts[i].y, pts[i].z + right.z
-    );
-
-    if (i > 0) distance += pts[i].distanceTo(pts[i - 1]);
-    uvs.push(0, distance, 1, distance);
-  }
-
-  for (let i = 0; i < pts.length - 1; i++) {
-    const v1 = i * 2;
-    const v2 = i * 2 + 1;
-    const v3 = (i + 1) * 2;
-    const v4 = (i + 1) * 2 + 1;
-    indices.push(v1, v2, v4);
-    indices.push(v1, v4, v3);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  return geo;
-}
-
-// ─── Build yard outline from XML polygon ─────────────────────────────────────
-
-function buildYardOutline(
-  scene: THREE.Scene,
-  yardPolygon: { x: number; y: number }[],
-) {
-  if (!yardPolygon.length) return;
-
-  const worldPts = yardPolygon.map(p => {
-    const w = n2world(p.x, p.y);
-    return w;
-  });
-
-  const shape = new THREE.Shape();
-  worldPts.forEach((p, i) =>
-    i === 0 ? shape.moveTo(p.x, -p.z) : shape.lineTo(p.x, -p.z),
-  );
-
-  const extrudeSettings = { depth: 0.1, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 2 };
-  const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.95 }); // dark gray terminal
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = -0.09;
-  mesh.receiveShadow = true;
-  mesh.castShadow = true;
-  scene.add(mesh);
-
-  const pts3 = worldPts.map(p => new THREE.Vector3(p.x, 0.05, p.z));
-  const lineGeo = new THREE.BufferGeometry().setFromPoints(pts3);
-  scene.add(
-    new THREE.Line(
-      lineGeo,
-      new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.5 }),
-    ),
-  );
-}
 
 // ─── Main scene class ─────────────────────────────────────────────────────────
 
@@ -375,7 +264,7 @@ class TerminalScene {
     const { yardPolygon, blocks: xmlBlocks, railTracks = [], roads = [] } = geo;
 
     // Yard ground
-    buildYardOutline(this.scene, yardPolygon);
+    this.scene.add(buildYardOutline(yardPolygon));
 
     // --- Land plane beneath terminal (covers left, right, bottom — not quay/sea side) ---
     const landGeo = new THREE.PlaneGeometry(WORLD_SCALE * 1.1, WORLD_SCALE * 0.9);
@@ -657,120 +546,7 @@ class TerminalScene {
     }
   }
 
-  buildStsCrane(x: number, y: number, z: number, rotY: number): THREE.Group {
-    const g = new THREE.Group();
-    const matBlue = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, metalness: 0.6, roughness: 0.4 });
-    const matWhite = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.3, roughness: 0.8 });
-    const matDark = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.5 });
-    const matCable = new THREE.LineBasicMaterial({ color: 0x333333 });
 
-    const scale = 1.5; // Massive structure
-
-    // 1. Gantry Base (Rails/Bogeys)
-    for (const dx of [-0.6, 0.6]) {
-      const bogey = new THREE.Mesh(new THREE.BoxGeometry(0.3 * scale, 0.2 * scale, 2.5 * scale), matDark);
-      bogey.position.set(dx * scale, 0.1 * scale, 0);
-      bogey.castShadow = true;
-      g.add(bogey);
-    }
-
-    // 2. Main Portal Legs
-    for (const dx of [-0.5, 0.5]) {
-      for (const dz of [-0.8, 0.8]) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15 * scale, 3.5 * scale, 0.15 * scale), matBlue);
-        leg.position.set(dx * scale, 1.85 * scale, dz * scale);
-        leg.castShadow = true;
-        g.add(leg);
-      }
-    }
-
-    // 3. Diagonal Bracing
-    for (const dx of [-0.5, 0.5]) {
-      const braceGeo = new THREE.CylinderGeometry(0.05 * scale, 0.05 * scale, 2.2 * scale, 4);
-      const brace1 = new THREE.Mesh(braceGeo, matBlue);
-      brace1.position.set(dx * scale, 1.85 * scale, 0);
-      brace1.rotation.x = Math.PI / 4;
-      g.add(brace1);
-
-      const brace2 = new THREE.Mesh(braceGeo, matBlue);
-      brace2.position.set(dx * scale, 1.85 * scale, 0);
-      brace2.rotation.x = -Math.PI / 4;
-      g.add(brace2);
-    }
-
-    // 4. Main Girder / Boom (Extends over sea +Z and land -Z)
-    const girder = new THREE.Mesh(new THREE.BoxGeometry(0.4 * scale, 0.3 * scale, 8.0 * scale), matWhite);
-    girder.position.set(0, 3.7 * scale, 1.5 * scale);
-    girder.castShadow = true;
-    g.add(girder);
-
-    // 5. Upper A-frame / Apex
-    for (const dx of [-0.3, 0.3]) {
-      const apexLeg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * scale, 0.08 * scale, 2.0 * scale, 4), matBlue);
-      apexLeg1.position.set(dx * scale, 4.6 * scale, -0.6 * scale);
-      apexLeg1.rotation.x = Math.PI / 8;
-      g.add(apexLeg1);
-
-      const apexLeg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * scale, 0.08 * scale, 2.0 * scale, 4), matBlue);
-      apexLeg2.position.set(dx * scale, 4.6 * scale, 0.6 * scale);
-      apexLeg2.rotation.x = -Math.PI / 8;
-      g.add(apexLeg2);
-    }
-    const apexTop = new THREE.Mesh(new THREE.BoxGeometry(0.8 * scale, 0.2 * scale, 0.2 * scale), matBlue);
-    apexTop.position.set(0, 5.5 * scale, 0);
-    g.add(apexTop);
-
-    // 6. Tension Cables
-    for (const dx of [-0.35, 0.35]) {
-      const cableFront = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(dx * scale, 5.5 * scale, 0),
-        new THREE.Vector3(dx * scale, 3.85 * scale, 4.5 * scale)
-      ]), matCable);
-      g.add(cableFront);
-
-      const cableBack = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(dx * scale, 5.5 * scale, 0),
-        new THREE.Vector3(dx * scale, 3.85 * scale, -2.0 * scale)
-      ]), matCable);
-      g.add(cableBack);
-    }
-
-    // 7. Machinery House (Landside)
-    const engineHouse = new THREE.Mesh(new THREE.BoxGeometry(0.8 * scale, 0.6 * scale, 1.2 * scale), matDark);
-    engineHouse.position.set(0, 4.1 * scale, -2.0 * scale);
-    engineHouse.castShadow = true;
-    g.add(engineHouse);
-
-    // 8. Trolley & Spreader (Waterside)
-    const trolley = new THREE.Group();
-    const trolleyBox = new THREE.Mesh(new THREE.BoxGeometry(0.5 * scale, 0.15 * scale, 0.6 * scale), matDark);
-    trolleyBox.position.set(0, 3.5 * scale, 3.5 * scale);
-    trolley.add(trolleyBox);
-
-    const spreader = new THREE.Mesh(new THREE.BoxGeometry(0.6 * scale, 0.1 * scale, 0.2 * scale), matDark);
-    spreader.position.set(0, 1.5 * scale, 3.5 * scale);
-    trolley.add(spreader);
-
-    for (const dx of [-0.2, 0.2]) {
-      const hoist = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(dx * scale, 3.4 * scale, 3.5 * scale),
-        new THREE.Vector3(dx * scale, 1.55 * scale, 3.5 * scale)
-      ]), matCable);
-      trolley.add(hoist);
-    }
-
-    // Operator Cabin
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.25 * scale, 0.2 * scale), new THREE.MeshStandardMaterial({ color: 0xeab308 }));
-    cabin.position.set(0, 3.3 * scale, 3.3 * scale);
-    trolley.add(cabin);
-
-    g.add(trolley);
-
-    g.position.set(x, y, z);
-    g.rotation.y = rotY;
-    this.scene.add(g);
-    return g;
-  }
 
   buildShip(
     id: string,
@@ -1015,10 +791,9 @@ class TerminalScene {
     this.scene.add(g);
     this.shipMeshes.set(id, g);
 
-    const crane1 = this.buildStsCrane(0, 0, 0, 0);
-    const crane2 = this.buildStsCrane(0, 0, 0, 0);
+    const crane1 = createStsCraneMesh(0, 0, 0, 0);
+    const crane2 = createStsCraneMesh(0, 0, 0, 0);
 
-    this.scene.remove(crane1, crane2);
     g.add(crane1, crane2);
 
     const landLocal = g.worldToLocal(new THREE.Vector3(landWp.x, -0.15, landWp.z));

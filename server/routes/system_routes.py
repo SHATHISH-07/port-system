@@ -5,7 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import text
-
+from services.xml_layout_service import xml_layout_service
+from config import settings
 from auth.dependencies import get_current_user, require_admin
 from db.connection import get_engine
 
@@ -39,8 +40,7 @@ def get_terminal_layout(current_user: dict = Depends(get_current_user)):
     parsed directly from the XML configuration.
     """
     try:
-        from services.xml_layout_service import xml_layout_service
-        from config import settings
+        
         layout_data = xml_layout_service.parse(settings.TERMINAL_XML_PATH)
         distances = xml_layout_service.compute_distances(cached=layout_data)
         layout_data["distances"] = distances

@@ -1,3 +1,13 @@
+from __future__ import annotations
+import heapq
+import re
+import logging
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger("xml_layout_service")
+
+
 """
 xml_layout_service.py
 ─────────────────────
@@ -19,17 +29,6 @@ Usage
   layout = xml_layout_service.parse_string(xml_text)
 """
 
-from __future__ import annotations
-
-import re
-import logging
-from pathlib import Path
-from typing import Any
-
-logger = logging.getLogger("xml_layout_service")
-
-
-# ─── WKT helpers ─────────────────────────────────────────────────────────────
 
 def _parse_polygon(poly_str: str) -> list[tuple[float, float]]:
     """Parse WKT POLYGON ((...)) → list of (x, y)."""
@@ -354,8 +353,6 @@ class XmlLayoutService:
         vertices = cached.get("vertices", {})
         blocks = cached.get("blocks", {})
         berths = cached.get("berths", {})
-
-        import heapq
 
         # 1. Build adjacency list for Dijkstra
         adj = {}

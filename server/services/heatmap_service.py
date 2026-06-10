@@ -1,6 +1,8 @@
 from __future__ import annotations
 import logging
 import pandas as pd
+from config import settings
+from services.xml_layout_service import xml_layout_service
 
 logger = logging.getLogger("port_system")
 
@@ -14,7 +16,7 @@ def _first_existing_value(row: dict, candidates: list[str]) -> any:
     return None
 
 # Block helpers
-from services.xml_layout_service import xml_layout_service
+
 
 def _deterministic_layout(blocks: list[str]) -> dict:
     """
@@ -22,7 +24,7 @@ def _deterministic_layout(blocks: list[str]) -> dict:
     Fallback to simple grid for PEB/CWIT to not break existing components.
     """
     # Always try XML layout first
-    from config import settings
+    
     try:
         return xml_layout_service.get_normalized_layout(blocks, xml_path=settings.TERMINAL_XML_PATH)
     except Exception:
@@ -84,4 +86,4 @@ def calculate_dynamic_proximity(df: pd.DataFrame, block_col: str = "yard_block",
             else:
                 proximity_map[blk] = "FAR"
 
-    return proximity_map
+    return proximity_map

@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from typing import Optional
-
+import numpy as np
 import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile, HTTPException
 from sqlalchemy import MetaData, Table, text, func
@@ -198,7 +198,6 @@ def _ensure_text_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     """
     Converts columns to string types and normalizes various 'null' representations.
     """
-    import numpy as np
     df = df.copy()
     for col in columns:
         if col in df.columns:

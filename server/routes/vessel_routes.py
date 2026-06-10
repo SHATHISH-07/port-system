@@ -2,19 +2,19 @@ from __future__ import annotations
 # cspell:disable
 
 import logging
-
+import math
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
-
+from services.port_stay_prediction_service import predict_port_stay
 from auth.dependencies import get_current_user
 from db.connection import get_engine
 from db.queries import load_from_db
-from services.vessel_service import (
-    analyze_vessel_dashboard,
-    get_yard_heatmap_data,
-)
-
+from services.vessel_service import analyze_vessel_dashboard
+from services.berth_optimization_service import get_yard_heatmap_data
 from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse, DiscoverServicesRequest
+from services.vessel_operations import discover_services_for_containers
+from schemas.vessel import PortStayPredictionRequest, PortStayPredictionResponse
 
 logger = logging.getLogger("port_system")
 router = APIRouter(prefix="/vessel", tags=["Vessel Analytics"])
@@ -98,8 +98,6 @@ async def get_vessel_heatmap_route(
         if "error" in res:
             raise HTTPException(status_code=404, detail=res["error"])
             
-        import math
-        import pandas as pd
         def clean_nan(obj):
             if isinstance(obj, dict):
                 return {k: clean_nan(v) for k, v in obj.items()}
@@ -127,14 +125,11 @@ async def discover_services(
     Discovers unique outbound services (vessels) from a list of unit IDs.
     """
     try:
-        from services.vessel_service import discover_services_for_containers
         services = discover_services_for_containers(request.unit_ids, request.yard_id)
         return {"services": services}
     except Exception as e:
         logger.error(f"Error discovering services: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
-
-from schemas.vessel import PortStayPredictionRequest, PortStayPredictionResponse
 
 @router.post("/port-stay", response_model=PortStayPredictionResponse)
 async def predict_port_stay_route(
@@ -145,7 +140,6 @@ async def predict_port_stay_route(
     Uses historical performance data (avg cranes, avg mph) for the given vessel_id.
     """
     try:
-        from services.vessel_service import predict_port_stay
         res = predict_port_stay(request.vessel_id, request.load_moves)
         return res
     except Exception as e:

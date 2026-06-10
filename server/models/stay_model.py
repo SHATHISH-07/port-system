@@ -5,7 +5,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
-
+from services.crane_analytics_service import _fetch_crane_counts_batch
 import joblib
 import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor, VotingRegressor, RandomForestRegressor
@@ -240,7 +240,6 @@ def train_stay_model(df: pd.DataFrame, config: dict = None):
         
         # Pre-fetch crane counts for all visits in this training batch
         visit_ids = [str(vid) for vid, _ in grouped]
-        from services.vessel_service import _fetch_crane_counts_batch
         crane_counts = _fetch_crane_counts_batch(visit_ids)
 
         X_rows, y_vals = [], []
