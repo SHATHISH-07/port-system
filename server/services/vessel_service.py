@@ -283,13 +283,18 @@ def analyze_vessel_dashboard(
                 total_discharged,
                 crane_count=estimated_cranes,
                 historical_mph_avg=historical_mph_avg,
-                # Do NOT pass historical_avg_stay_hours here! 
-                # What-if analysis means we want the physics heuristic to recalculate move_span_hours
-                historical_avg_stay_hours=None,
+                historical_avg_stay_hours=actual_raw.get("avg_hours"),
                 equipment_breakdown=equipment_breakdown_override,
             )
-            p_stay = p_res.get("predicted", {}).get("avg_hours") if isinstance(p_res, dict) else p_res
-            predicted = {"avg_hours": p_stay, "visits": 1, "source": "metric_override", "assigned_cranes": estimated_cranes}
+            p_pred = p_res.get("predicted", {}) if isinstance(p_res, dict) else {}
+            p_stay = p_pred.get("avg_hours") if isinstance(p_res, dict) else p_res
+            predicted = {
+                "avg_hours": p_stay, 
+                "visits": 1, 
+                "source": "metric_override", 
+                "assigned_cranes": estimated_cranes,
+                "justification": p_pred.get("justification")
+            }
     except Exception:
         predicted = None
 
@@ -451,6 +456,31 @@ def analyze_vessel_dashboard(
         "avg_restows": merged_avg_restows,
         "container_breakdown": container_classification,
     }
+
+    # Generate historical insight
+    historical_insight = "No historical data available for trend analysis."
+    if merged_stays and len(merged_stays) > 0:
+        base_avg = round(merged_avg_hours if merged_avg_hours > 0 else actual_raw.get("avg_hours", 0), 1)
+        min_h = round(min(merged_stays), 1)
+        max_h = round(max(merged_stays), 1)
+        
+        insight_parts = [f"Historically, this service averages {base_avg} hours with a variance between {min_h}h and {max_h}h."]
+        
+        if len(merged_stays) >= 3:
+            recent_stays = list(merged_visits.values())[-3:]
+            recent_avg = sum(v.get("stay_hours", 0) for v in recent_stays) / 3
+            trend_pct = ((recent_avg - base_avg) / base_avg) * 100 if base_avg > 0 else 0
+            
+            if trend_pct > 5:
+                insight_parts.append(f"The last 3 visits have trended {round(trend_pct)}% higher than the baseline.")
+            elif trend_pct < -5:
+                insight_parts.append(f"The last 3 visits have trended {round(abs(trend_pct))}% lower than the baseline.")
+            else:
+                insight_parts.append("Recent visits have been consistent with the historical baseline.")
+                
+        historical_insight = " ".join(insight_parts)
+        
+    actual["historical_insight"] = historical_insight
 
     # ── Pick busiest visit ────────────────────────────────────────────────────
     visit_scores: list[tuple] = []

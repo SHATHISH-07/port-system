@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import pandas as pd
 from db.queries import load_from_db
 from services.xml_layout_service import xml_layout_service
@@ -18,10 +18,11 @@ def _calculate_delay_analysis(visit_df) -> list:
             gaps_min = mct.diff().dt.total_seconds().dropna() / 60
             long_gaps = gaps_min[gaps_min > 60]
             if not long_gaps.empty:
+                lost_hours = round(long_gaps.sum() / 60, 1)
                 causes.append({
                     "factor": "Operational Gaps",
-                    "impact": "Medium",
-                    "reason": f"Detected {len(long_gaps)} move-completion gaps exceeding 60 mins.",
+                    "impact": "High" if lost_hours > 5 else "Medium",
+                    "reason": f"Detected {len(long_gaps)} move-completion gaps exceeding 60 mins, amounting to a total of {lost_hours} hours of lost crane productivity.",
                     "recommendation": "Review crane allocation",
                 })
         
@@ -57,10 +58,12 @@ def _calculate_delay_analysis(visit_df) -> list:
                     dual_cycle_rate = (dual_cycles / productive) * 100
                     
                     if dual_cycle_rate < 15.0:
+                        lost_m_cycles = int(productive * (0.15 - (dual_cycle_rate / 100)))
+                        est_lost_hours = round(lost_m_cycles * 3 / 60, 1) # Assuming ~3 mins per missed dual cycle opportunity
                         causes.append({
                             "factor": "Low M-Cycle Percentage",
-                            "impact": "Low",
-                            "reason": f"Only {dual_cycle_rate:.1f}% dual-cycles (M-cycles) detected. Poor interleaving of loads and discharges.",
+                            "impact": "High" if est_lost_hours > 3 else "Medium",
+                            "reason": f"Only {dual_cycle_rate:.1f}% dual-cycles (M-cycles) detected. Poor interleaving has resulted in an estimated {est_lost_hours} hours of wasted gantry movement.",
                             "recommendation": "Improve stacking and consolidation",
                         })
 
@@ -80,10 +83,11 @@ def _calculate_delay_analysis(visit_df) -> list:
         restow_count += int((unknowns & move_kind.isin(["SHIFT", "RESTOW"])).sum())
 
     if restow_count > 20:
+        est_restow_hours = round(restow_count * 3.5 / 60, 1) # ~3.5 mins per restow
         causes.append({
             "factor": "High Restow Rate",
-            "impact": "Medium",
-            "reason": f"{restow_count} restow/shift moves detected â€” increases berth time.",
+            "impact": "High" if est_restow_hours > 4 else "Medium",
+            "reason": f"{restow_count} restow/shift moves detected, extending berth time by an estimated {est_restow_hours} hours.",
             "recommendation": "Improve stacking and consolidation",
         })
 

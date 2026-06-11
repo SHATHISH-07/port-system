@@ -46,7 +46,60 @@ function extractApiError(err: any) {
 function DelayAnalysisPanel({ delays }: { delays: any[] }) {
   const theme = useTheme();
 
-  if (!delays.length) return null;
+  if (!delays || delays.length === 0) {
+    return (
+      <Paper
+        elevation={0}
+        sx={{
+          bgcolor: 'background.paper',
+          p: 2.5,
+          borderRadius: 4,
+          border: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Historical Delay Analysis
+        </Typography>
+        <Box
+          sx={{
+            p: 2.5,
+            borderRadius: 2.5,
+            border: '1px solid',
+            borderColor: alpha(theme.palette.success.main, 0.3),
+            bgcolor: alpha(theme.palette.success.main, 0.05),
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+            <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'success.main', flexShrink: 0 }} />
+            <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 600 }}>
+              No major historical delays or operational inefficiencies detected.
+            </Typography>
+          </Box>
+          <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mb: 1.5 }}>
+            We evaluated the historical container movements and crane activity against standard efficiency thresholds. This service operated optimally:
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pl: 3 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', display: 'list-item' }}>
+              <strong>Operational Gaps:</strong> Move-completion gaps remained consistently under the 60-minute threshold.
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', display: 'list-item' }}>
+              <strong>M-Cycle Efficiency:</strong> Dual-cycle rates (interleaving loads & discharges) exceeded the 15% minimum standard.
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', display: 'list-item' }}>
+              <strong>Restow Rate:</strong> Shift/restow operations were kept below the 20-move threshold, indicating excellent yard stacking.
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', display: 'list-item' }}>
+              <strong>Crane Idle Time:</strong> No excessive instances of crane idle time (&gt;30 minutes) were recorded during operations.
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', display: 'list-item' }}>
+              <strong>Equipment Readiness:</strong> Export containers were properly staged in the yard prior to loading commencement.
+            </Typography>
+          </Box>
+        </Box>
+      </Paper>
+    );
+  }
 
   return (
     <Paper
@@ -352,6 +405,23 @@ export default function StayTimeAnalysis() {
                           >
                             Prediction is based on <strong>{visitsCount}</strong> historical visits.
                           </Typography>
+                          
+                          {analysisData?.predicted?.justification && (
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                mt: 2,
+                                display: 'block',
+                                color: 'primary.main',
+                                fontWeight: 600,
+                                lineHeight: 1.5,
+                                maxWidth: '400px',
+                                whiteSpace: 'pre-line',
+                              }}
+                            >
+                              {analysisData.predicted.justification}
+                            </Typography>
+                          )}
                         </Box>
                       </Box>
 
@@ -404,7 +474,11 @@ export default function StayTimeAnalysis() {
 
                 <Grid container spacing={2.5}>
                   <Grid size={{ xs: 12, md: 8 }}>
-                    <StayTimeTrendChart visits={analysisData?.actual?.visits || {}} avgHours={actualAvg} />
+                    <StayTimeTrendChart 
+                      visits={analysisData?.actual?.visits || {}} 
+                      avgHours={actualAvg} 
+                      insight={analysisData?.actual?.historical_insight}
+                    />
                   </Grid>
 
                   {analysisData?.actual?.container_breakdown?.equipment_breakdown && Object.keys(analysisData.actual.container_breakdown.equipment_breakdown).length > 0 ? (

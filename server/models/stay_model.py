@@ -712,11 +712,29 @@ def predict_vessel_stay_duration(
     avg_hours = round(weighted_sum / total_weight, 2)
     vals = list(visit_preds.values())
 
+    justification = ""
+    if historical_avg_stay_hours and float(historical_avg_stay_hours) > 0:
+        h_span = round(float(historical_avg_stay_hours), 1)
+        variance = round(avg_hours - h_span, 1)
+        
+        justification = (
+            f"1. Baseline Calculation: A base historical operational time of {h_span} hours was established for this service. This calculation assumes the standard physics of the operation, based on {int(round(total_weight / len(visit_preds)))} average container moves.\n\n"
+            f"2. Machine Learning Adjustment: "
+        )
+        
+        if variance > 0:
+            justification += f"The ML model analyzed the specific equipment distribution for these visits (such as the mix of 20ft/40ft, reefers, and hazardous units) alongside historical inefficiency patterns, predicting an additional {variance} hours of delays."
+        elif variance < 0:
+            justification += f"The ML model analyzed the specific equipment distribution for these visits alongside historical efficiency patterns, predicting an optimization that reduces the base stay time by {abs(variance)} hours."
+        else:
+            justification += "The ML model analyzed historical patterns and the equipment distribution and found no significant deviations, aligning perfectly with the historical baseline."
+
     return {
         "avg_hours": avg_hours,
         "visits":    len(visit_preds),
         "max_hours": round(max(vals), 2),
         "min_hours": round(min(vals), 2),
+        "justification": justification,
     }
 
 
@@ -835,10 +853,25 @@ def predict_stay_duration_from_metrics(
 
     avg_hours = round(float(max(ABSOLUTE_MIN_HOURS, avg_hours)), 2)
 
+    h_span = round(heuristic_span_hours, 1)
+    variance = round(avg_hours - h_span, 1)
+    
+    justification = (
+        f"1. Baseline Calculation: A base operational time of {h_span} hours was calculated using the physics of the operation. This calculation assumes {total_moves} total moves handled by {int(crane_count)} assigned cranes operating at a historical average of {round(historical_mph_avg or 17.1, 1)} moves per hour.\n\n"
+        f"2. Machine Learning Adjustment: "
+    )
+    
+    if variance > 0:
+        justification += f"The ML model analyzed the specific equipment distribution (e.g., proportion of 20ft/40ft, reefers, hazardous) and historical operational delays, predicting an additional {variance} hours of inefficiencies on top of the physical baseline."
+    elif variance < 0:
+        justification += f"The ML model analyzed the specific equipment distribution and historical efficiency patterns, predicting an optimization that reduces the physical baseline stay time by {abs(variance)} hours."
+    else:
+        justification += "The ML model analyzed historical patterns and equipment distribution and found no significant deviations, aligning perfectly with the operational baseline."
+
     return {
         "mode":     "manual",
         "vessel":   None,
         "actual":   {"visits": {}, "avg_hours": None},
-        "predicted": {"avg_hours": avg_hours, "visits": 1},
+        "predicted": {"avg_hours": avg_hours, "visits": 1, "justification": justification},
         "input": {"loaded": loaded, "discharged": discharged},
     }

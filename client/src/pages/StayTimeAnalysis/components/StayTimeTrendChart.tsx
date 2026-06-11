@@ -70,10 +70,12 @@ function TrendChartTooltip({ active, payload, label }: any) {
 export default function StayTimeTrendChart({
     visits,
     avgHours,
+    insight,
 }: {
     visits: Record<string, any>;
     avgHours: number;
     containerBreakdown?: any;
+    insight?: string;
 }) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -174,6 +176,11 @@ export default function StayTimeTrendChart({
                             <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mt: 0.25 }}>
                                 Port stay duration with load & discharge movements over time
                             </Typography>
+                            {insight && (
+                                <Typography variant="body2" sx={{ color: 'info.main', fontWeight: 600, mt: 1, maxWidth: 600, lineHeight: 1.4 }}>
+                                    {insight}
+                                </Typography>
+                            )}
                         </Box>
 
                         {/* Baseline indicator – lives outside the chart so it never overlaps data */}
