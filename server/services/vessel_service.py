@@ -111,6 +111,7 @@ def analyze_vessel_dashboard(
     # ── Historical baseline for feature template ───────────────────────────
     feature_template: dict = {}
     historical_mph_avg = 0.0
+    historical_features_list: list = []
 
     baseline_vessel = pd.DataFrame()
     if history_df is not None and not history_df.empty:
@@ -161,7 +162,11 @@ def analyze_vessel_dashboard(
             if valid_cranes:
                 avg_hist_cranes = sum(valid_cranes) / len(valid_cranes)
             else:
-                # Estimate based on total volume and stay
+                # Estimate crane count from historical throughput:
+                # total_vessel_mph = total_moves / total_stay_hours
+                # cranes ≈ total_vessel_mph / typical_per_crane_mph
+                # Industry standard per-crane rate is ~10 MPH
+                PER_CRANE_MPH_ESTIMATE = 10.0
                 total_m = 0
                 total_s = 0
                 for vid in baseline_prepared.keys():
@@ -171,7 +176,8 @@ def analyze_vessel_dashboard(
                         total_m += v_moves
                         total_s += v_stay
                 if total_s > 0:
-                    avg_hist_cranes = max(1.0, round((total_m / total_s) / 25.0))
+                    total_vessel_mph = total_m / total_s
+                    avg_hist_cranes = max(1.0, round(total_vessel_mph / PER_CRANE_MPH_ESTIMATE))
                 else:
                     avg_hist_cranes = 1.0
 
@@ -208,11 +214,13 @@ def analyze_vessel_dashboard(
                     crane_counts=visit_crane_counts,
                     historical_avg_stay_hours=baseline_avg_hours,
                 )
-                pred_avg = (
-                    predicted_init.get("avg_hours")
-                    if isinstance(predicted_init, dict) else None
-                )
-            except Exception:
+                if isinstance(predicted_init, dict) and predicted_init:
+                    vals = list(predicted_init.values())
+                    pred_avg = sum(vals) / len(vals)
+                else:
+                    pred_avg = None
+            except Exception as e:
+                logger.error("Failed to predict init: %s", e)
                 pred_avg = None
 
             synthetic_visits: dict = {}
@@ -246,6 +254,7 @@ def analyze_vessel_dashboard(
             return {"error": "No valid visit data found", "vessel": vessel_service}
 
     # ── Predict stay duration ────────────────────────────────────────────────
+    predicted = None
     try:
         if loaded_override is not None or discharged_override is not None or crane_count_override is not None or equipment_breakdown_override:
             total_loaded = loaded_override if loaded_override is not None else 0
@@ -281,15 +290,6 @@ def analyze_vessel_dashboard(
             )
             p_stay = p_res.get("predicted", {}).get("avg_hours") if isinstance(p_res, dict) else p_res
             predicted = {"avg_hours": p_stay, "visits": 1, "source": "metric_override", "assigned_cranes": estimated_cranes}
-        else:
-            # Pass properly windowed prepared_visits so move_span_hours accurately reflects vessel operation time
-            predicted = predict_vessel_stay_duration(
-                prepared_visits,
-                mph_override=historical_mph_avg or None,
-                feature_template=feature_template,
-                crane_counts=visit_crane_counts,
-                historical_avg_stay_hours=baseline_avg_hours,
-            )
     except Exception:
         predicted = None
 
@@ -344,6 +344,48 @@ def analyze_vessel_dashboard(
                 total_hours += stay * weight
                 total_weight += weight
         merged_avg_hours = round(total_hours / total_weight, 2) if total_weight > 0 else 0.0
+
+    # ── FIX: Extract correct crane counts from merged_visits ─────────────────
+    # _fetch_crane_counts_batch may return 0 due to visit ID format mismatch,
+    # but _visit_details (via _fetch_crane_stats_batch) correctly gets crane data.
+    # Use the merged_visits data as the source of truth for crane counts.
+    merged_crane_counts = {}
+    for vid, v in merged_visits.items():
+        cranes = v.get("assigned_cranes", 0)
+        if cranes > 0:
+            merged_crane_counts[vid] = cranes
+    
+    # If merged_visits has better crane data than _fetch_crane_counts_batch, use it
+    if merged_crane_counts and not any(v > 0 for v in visit_crane_counts.values()):
+        visit_crane_counts = merged_crane_counts
+        # Recalculate historical_mph_avg with correct crane count
+        valid_cranes = list(merged_crane_counts.values())
+        avg_hist_cranes = sum(valid_cranes) / len(valid_cranes) if valid_cranes else 1.0
+        if historical_features_list:
+            mph_rates = []
+            total_m_weight = 0.0
+            for f in historical_features_list:
+                span = f.get("move_span_hours", 0)
+                moves = f.get("total_moves", 0)
+                if span > 0 and moves > 0:
+                    rate = (moves / span) / avg_hist_cranes
+                    mph_rates.append(rate * moves)
+                    total_m_weight += moves
+            if mph_rates and total_m_weight > 0:
+                historical_mph_avg = sum(mph_rates) / total_m_weight
+
+    # ── Run baseline prediction if not already done (override path) ──────────
+    if predicted is None and not (loaded_override is not None or discharged_override is not None or crane_count_override is not None or equipment_breakdown_override):
+        try:
+            predicted = predict_vessel_stay_duration(
+                prepared_visits,
+                mph_override=historical_mph_avg or None,
+                feature_template=feature_template,
+                crane_counts=visit_crane_counts,
+                historical_avg_stay_hours=baseline_avg_hours or merged_avg_hours or None,
+            )
+        except Exception:
+            predicted = None
 
     merged_restows = [v.get("restow_count", 0) for v in merged_visits.values()]
     merged_avg_restows = round(sum(merged_restows) / len(merged_restows), 1) if merged_restows else 0.0
@@ -477,8 +519,14 @@ def analyze_vessel_dashboard(
 
         est_cranes = predicted.get("assigned_cranes")
         if not est_cranes:
-            if visit_crane_counts:
-                est_cranes = int(round(sum(visit_crane_counts.values()) / len(visit_crane_counts)))
+            # Try to get non-zero crane counts from DB
+            valid_crane_counts = {k: v for k, v in visit_crane_counts.items() if v > 0} if visit_crane_counts else {}
+            if valid_crane_counts:
+                est_cranes = int(round(sum(valid_crane_counts.values()) / len(valid_crane_counts)))
+            elif merged_avg_hours and merged_avg_hours > 0 and (model_loaded + model_discharged) > 0:
+                # Estimate cranes from: total_moves / (MPH * stay_hours)
+                mph = float(historical_mph_avg) if historical_mph_avg and historical_mph_avg > 0 else 17.0
+                est_cranes = max(1, int(round((model_loaded + model_discharged) / (mph * merged_avg_hours))))
             else:
                 est_cranes = max(1, (model_loaded + model_discharged) // 400)
         

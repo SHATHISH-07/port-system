@@ -15,6 +15,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import TuneIcon from '@mui/icons-material/Tune';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ClearAllIcon from '@mui/icons-material/ClearAll';
 import { api } from '../../../api/api';
 
 export default function StayTimeForm({
@@ -139,7 +140,25 @@ export default function StayTimeForm({
       {/* Advanced Analysis Collapse */}
       <Collapse in={advancedOpen}>
         <Box sx={{ pt: 1 }}>
-          <Divider sx={{ mb: 2.5 }} />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+            <Divider sx={{ flex: 1 }} />
+            <Button
+              size="small"
+              color="error"
+              onClick={() => {
+                onLoadedChange('');
+                onDischargedChange('');
+                onCraneCountChange('');
+                onEquipmentBreakdownChange({});
+                setSelectedEqType('');
+                setEqCount('');
+              }}
+              startIcon={<ClearAllIcon />}
+              sx={{ ml: 2, borderRadius: 2, textTransform: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}
+            >
+              Clear All
+            </Button>
+          </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
             <TextField

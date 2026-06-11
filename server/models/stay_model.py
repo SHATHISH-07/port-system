@@ -214,6 +214,10 @@ def _build_feature_row(
         for k, v in feature_template.items():
             if k not in features or features[k] == 0:
                 features[k] = v
+            elif k in ["total_moves", "loaded", "discharged"] or k.startswith("eq_"):
+                # For volume and equipment metrics, take the max of the active count or the historical average.
+                # This ensures incomplete active visits are correctly scaled up to the baseline expectations.
+                features[k] = max(float(features[k]), float(v))
 
     return features
 
