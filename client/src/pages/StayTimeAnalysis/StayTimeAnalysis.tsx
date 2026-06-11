@@ -127,7 +127,7 @@ export default function StayTimeAnalysis() {
   const [vesselId, setVesselId] = useState('');
   const [loaded, setLoaded] = useState('');
   const [discharged, setDischarged] = useState('');
-  const [craneCount, setCraneCount] = useState('1');
+  const [craneCount, setCraneCount] = useState('');
   const [equipmentBreakdown, setEquipmentBreakdown] = useState<Record<string, number>>({});
 
 
@@ -403,16 +403,16 @@ export default function StayTimeAnalysis() {
                 </Grid>
 
                 <Grid container spacing={2.5}>
-                  <Grid size={{ xs: 12, md: 6 }}>
+                  <Grid size={{ xs: 12, md: 8 }}>
                     <StayTimeTrendChart visits={analysisData?.actual?.visits || {}} avgHours={actualAvg} />
                   </Grid>
 
                   {analysisData?.actual?.container_breakdown?.equipment_breakdown && Object.keys(analysisData.actual.container_breakdown.equipment_breakdown).length > 0 ? (
-                    <Grid size={{ xs: 12, md: 6 }}>
+                    <Grid size={{ xs: 12, md: 4 }}>
                       <EquipmentBreakdownChart equipmentData={analysisData.actual.container_breakdown.equipment_breakdown} />
                     </Grid>
                   ) : (
-                    <Grid size={{ xs: 12, md: 6 }}>
+                    <Grid size={{ xs: 12, md: 4 }}>
                       <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.paper', borderRadius: 4, border: '1px dashed', borderColor: 'divider' }}>
                         <Typography variant="body2" color="text.secondary">No Equipment Data</Typography>
                       </Box>
