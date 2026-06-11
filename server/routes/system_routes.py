@@ -86,3 +86,23 @@ def create_request(req: RequestCreate, user: dict = Depends(get_current_user)):
             {"type": req.type, "payload": req.payload, "username": user["username"]}
         )
     return {"message": "Request submitted successfully"}
+
+
+@router.get("/equipment-types")
+def get_equipment_types(user: dict = Depends(get_current_user)):
+    """
+    Retrieves the list of unique equipment types from the historical container data.
+    """
+    engine = get_engine()
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT DISTINCT
+            INITCAP(LOWER(TRIM(REGEXP_REPLACE(equipment_type, '\s+', ' ', 'g')))) AS equipment_type
+            FROM containers
+            WHERE equipment_type IS NOT NULL
+            AND TRIM(equipment_type) <> ''
+            ORDER BY equipment_type;
+        """)).fetchall()
+    
+    # Filter out any internal formatting artifacts like trailing spaces
+    return [str(r[0]).strip() for r in result if r[0]]

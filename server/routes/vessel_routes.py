@@ -12,7 +12,7 @@ from db.connection import get_engine
 from db.queries import load_from_db
 from services.vessel_service import analyze_vessel_dashboard
 from services.berth_optimization_service import get_yard_heatmap_data
-from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse, DiscoverServicesRequest
+from schemas.vessel import HeatmapRequest, VesselAnalysisResponse, YardSummaryResponse, DiscoverServicesRequest, VesselAnalysisRequest
 from services.vessel_operations import discover_services_for_containers
 from schemas.vessel import PortStayPredictionRequest, PortStayPredictionResponse
 
@@ -72,6 +72,54 @@ async def get_vessel_analysis(
     except Exception as exc:
         logger.error("vessel_analysis error for %s: %s", vessel_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# POST /vessel/analysis
+@router.post("/analysis", response_model=VesselAnalysisResponse)
+async def post_vessel_analysis(
+    request: VesselAnalysisRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Advanced vessel analysis endpoint accepting specific breakdowns.
+    """
+    vessel_id = request.vessel_id
+    try:
+        df_curr = load_from_db("current", vessel_id=vessel_id)
+        df_hist = load_from_db("history", vessel_id=vessel_id)
+
+        result = analyze_vessel_dashboard(
+            df_curr,
+            vessel_id,
+            loaded_override=request.load_moves,
+            discharged_override=request.discharge_moves,
+            crane_count_override=request.crane_count,
+            equipment_breakdown_override=request.equipment_breakdown,
+            history_df=df_hist,
+        )
+
+        if "error" in result:
+            hist_result = analyze_vessel_dashboard(
+                df_hist,
+                vessel_id,
+                loaded_override=request.load_moves,
+                discharged_override=request.discharge_moves,
+                crane_count_override=request.crane_count,
+                equipment_breakdown_override=request.equipment_breakdown,
+                history_df=df_hist,
+            )
+            if "error" not in hist_result:
+                return hist_result
+            raise HTTPException(status_code=404, detail=hist_result.get("error", "No data found for vessel"))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("post_vessel_analysis error for %s: %s", vessel_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 
 # POST /vessel/heatmap  — unified map/heatmap/container-position endpoint

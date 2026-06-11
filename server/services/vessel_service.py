@@ -20,6 +20,8 @@ def analyze_vessel_dashboard(
     vessel_service: str,
     loaded_override: int = None,
     discharged_override: int = None,
+    crane_count_override: int = None,
+    equipment_breakdown_override: dict = None,
     history_df: pd.DataFrame = None,
     optional_unit_ids: list[str] = None,
 ) -> dict:
@@ -245,13 +247,15 @@ def analyze_vessel_dashboard(
 
     # ── Predict stay duration ────────────────────────────────────────────────
     try:
-        if loaded_override is not None or discharged_override is not None:
+        if loaded_override is not None or discharged_override is not None or crane_count_override is not None or equipment_breakdown_override:
             total_loaded = loaded_override if loaded_override is not None else 0
             total_discharged = discharged_override if discharged_override is not None else 0
 
             total_moves = total_loaded + total_discharged
             estimated_cranes = 1
-            if historical_mph_avg and historical_mph_avg > 0 and actual_raw.get("avg_hours") and actual_raw.get("avg_hours") > 0:
+            if crane_count_override is not None and crane_count_override > 0:
+                estimated_cranes = crane_count_override
+            elif historical_mph_avg and historical_mph_avg > 0 and actual_raw.get("avg_hours") and actual_raw.get("avg_hours") > 0:
                 total_mph = total_moves / actual_raw.get("avg_hours")
                 estimated_cranes = max(1, int(round(total_mph / historical_mph_avg)))
             else:
@@ -261,14 +265,19 @@ def analyze_vessel_dashboard(
                 )
                 estimated_cranes = max(avg_crane_count, 1)
                 
-            estimated_cranes = min(3, estimated_cranes) # Cap at physical berth limit
+            # If the user provides a crane count override, do not cap it at 3 (allow what-if scenarios)
+            if crane_count_override is None:
+                estimated_cranes = min(3, estimated_cranes) # Cap at physical berth limit
             
             p_res = predict_stay_duration_from_metrics(
                 total_loaded,
                 total_discharged,
                 crane_count=estimated_cranes,
                 historical_mph_avg=historical_mph_avg,
-                historical_avg_stay_hours=baseline_avg_hours if baseline_avg_hours else actual_raw.get("avg_hours"),
+                # Do NOT pass historical_avg_stay_hours here! 
+                # What-if analysis means we want the physics heuristic to recalculate move_span_hours
+                historical_avg_stay_hours=None,
+                equipment_breakdown=equipment_breakdown_override,
             )
             p_stay = p_res.get("predicted", {}).get("avg_hours") if isinstance(p_res, dict) else p_res
             predicted = {"avg_hours": p_stay, "visits": 1, "source": "metric_override", "assigned_cranes": estimated_cranes}

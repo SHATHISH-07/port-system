@@ -187,14 +187,23 @@ class Settings:
         "hazard_count",
         "oog_count",
         "service_hash",
-        "move_span_hours",        # FIX: was missing — strongest single feature
+        "move_span_hours",        
         "restow_intensity",
         "block_concentration",
-        "reefer_equipment_ratio",
-        "pct_40ft",
         "avg_weight_kg",
         "heavy_ratio",
         "crane_count",
+        "eq_20ft_general",
+        "eq_40ft_general",
+        "eq_20ft_reefer",
+        "eq_40ft_reefer",
+        "eq_20ft_flatrack",
+        "eq_40ft_flatrack",
+        "eq_20ft_opentop",
+        "eq_40ft_opentop",
+        "eq_20ft_tank",
+        "eq_40ft_tank",
+        "eq_other",
     ]
 
     # Automated retraining

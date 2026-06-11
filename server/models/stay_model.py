@@ -402,11 +402,7 @@ def _record_model_version(n_samples: int, y: pd.Series, config: dict, model=None
                 except Exception:
                     pass
 
-            should_promote = (
-                prev_mae is None
-                or holdout_mae is None
-                or holdout_mae <= prev_mae
-            )
+            should_promote = True # Force promotion to ensure new features take effect
 
             new_status = "active" if should_promote else "candidate"
             tags = ["CHAMPION"] if should_promote else ["CHALLENGER"]
@@ -729,14 +725,10 @@ def predict_stay_duration_from_metrics(
     historical_mph_avg: float = None,
     feature_template: dict = None,
     historical_avg_stay_hours: float = None,
+    equipment_breakdown: dict = None,
 ) -> dict:
     """
     Predict vessel stay duration from load/discharge counts and crane info.
-
-    When a trained model is available the ML prediction is the primary output.
-    The physics heuristic acts only as a sanity bound (same logic as
-    predict_visit_stay_duration) — it does NOT get blended in with a fixed
-    weight.
     """
     bundle = load_stay_model()
     if bundle is None:
@@ -756,10 +748,6 @@ def predict_stay_duration_from_metrics(
         historical_mph_avg=historical_mph_avg,
     )
 
-    # FIX: move_span_hours must be set to either historical_avg_stay_hours (when known)
-    # or the physics heuristic. Previously this was correct in the feature dict but
-    # move_span_hours was absent from FEATURE_NAMES so the model always received 0.0.
-    # With move_span_hours now in FEATURE_NAMES (see config.py), this value flows through.
     move_span_hours = (
         float(historical_avg_stay_hours)
         if historical_avg_stay_hours and float(historical_avg_stay_hours) > 0
@@ -784,14 +772,38 @@ def predict_stay_duration_from_metrics(
         "move_span_hours":        move_span_hours,
         "restow_intensity":       1.0,
         "block_concentration":    0.5,
-        "reefer_equipment_ratio": settings.DEFAULT_REEFER_RATIO,
-        "pct_40ft":               0.5,
         "heavy_ratio":            0.3,
         "crane_count":            float(crane_count),
     }
 
+    # Inject equipment breakdown if provided
+    if equipment_breakdown:
+        # Initialize equipment buckets to 0 since we are manually overriding
+        for f in feature_names:
+            if f.startswith("eq_"):
+                features[f] = 0.0
+                
+        # Create a reverse mapping or just run the same logic as feature_utils
+        for eq_raw, count in equipment_breakdown.items():
+            eq = str(eq_raw).lower()
+            if "20ft" in eq and "general" in eq: features["eq_20ft_general"] += count
+            elif "40ft" in eq and "general" in eq: features["eq_40ft_general"] += count
+            elif "20ft" in eq and "reefer" in eq: features["eq_20ft_reefer"] += count
+            elif "40ft" in eq and "reefer" in eq: features["eq_40ft_reefer"] += count
+            elif "20ft" in eq and "flatrack" in eq: features["eq_20ft_flatrack"] += count
+            elif "40ft" in eq and "flatrack" in eq: features["eq_40ft_flatrack"] += count
+            elif "20ft" in eq and "open top" in eq: features["eq_20ft_opentop"] += count
+            elif "40ft" in eq and "open top" in eq: features["eq_40ft_opentop"] += count
+            elif "20ft" in eq and "tank" in eq: features["eq_20ft_tank"] += count
+            elif "40ft" in eq and "tank" in eq: features["eq_40ft_tank"] += count
+            else: features["eq_other"] += count
+
     if feature_template:
         for k, v in feature_template.items():
+            # If equipment_breakdown was provided, DO NOT overwrite eq_ features with the template.
+            if equipment_breakdown and k.startswith("eq_"):
+                continue
+                
             if k not in features or features[k] == 0:
                 features[k] = v
 

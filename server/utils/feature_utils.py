@@ -156,21 +156,37 @@ def create_features(df: pd.DataFrame) -> dict | None:
         svc  = str(vals.iloc[0]).strip() if not vals.empty else "unknown"
     service_hash = int(hashlib.md5(svc.encode()).hexdigest()[:6], 16)
 
-    #  Container mix 
-    reefer_equipment_ratio = float(
-        df["equipment_type"].astype(str).str.contains("R", case=False).mean()
-    ) if "equipment_type" in df.columns and not df["equipment_type"].isna().all() else 0.0
+    #  Explicit Equipment Breakdowns 
+    eq_counts = {
+        "eq_20ft_general": 0, "eq_40ft_general": 0,
+        "eq_20ft_reefer": 0, "eq_40ft_reefer": 0,
+        "eq_20ft_flatrack": 0, "eq_40ft_flatrack": 0,
+        "eq_20ft_opentop": 0, "eq_40ft_opentop": 0,
+        "eq_20ft_tank": 0, "eq_40ft_tank": 0,
+        "eq_other": 0,
+    }
 
-    pct_40ft = float(
-        (pd.to_numeric(
-            df.get("container_length", pd.Series(dtype=float)), errors="coerce"
-        ) >= 40).mean()
-    ) if "container_length" in df.columns and not df["container_length"].isna().all() else 0.0
+    if "equipment_type" in df.columns:
+        for eq in df["equipment_type"].dropna().astype(str).str.lower():
+            if "20ft" in eq and "general" in eq: eq_counts["eq_20ft_general"] += 1
+            elif "40ft" in eq and "general" in eq: eq_counts["eq_40ft_general"] += 1
+            elif "20ft" in eq and "reefer" in eq: eq_counts["eq_20ft_reefer"] += 1
+            elif "40ft" in eq and "reefer" in eq: eq_counts["eq_40ft_reefer"] += 1
+            elif "20ft" in eq and "flatrack" in eq: eq_counts["eq_20ft_flatrack"] += 1
+            elif "40ft" in eq and "flatrack" in eq: eq_counts["eq_40ft_flatrack"] += 1
+            elif "20ft" in eq and "open top" in eq: eq_counts["eq_20ft_opentop"] += 1
+            elif "40ft" in eq and "open top" in eq: eq_counts["eq_40ft_opentop"] += 1
+            elif "20ft" in eq and "tank" in eq: eq_counts["eq_20ft_tank"] += 1
+            elif "40ft" in eq and "tank" in eq: eq_counts["eq_40ft_tank"] += 1
+            else: eq_counts["eq_other"] += 1
+    else:
+        # Fallback if no equipment type available
+        eq_counts["eq_other"] = len(df)
 
     heavy_ratio = heavy_count / max(total_moves, 1)
     avg_weight_kg = float(avg_weight)
 
-    return {
+    res = {
         "loaded":                 int(loaded),
         "discharged":             int(discharged),
         "total_moves":            int(total_moves),
@@ -187,10 +203,15 @@ def create_features(df: pd.DataFrame) -> dict | None:
         "move_span_hours":        float(move_span_hours),
         "restow_intensity":       float(restow_intensity),
         "block_concentration":    float(block_concentration),
-        "reefer_equipment_ratio": float(reefer_equipment_ratio),
-        "pct_40ft":               float(pct_40ft),
         "avg_weight_kg":          avg_weight_kg,
         "heavy_ratio":            float(heavy_ratio),
-        # Diagnostic (not in FEATURE_NAMES — ignored by model)
-        "restow_count":           int(restows),
     }
+    
+    # Merge equipment counts
+    for k, v in eq_counts.items():
+        res[k] = float(v)
+        
+    # Diagnostic (not in FEATURE_NAMES — ignored by model)
+    res["restow_count"] = int(restows)
+        
+    return res

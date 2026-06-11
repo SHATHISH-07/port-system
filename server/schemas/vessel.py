@@ -13,6 +13,13 @@ class DiscoverServicesRequest(BaseModel):
     unit_ids: List[str]
     yard_id: Optional[str] = None
 
+class VesselAnalysisRequest(BaseModel):
+    vessel_id: str
+    load_moves: Optional[int] = None
+    discharge_moves: Optional[int] = None
+    crane_count: Optional[int] = None
+    equipment_breakdown: Optional[Dict[str, int]] = None
+
 class VesselAnalysisResponse(BaseModel):
     model_config = ConfigDict(extra='allow')
     

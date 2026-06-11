@@ -127,6 +127,8 @@ export default function StayTimeAnalysis() {
   const [vesselId, setVesselId] = useState('');
   const [loaded, setLoaded] = useState('');
   const [discharged, setDischarged] = useState('');
+  const [craneCount, setCraneCount] = useState('1');
+  const [equipmentBreakdown, setEquipmentBreakdown] = useState<Record<string, number>>({});
 
 
   const handleAnalyze = async (e?: React.SubmitEvent<HTMLFormElement>) => {
@@ -139,35 +141,33 @@ export default function StayTimeAnalysis() {
     setError(null);
 
     try {
-      const params: Record<string, any> = {
-        vesselId: trimmedVesselId,
+      const dataPayload: Record<string, any> = {
         vessel_id: trimmedVesselId,
-        vessel_service: trimmedVesselId,
       };
 
       if (loaded.trim() !== '') {
         const loadedValue = Number(loaded);
-        if (Number.isNaN(loadedValue)) {
-          setError('Load Moves must be a valid number.');
-          setAnalysisData(null);
-          setLoading(false);
-          return;
-        }
-        params.loaded = loadedValue;
+        if (Number.isNaN(loadedValue)) throw new Error('Load Moves must be a valid number.');
+        dataPayload.load_moves = loadedValue;
       }
 
       if (discharged.trim() !== '') {
         const dischargedValue = Number(discharged);
-        if (Number.isNaN(dischargedValue)) {
-          setError('Discharge must be a valid number.');
-          setAnalysisData(null);
-          setLoading(false);
-          return;
-        }
-        params.discharged = dischargedValue;
+        if (Number.isNaN(dischargedValue)) throw new Error('Discharge must be a valid number.');
+        dataPayload.discharge_moves = dischargedValue;
       }
 
-      const response = await api.get('/vessel/analysis', { params });
+      if (craneCount.trim() !== '') {
+        const craneValue = Number(craneCount);
+        if (Number.isNaN(craneValue)) throw new Error('Crane Count must be a valid number.');
+        dataPayload.crane_count = craneValue;
+      }
+
+      if (Object.keys(equipmentBreakdown).length > 0) {
+        dataPayload.equipment_breakdown = equipmentBreakdown;
+      }
+
+      const response = await api.post('/vessel/analysis', dataPayload);
       const data = response.data;
 
       if (data?.error) {
@@ -261,6 +261,10 @@ export default function StayTimeAnalysis() {
             onLoadedChange={setLoaded}
             discharged={discharged}
             onDischargedChange={setDischarged}
+            craneCount={craneCount}
+            onCraneCountChange={setCraneCount}
+            equipmentBreakdown={equipmentBreakdown}
+            onEquipmentBreakdownChange={setEquipmentBreakdown}
             onSubmit={handleAnalyze}
             loading={loading}
           />
