@@ -46,7 +46,7 @@ export const EquipmentBreakdownChart: React.FC<EquipmentBreakdownChartProps> = (
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Showing {data.length} unique equipment types during this visit.
       </Typography>
-      
+
       <Paper
         elevation={0}
         sx={{
@@ -66,11 +66,11 @@ export const EquipmentBreakdownChart: React.FC<EquipmentBreakdownChartProps> = (
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow>
-                <TableCell 
-                  sx={{ 
-                    fontWeight: 700, 
-                    color: "text.secondary", 
-                    textTransform: "uppercase", 
+                <TableCell
+                  sx={{
+                    fontWeight: 700,
+                    color: "text.secondary",
+                    textTransform: "uppercase",
                     fontSize: "0.75rem",
                     letterSpacing: "0.05em",
                     borderBottom: `1px solid ${theme.palette.divider}`,
@@ -79,12 +79,12 @@ export const EquipmentBreakdownChart: React.FC<EquipmentBreakdownChartProps> = (
                 >
                   Equipment Types
                 </TableCell>
-                <TableCell 
+                <TableCell
                   align="right"
-                  sx={{ 
-                    fontWeight: 700, 
-                    color: "text.secondary", 
-                    textTransform: "uppercase", 
+                  sx={{
+                    fontWeight: 700,
+                    color: "text.secondary",
+                    textTransform: "uppercase",
                     fontSize: "0.75rem",
                     letterSpacing: "0.05em",
                     borderBottom: `1px solid ${theme.palette.divider}`,
@@ -97,10 +97,10 @@ export const EquipmentBreakdownChart: React.FC<EquipmentBreakdownChartProps> = (
             </TableHead>
             <TableBody>
               {data.map((row, index) => (
-                <TableRow 
+                <TableRow
                   key={index}
                   hover
-                  sx={{ 
+                  sx={{
                     '&:last-child td, &:last-child th': { border: 0 },
                     transition: 'background-color 0.2s',
                   }}
@@ -116,11 +116,11 @@ export const EquipmentBreakdownChart: React.FC<EquipmentBreakdownChartProps> = (
             </TableBody>
           </Table>
         </TableContainer>
-        
+
         {/* Footer summary */}
-        <Box 
-          sx={{ 
-            p: 1.5, 
+        <Box
+          sx={{
+            p: 1.5,
             borderTop: `1px solid ${theme.palette.divider}`,
             bgcolor: alpha(theme.palette.primary.main, 0.04),
             display: "flex",

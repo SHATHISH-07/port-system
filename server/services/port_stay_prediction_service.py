@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import math
 import pandas as pd
 from sqlalchemy import text
@@ -64,11 +64,17 @@ def predict_port_stay(vessel_id: str, load_moves: int) -> dict:
     recommended_cranes = min(5, max(1, math.ceil(load_moves / dynamic_crane_capacity)))
     predicted_port_stay_hours = round(load_moves / (recommended_cranes * avg_crane_mph), 1) if (recommended_cranes * avg_crane_mph) > 0 else 0.0
 
+    justification = (
+        f"Predicted port stay of {predicted_port_stay_hours} hours is established based on a workload of {load_moves} total moves. "
+        f"This model assumes an optimal operational allocation of {recommended_cranes} quay cranes, each maintaining a historical average productivity rate of {round(avg_crane_mph, 1)} moves per hour, reflecting the established baseline efficiency for the {vessel_id.strip().upper()} service."
+    )
+
     return {
         "vessel_id": vessel_id,
         "total_moves": load_moves,
         "historical_avg_cranes": recommended_cranes, # Proxy based on total load moves
         "historical_avg_mph": round(avg_crane_mph, 1),
         "recommended_cranes": recommended_cranes,
-        "predicted_port_stay_hours": predicted_port_stay_hours
+        "predicted_port_stay_hours": predicted_port_stay_hours,
+        "justification": justification
     }

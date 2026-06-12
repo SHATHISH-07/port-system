@@ -22,7 +22,7 @@ def _calculate_delay_analysis(visit_df) -> list:
                 causes.append({
                     "factor": "Operational Gaps",
                     "impact": "High" if lost_hours > 5 else "Medium",
-                    "reason": f"Detected {len(long_gaps)} move-completion gaps exceeding 60 mins, amounting to a total of {lost_hours} hours of lost crane productivity.",
+                    "reason": f"Detected {len(long_gaps)} move-completion gaps exceeding 60 mins, amounting to a total of {lost_hours} hours of lost crane productivity. Prolonged gaps indicate coordination failures between yard equipment and the quay crane, directly extending the port stay and reducing overall berth throughput.",
                     "recommendation": "Review crane allocation",
                 })
         
@@ -63,7 +63,7 @@ def _calculate_delay_analysis(visit_df) -> list:
                         causes.append({
                             "factor": "Low M-Cycle Percentage",
                             "impact": "High" if est_lost_hours > 3 else "Medium",
-                            "reason": f"Only {dual_cycle_rate:.1f}% dual-cycles (M-cycles) detected. Poor interleaving has resulted in an estimated {est_lost_hours} hours of wasted gantry movement.",
+                            "reason": f"Only {dual_cycle_rate:.1f}% dual-cycles (M-cycles) detected. Poor interleaving has resulted in an estimated {est_lost_hours} hours of wasted gantry movement. Expanding dual-cycling directly reduces unladen trolley travel time and significantly improves operational efficiency.",
                             "recommendation": "Improve stacking and consolidation",
                         })
 
@@ -87,7 +87,7 @@ def _calculate_delay_analysis(visit_df) -> list:
         causes.append({
             "factor": "High Restow Rate",
             "impact": "High" if est_restow_hours > 4 else "Medium",
-            "reason": f"{restow_count} restow/shift moves detected, extending berth time by an estimated {est_restow_hours} hours.",
+            "reason": f"{restow_count} restow/shift moves detected, extending berth time by an estimated {est_restow_hours} hours. High restow rates typically stem from sub-optimal yard stacking or late changes to the stowage plan, causing significant unproductive crane usage.",
             "recommendation": "Improve stacking and consolidation",
         })
 
@@ -115,7 +115,7 @@ def _calculate_delay_analysis(visit_df) -> list:
                 causes.append({
                     "factor": "Crane Idle Time",
                     "impact": "High",
-                    "reason": f"Detected {len(idle_gaps)} instances of crane idle time >30 mins.",
+                    "reason": f"Detected {len(idle_gaps)} instances of crane idle time >30 mins. Unplanned crane idle time points to severe bottlenecks in horizontal transport (ITV shortage) or yard crane unreadiness, leading to direct vessel departure delays.",
                     "recommendation": "Review crane allocation",
                 })
 
@@ -131,7 +131,7 @@ def _calculate_delay_analysis(visit_df) -> list:
                     causes.append({
                         "factor": "Container not ready",
                         "impact": "High",
-                        "reason": f"{len(late_arrivals)} containers arrived after vessel loading started.",
+                        "reason": f"{len(late_arrivals)} containers arrived after vessel loading started. Late arrivals severely disrupt the planned load sequence, forcing quay cranes to wait or restow units, which critically impacts the operational timeline.",
                         "recommendation": "Improve yard readiness before arrival",
                     })
 
@@ -155,7 +155,7 @@ def _calculate_delay_analysis(visit_df) -> list:
                     causes.append({
                         "factor": "ITV congestion / Long unladen travel",
                         "impact": "Medium",
-                        "reason": f"{long_travel_count} load moves originated from blocks >800m from the berth.",
+                        "reason": f"{long_travel_count} load moves originated from blocks >800m from the berth. This extended unladen travel time creates ITV congestion and slows down the cycle time of horizontal transport, reducing the quay crane delivery rate.",
                         "recommendation": "Review corridor planning",
                     })
     except Exception as e:
@@ -193,7 +193,7 @@ def _calculate_delay_analysis(visit_df) -> list:
             causes.append({
                 "factor": "Crane crossing conflicts",
                 "impact": "High",
-                "reason": f"Detected {crossing_conflicts} instances of crane working zone (bay) overlap.",
+                "reason": f"Detected {crossing_conflicts} instances of crane working zone (bay) overlap. Crane clashes or overlapping work zones require gantry speed reduction and manual intervention, creating significant safety risks and operational delays.",
                 "recommendation": "Review crane deployment zones",
             })
 

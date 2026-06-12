@@ -722,12 +722,19 @@ def predict_vessel_stay_duration(
             f"2. Machine Learning Adjustment: "
         )
         
+        insight_details = ""
+        if feature_template:
+            heavy_pct = round(feature_template.get("heavy_ratio", 0) * 100, 1)
+            reefer_pct = round(feature_template.get("reefer_equipment_ratio", 0) * 100, 1)
+            restow_int = round(feature_template.get("restow_intensity", 1.0), 2)
+            insight_details = f"Specifically, the model identified a heavy lift ratio of {heavy_pct}%, a reefer concentration of {reefer_pct}%, and a yard restow intensity factor of {restow_int}. "
+
         if variance > 0:
-            justification += f"The ML model analyzed the specific equipment distribution for these visits (such as the mix of 20ft/40ft, reefers, and hazardous units) alongside historical inefficiency patterns, predicting an additional {variance} hours of delays."
+            justification += f"The ML model performed a deep analysis of the equipment distribution across these visits. {insight_details}Alongside historical delay patterns and yard congestion indicators, these complex handling factors led the model to predict an additional {variance} hours of operational inefficiencies on top of the physical baseline."
         elif variance < 0:
-            justification += f"The ML model analyzed the specific equipment distribution for these visits alongside historical efficiency patterns, predicting an optimization that reduces the base stay time by {abs(variance)} hours."
+            justification += f"The ML model performed a deep analysis of the equipment distribution and historical efficiency patterns. {insight_details}These favorable stowage combinations and efficient yard flows led the model to predict an optimization that reduces the base stay time by {abs(variance)} hours."
         else:
-            justification += "The ML model analyzed historical patterns and the equipment distribution and found no significant deviations, aligning perfectly with the historical baseline."
+            justification += f"The ML model analyzed historical patterns and the equipment distribution. {insight_details}The model found no significant deviations or congestion bottlenecks, aligning perfectly with the historical operational baseline."
 
     return {
         "avg_hours": avg_hours,
@@ -861,12 +868,19 @@ def predict_stay_duration_from_metrics(
         f"2. Machine Learning Adjustment: "
     )
     
+    heavy_pct = round((features.get("heavy_count", 0) / total_moves) * 100, 1) if total_moves else 0
+    reefer_pct = round((features.get("reefer_count", 0) / total_moves) * 100, 1) if total_moves else 0
+    oog_pct = round((features.get("oog_count", 0) / total_moves) * 100, 1) if total_moves else 0
+    hazard_pct = round((features.get("hazard_count", 0) / total_moves) * 100, 1) if total_moves else 0
+
+    insight_details = f"Based on your inputs, the simulated workload contains {heavy_pct}% heavy containers, {reefer_pct}% reefers, {oog_pct}% Out-of-Gauge, and {hazard_pct}% hazardous units. "
+
     if variance > 0:
-        justification += f"The ML model analyzed the specific equipment distribution (e.g., proportion of 20ft/40ft, reefers, hazardous) and historical operational delays, predicting an additional {variance} hours of inefficiencies on top of the physical baseline."
+        justification += f"The ML model evaluated this specific simulated scenario. {insight_details}These challenging equipment profiles—combined with projected yard block density and historical delay markers—result in the model predicting an additional {variance} hours of inefficiencies on top of the physical baseline."
     elif variance < 0:
-        justification += f"The ML model analyzed the specific equipment distribution and historical efficiency patterns, predicting an optimization that reduces the physical baseline stay time by {abs(variance)} hours."
+        justification += f"The ML model evaluated this specific simulated scenario. {insight_details}This highly favorable equipment distribution leads the model to predict an optimization, reducing the physical baseline stay time by {abs(variance)} hours due to seamless handling expectations."
     else:
-        justification += "The ML model analyzed historical patterns and equipment distribution and found no significant deviations, aligning perfectly with the operational baseline."
+        justification += f"The ML model evaluated this specific simulated scenario. {insight_details}This profile perfectly matches standard operational expectations, showing no significant inefficiency markers and aligning directly with the physical baseline."
 
     return {
         "mode":     "manual",

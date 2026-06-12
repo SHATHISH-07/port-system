@@ -9,7 +9,10 @@ import {
   CircularProgress,
   Paper,
   Stack,
+  Divider,
 } from '@mui/material';
+import CalculateIcon from '@mui/icons-material/Calculate';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 import StayTimeForm from './components/StayTimeForm';
 import HistoryAnalysisTable from './components/HistoryAnalysisTable';
@@ -243,6 +246,22 @@ export default function StayTimeAnalysis() {
   const delayAnalysis = Array.isArray(analysisData?.delay_analysis) ? analysisData.delay_analysis : [];
   const isStayLoaded = !!analysisData && !analysisData.error && !loading;
 
+  let aiConfidence = 80;
+  if (analysisData?.predicted?.source === 'metric_override') {
+     aiConfidence = 92;
+  } else if (visitsCount >= 10) {
+     aiConfidence = 96;
+  } else if (visitsCount >= 5) {
+     aiConfidence = 88;
+  } else if (visitsCount > 0) {
+     aiConfidence = 75;
+  }
+
+  const justificationText = analysisData?.predicted?.justification || "";
+  const hasSplit = justificationText.includes("2. Machine Learning Adjustment:");
+  const baselinePart = hasSplit ? justificationText.split("2. Machine Learning Adjustment:")[0].replace("1. Baseline Calculation:", "").trim() : "";
+  const mlPart = hasSplit ? justificationText.split("2. Machine Learning Adjustment:")[1].trim() : justificationText;
+
   // ML Prediction Factors
   const modelFactors = analysisData?.predicted?.model_factors || {};
   const fTotalMoves = modelFactors.total_moves || 0;
@@ -275,11 +294,23 @@ export default function StayTimeAnalysis() {
   );
 
   const MetricGroup = ({ title, children }: any) => (
-    <Box sx={{ width: '100%', mb: 1 }}>
+    <Box sx={{ width: '100%', mb: 2 }}>
       <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.1em', mb: 1, display: 'block' }}>
         {title}
       </Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 2, md: 3 }, p: 2.5, borderRadius: 3, bgcolor: alpha(theme.palette.background.default, 0.5), border: '1px solid', borderColor: alpha(theme.palette.divider, 0.6) }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+          gap: { xs: 2, md: 3 },
+          p: 2.5,
+          borderRadius: 3,
+          bgcolor: alpha(theme.palette.background.default, 0.6),
+          border: '1px solid',
+          borderColor: alpha(theme.palette.divider, 0.8),
+          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+        }}
+      >
         {children}
       </Box>
     </Box>
@@ -367,91 +398,145 @@ export default function StayTimeAnalysis() {
                         position: 'relative',
                         overflow: 'hidden',
                         display: 'flex',
-                        flexDirection: { xs: 'column', md: 'row' },
-                        alignItems: { xs: 'flex-start', md: 'center' },
-                        justifyContent: 'flex-start',
-                        gap: { xs: 4, md: 6 },
+                        flexDirection: 'column',
+                        gap: 3,
                         boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.05)}`
                       }}
                     >
-                      {/* Left Side: Main Predicted Stay */}
-                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: '0 0 auto' }}>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography sx={{ fontWeight: 800, fontSize: '1.2rem', color: 'text.secondary', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                            {analysisData?.vessel_service || vesselId}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                            Predicted Port Stay
-                          </Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                            <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '4.5rem', md: '6.5rem' }, lineHeight: 1, color: 'text.primary' }}>
-                              {formatNumber(predictedAvg)}
-                            </Typography>
-                            <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.7 }}>
-                              hours
+                      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: { xs: 4, md: 6 }, width: '100%' }}>
+                        {/* Left Side: Main Predicted Stay */}
+                        <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: '0 0 auto', minWidth: '250px' }}>
+                          <Box sx={{ mb: 2 }}>
+                            <Typography sx={{ fontWeight: 800, fontSize: '1.2rem', color: 'text.secondary', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                              {analysisData?.vessel_service || vesselId}
                             </Typography>
                           </Box>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              mt: 2,
-                              display: 'block',
-                              color: 'text.secondary',
-                              fontWeight: 500,
-                              lineHeight: 1.5,
-                            }}
-                          >
-                            Prediction is based on <strong>{visitsCount}</strong> historical visits.
-                          </Typography>
-                          
-                          {analysisData?.predicted?.justification && (
+                          <Box>
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                              Predicted Port Stay
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                              <Typography sx={{ fontWeight: 900, letterSpacing: '-0.03em', fontSize: { xs: '4.5rem', md: '6.5rem' }, lineHeight: 1, color: 'text.primary' }}>
+                                {formatNumber(predictedAvg)}
+                              </Typography>
+                              <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.secondary', opacity: 0.7 }}>
+                                hours
+                              </Typography>
+                            </Box>
                             <Typography
                               variant="body2"
                               sx={{
                                 mt: 2,
                                 display: 'block',
-                                color: 'primary.main',
-                                fontWeight: 600,
+                                color: 'text.secondary',
+                                fontWeight: 500,
                                 lineHeight: 1.5,
-                                maxWidth: '400px',
-                                whiteSpace: 'pre-line',
                               }}
                             >
-                              {analysisData.predicted.justification}
+                              {analysisData?.predicted?.source === 'metric_override' ? (
+                                <>Prediction is based on <strong>manual simulation inputs</strong>, calibrated against historical baseline.</>
+                              ) : (
+                                <>Prediction is based on <strong>{visitsCount}</strong> historical visits.</>
+                              )}
                             </Typography>
-                          )}
+                          </Box>
+                        </Box>
+
+                        {/* Divider for Desktop */}
+                        <Box sx={{ display: { xs: 'none', md: 'block' }, width: '1px', alignSelf: 'stretch', bgcolor: 'divider', zIndex: 1 }} />
+                        {/* Divider for Mobile */}
+                        <Box sx={{ display: { xs: 'block', md: 'none' }, height: '1px', width: '100%', bgcolor: 'divider', zIndex: 1 }} />
+
+                        {/* Right Side: Prediction Drivers Grid */}
+                        <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 2, flex: '1 1 auto', pt: { xs: 1, md: 0 } }}>
+                          <MetricGroup title="Operational Performance">
+                            <MetricBox title="Historical Baseline" value={formatNumber(actualAvg)} unit="h" subtitle="Typical stay duration" />
+                            <MetricBox title="Avg Workload" value={formatNumber(fTotalMoves, 0)} subtitle="Total Moves" />
+                            <MetricBox title="Avg Resources" value={fCranes} subtitle="Assigned Cranes" color="primary.main" />
+                            <MetricBox title="Avg Productivity" value={formatNumber(fMph, 1)} unit="MPH" subtitle="Moves per Hour" />
+                            <MetricBox title="History Coverage" value={formatNumber(visitsCount, 0)} subtitle="Analyzed visits" color="primary.main" />
+                          </MetricGroup>
+
+                          <MetricGroup title="Container Classification">
+                            <MetricBox title="Total Historical Vol." value={formatNumber(cTotal, 0)} color="info.main" />
+                            <MetricBox title="40FT Containers" value={formatNumber(c40, 0)} />
+                            <MetricBox title="20FT Containers" value={formatNumber(c20, 0)} />
+                            <MetricBox title="Heavy" value={formatNumber(cHeavy, 0)} color="error.main" />
+                            <MetricBox title="Reefer Units" value={formatNumber(cReefer, 0)} color="info.main" />
+                            <MetricBox title="Hazardous" value={formatNumber(cHaz, 0)} color="warning.main" />
+                            <MetricBox title="Out of Gauge" value={formatNumber(cOog, 0)} />
+                          </MetricGroup>
                         </Box>
                       </Box>
 
-                      {/* Divider for Desktop */}
-                      <Box sx={{ display: { xs: 'none', md: 'block' }, width: '1px', height: '120px', bgcolor: 'divider', zIndex: 1 }} />
-                      {/* Divider for Mobile */}
-                      <Box sx={{ display: { xs: 'block', md: 'none' }, height: '1px', width: '100%', bgcolor: 'divider', zIndex: 1 }} />
+                      {/* Full-width AI Justification at the bottom */}
+                      {analysisData?.predicted?.justification && (
+                        <Box 
+                          sx={{ 
+                            mt: 1, 
+                            p: 3, 
+                            borderRadius: 4, 
+                            bgcolor: alpha(theme.palette.background.paper, 0.6), 
+                            border: '1px solid', 
+                            borderColor: alpha(theme.palette.divider, 0.8),
+                            position: 'relative',
+                            zIndex: 1,
+                            display: 'flex',
+                            flexDirection: { xs: 'column', md: 'row' },
+                            gap: 4
+                          }}
+                        >
+                          {/* Confidence Score Ring */}
+                          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0, px: 2 }}>
+                            <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+                              <CircularProgress variant="determinate" value={100} size={70} thickness={4} sx={{ color: alpha(theme.palette.primary.main, 0.1) }} />
+                              <CircularProgress variant="determinate" value={aiConfidence} size={70} thickness={4} sx={{ color: 'primary.main', position: 'absolute', left: 0 }} />
+                              <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Typography variant="caption" component="div" sx={{ color: 'text.primary', fontWeight: 900, fontSize: '1rem' }}>
+                                  {aiConfidence}%
+                                </Typography>
+                              </Box>
+                            </Box>
+                            <Typography variant="caption" sx={{ mt: 1, fontWeight: 800, textTransform: 'uppercase', color: 'text.secondary', letterSpacing: '0.05em' }}>
+                              AI Confidence
+                            </Typography>
+                          </Box>
 
-                      {/* Right Side: Prediction Drivers Grid */}
-                      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 1, flex: '1 1 auto', pt: { xs: 1, md: 0 } }}>
-                        
-                        <MetricGroup title="Operational Performance">
-                          <MetricBox title="Historical Baseline" value={formatNumber(actualAvg)} unit="h" subtitle="Typical stay duration" />
-                          <MetricBox title="Avg Workload" value={formatNumber(fTotalMoves, 0)} subtitle="Total Moves" />
-                          <MetricBox title="Avg Resources" value={fCranes} subtitle="Assigned Cranes" color="primary.main" />
-                          <MetricBox title="Avg Productivity" value={formatNumber(fMph, 1)} unit="MPH" subtitle="Moves per Hour" />
-                          <MetricBox title="History Coverage" value={formatNumber(visitsCount, 0)} subtitle="Analyzed visits" color="primary.main" />
-                        </MetricGroup>
+                          <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', md: 'block' } }} />
 
-                        <MetricGroup title="Container Classification">
-                          <MetricBox title="Total Historical Vol." value={formatNumber(cTotal, 0)} color="info.main" />
-                          <MetricBox title="40FT Containers" value={formatNumber(c40, 0)} />
-                          <MetricBox title="20FT Containers" value={formatNumber(c20, 0)} />
-                          <MetricBox title="Heavy" value={formatNumber(cHeavy, 0)} color="error.main" />
-                          <MetricBox title="Reefer Units" value={formatNumber(cReefer, 0)} color="info.main" />
-                          <MetricBox title="Hazardous" value={formatNumber(cHaz, 0)} color="warning.main" />
-                          <MetricBox title="Out of Gauge" value={formatNumber(cOog, 0)} />
-                        </MetricGroup>
-                        
-                      </Box>
+                          {/* Justification Details */}
+                          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                            {hasSplit && (
+                              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                                <Box sx={{ p: 1, borderRadius: 2, bgcolor: alpha(theme.palette.text.secondary, 0.1), color: 'text.secondary' }}>
+                                  <CalculateIcon fontSize="small" />
+                                </Box>
+                                <Box>
+                                  <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.5, display: 'block' }}>
+                                    Physical Baseline
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500, lineHeight: 1.5 }}>
+                                    {baselinePart}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            )}
+                            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                              <Box sx={{ p: 1, borderRadius: 2, bgcolor: alpha(theme.palette.info.main, 0.1), color: 'info.main' }}>
+                                <AutoAwesomeIcon fontSize="small" />
+                              </Box>
+                              <Box>
+                                <Typography variant="caption" sx={{ fontWeight: 800, color: 'info.main', textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.5, display: 'block' }}>
+                                  Machine Learning Adjustment
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500, lineHeight: 1.5 }}>
+                                  {mlPart}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                        </Box>
+                      )}
 
                       {/* Background Decoration */}
                       <Box
@@ -474,9 +559,9 @@ export default function StayTimeAnalysis() {
 
                 <Grid container spacing={2.5}>
                   <Grid size={{ xs: 12, md: 8 }}>
-                    <StayTimeTrendChart 
-                      visits={analysisData?.actual?.visits || {}} 
-                      avgHours={actualAvg} 
+                    <StayTimeTrendChart
+                      visits={analysisData?.actual?.visits || {}}
+                      avgHours={actualAvg}
                       insight={analysisData?.actual?.historical_insight}
                     />
                   </Grid>
