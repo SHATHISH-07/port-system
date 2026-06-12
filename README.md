@@ -74,7 +74,7 @@ Interactive visualization engine supporting:
 
 ---
 
-## Stowage Planning
+## Stowage Planning & Yard Preparation
 
 Dedicated stowage intelligence module includes:
 
@@ -82,6 +82,8 @@ Dedicated stowage intelligence module includes:
 * Historical stowage analysis
 * Stowage optimization visualization
 * Container load planning
+* Berth selection & yard cargo distribution algorithms
+* Berth proximity matching
 
 ---
 
@@ -177,39 +179,66 @@ Two-level access model:
 # Project Structure
 
 ```bash
-shathish-07-port-system/
+port-system/
 │
-├── client/
-│   ├── src/
-│   │   ├── api/
-│   │   ├── auth/
-│   │   ├── layout/
-│   │   ├── pages/
-│   │   │   ├── Heatmap/
-│   │   │   ├── StayTimeAnalysis/
-│   │   │   ├── StowagePlanning/
-│   │   │   ├── auth/
-│   │   │   ├── ingestion/
-│   │   │   ├── ml/
-│   │   │   └── user/
-│   │   ├── theme/
-│   │   └── types/
+├── client/                      # React Frontend Application
+│   ├── public/                  # Static assets
+│   ├── src/                     # Source Code
+│   │   ├── api/                 # Axios clients and API handlers
+│   │   ├── auth/                # Authentication providers and hooks
+│   │   ├── layout/              # Application layouts and sidebars
+│   │   ├── pages/               # Main application views
+│   │   │   ├── Heatmap/         # 2D/3D Yard Visualization
+│   │   │   ├── StayTimeAnalysis/# Vessel Analytics
+│   │   │   ├── StowagePlanning/ # Stowage & Load Sequence Views
+│   │   │   ├── auth/            # Login/Registration Pages
+│   │   │   ├── ingestion/       # CSV/JSON Data Upload Views
+│   │   │   ├── ml/              # Model Monitoring & Retraining Dashboard
+│   │   │   └── user/            # User Management Interface
+│   │   ├── theme/               # Material UI Theme configuration
+│   │   ├── types/               # TypeScript Definitions
+│   │   └── utild/               # Utility functions
+│   ├── package.json             # NPM dependencies
+│   └── vite.config.ts           # Vite Bundler config
 │
-├── server/
-│   ├── auth/
-│   ├── config.py
-│   ├── db/
-│   ├── main.py
-│   ├── models/
-│   ├── routes/
-│   ├── schemas/
-│   ├── services/
-│   ├── utils/
-│   ├── worker/
-│   ├── tests/
-│   └── data/
+├── server/                      # FastAPI Backend Application
+│   ├── auth/                    # Authentication utilities
+│   ├── db/                      # Database connection and queries
+│   ├── models/                  # SQLAlchemy ORM definitions and ML models
+│   ├── routes/                  # API Endpoint definitions
+│   │   ├── auth_routes.py
+│   │   ├── config_routes.py
+│   │   ├── ingest_routes.py
+│   │   ├── model_routes.py
+│   │   ├── stowage_routes.py
+│   │   ├── system_routes.py
+│   │   ├── user_routes.py
+│   │   └── vessel_routes.py
+│   ├── schemas/                 # Pydantic validation schemas
+│   ├── services/                # Core Business Logic & Orchestration
+│   │   ├── berth_optimization_service.py
+│   │   ├── crane_analytics_service.py
+│   │   ├── heatmap_service.py
+│   │   ├── historical_delay_service.py
+│   │   ├── port_stay_prediction_service.py
+│   │   ├── retraining_service.py
+│   │   ├── stowage_helpers.py
+│   │   ├── stowage_history_service.py
+│   │   ├── stowage_service.py
+│   │   ├── stowage_visualizer_service.py
+│   │   ├── vessel_operations.py
+│   │   ├── vessel_service.py
+│   │   ├── xml_layout_service.py
+│   │   ├── yard_preparation_service.py
+│   │   └── yard_strategy_service.py
+│   ├── utils/                   # Feature extraction, parsing & calculation logic
+│   ├── worker/                  # Celery background workers
+│   ├── tests/                   # E2E Test Suite
+│   ├── data/                    # Local storage (datasets, maps, etc.)
+│   ├── config.py                # System settings and environment variables
+│   └── main.py                  # FastAPI Application entry point
 │
-└── README.md
+└── README.md                    # Project Documentation
 ```
 
 ---
@@ -218,50 +247,22 @@ shathish-07-port-system/
 
 ## Heatmap Module
 
-Files:
-
-* HeatmapPage.tsx
-* HeatmapView.tsx
-* TerminalMap2D.tsx
-* BerthRecommendation.tsx
-
 Features:
-
 * Dynamic congestion visualization
 * Yard occupancy analytics
 * Berth recommendation support
 * XML-based terminal map generation and layout parsing
 
----
-
 ## Stay Time Analysis
 
-Files:
-
-* StayTimeAnalysis.tsx
-* StayTimeTrendChart.tsx
-* OperationalProfile.tsx
-
 Features:
-
 * Historical vessel analysis
 * Stay prediction trends
 * Operational KPI breakdown
 
----
-
 ## Stowage Planning
 
-Files:
-
-* StowagePlanning.tsx
-* CurrentPlanningTab.tsx
-* HistoryAnalysisTab.tsx
-* StowageVisualizationTab.tsx
-* StowageHeader.tsx
-
 Features:
-
 * Visualization of container load sequences
 * Historical stowage pattern analysis
 * 3D visualization of container stacks
@@ -272,60 +273,33 @@ Features:
 
 ## Route Layer
 
-Handles:
-
-* Authentication
-* Vessel analytics
-* Heatmap APIs
-* Ingestion
-* Model training
-* System administration
-
-Main route files:
-
-* auth_routes.py
-* vessel_routes.py
-* stowage_routes.py
-* ingest_routes.py
-* model_routes.py
-
----
+Maintains dedicated routes under `server/routes/` to handle:
+* Authentication (`auth_routes.py`)
+* Vessel analytics (`vessel_routes.py`)
+* Heatmap & Stowage (`stowage_routes.py`)
+* Ingestion (`ingest_routes.py`)
+* Model training (`model_routes.py`)
+* System administration (`system_routes.py`, `config_routes.py`, `user_routes.py`)
 
 ## Service Layer
 
-Encapsulates operational business logic.
-
-Services:
-
-* vessel_service.py
-* heatmap_service.py
-* retraining_service.py
-* stowage_service.py
-* stowage_visualizer_service.py
+Encapsulates operational business logic via extensive modular services under `server/services/`:
+* Berth Optimization (`berth_optimization_service.py`)
+* Crane Analytics (`crane_analytics_service.py`)
+* Historical Delay Tracking (`historical_delay_service.py`)
+* Yard Strategy & Prep (`yard_strategy_service.py`, `yard_preparation_service.py`)
+* Stowage Visualization (`stowage_visualizer_service.py`)
+* Heatmap & XML Layout parsing (`heatmap_service.py`, `xml_layout_service.py`)
 
 Responsibilities:
-
-* Data aggregation
-* Feature extraction
+* Data aggregation & Feature extraction
 * Prediction orchestration
-* Heatmap generation
-
----
+* Real-world delay diagnosis
+* Yard preparation & sequence routing
 
 ## Utility Layer
 
-Core operational intelligence logic.
-
-Utilities:
-
-* extractContainerMoves.py
-* classifyWeight.py
-* feature_utils.py
-* position_parser.py
-* stay_utils.py
-
-Responsibilities:
-
+Core operational intelligence logic handling:
 * Container move parsing
 * Yard position decoding
 * Feature engineering
@@ -356,9 +330,11 @@ graph TB
     end
 
     subgraph Services
-        C1[Vessel Service]
-        C2[Heatmap Service]
+        C1[Vessel & Berth Services]
+        C2[Heatmap & XML Services]
         C3[Retraining Service]
+        C4[Crane & Delay Analytics]
+        C5[Yard Strategy Services]
     end
 
     subgraph Utils
@@ -471,8 +447,6 @@ Ensemble-based VotingRegressor using:
 * XGBoost
 * GradientBoostingRegressor
 * Ridge Regression
-
----
 
 ## Engineered Features
 
@@ -750,28 +724,28 @@ Worker responsibilities:
 
 ---
 
-# Deck Optimizer Framework Implementation Status
+# Framework Implementation Status
 
-Based on the `deck_optimizer_text.txt` operational specification, the following features have been implemented and tracked:
+Based on the operational specification, the following features have been implemented and tracked:
 
 ## Fully Implemented Features
 
-*   **Berth Selection & Yard Cargo Distribution (Section 2.1 - 2.3)**
+*   **Berth Selection & Yard Cargo Distribution**
     *   Dynamic extraction of loading container locations (Yard Block, Row, Bay, Tier).
     *   Classification of containers by equipment class (Reefer, OOG, Hazmat) and weight class (Light, Medium, Heavy).
-    *   Interactive 3D Yard Heat Map visually highlighting block concentration (Red/High, Orange/Medium, Green/Low).
-*   **Port Stay Time Prediction (Section 3)**
+    *   Interactive 3D Yard Heat Map visually highlighting block concentration.
+*   **Port Stay Time Prediction**
     *   Implementation of the precise mathematical formula: `Total Moves ÷ (Number of Cranes × Average Productivity)`.
     *   Side-by-side comparison with historical ML-predicted baselines.
-*   **Berth Conflict & Crane Clash Analysis (Section 4)**
+*   **Berth Conflict & Crane Clash Analysis**
     *   Dynamic multi-vessel overlap detection based on working time windows.
     *   Identification and percentage breakdown of shared yard blocks.
     *   Severity-based risk flagging (Low/Medium/High Risk) surfaced in the UI.
-*   **Historical Delay Root Cause Analysis (Section 5)**
+*   **Historical Delay Root Cause Analysis**
     *   Detection of Crane Idle Time (identifying operation gaps > 60 minutes).
     *   Analysis of Poor Stacking Strategy (high reshuffle rates).
     *   M-Cycle efficiency tracking (dual-cycle vs single-cycle ratio extraction).
-*   **Yard Preparation & Weight Distribution Strategy (Section 6)**
+*   **Yard Preparation & Weight Distribution Strategy**
     *   Stowage rule engine enforcing `HEAVY` containers below deck and `LIGHT` containers above deck.
     *   Berth proximity matching (recommending Heavy containers to `CLOSE` yard blocks).
     *   Dynamic Discharge Port Grouping powered by an OpenStreetMap Geocoding API that learns and tracks real-world port coordinates to calculate nearest-neighbor sequences.
@@ -779,16 +753,16 @@ Based on the `deck_optimizer_text.txt` operational specification, the following 
 
 ## Features Pending Implementation (Future Scope)
 
-*   **Distance Impact Simulation (Section 2.4)**
+*   **Distance Impact Simulation**
     *   *Requirement*: Calculate physical "Total Laden Travel Distance" and "Estimated Unladen Travel".
     *   *Blocker*: Requires live integration with physical yard and berth coordinate telemetry mappings.
-*   **Advanced Conflict Checks (Section 4.3)**
+*   **Advanced Conflict Checks**
     *   *Requirement*: Detect internal corridor overlaps, crane rail overlap, and equipment demand conflicts.
     *   *Blocker*: Awaiting granular terminal infrastructure layouts and active ITV telemetry tracking in the dataset.
-*   **ITV Arrival Delay & Congestion Analysis (Section 5.2 / 5.3)**
+*   **ITV Arrival Delay & Congestion Analysis**
     *   *Requirement*: Identify ITV congestion and arrival delays.
     *   *Blocker*: Requires GPS/RFID telemetry logs from the Internal Terminal Vehicles (ITVs).
-*   **Dynamic Recalculation Based on ETA Accuracy (Section 7)**
+*   **Dynamic Recalculation Based on ETA Accuracy**
     *   *Requirement*: Real-time recalculation of the berth simulation if vessel ETA changes.
     *   *Blocker*: Requires a live socket integration with Vessel Traffic Services (VTS) to stream live ETA updates.
 
